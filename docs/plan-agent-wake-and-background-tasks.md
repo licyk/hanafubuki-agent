@@ -712,41 +712,36 @@ and queues nothing.
 
 ### 3.10 Persistence and restart [1][3]
 
-- **What is durable**: the queue (the session's runtime, D2); delivered
-  events (history); the policy is reconciled at activation.
-- **What is not**: `SubagentRuns` (rebuilt from the kernel, as today), the
-  pause state, the dispatcher's signals.
-- **At start**, after recovery and `reconcile_recovered_execution_activities`
-  (`agent/src/service/mod.rs:532`), the new `report_lost_background_work`
-  (`service/background.rs`):
-  1. collects the sessions that lost work: a turn settled as
-     `ApplicationRestarted`, or a background terminal the reconciliation
-     disposed;
-  2. closes the set upward: a sub-agent whose child lost work lost work
-     too (two levels);
-  3. for each lost sub-agent, queues `Lost` on its parent unless the parent
-     is itself a lost sub-agent. For each lost terminal of a session that
-     is not a lost sub-agent, queues the terminal's `Lost` on it.
-- **Nothing is woken at start.** The dispatcher ignores the events queued
-  before the instance's start completes. Recovered events are delivered
-  with the session's next turn. The terminal interface's status item shows
-  them as `N updates`.
-- **At a clean shutdown**, the same `report_lost_background_work` runs
-  before turns are cancelled. It is the first step of the stage that
-  cancels them (`stop_operations`, `kernel/src/service/lifecycle.rs:16`,
-  is called after it), within that stage's 5 s. It takes the sub-agents
-  with live work (from `SubagentRuns` and `background_work`) and the
-  running background terminals, and queues `Lost` on their owners by the
-  same rule. It must run there because the cancellation `stop_operations`
-  makes is recorded `UserInterrupted` (`turn/terminal.rs:13-21`), so
-  afterwards a quit and a person's Esc look the same. The sub-agents' runs
-  are then cancelled, and their `finish` queues nothing (D8: a cancel
-  reports nothing).
-- **A crash** (no shutdown) leaves turns that recovery settles as
-  `ApplicationRestarted`, and terminals the start's reconciliation
-  disposes. The start's run reports them. After a clean shutdown the
-  start's run finds the same terminals still recorded and queues the same
-  keys, which replaces what is queued (§3.1), so nothing is reported twice.
+The queue and delivered events remain durable; runs, pauses and dispatcher
+signals remain instance-local. Recovery reports only work newly repaired
+in this pass: `AgentRecoveryReport.interrupted_turns` and
+`interrupted_executions`. It does not infer new loss from an old
+`ApplicationRestarted` terminal reason, which would report the same loss
+again after its previous report had been consumed (including by
+`wait_agent`). Idle ancestors are loaded from the history store before
+closing the set upward. A lost grandchild makes its sub-agent parent lost;
+only the highest lost sub-agent is reported to a surviving owner.
+
+Clean shutdown captures currently live turns, waiting sub-agents and
+model-started terminals before cancellation; it writes the collected
+reports after the turns stop, while history remains open. This corrects
+the original persist-before-cancel order: the evidence must be captured
+before cancellation records `UserInterrupted`, but an active parent must
+not consume the shutdown report and start another model request.
+
+Both paths use the kernel's synchronous, silent
+`record_lost_background_work`: no policy activation, no dispatcher
+notification, and no model request at start. Existing pending events stay;
+keyed replacement retains one final status for each work item. Work
+settled by a previous recovery does not appear in the next pass, so a
+second restart does not repeat a delivered loss. No persisted marker or
+history-format change is added.
+
+The settlement and the owner's report are separate commits. A second
+crash between them can omit the report; this implementation adds no
+cross-session transaction protocol. Failed report writes are diagnosed
+and retain the histories. Execution activities do not always persist a
+command subject, so a recovered terminal can be identified by id alone.
 
 ### 3.11 `exec` [1][2][3]
 

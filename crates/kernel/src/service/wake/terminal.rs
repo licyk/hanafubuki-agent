@@ -104,6 +104,36 @@ impl AgentService {
             })
             .unwrap_or_default()
     }
+
+    /// Captures model-started terminals before shutdown loses their live
+    /// tracking. A `!command` is never in this map.
+    pub fn background_terminals_to_interrupt(&self) -> Vec<crate::AgentInterruptedExecution> {
+        self.inner
+            .sessions
+            .cells()
+            .into_iter()
+            .flat_map(|cell| {
+                cell.lock()
+                    .map(|record| {
+                        record
+                            .runtime
+                            .background_terminals
+                            .0
+                            .iter()
+                            .filter(|(_, terminal)| !terminal.ended)
+                            .map(
+                                |(execution_id, terminal)| crate::AgentInterruptedExecution {
+                                    session_id: cell.session_id(),
+                                    execution_id: *execution_id,
+                                    command: terminal.command.clone(),
+                                },
+                            )
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default()
+            })
+            .collect()
+    }
 }
 
 /// Applies `update`, already applied to the session's activities

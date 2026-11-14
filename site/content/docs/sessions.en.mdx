@@ -127,6 +127,8 @@ A side conversation is a temporary conversation beside a session, for a question
 
 ## Sub-agents [#subagents]
 
+After a shutdown or restart, a sub-agent whose work was interrupted is reported as lost to its parent. When a nested subtree is lost, its highest sub-agent is reported once. The history remains available for a follow-up task. The report waits for the parent’s next turn; launching the Agent does not resume work automatically.
+
 A sub-agent is a child the session's model spawns with `spawn_agent` to work on a task in the background ([Tools](/docs/tools#subagents)).
 
 - It is **durable**: written to the history like any session, with `origin` `subagent` and the task name as its title. Session lists leave it out like every child; it is listed with its parent's children.

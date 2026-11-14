@@ -5637,10 +5637,30 @@ its next pin, and any module-size exception.
 - [ ] R6: `close_subagent` (cascade), `close_background_terminal`, and
       `/stop` as the person's close. Each wakes the owner; archive, delete
       and side close do not.
-- [ ] R7: restart. Work a stop of the Agent ended is reported as `Lost`
-      to its owner (transitively), at a clean shutdown before turns are
-      cancelled and at start for a crash. It is idempotent by key, and
-      nothing is woken while starting.
+- [x] R7: restart. Work a stop of the Agent ended is reported as `Lost`
+      to its surviving owner, transitively. Clean shutdown captures live
+      work before cancellation and persists reports after turns stop;
+      crash recovery reports only work newly interrupted in that pass.
+      Nothing is woken while starting or shutting down.
+    - Done (2026-11-14): typed recovery evidence, silently persisted loss
+      reports, lazy loading of idle ancestors, subtree collapse, and the
+      existing kernel accepting flag gates dispatcher shutdown. No new
+      persisted markers or history format. A second crash between repair
+      and owner-report commits can omit a report; documented in §3.10.
+    - Fixed a real crash regression: a history-only delta ahead of the
+      runtime checkpoint made the repair fail with `StaleRevision`.
+      Readers verify the checkpoint first, then restore the latest
+      session revision. Corrupt checkpoint revisions remain rejected.
+    - Validation: facade `background_recovery` tests cover active parent
+      shutdown, a crashed grandchild, clean/crashed terminal, next-turn
+      delivery and another restart after normal or `wait_agent` delivery.
+      History `deltas_advance` covers checkpoint 2 / head 4 plus integrity.
+      `cargo fmt --all --check`, `cargo xtask check`, `git diff --check`,
+      and scoped kernel/history/facade clippy with all targets/features
+      and `-D warnings` passed. Full workspace and native CI belong to
+      integration; documentation-only site edits do not need site builds.
+      No golden changes or module-size exceptions. Embedding hosts adopt
+      the added typed fields on `AgentRecoveryReport` at their next pin.
 - [ ] R8: the terminal interface. `/tasks` (the manager: a tree of agents,
       the terminals, inspect, close, resume), the `background-tasks`
       status item in the default status line, the waiting and paused

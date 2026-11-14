@@ -29,7 +29,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 mod background;
-
+mod background_recovery;
 mod background_terminals;
 mod children;
 mod compression;
@@ -548,6 +548,13 @@ impl AgentApplicationService {
             );
         }
         self.reconcile_recovered_execution_activities();
+        let lost = self.lost_background_work(
+            report.interrupted_turns.iter().copied().collect(),
+            report.interrupted_executions.clone(),
+        );
+        for diagnostic in self.report_lost_background_work(lost) {
+            log::error!("{}: {}", diagnostic.worker, diagnostic.message);
+        }
         Ok(report)
     }
 

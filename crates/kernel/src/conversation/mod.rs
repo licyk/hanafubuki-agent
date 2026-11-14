@@ -414,6 +414,17 @@ pub struct AgentQuarantinedSession {
 pub struct AgentRecoveryReport {
     pub restored: usize,
     pub quarantined: Vec<AgentQuarantinedSession>,
+    /// Turns settled in this recovery pass, not earlier interruptions.
+    pub interrupted_turns: Vec<AgentSessionId>,
+    /// Executions whose running activities this pass settled.
+    pub interrupted_executions: Vec<AgentInterruptedExecution>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AgentInterruptedExecution {
+    pub session_id: AgentSessionId,
+    pub execution_id: u64,
+    pub command: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

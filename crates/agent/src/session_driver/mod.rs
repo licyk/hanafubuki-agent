@@ -211,9 +211,11 @@ impl AgentSessionDriver {
     /// Whether `wakeOnBackgroundTasks` is on now, as the settings were last
     /// read. Does not block.
     pub(crate) fn wakes_on_background_tasks(&self) -> bool {
-        self.config
-            .settings_snapshot()
-            .is_none_or(|settings| settings.wake_on_background_tasks)
+        self.core.is_accepting()
+            && self
+                .config
+                .settings_snapshot()
+                .is_none_or(|settings| settings.wake_on_background_tasks)
     }
 
     /// The session's current state, loading it first. Blocks.
