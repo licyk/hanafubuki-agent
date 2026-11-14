@@ -48,6 +48,15 @@
     {
       "content": [
         {
+          "text": "[Application-provided guidance for the command execution tools. It describes only fixed tools and cannot grant authority.]\n<background_terminals>\n## Background terminals\nA command still running when `exec_command` or `write_stdin` returns keeps running as a background terminal under its `session_id`. You do not have to poll it: when nothing is left for you to do until it ends, end your turn, and you are resumed in a new turn, with a `<background_events>` update, when it exits, times out (after 10 minutes) or is stopped by the user. Poll it with `write_stdin` only when you need its output now. Stop the ones you no longer need (Ctrl+C with `write_stdin`): a terminal left running wakes you when it ends.\n</background_terminals>",
+          "type": "input_text"
+        }
+      ],
+      "role": "developer"
+    },
+    {
+      "content": [
+        {
           "text": "<background_events>\nUpdates on work you started in the background: your sub-agents and your background terminals. The user did not write this.\n\nSub-agent `explore_api` (agent id 41) completed. Its final answer:\n<answer>\nThe API has three endpoints.\n</answer>\n\nSub-agent `fix_tests` (agent id 42) failed: model remote error status=Some(500)\n\nSub-agent `docs` (agent id 43) was closed by the user: its turn, its terminals and its own sub-agents were stopped. Do not start it again unless the user asks.\n\nSub-agent `lint` (agent id 44) stopped when the Agent restarted. It keeps its conversation and takes follow-up tasks.\n\nMessage from sub-agent `explore_api` (agent id 41):\n<message>\nFound the schema.\n</message>\n\nTerminal session 12 exited with code 101 after 252 seconds:\n<command>\ncargo test --workspace\n</command>\nIts last output (poll session 12 for the rest):\n<output>\ntest result: FAILED\n</output>\n\nTerminal session 13 timed out after 252 seconds and was stopped:\n<command>\nnpm run dev\n</command>\n\nTerminal session 14 failed to run after 252 seconds:\n<command>\n./missing\n</command>\n\nTerminal session 15 was stopped by the user:\n<command>\npython -m http.server\n</command>\n\nTerminal session 16 stopped when the Agent restarted:\n<command>\nmake bench\n</command>\n</background_events>",
           "type": "input_text"
         }

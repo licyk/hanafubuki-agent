@@ -3,7 +3,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use hanafubuki_agent_contracts::{
-    ApprovalRuleRegistry, BlockingService, Register, ToolPresenterRegistry, ToolRegistry,
+    ApprovalRuleRegistry, BlockingService, ContextRendererRegistry, PromptContributorRegistry,
+    Register, ToolPresenterRegistry, ToolRegistry,
 };
 use hanafubuki_agent_execution::AgentExecutionService;
 use hanafubuki_agent_foundation::background_worker::BackgroundWorkerGroup;
@@ -12,6 +13,7 @@ use kardia_core::{Context, Disposer, Inject, PluginDef, Service};
 use crate::approval::GitCloneRequiresUser;
 use crate::options::ExecutionOptions;
 use crate::presenter::ExecPresenter;
+use crate::prompt::{BackgroundTerminalsPrompt, BACKGROUND_TERMINALS_RENDERER};
 use crate::tool::{ExecServices, ExecTool, ExecToolKind};
 
 /// How long a stopping plugin waits for its output monitors and cleanup
@@ -20,9 +22,11 @@ const MONITOR_STOP_BOUND: Duration = Duration::from_secs(3);
 
 /// Registers the execution tools over `executions`, which the host owns: it
 /// also serves background terminals and is shut down after the plugins. Also
-/// registers their presenter and the approval rule of the commands they
-/// run. A change of its options is taken in place, for the commands started
-/// after it: a restart would stop the output monitors of the running ones.
+/// registers their presenter, the approval rule of the commands they run
+/// and the guidance on background terminals. A change of its options is
+/// taken in place, for the commands started after it (and the guidance's
+/// next step): a restart would stop the output monitors of the running
+/// ones.
 pub fn execution_plugin(executions: AgentExecutionService) -> PluginDef {
     PluginDef::typed(move |ctx: Context, options: Arc<ExecutionOptions>| {
         let executions = executions.clone();
@@ -30,6 +34,8 @@ pub fn execution_plugin(executions: AgentExecutionService) -> PluginDef {
             let tools = ctx.get::<ToolRegistry>()?;
             let presenters = ctx.get::<ToolPresenterRegistry>()?;
             let rules = ctx.get::<ApprovalRuleRegistry>()?;
+            let prompts = ctx.get::<PromptContributorRegistry>()?;
+            let renderers = ctx.get::<ContextRendererRegistry>()?;
             let blocking = ctx.get::<BlockingService>()?.arc().clone();
             // Agent threads: a panicking monitor ends only itself.
             let workers = BackgroundWorkerGroup::contained();
@@ -40,8 +46,9 @@ pub fn execution_plugin(executions: AgentExecutionService) -> PluginDef {
                 blocking: blocking.clone(),
                 command_timeout_ms: command_timeout_ms.clone(),
             };
+            let updated = command_timeout_ms.clone();
             ctx.on_update(move |options: &ExecutionOptions| {
-                command_timeout_ms.store(options.command_timeout_ms(), Ordering::Relaxed);
+                updated.store(options.command_timeout_ms(), Ordering::Relaxed);
                 true
             })?;
             ctx.defer(
@@ -73,6 +80,8 @@ pub fn execution_plugin(executions: AgentExecutionService) -> PluginDef {
             }
             presenters.register(Arc::new(ExecPresenter))?;
             rules.register(Arc::new(GitCloneRequiresUser))?;
+            prompts.register(Arc::new(BackgroundTerminalsPrompt { command_timeout_ms }))?;
+            renderers.register(BACKGROUND_TERMINALS_RENDERER)?;
             Ok(())
         }
     })
@@ -82,6 +91,8 @@ pub fn execution_plugin(executions: AgentExecutionService) -> PluginDef {
             .with(ToolRegistry::NAME)
             .with(ToolPresenterRegistry::NAME)
             .with(ApprovalRuleRegistry::NAME)
+            .with(PromptContributorRegistry::NAME)
+            .with(ContextRendererRegistry::NAME)
             .with(BlockingService::NAME),
     )
 }

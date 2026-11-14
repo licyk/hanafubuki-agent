@@ -1,7 +1,7 @@
 //! What a session's background work holds open: its sub-agents still
-//! working, two levels deep. Terminals are counted once their end wakes
-//! their owner (R5). Only loaded sessions are read: one that runs a turn is
-//! loaded, and one that is not runs nothing.
+//! working, two levels deep, and their background terminals still
+//! running (`terminal.rs`). Only loaded sessions are read: one that runs
+//! a turn is loaded, and one that is not runs nothing.
 
 use super::*;
 use crate::{AgentBackgroundWork, AgentSessionOrigin};
@@ -13,10 +13,7 @@ impl AgentService {
     /// The session's background work now. Each session is locked in turn,
     /// never two at once.
     pub fn background_work(&self, session_id: AgentSessionId) -> AgentBackgroundWork {
-        AgentBackgroundWork {
-            agents: self.working_subagents(session_id, COUNTED_LEVELS),
-            terminals: 0,
-        }
+        self.tree_work(session_id, COUNTED_LEVELS)
     }
 
     /// The background work the session is woken for: none while its wake
@@ -32,35 +29,34 @@ impl AgentService {
         })
     }
 
-    /// The sub-agents of `session_id` that run a turn, or whose own
-    /// sub-agents do, `levels` deep.
-    fn working_subagents(&self, session_id: AgentSessionId, levels: usize) -> usize {
+    fn tree_work(&self, session_id: AgentSessionId, levels: usize) -> AgentBackgroundWork {
+        let mut work = AgentBackgroundWork {
+            agents: 0,
+            terminals: self.background_terminals(session_id),
+        };
         if levels == 0 {
-            return 0;
+            return work;
         }
-        self.inner
-            .sessions
-            .cells()
-            .into_iter()
-            .map(|cell| {
-                let (child, running) = match cell.lock() {
-                    Ok(record) => (
-                        record.lineage.parent_session_id == Some(session_id)
-                            && record.lineage.origin == Some(AgentSessionOrigin::Subagent),
-                        record
-                            .runtime
-                            .turn
-                            .as_ref()
-                            .is_some_and(|turn| !turn.phase.is_terminal()),
-                    ),
-                    Err(_) => (false, false),
-                };
-                if !child {
-                    return 0;
-                }
-                let descendants = self.working_subagents(cell.session_id(), levels - 1);
-                usize::from(running || descendants > 0) + descendants
-            })
-            .sum()
+        for cell in self.inner.sessions.cells() {
+            let (child, running) = match cell.lock() {
+                Ok(record) => (
+                    record.lineage.parent_session_id == Some(session_id)
+                        && record.lineage.origin == Some(AgentSessionOrigin::Subagent),
+                    record
+                        .runtime
+                        .turn
+                        .as_ref()
+                        .is_some_and(|turn| !turn.phase.is_terminal()),
+                ),
+                Err(_) => (false, false),
+            };
+            if !child {
+                continue;
+            }
+            let descendants = self.tree_work(cell.session_id(), levels - 1);
+            work.agents += usize::from(running || !descendants.is_empty()) + descendants.agents;
+            work.terminals += descendants.terminals;
+        }
+        work
     }
 }

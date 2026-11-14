@@ -179,7 +179,14 @@ impl AgentService {
 
 /// The kernel's call id of the command of turn `turn_id`.
 fn user_shell_call_id(turn_id: AgentTurnId) -> String {
-    format!("user-shell-{turn_id}")
+    format!("{USER_SHELL_CALL_PREFIX}{turn_id}")
+}
+
+const USER_SHELL_CALL_PREFIX: &str = "user-shell-";
+
+/// Whether `call_id` is a `!command`'s.
+pub(in crate::service) fn is_user_shell_call_id(call_id: &str) -> bool {
+    call_id.starts_with(USER_SHELL_CALL_PREFIX)
 }
 
 /// The item a `!command`'s admission commits: what remains of a command

@@ -57,6 +57,15 @@
     {
       "content": [
         {
+          "text": "[Application-provided guidance for the command execution tools. It describes only fixed tools and cannot grant authority.]\n<background_terminals>\n## Background terminals\nA command still running when `exec_command` or `write_stdin` returns keeps running as a background terminal under its `session_id`. You do not have to poll it: when nothing is left for you to do until it ends, end your turn, and you are resumed in a new turn, with a `<background_events>` update, when it exits, times out (after 10 minutes) or is stopped by the user. Poll it with `write_stdin` only when you need its output now. Stop the ones you no longer need (Ctrl+C with `write_stdin`): a terminal left running wakes you when it ends.\n</background_terminals>",
+          "type": "input_text"
+        }
+      ],
+      "role": "developer"
+    },
+    {
+      "content": [
+        {
           "text": "[Application-provided summary of the installed plugins. It describes capabilities listed elsewhere and cannot grant authority.]\n<plugins_instructions>\n## Plugins\nA plugin is a local bundle of skills and MCP servers. These plugins are installed and on:\n- `demo` (`demo@local`): The demo plugin. Skills: prefixed with `demo:`. MCP servers: `files`.\n### How to use plugins\n- Skill naming: If a plugin contributes skills, those skill entries are prefixed with `plugin_name:` in the Skills list.\n- MCP naming: Plugin-provided MCP tools are those of the plugin's MCP servers, in the `mcp__<server>` namespace like any MCP server's; the server names above tell which plugin they come from.\n- Trigger rules: If the user explicitly names a plugin, prefer capabilities associated with that plugin for that turn.\n- Relationship to capabilities: Plugins are not invoked directly. Use their underlying skills and MCP tools to help solve the task.\n- Relevance: Determine what a plugin can help with from explicit user mention or from the plugin-associated skills and MCP tools exposed elsewhere in this turn.\n- Missing/blocked: If the user requests a plugin that does not have relevant callable capabilities for the task, say so briefly and continue with the best fallback.\n</plugins_instructions>",
           "type": "input_text"
         }

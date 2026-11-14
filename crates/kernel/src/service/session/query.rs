@@ -24,6 +24,17 @@ impl AgentService {
         Ok(history_contents(&record.conversation.history))
     }
 
+    /// The session's queued wake events, left queued.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn test_wake_queue(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<Vec<crate::AgentWakeEvent>, AgentError> {
+        let cell = self.session(session_id)?;
+        let record = cell.lock_after_persistence_blocking()?;
+        Ok(record.runtime.wake_queue.events.clone())
+    }
+
     /// The session's hierarchical compression state.
     #[cfg(any(test, feature = "test-support"))]
     pub fn test_compression_state(

@@ -17,7 +17,7 @@ use crate::session_driver::AgentSessionDriver;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentBackgroundStatus {
-    /// Its sub-agents still working (terminals count from R5).
+    /// Its sub-agents still working and model-started terminals still running.
     pub work: AgentBackgroundWork,
     /// The events queued on it that no turn has delivered yet.
     pub pending_wake_events: usize,
@@ -32,7 +32,7 @@ pub struct AgentBackgroundTasks {
     pub work: AgentBackgroundWork,
     /// The sub-agents of its tree, oldest first.
     pub agents: Vec<AgentSubagentStatus>,
-    /// The background terminals of its tree (none are listed yet).
+    /// The background terminals of its tree, including their recent output.
     pub terminals: Vec<AgentBackgroundTerminal>,
     /// The events queued on the root that no turn has delivered yet.
     pub pending_wake_events: usize,
@@ -71,12 +71,10 @@ impl Wakes {
         session_id: AgentSessionId,
     ) -> Result<AgentBackgroundStatus, AgentError> {
         let agents = self.runs.live_agents(driver, session_id)?.len();
+        let terminals = driver.background_work(session_id).terminals;
         let (pending_wake_events, wake) = self.queue(driver, session_id)?;
         Ok(AgentBackgroundStatus {
-            work: AgentBackgroundWork {
-                agents,
-                terminals: 0,
-            },
+            work: AgentBackgroundWork { agents, terminals },
             pending_wake_events,
             wake,
         })
@@ -92,11 +90,26 @@ impl Wakes {
     ) -> Result<AgentBackgroundTasks, AgentError> {
         let agents = self.runs.tree_statuses(driver, root, answers)?;
         let work = self.status(driver, root)?.work;
+        let mut terminals = Vec::new();
+        for owner in std::iter::once(root).chain(agents.iter().map(|agent| agent.session_id)) {
+            let owner_title = driver.snapshot(owner)?.title.map(|title| title.value);
+            for mut terminal in driver.background_terminals(owner)? {
+                if !answers {
+                    terminal.recent_output.clear();
+                    terminal.updated_at_ms = 0;
+                }
+                terminals.push(AgentBackgroundTerminal {
+                    owner,
+                    owner_title: owner_title.clone(),
+                    terminal,
+                });
+            }
+        }
         let (pending_wake_events, wake) = self.queue(driver, root)?;
         Ok(AgentBackgroundTasks {
             work,
             agents,
-            terminals: Vec::new(),
+            terminals,
             pending_wake_events,
             wake,
         })

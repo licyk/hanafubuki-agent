@@ -64,6 +64,8 @@ icon: Wrench
 
 在[评审](/docs/sessions#reviews)中只运行普通的 `git --no-pager` 读取命令；见[权限](/docs/permissions#review)。
 
+后台终端的退出、失败或超时会在 `wakeOnBackgroundTasks` 打开时排入更新，包含退出码、运行时间和末尾输出：正在运行的回合在下一步读到它，等待中的会话则由新回合唤醒。轮询如果已报告结束，会撤回待交付的更新，避免重复报告。`!` 命令和取消不会产生终端结束更新。
+
 ## 文件 [#files]
 
 | 工具             | 作用                                               |

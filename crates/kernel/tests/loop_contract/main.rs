@@ -936,6 +936,7 @@ mod sampling;
 mod scope;
 mod sources;
 mod steering;
+mod terminals;
 mod turn_limits;
 mod user_input;
 mod wake;
