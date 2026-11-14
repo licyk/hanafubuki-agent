@@ -17,7 +17,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 
 use hanafubuki_agent::{
-    AgentAvailability, AgentBackgroundEvent, AgentBackgroundEventSink, AgentBackgroundStatus,
+    AgentAvailability, AgentBackgroundEvent, AgentBackgroundEventSink, AgentBackgroundStatus, AgentBackgroundWork,
     AgentEvent, AgentEventKind, AgentEventSink, AgentHandle, AgentRuntimeHost, AgentSessionId,
     AgentSessionMode, AgentSessionModelSelectionRequest, AgentStatusEventSink, AgentTurnAccepted,
     AgentTurnRequest, AgentTurnTerminalReason, AgentWakePause, AgentWakeState,
@@ -261,6 +261,7 @@ impl Turn<'_> {
         root: AgentSessionId,
         sender: &Sender<Message>,
     ) -> Result<Waited, Failure> {
+        let mut noted = None;
         loop {
             let status = self
                 .agent
@@ -284,6 +285,9 @@ impl Turn<'_> {
                 }
             } else if !working(&status) {
                 return Ok(Waited::Done);
+            } else if noted != Some(status.work) {
+                self.output.note(&waiting_for(status.work));
+                noted = Some(status.work);
             }
             match self.receiver.recv() {
                 Ok(Message::Interrupted) => return Ok(Waited::Interrupted),
@@ -385,6 +389,30 @@ impl Turn<'_> {
 /// Whether `status` holds work `exec` waits for.
 fn working(status: &AgentBackgroundStatus) -> bool {
     !status.work.is_empty()
+}
+
+/// What `exec` says it waits for. A terminal that does not exit by itself
+/// is waited for until the command timeout stops it.
+fn waiting_for(work: AgentBackgroundWork) -> String {
+    let count = |count: usize, one: &str| match count {
+        0 => None,
+        1 => Some(format!("1 {one}")),
+        count => Some(format!("{count} {one}s")),
+    };
+    let waited = [
+        count(work.agents, "agent"),
+        count(work.terminals, "background terminal"),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(" and ");
+    if work.terminals == 0 {
+        return format!("waiting for {waited}");
+    }
+    format!(
+        "waiting for {waited} (a command that does not exit by itself runs until the command timeout, commandTimeoutMinutes)"
+    )
 }
 
 /// Ctrl-C cancels the turn; a second one ends the process at once.

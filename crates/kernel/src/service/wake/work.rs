@@ -1,7 +1,7 @@
 //! What a session's background work holds open: its sub-agents still
-//! working, two levels deep. Terminals are counted once their end wakes
-//! their owner (R5). Only loaded sessions are read: one that runs a turn is
-//! loaded, and one that is not runs nothing.
+//! working, two levels deep, and its own background terminals still
+//! running (`terminal.rs`). Only loaded sessions are read: one that runs
+//! a turn is loaded, and one that is not runs nothing.
 
 use super::*;
 use crate::{AgentBackgroundWork, AgentSessionOrigin};
@@ -15,7 +15,7 @@ impl AgentService {
     pub fn background_work(&self, session_id: AgentSessionId) -> AgentBackgroundWork {
         AgentBackgroundWork {
             agents: self.working_subagents(session_id, COUNTED_LEVELS),
-            terminals: 0,
+            terminals: self.background_terminals(session_id),
         }
     }
 

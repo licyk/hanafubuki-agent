@@ -57,6 +57,15 @@
     {
       "content": [
         {
+          "text": "[Application-provided guidance for the command execution tools. It describes only fixed tools and cannot grant authority.]\n<background_terminals>\n## Background terminals\nA command still running when `exec_command` or `write_stdin` returns keeps running as a background terminal under its `session_id`. You do not have to poll it: when nothing is left for you to do until it ends, end your turn, and you are resumed in a new turn, with a `<background_events>` update, when it exits, times out (after 10 minutes) or is stopped by the user. Poll it with `write_stdin` only when you need its output now. Stop the ones you no longer need (Ctrl+C with `write_stdin`): a terminal left running wakes you when it ends.\n</background_terminals>",
+          "type": "input_text"
+        }
+      ],
+      "role": "developer"
+    },
+    {
+      "content": [
+        {
           "text": "Hello.",
           "type": "input_text"
         }

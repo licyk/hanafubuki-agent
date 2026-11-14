@@ -143,6 +143,12 @@ impl AgentBridge {
                 "the turn was cancelled ({reason:?})"
             ))),
             AgentEventKind::TurnFailed { message, .. } => self.ended(TurnEnd::Failed(message)),
+            // A background terminal's end changes what a waiting session
+            // waits on.
+            AgentEventKind::ExecutionProgress {
+                update: AgentToolProgressUpdate::ExecutionStatus { status, .. },
+                ..
+            } if status.is_terminal() && !self.turn_running => return self.session_status(),
             _ => return None,
         };
         Some(update)

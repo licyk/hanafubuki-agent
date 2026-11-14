@@ -440,15 +440,24 @@ impl AgentService {
         call_id: Option<String>,
         update: AgentToolProgressUpdate,
     ) -> Result<(), AgentError> {
+        let command = self.started_terminal_command(cell, call_id.as_deref(), &update);
         let staged = {
             let mut record = cell.lock_after_persistence().await?;
-            self.stage_execution_progress(cell, &mut record, call_id, update)
+            self.stage_execution_progress(cell, &mut record, call_id, update, command)
         };
-        let Some((staged, event)) = staged else {
+        let Some((staged, event, woken)) = staged else {
             return Ok(());
         };
         self.persist_staged(staged).await?;
         self.emit_session_event(cell.session_id(), event);
+        if woken {
+            self.inner
+                .registries
+                .observers
+                .notify(&AgentNotification::WakeEventQueued {
+                    session_id: cell.session_id(),
+                });
+        }
         Ok(())
     }
 
@@ -473,9 +482,10 @@ impl AgentService {
         }
         let staged = {
             let mut record = cell.lock_after_persistence_blocking()?;
-            self.stage_execution_progress(&cell, &mut record, None, update)
+            self.stage_execution_progress(&cell, &mut record, None, update, None)
         };
-        let Some((staged, event)) = staged else {
+        // Naming no call, it queues no wake event.
+        let Some((staged, event, _)) = staged else {
             return Ok(());
         };
         self.persist_staged_blocking(staged)?;
@@ -485,13 +495,17 @@ impl AgentService {
 
     /// Stages `update` on the record: a checkpoint when it starts or ends an
     /// execution, a delta otherwise; nothing while the session is disposed.
+    /// A model's background terminal is tracked with it (`command`, from
+    /// [`Self::started_terminal_command`]), and its end queued or withdrawn
+    /// in the same checkpoint; whether an end was queued.
     fn stage_execution_progress(
         &self,
         cell: &Arc<SessionCell>,
         record: &mut SessionRecord,
         call_id: Option<String>,
         update: AgentToolProgressUpdate,
-    ) -> Option<(StagedPersistence, AgentEvent)> {
+        command: Option<String>,
+    ) -> Option<(StagedPersistence, AgentEvent, bool)> {
         if record.status.disposing {
             return None;
         }
@@ -504,18 +518,31 @@ impl AgentService {
             &update,
             AgentToolProgressUpdate::ExecutionStatus { status, .. } if status.is_terminal()
         );
+        // Every update but an output, which ends or starts nothing, is small.
+        let tracked = (!matches!(update, AgentToolProgressUpdate::ExecutionOutput { .. }))
+            .then(|| update.clone());
+        let from_call = call_id.is_some();
         let previous = record.rollback_state();
         let event = record_session_event(
             record,
             AgentEventKind::ExecutionProgress { call_id, update },
             self.inner.limits,
         );
+        let woken = tracked.is_some_and(|update| {
+            super::wake::track_background_terminal(
+                record,
+                from_call,
+                &update,
+                event.activity.as_ref(),
+                command,
+            )
+        });
         let staged = if checkpoint {
             StagedPersistence::commit(cell, record, previous)
         } else {
             StagedPersistence::delta(cell, record, previous)
         };
-        Some((staged, event))
+        Some((staged, event, woken))
     }
 
     /// Emits a session-level event to the sink of the session's managed turn,

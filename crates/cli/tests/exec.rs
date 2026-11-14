@@ -233,6 +233,72 @@ fn exec_waits_for_its_agents_and_ends_with_the_woken_turns_answer() {
 }
 
 #[test]
+fn exec_waits_for_a_terminal_and_exits_after_its_woken_turn() {
+    let home = Home::new();
+    let release = home.cwd.join("release");
+    #[cfg(not(windows))]
+    let command = "while [ ! -e release ]; do sleep 0.1; done; echo finished; exit 3";
+    #[cfg(windows)]
+    let command = "while (-not (Test-Path -LiteralPath release)) { Start-Sleep -Milliseconds 100 }; Write-Output finished; exit 3";
+    let arguments = serde_json::json!({ "cmd": command, "yield_time_ms": 500 });
+    let model = Model::start(vec![
+        tool_events("exec_command", &arguments.to_string()),
+        assistant_events("The command is running."),
+        assistant_events("The command finished with code 3."),
+    ]);
+    let home = home.with_provider(&model.server.base_url);
+    let last = home.home.join("last.txt");
+    let mut child = home
+        .command()
+        .args([
+            "--permission-mode",
+            "full-access",
+            "exec",
+            "--json",
+            "-o",
+            last.to_str().unwrap(),
+            "Run the command in the background.",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut lines = std::io::BufReader::new(child.stdout.take().unwrap()).lines();
+    let mut completed = 0;
+    for line in lines.by_ref() {
+        let event: Value = serde_json::from_str(&line.unwrap()).unwrap();
+        if event["kind"]["type"] == "turn_completed" {
+            completed += 1;
+            break;
+        }
+    }
+    std::fs::write(release, b"").unwrap();
+    for line in lines {
+        let event: Value = serde_json::from_str(&line.unwrap()).unwrap();
+        if event["kind"]["type"] == "turn_completed" {
+            completed += 1;
+        }
+    }
+    let run = support::Run(child.wait_with_output().unwrap()).expect(0);
+    assert_eq!(completed, 2, "{}", run.stderr());
+    assert_eq!(model.request_count(), 3);
+    assert!(
+        run.stderr().contains("background update: Terminal session"),
+        "{}",
+        run.stderr()
+    );
+    assert_eq!(
+        std::fs::read_to_string(last).unwrap(),
+        "The command finished with code 3."
+    );
+    let request = String::from_utf8_lossy(&model.server.requests()[2].body).into_owned();
+    assert!(
+        request.contains("exited with code 3") && request.contains("finished"),
+        "{request}"
+    );
+}
+
+#[test]
 fn an_approval_is_denied_under_approve_deny_and_the_turn_goes_on() {
     let model = Model::start(vec![
         command_call("echo should-not-run"),

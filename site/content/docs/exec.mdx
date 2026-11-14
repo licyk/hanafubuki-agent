@@ -103,6 +103,8 @@ hanafubuki-agent exec --json "列出最大的五个文件"
 
 ## 等待子代理 [#subagents]
 
+`exec` 也等待模型启动的后台终端。它会说明当前等待的工作，在终端退出、失败或超时时运行被唤醒的回合，并将最后一个回合的回答写入 `-o`。不会自行退出的命令会使 `exec` 一直等待到启动时配置的 `pluginOptions.execution.commandTimeoutMinutes` 到期（默认 10 分钟）。Ctrl-C 会停止等待并关闭 Agent。
+
 回合完成时，如果它创建的[子代理](/docs/tools#subagents)仍在工作，`exec` 不会退出：它等待它们，期间不运行任何东西。其中一个结束或给会话发消息时，`exec` 运行为所报告内容唤醒会话的回合，像任何回合一样输出：先把每条报告作为一条说明输出（``· background update: Sub-agent `counter` (agent id 2) completed: Twelve files.``，使用 `--json` 时输出到标准错误），然后是回合本身。它一直进行，直到没有子代理在工作、也没有剩下要读的内容，然后按最后一个回合的结束方式退出，`-o` 写入那个回合的最终回答。
 
 `wakeOnBackgroundTasks` 关闭时、回合没有完成时，以及子代理唤醒会话 100 次之后（会输出一条说明），它像以前一样在回合结束时退出。`exec` 等待时按 Ctrl-C 以 130 退出，子代理随 Agent 一起停止。

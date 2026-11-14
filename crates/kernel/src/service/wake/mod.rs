@@ -12,7 +12,10 @@ use super::*;
 use crate::{AgentWakeFilter, AgentWakePolicy, AgentWakeQueued, AgentWakeSource};
 
 mod admission;
+mod terminal;
 mod work;
+
+pub(in crate::service) use terminal::{track_background_terminal, BackgroundTerminals};
 
 impl AgentService {
     /// Queues `source` on `session_id`, durably. A sub-agent's or a
@@ -105,12 +108,15 @@ impl AgentService {
     /// Delivers the queued wake events to the running turn as one item, at
     /// a step boundary; the sequence of the last one it delivered, if any
     /// (the turn then takes another step). Nothing with the policy off.
+    /// What the step's calls reported is applied first, so the end of a
+    /// terminal a call's result reported is withdrawn, never delivered.
     pub(super) async fn consume_pending_wake_events(
         &self,
         identity: TurnIdentity,
         event_sink: &dyn AgentEventSink,
     ) -> Result<Option<u64>, AgentError> {
         let cell = self.session(identity.session_id)?;
+        self.flush_execution_progress(&cell).await;
         let (staged, history_event, last) = {
             let mut guard = cell.lock_after_persistence().await?;
             let record = &mut *guard;

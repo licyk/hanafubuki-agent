@@ -3,7 +3,8 @@
 //! streams each execution's output into the turn's activity monitor, and
 //! presents their calls (`presenter`). A
 //! `git clone` it runs always needs a person's approval. Its option
-//! `commandTimeoutMinutes` bounds each command from its start.
+//! `commandTimeoutMinutes` bounds each command from its start. It tells
+//! the model that a background terminal's end resumes it (`prompt`).
 
 mod approval;
 mod arguments;
@@ -11,6 +12,7 @@ mod monitor;
 mod options;
 mod plugin;
 mod presenter;
+mod prompt;
 mod specs;
 mod tool;
 
