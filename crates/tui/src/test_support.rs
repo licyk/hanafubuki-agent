@@ -57,13 +57,22 @@ impl Write for Recorder {
 impl VT100Backend {
     /// Creates a new `TestBackend` with the specified width and height.
     pub fn new(width: u16, height: u16) -> Self {
+        Self::with_scrollback(width, height, 0)
+    }
+
+    /// A screen that keeps the last `rows` rows scrolled off its top.
+    pub fn with_scrollback(width: u16, height: u16, rows: usize) -> Self {
         ratatui::crossterm::style::force_color_output(true);
         Self {
             crossterm_backend: CrosstermBackend::new(Recorder {
-                parser: vt100::Parser::new(height, width, 0),
+                parser: vt100::Parser::new(height, width, rows),
                 written: Vec::new(),
             }),
         }
+    }
+
+    pub fn vt100_mut(&mut self) -> &mut vt100::Parser {
+        &mut self.crossterm_backend.writer_mut().parser
     }
 
     pub fn vt100(&self) -> &vt100::Parser {

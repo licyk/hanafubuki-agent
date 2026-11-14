@@ -946,9 +946,34 @@ When the interface starts (`hanafubuki-agent` and `hanafubuki-agent resume`; nev
 - Only a stable release counts, and only one newer than this version. A check that fails (no network, GitHub's rate limit, an answer it does not read) shows nothing and is made again at the next launch. A build from a checkout (`target/debug`, `target/release`, or `cargo install --path`) never checks.
 - The answer is kept in [`update-check.json`](/docs/data-directory#contents).
 
+### The prompt at launch [#update-prompt]
+
+When the release an earlier check found is newer than this version, the next launch asks first, before the Agent starts: nothing of it runs yet, so no lock is taken and no plugin holds the executable an update replaces. The screen is Codex's:
+
+```text
+
+  Update available · 0.2.0 → 0.3.0
+  Release notes: https://github.com/licyk/hanafubuki-agent/releases/tag/v0.3.0
+
+› 1. Update now (downloads 0.3.0 and replaces this executable)
+  2. Skip
+  3. Skip until next version
+
+  enter continue · esc skip
+```
+
+- **Update now** runs [`hanafubuki-agent update`](/docs/cli-reference#update) in the terminal: the screen is cleared, the latest release is looked up again (it may be newer than the one shown, and `GITHUB_TOKEN` is sent to that lookup as `update` sends it), its lines are printed, and the program ends; start it again to run the new version. When the update fails, the error says what was kept, the executable is as it was, the program ends with exit code 1, and the next launch asks again. For a copy `cargo install` put in place, on Linux and macOS, the option reads ``Update now (runs `cargo install --locked hanafubuki-agent-cli`)``, with `--root` when it was installed elsewhere, and runs cargo.
+- **Skip** starts the interface; the next launch asks again.
+- **Skip until next version** starts the interface and does not ask again until a newer release is found; the version is kept in `update-check.json` as `dismissedVersion`. The footer's notice still shows it.
+- Up or `k` and Down or `j` move the highlight, wrapping around; Enter chooses it; `1`, `2` and `3` choose at once; Esc, Ctrl+C and Ctrl+D are Skip. What was typed before the screen appeared is dropped, so an Enter pressed while the program started never chooses Update now.
+- It is shown on `hanafubuki-agent` and on `hanafubuki-agent resume`, but not when a prompt was given on the command line (`hanafubuki-agent "fix the tests"`, `resume ID PROMPT`), not when the check is off, never in `exec` or without a terminal, and not for a build from a checkout. Nor is it shown when this copy cannot be updated from here (a directory you cannot write, a platform without a released binary, a cargo installation on Windows): the notice names the step instead.
+- It takes the whole screen in both presentations and is cleared once a choice is made, before the interface starts; nothing of it is left in the scrollback. A narrow or short window wraps it and keeps the highlighted option and the keys' line in view, down to about 20 columns and 4 rows; the blank rows, then the heading and the release notes give way first.
+- Two windows started at once may both ask. When both choose Update now, the second finds the executable updated and says so (`… is already 0.3.0 (another process updated it).`).
+- On Windows the launch also removes the executables earlier updates set aside (`hanafubuki-agent.exe.NUMBER.outdated`) that no program runs any more, whether the check is on or not.
+
 What the check sends: one HTTPS request, `GET https://api.github.com/repos/licyk/hanafubuki-agent/releases/latest`, with `Accept: application/vnd.github+json` and `User-Agent: hanafubuki-agent/VERSION` (this copy's version), through [`network.proxy`](/docs/network-logging#proxy-scope). No token, cookie or identifier is sent (not even `GITHUB_TOKEN`), and nothing of your configuration, sessions or projects; GitHub sees the request's address and the version, as it would a download. A failure is logged at `debug` as its kind alone.
 
-Turn it off with `tui.checkForUpdates = false` ([Configuration reference](/docs/config-reference#tui)) or by setting `HANAFUBUKI_AGENT_NO_UPDATE_CHECK` to any non-empty value ([Environment](/docs/environment#read)): then nothing is sent and no notice is shown, not even one an earlier check found. Either applies at the next launch.
+Turn it off with `tui.checkForUpdates = false` ([Configuration reference](/docs/config-reference#tui)) or by setting `HANAFUBUKI_AGENT_NO_UPDATE_CHECK` to any non-empty value ([Environment](/docs/environment#read)): then nothing is sent and neither the notice nor the prompt is shown, not even for a release an earlier check found. Either applies at the next launch.
 
 ## Terminal requirements [#terminal]
 

@@ -509,6 +509,10 @@ path = "crates/tui/src/app/tests/shell.rs"
 reason = "`!command`s end to end over the standalone Agent and its scripted model: run, carried to the next request, replayed, refused during a turn, stopped by Esc."
 
 [[original]]
+path = "crates/tui/src/app/tests/update_prompt.rs"
+reason = "What the update prompt leaves on the terminal: nothing in the scrollback or on the screen, and the interface's first frame after it clean in both presentations, over the standalone Agent."
+
+[[original]]
 path = "crates/tui/src/app/tests/history_search.rs"
 reason = "Ctrl+R end to end over the standalone Agent: what an earlier run sent found through the history store, and the search closed while a turn runs."
 

@@ -547,12 +547,175 @@ changed (none expected), what Hanafubuki must change at its next pin
         Linux, Windows and macOS passed at the first attempt. Site on
         daceddf: .../runs/43575490865, passed, its build and deploy
         included.
-- [ ] U3 (after U1 and U2): the prompt before the Agent starts (Codex's
+- [x] U3 (after U1 and U2): the prompt before the Agent starts (Codex's
       screen and keys: Update now, Skip, Skip until next version), skipped
       with a prompt argument; "Update now" runs `update`'s flow in the
       terminal and ends; the Windows backup swept at launch.
+      Done (2026-11-14):
+      - TUI (`update_prompt.rs`, new, ported from Codex's
+        `update_prompt.rs`): `update_prompt(TuiUpdatePrompt { current,
+        latest, release_notes, update_now }) -> Result<TuiUpdateChoice,
+        String>` (`UpdateNow`, `Skip`, `SkipVersion`), plain text in, a
+        choice out; the TUI's layer row is unchanged. It runs before the
+        main UI exists: `tui::init()` (modes, the inline viewport at the
+        cursor), `discard_input()` (what crossterm holds, the keys typed
+        while the program started among it), an `InputReader` on a channel
+        of its own, the screen drawn at the screen's height, the channel
+        drained once after the first frame (what the thread read before
+        the screen appeared), then keys and `Redraw` until a choice (the
+        input's end is Skip); `Tui::leave` clears the viewport and
+        `RestoreOnDrop` (moved from `interface.rs` to `tui/mod.rs`, shared)
+        restores the modes on every return; a fatal panic is restored by
+        the hook `tui::init` installs, now once per process (`Once`), not
+        once per `init`. Codex's keys: Up/`k`, Down/`j` wrapping, `1`/`2`/
+        `3`, Enter, Esc/Ctrl-C/Ctrl-D as Skip, releases ignored. The layout
+        is Codex's 57a808a392 column with its newer flex allocation (ported
+        as a small `allocate`; this crate's `FlexRenderable` is the older
+        one), applied to the heading, the release notes and the options
+        under the fixed hint, the two blank rows taking what is left; and a
+        line-based option list with Codex's `↑`/`↓` rows (this crate's
+        `render_rows` scrolls by item and could cut the highlighted
+        option). So the highlighted option and the hint stay from 20
+        columns and 4 rows up. The release notes are an OSC 8 link on each
+        row they wrap onto.
+        `InputReader::resume` now calls the shared `discard_input`.
+      - CLI (`update_check/prompt.rs`, new): `offer` (D13: not the
+        dismissed version, and only for `Replace` (``Update now (downloads
+        X and replaces this executable)``) or `Cargo` (``Update now (runs
+        `cargo install --locked hanafubuki-agent-cli`)``, `--root` when
+        passed); every manual case gets none), `ask` (the screen; a
+        terminal it cannot use is logged at `warn` and is a Skip),
+        `dismiss` (`UpdateCache::update` sets `dismissedVersion`, other
+        fields as the file holds them then; a failed write is logged at
+        `warn`). `Launch::start` gains the prompt (`ask: Option<…>`, `None`
+        with a prompt argument) and returns `Started::{Interface(notice),
+        UpdateNow(installation)}`: the Windows sweep, then (when allowed and
+        a client exists) the cache, the prompt, the dismissal, and only then
+        the check's thread, so "Update now" starts no check; the action is
+        computed once (it probes the directory). `at_launch` returns
+        `AtLaunch::{Interface, Exit(Result<u8, Failure>)}`; on Exit it runs
+        `crate::update::update(&installation, &client(&proxy)?, false)`
+        (a fresh lookup, `GITHUB_TOKEN` as `update` sends it) and
+        `interactive::run` shuts the opened runtime down and returns that
+        result: the Agent never starts, the data directory's lock is never
+        taken. `install.rs`'s Windows line now says "the next update or
+        start removes it".
+      - Deviations: (1) the Windows `.outdated` sweep runs synchronously at
+        the start of `Launch::start` (one directory read), for every
+        interface launch that resolved its installation, whether the check
+        is on or not, rather than in the check's thread, which runs only
+        when the check is due (every 20 h) and only when allowed: D18 says
+        "at each launch", and the docs' "the next update or start removes
+        it" holds only this way. (2) Codex makes its blank rows flexible
+        and its heading fixed, which on a short screen gives the blank rows
+        rows before the options (below about 10 rows the options got none);
+        here the blank rows take only what is left and the heading shares
+        with the options, so the 40×12 snapshot is the plan's picture (all
+        three options, the trailing blank row dropped); at 80×12 the result
+        is Codex's. (3) Codex's 80×12 snapshot pads
+        the selected row with spaces (its selection style paints the row);
+        here the selected row is the crate's cyan bold, no padding; the
+        texts differ by design (title versions, the release-notes URL built
+        from the version, the first option's wording per install kind).
+        (4) A prompt whose terminal fails is a Skip (logged), not an error:
+        the interface then starts and reports its own terminal error.
+      - Tests (TUI, `update_prompt/tests.rs`, Codex's ported): snapshots at
+        80×12 (released, cargo) and 40×12 with option 3 highlighted; widths
+        20, 28, 33, 40, 57, 80 and 120 at every height from 4 to 20 keep the
+        highlighted option (each of the three) and the hint; every size up
+        to 24×14 draws without a panic; the release notes an OSC 8 link
+        on both rows at 40 columns; keys (Enter on the default, Down/Down
+        Enter, Up wrapping, `j`/`k`, `1`/`2`/`3` whatever is highlighted,
+        Esc, Ctrl-C, Ctrl-D, releases ignored); the loop over a channel and
+        the vt100 terminal: an Enter and a `1` queued before the screen are
+        dropped (the input then ends: Skip), two `Redraw`s and a move each
+        draw a frame (counted by synchronized-update markers), the choice
+        clears the viewport. `app/tests/update_prompt.rs` (new, original):
+        after the prompt on a screen with scrollback, the screen is empty
+        and the scrollback has the shell's lines and nothing of the prompt;
+        the interface's first frame after it, in Scrollback and Fullscreen,
+        shows the composer and nothing of the prompt. CLI unit tests
+        (`update_check/tests.rs`, `prompt/tests.rs`): prompted for a newer
+        cached release with its exact texts, Skip leaves the cache and asks
+        again; equal (as after an update) and older: no prompt, no notice;
+        "Skip until next version" writes `dismissedVersion` keeping
+        `latestVersion`, `checkedAtMs` and an unknown key, stops the prompt
+        (the notice stays, Q9), and 0.3.1 after a dismissed 0.3.0 prompts;
+        off, without a client, with a prompt argument: none; "Update now"
+        hands the installation back with no request even from a due cache;
+        the sweep (Windows: the backup removed, another file kept; Unix:
+        nothing removed); the option texts (cargo with and without
+        `--root`), every manual reason none; a dismissal and a concurrent
+        check keep each other's fields in both orders; an unreadable cache
+        is not written. `crates/cli/tests/update_prompt.rs` (new, Unix,
+        debug builds): the real binary hard-linked out of `target/` on a
+        portable-pty pseudo-terminal, the test answering the cursor and
+        device-attribute queries and reading the screen with vt100:
+        "Update now" prints `update`'s lines, exits 0, the installed file
+        reports 99.0.0, no `.lock` in the data directory, two requests
+        (lookup, archive), cache not dismissed; a digest mismatch exits 1
+        with §4's sentence and the executable's inode, size and mtime
+        unchanged, no `.lock`; `1\r` typed before the prompt is dropped and
+        Esc on `resume --last` opens the interface, the next launch prompts
+        again; "3" writes the dismissal, the next launch reaches the
+        interface without the prompt; a prompt argument, the variable, the
+        setting and a build in `target/` reach the interface without it;
+        two instances both prompt, the second "Update now" prints `… is
+        already 99.0.0 (another process updated it).`.
+        `tests/update_check.rs`: `exec`, a launch and `resume --last`
+        without a terminal, with a newer and due release cached, exit as
+        before, ask nothing and leave the cache byte-identical. By
+        mutation, each seen failing then restored: both input drops removed
+        (the pre-typed-key unit test, and the PTY test, whose screen then
+        never showed the prompt), the dismissal ignored (2 tests).
+      - Not covered end to end: Windows (no pseudo-terminal test there: the
+        prompt's screen and loop run on the vt100 terminal, the decision as
+        typed-input unit tests, the sweep as a unit test on Windows CI); a
+        real terminal's scrollback (vt100 drops the lines a scrolling region
+        pushes off the top, which a real terminal keeps); "Update now" for
+        a cargo installation through the prompt (its text is tested, and
+        the flow is `update`'s, tested by U1 with a fake cargo); a resize
+        during the prompt in a real terminal; Ctrl-C before the prompt's
+        raw mode (a SIGINT, as for any command). The installed "new
+        version" is a script, so "the next launch after an update does not
+        prompt" is the equal-version decision test plus the cache left by
+        "Update now".
+      - Dependencies: `portable-pty` 0.9 and `vt100` (workspace) as Unix
+        dev-dependencies of the CLI; both already in `Cargo.lock` (the
+        process and TUI crates use them; portable-pty is MIT), so no new
+        package.
+      - Docs (both languages): `terminal-interface#update-prompt` (new,
+        under `#updates`: the screen, the options, the keys, when it
+        appears and when not, the Windows sweep; how to stop it in the
+        existing paragraph), `cli-reference#interface` (the prompt and
+        "Update now"'s exit code) and `#agent-start`, `installation#updating`
+        (the prompt; the backup removed at the next update or start),
+        `cli-reference#update` (the same), `internals#self-update` (the
+        launch's sweep and prompt, the terminal's setup and restore). Each
+        changed page compiled with `@mdx-js/mdx` 3.1.1 and remark-gfm.
+      - Validation (Linux): `cargo fmt --all --check`; `RUSTFLAGS="-D
+        warnings" cargo check --workspace --all-targets --all-features`;
+        `cargo clippy --workspace --all-targets --all-features -- -D
+        warnings`; `cargo xtask check`; `cargo test --workspace
+        --all-features --no-fail-fast` (5059 passed, 4 ignored, before the
+        last layout change), then the TUI and CLI crates' tests again on
+        the final tree (all passed); `cargo check -p hanafubuki-agent-cli
+        --release`; `cargo clippy -p hanafubuki-agent-tui -p
+        hanafubuki-agent-cli --target x86_64-pc-windows-gnu --all-targets
+        --all-features` (compiles; only `hanafubuki-agent-execution`'s
+        existing dead-code warning); `bun install --frozen-lockfile`, `bun
+        run format:check:site`, `bun run site:check`, `bun run site:test`
+        (28 passed). Skipped: `site:build` (the Site workflow). Windows
+        and macOS: CI only.
+      - Goldens: none. Module size: no exception added or raised
+        (`update_prompt.rs` 317 code lines, `update_check/mod.rs` 140,
+        `app/tests/mod.rs` 796 of 900). Hanafubuki: nothing (the facade is
+        untouched; the TUI and the CLI are not its).
 - [ ] U4 (optional, later: Q8; not started without a further decision):
       minisign signatures over each archive, verified before extraction.
+
+U0–U3, the plan's required milestones, are done (2026-11-14); U4 (signed
+archives) waits for a further decision.
 
 ## Plan: the model list's facts and its loading state (2026-11-14)
 

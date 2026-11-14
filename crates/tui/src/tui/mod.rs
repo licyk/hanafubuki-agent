@@ -17,6 +17,7 @@ mod input;
 
 use std::io::{self, stdout, Result, Stdout, Write};
 use std::panic;
+use std::sync::Once;
 use std::time::{Duration, Instant};
 
 use crate::terminal_hyperlinks::HyperlinkLine;
@@ -36,7 +37,7 @@ use crate::app_event::{AppEvent, AppEventSender};
 use crate::custom_terminal;
 use crate::custom_terminal::Terminal as CustomTerminal;
 use alternate_screen::ALTERNATE_SCREEN;
-pub(crate) use input::InputReader;
+pub(crate) use input::{discard_input, InputReader};
 
 /// The terminal type the application draws on.
 pub(crate) type Terminal = CustomTerminal<CrosstermBackend<Stdout>>;
@@ -65,9 +66,19 @@ pub(crate) fn restore() -> Result<()> {
     Ok(())
 }
 
+/// Restores the terminal however the screen that set it up returns.
+pub(crate) struct RestoreOnDrop;
+
+impl Drop for RestoreOnDrop {
+    fn drop(&mut self) {
+        let _ = restore();
+    }
+}
+
 /// Enters the terminal's modes and opens the inline viewport at the
 /// cursor. Call it after the process's panic hook is installed: the hook
-/// this installs restores the terminal before it runs that one.
+/// this installs restores the terminal before it runs that one. The update
+/// prompt and then the interface each call it; the hook is installed once.
 pub(crate) fn init() -> Result<Terminal> {
     set_modes()?;
     set_panic_hook();
@@ -84,13 +95,16 @@ pub(crate) fn init() -> Result<Terminal> {
 /// guard that could restore it later). A contained panic, on an Agent
 /// thread the Agent recovers from, leaves the interface running.
 fn set_panic_hook() {
-    let hook = panic::take_hook();
-    panic::set_hook(Box::new(move |panic_info| {
-        if !hanafubuki_agent::panic::is_panic_contained() {
-            let _ = restore();
-        }
-        hook(panic_info);
-    }));
+    static INSTALLED: Once = Once::new();
+    INSTALLED.call_once(|| {
+        let hook = panic::take_hook();
+        panic::set_hook(Box::new(move |panic_info| {
+            if !hanafubuki_agent::panic::is_panic_contained() {
+                let _ = restore();
+            }
+            hook(panic_info);
+        }));
+    });
 }
 
 /// Whether the terminal reports modified keys apart. Ask it before the

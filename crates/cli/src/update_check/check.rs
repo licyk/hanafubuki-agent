@@ -40,7 +40,7 @@ impl Check {
     fn run(self, notifier: &TuiUpdateNotifier) {
         let current = current_version();
         if let Some(newer) = check(&self.client, &self.data_dir, &current, now_ms()) {
-            notifier.notify(notice(&newer, &self.installation));
+            notifier.notify(notice(&newer, &self.installation.action()));
         }
     }
 }

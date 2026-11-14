@@ -48,6 +48,8 @@ hanafubuki-agent [选项] <命令> [参数]
 
 没有终端时，两者都以退出码 2 退出。见[终端界面](/docs/terminal-interface#modes)。
 
+之前的更新检查发现了更新的版本时，两者都会在 Agent 启动之前先显示[更新提示](/docs/terminal-interface#update-prompt)；给出了 `提示词` 时不显示。选择其中的 Update now 会运行 [`update`](#update)，并以 `update` 的退出码结束程序：更新成功或没有需要安装的版本时为 0，无法更新时为 1；此时不会打开界面。Skip 和 Skip until next version 照常打开界面。
+
 ## exec [#exec]
 
 ```text
@@ -207,7 +209,7 @@ Updated to 0.3.0. The next start of hanafubuki-agent runs it; running ones keep 
 
 具体做法取决于可执行文件的安装方式：
 
-- **发布的二进制**：把最新发布版本中本平台的归档（`hanafubuki-agent-VERSION-TARGET.tar.gz`，Windows 上是 `.zip`）下载到可执行文件旁边新建的隐藏目录（`.hanafubuki-agent-update-…`）中，并按 GitHub 给出的大小和 SHA-256 摘要校验；没有摘要的发布会被拒绝。只按确切路径（`hanafubuki-agent-VERSION-TARGET/hanafubuki-agent`）从中取出可执行文件，它必须在 10 秒内用新版本号回答 `--version`，这同时能发现其他架构的构建，以及 Linux 上低于 2.35 的 glibc。然后用一次重命名把它放到位：从不写入已安装的可执行文件，这最后一步之前的任何步骤都不会碰它。通过符号链接运行时，替换的是链接指向的文件，链接保持不变。在 Windows 上，正在运行的可执行文件不能被替换，所以先把它重命名为旁边的 `hanafubuki-agent.exe.NUMBER.outdated`（新文件放不到位时会改回来）；没有进程再运行它之后，下一次更新会删除这个文件。
+- **发布的二进制**：把最新发布版本中本平台的归档（`hanafubuki-agent-VERSION-TARGET.tar.gz`，Windows 上是 `.zip`）下载到可执行文件旁边新建的隐藏目录（`.hanafubuki-agent-update-…`）中，并按 GitHub 给出的大小和 SHA-256 摘要校验；没有摘要的发布会被拒绝。只按确切路径（`hanafubuki-agent-VERSION-TARGET/hanafubuki-agent`）从中取出可执行文件，它必须在 10 秒内用新版本号回答 `--version`，这同时能发现其他架构的构建，以及 Linux 上低于 2.35 的 glibc。然后用一次重命名把它放到位：从不写入已安装的可执行文件，这最后一步之前的任何步骤都不会碰它。通过符号链接运行时，替换的是链接指向的文件，链接保持不变。在 Windows 上，正在运行的可执行文件不能被替换，所以先把它重命名为旁边的 `hanafubuki-agent.exe.NUMBER.outdated`（新文件放不到位时会改回来）；没有进程再运行它之后，下一次更新或终端界面的下一次启动会删除这个文件。
 - **`cargo install`**：在 Linux 和 macOS 上运行 `cargo install --locked hanafubuki-agent-cli`（可执行文件不在 cargo 的默认安装根目录时带上 `--root`），在一个临时目录中运行，这样任何项目的 cargo 设置都不会生效，并显示 cargo 自己的输出；然后询问可执行文件的版本，从而发现 cargo 把它装到了别处（`CARGO_INSTALL_ROOT`、`install.root`）的情况。在 Windows 上只给出这条命令。
 - **从检出的源码构建**（`target/debug`、`target/release`、`cargo install --path`）、**没有写权限的目录**，或**没有发布构建的平台**：说明应该怎么做，并以退出码 1 退出。
 
@@ -223,7 +225,7 @@ Updated to 0.3.0. The next start of hanafubuki-agent runs it; running ones keep 
 
 ## 哪些命令会启动 Agent [#agent-start]
 
-`config`、`providers list`、`roles` 和不带 `--online` 的 `doctor` 只读写配置（`roles` 和 `doctor` 还会读取已安装插件，但不在那里写入任何东西），`update` 只读取其中的代理；它们都不启动 Agent，可以在另一个 Agent 进程运行时使用。其他命令会启动 Agent，需要独占数据目录。
+`config`、`providers list`、`roles` 和不带 `--online` 的 `doctor` 只读写配置（`roles` 和 `doctor` 还会读取已安装插件，但不在那里写入任何东西），`update` 只读取其中的代理；它们都不启动 Agent，可以在另一个 Agent 进程运行时使用。其他命令会启动 Agent，需要独占数据目录。终端界面的[更新提示](/docs/terminal-interface#update-prompt)出现在 Agent 启动之前：选择 Update now 会结束程序，不启动 Agent。
 
 每个命令都会先读取配置，再安装崩溃处理和日志文件，然后才启动 Agent 或修改任何内容。会启动 Agent 的管理命令也会像每次启动一样在后台连接启用的 MCP 服务器。
 

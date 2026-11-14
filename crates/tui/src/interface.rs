@@ -21,7 +21,7 @@ use crate::chatwidget::{ChatWidget, ChatWidgetInit};
 use crate::history_cell::HistoryRenderMode;
 use crate::render::highlight::configure_theme;
 use crate::transcript_mode::{is_ssh_session, TranscriptMode};
-use crate::tui::{self, FrameRequester, InputReader, Tui};
+use crate::tui::{self, FrameRequester, InputReader, RestoreOnDrop, Tui};
 use crate::tui_state::TuiState;
 use crate::update_notice::{TuiUpdateNotice, TuiUpdateNotifier};
 use crate::user_message::UserMessage;
@@ -241,14 +241,5 @@ fn latest_session(agent: &AgentHandle) -> Result<Option<AgentSessionId>, String>
             Some(cursor) => request.cursor = Some(cursor),
             None => return Ok(None),
         }
-    }
-}
-
-/// Restores the terminal however the interface returns.
-struct RestoreOnDrop;
-
-impl Drop for RestoreOnDrop {
-    fn drop(&mut self) {
-        let _ = tui::restore();
     }
 }

@@ -63,7 +63,7 @@ mod launch {
     use std::path::Path;
     use std::time::{Duration, Instant};
 
-    use hanafubuki_agent_tui::TuiEvents;
+    use hanafubuki_agent_tui::{TuiEvents, TuiUpdateChoice, TuiUpdatePrompt};
     use hanafubuki_agent_update::test_support::{FakeRelease, FakeResponse};
 
     use super::super::cache::UPDATE_CHECK_FILE;
@@ -94,19 +94,59 @@ mod launch {
             Self { release, dir }
         }
 
+        /// A launch with a prompt argument: no prompt.
         fn start(&self, allowed: bool, client: Option<ReleaseClient>) -> Option<TuiUpdateNotice> {
-            let executable = self.dir.path().join("bin/hanafubuki-agent");
+            let no_prompt = None::<fn(TuiUpdatePrompt) -> TuiUpdateChoice>;
+            match self.launch(allowed, client, no_prompt) {
+                Started::Interface(notice) => notice,
+                Started::UpdateNow(_) => panic!("no prompt was put"),
+            }
+        }
+
+        /// A launch whose prompt, if any, `ask` answers.
+        fn launch(
+            &self,
+            allowed: bool,
+            client: Option<ReleaseClient>,
+            ask: Option<impl FnOnce(TuiUpdatePrompt) -> TuiUpdateChoice>,
+        ) -> Started {
             let launch = Launch {
                 data_dir: self.dir.path().to_path_buf(),
-                installation: Installation::at(&executable).unwrap(),
+                installation: Installation::at(&self.executable()).unwrap(),
                 current: "0.2.0".parse().unwrap(),
                 now_ms: NOW,
             };
             launch.start(
                 allowed,
                 || client.ok_or(UpdateError::DebugBuild),
+                ask,
                 TuiEvents::new().update_notifier(),
             )
+        }
+
+        /// A launch with the check on whose prompt, if any, is answered
+        /// `choice`: the prompt put, and the notice.
+        fn prompted(
+            &self,
+            choice: TuiUpdateChoice,
+        ) -> (Option<TuiUpdatePrompt>, Option<TuiUpdateNotice>) {
+            let mut put = None;
+            let started = self.launch(
+                true,
+                self.client(),
+                Some(|prompt| {
+                    put = Some(prompt);
+                    choice
+                }),
+            );
+            match started {
+                Started::Interface(notice) => (put, notice),
+                Started::UpdateNow(_) => panic!("updating after {put:?}"),
+            }
+        }
+
+        fn executable(&self) -> PathBuf {
+            self.dir.path().join("bin/hanafubuki-agent")
         }
 
         fn client(&self) -> Option<ReleaseClient> {
@@ -193,6 +233,136 @@ mod launch {
         let fixture = Fixture::new(cached("0.3.0", NOW + HOUR_MS));
         fixture.start(true, fixture.client());
         fixture.wait_for_the_check();
+    }
+
+    fn cached_with_dismissal(version: &str, dismissed: &str) -> Option<String> {
+        Some(format!(
+            r#"{{"latestVersion": "{version}", "checkedAtMs": {}, "dismissedVersion": "{dismissed}"}}"#,
+            NOW - HOUR_MS
+        ))
+    }
+
+    /// A newer release in the cache is put to the person, worded for a
+    /// released binary; Skip goes on into the interface with the notice
+    /// and the cache as it was, and asks again at the next launch.
+    #[test]
+    fn a_newer_cached_release_is_prompted_and_skip_asks_again_next_time() {
+        let fixture = Fixture::new(cached("0.3.0", NOW - HOUR_MS));
+        let before = fixture.cache();
+        let (put, notice) = fixture.prompted(TuiUpdateChoice::Skip);
+        assert_eq!(
+            put,
+            Some(TuiUpdatePrompt {
+                current: "0.2.0".to_string(),
+                latest: "0.3.0".to_string(),
+                release_notes: "https://github.com/licyk/hanafubuki-agent/releases/tag/v0.3.0"
+                    .to_string(),
+                update_now: "Update now (downloads 0.3.0 and replaces this executable)".to_string(),
+            })
+        );
+        assert_eq!(shown(notice).as_deref(), Some(FULL));
+        assert_eq!(fixture.cache(), before);
+        assert!(fixture.prompted(TuiUpdateChoice::Skip).0.is_some());
+    }
+
+    /// An equal release (as after an update: `update` leaves the cache, and
+    /// the new build is that release) or an older one: no prompt, no
+    /// notice.
+    #[test]
+    fn a_cached_release_that_is_not_newer_is_not_prompted() {
+        for version in ["0.2.0", "0.1.9"] {
+            let fixture = Fixture::new(cached(version, NOW - HOUR_MS));
+            let (put, notice) = fixture.prompted(TuiUpdateChoice::UpdateNow);
+            assert_eq!((put, notice), (None, None), "{version}");
+        }
+    }
+
+    /// "Skip until next version" keeps the cache's other fields; then that
+    /// version is not prompted again, its notice still shown, until a newer
+    /// one is cached.
+    #[test]
+    fn skip_until_next_version_stops_the_prompt_until_a_newer_release() {
+        let fixture = Fixture::new(Some(format!(
+            r#"{{"latestVersion": "0.3.0", "checkedAtMs": {}, "later": [1]}}"#,
+            NOW - HOUR_MS
+        )));
+        let (put, notice) = fixture.prompted(TuiUpdateChoice::SkipVersion);
+        assert!(put.is_some());
+        assert_eq!(shown(notice).as_deref(), Some(FULL));
+        let cache: serde_json::Value = serde_json::from_str(&fixture.cache()).unwrap();
+        assert_eq!(
+            cache,
+            serde_json::json!({
+                "latestVersion": "0.3.0",
+                "checkedAtMs": NOW - HOUR_MS,
+                "dismissedVersion": "0.3.0",
+                "later": [1],
+            })
+        );
+
+        let (put, notice) = fixture.prompted(TuiUpdateChoice::UpdateNow);
+        assert_eq!(put, None);
+        assert_eq!(shown(notice).as_deref(), Some(FULL));
+
+        let fixture = Fixture::new(cached_with_dismissal("0.3.1", "0.3.0"));
+        let (put, _) = fixture.prompted(TuiUpdateChoice::Skip);
+        assert_eq!(put.map(|prompt| prompt.latest).as_deref(), Some("0.3.1"));
+    }
+
+    /// Off (the setting, the variable, a checkout), without a client (a
+    /// debug build without the test URL) or with a prompt argument: no
+    /// prompt.
+    #[test]
+    fn no_prompt_when_the_check_is_off_or_a_prompt_argument_was_given() {
+        for (allowed, with_client) in [(false, true), (true, false)] {
+            let fixture = Fixture::new(cached("0.3.0", NOW - HOUR_MS));
+            let client = fixture.client().filter(|_| with_client);
+            let started = fixture.launch(allowed, client, Some(|_| panic!("prompted")));
+            assert!(matches!(started, Started::Interface(None)));
+        }
+        let fixture = Fixture::new(cached("0.3.0", NOW - HOUR_MS));
+        // `start` puts no prompt: `ask` is `None`.
+        assert_eq!(
+            shown(fixture.start(true, fixture.client())).as_deref(),
+            Some(FULL)
+        );
+    }
+
+    /// "Update now" hands the installation back before anything else: no
+    /// check starts, even when one is due, and the cache is left as it was.
+    #[test]
+    fn update_now_starts_no_check() {
+        let stale = cached("0.3.0", NOW - 30 * HOUR_MS);
+        let fixture = Fixture::new(stale.clone());
+        let started = fixture.launch(true, fixture.client(), Some(|_| TuiUpdateChoice::UpdateNow));
+        let Started::UpdateNow(installation) = started else {
+            panic!("not updating");
+        };
+        assert_eq!(
+            installation.executable().key(),
+            Installation::at(&fixture.executable())
+                .unwrap()
+                .executable()
+                .key()
+        );
+        assert_eq!(fixture.requests_after_a_moment(), 0);
+        assert_eq!(Some(fixture.cache()), stale);
+    }
+
+    /// The executables an update moved aside are removed at each launch on
+    /// Windows, whether the check is on or not; nothing else is, and on Unix
+    /// nothing is moved aside, so nothing is removed.
+    #[test]
+    fn a_launch_removes_the_executables_moved_aside_on_windows() {
+        let fixture = Fixture::new(None);
+        let bin = fixture.dir.path().join("bin");
+        let backup = bin.join("hanafubuki-agent.1763107200000.outdated");
+        let other = bin.join("other.1763107200000.outdated");
+        fs::write(&backup, "old").unwrap();
+        fs::write(&other, "old").unwrap();
+        fixture.start(false, None);
+        assert_eq!(backup.exists(), cfg!(not(windows)));
+        assert!(other.exists());
     }
 
     #[test]

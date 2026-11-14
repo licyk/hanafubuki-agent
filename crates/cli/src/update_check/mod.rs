@@ -1,6 +1,7 @@
 //! The update check at the terminal interface's launch
-//! (site/content/docs/terminal-interface.en.mdx, "Updates"): the notice an
-//! earlier check left in the cache, shown from the first frame, and, at
+//! (site/content/docs/terminal-interface.en.mdx, "Updates"): the prompt for
+//! a newer release an earlier check left in the cache, shown before the
+//! Agent starts; the notice of it, shown from the first frame; and, at
 //! most every 20 hours, a check on a thread of its own whose newer release
 //! the interface shows when it is found. Only `interactive::run` starts
 //! it, after its terminal check; `tui.checkForUpdates = false`,
@@ -10,32 +11,50 @@
 
 mod cache;
 mod check;
+mod prompt;
 
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-use hanafubuki_agent_tui::{TuiUpdateNotice, TuiUpdateNotifier};
+use hanafubuki_agent_tui::{TuiUpdateChoice, TuiUpdateNotice, TuiUpdateNotifier, TuiUpdatePrompt};
 use hanafubuki_agent_update::{
-    current_version, is_newer, InstallKind, Installation, ManualReason, ReleaseClient,
-    UpdateAction, UpdateError, UpdateProxy, Version,
+    current_version, is_newer, sweep_outdated, InstallKind, Installation, ManualReason,
+    ReleaseClient, UpdateAction, UpdateError, UpdateProxy, Version,
 };
 
 use crate::agent::Standalone;
+use crate::exit::Failure;
 use cache::UpdateCache;
 use check::{now_ms, Check};
 
 /// Any non-empty value turns the check and its notice off.
 const NO_UPDATE_CHECK_ENV: &str = "HANAFUBUKI_AGENT_NO_UPDATE_CHECK";
 
-/// At the interface's launch: the notice the cache holds, and the check
-/// started when it is due; `None`, and nothing started, when the check is
-/// off.
+/// How the launch goes on.
+pub(crate) enum AtLaunch {
+    /// Into the interface, with the notice of a newer release the cache
+    /// holds.
+    Interface(Option<TuiUpdateNotice>),
+    /// "Update now" was chosen and the update ran; the process ends with
+    /// its result, nothing of the Agent having started.
+    Exit(Result<u8, Failure>),
+}
+
+/// At the interface's launch, before the Agent starts: on Windows the
+/// executables earlier updates moved aside removed; then, unless the check
+/// is off, the prompt (not when a prompt argument was given), the notice
+/// the cache holds, and the check started when it is due.
 pub(crate) fn at_launch(
     standalone: &Standalone,
     notifier: TuiUpdateNotifier,
-) -> Option<TuiUpdateNotice> {
-    let settings = standalone.runtime.config().standalone_settings().ok()?;
-    let installation = Installation::current().ok()?;
+    prompt_argument: bool,
+) -> AtLaunch {
+    let Ok(settings) = standalone.runtime.config().standalone_settings() else {
+        return AtLaunch::Interface(None);
+    };
+    let Ok(installation) = Installation::current() else {
+        return AtLaunch::Interface(None);
+    };
     let allowed = allowed(
         settings.tui.check_for_updates,
         std::env::var_os(NO_UPDATE_CHECK_ENV),
@@ -48,11 +67,20 @@ pub(crate) fn at_launch(
         current: current_version(),
         now_ms: now_ms(),
     };
-    launch.start(
+    let started = launch.start(
         allowed,
         || ReleaseClient::for_this_build(&proxy, None),
+        (!prompt_argument).then_some(prompt::ask),
         notifier,
-    )
+    );
+    match started {
+        Started::Interface(notice) => AtLaunch::Interface(notice),
+        // A fresh lookup, with the token `update` sends.
+        Started::UpdateNow(installation) => AtLaunch::Exit(
+            crate::update::client(&proxy)
+                .and_then(|client| crate::update::update(&installation, &client, false)),
+        ),
+    }
 }
 
 /// What the launch knows, read from the process.
@@ -63,32 +91,61 @@ struct Launch {
     now_ms: u64,
 }
 
+/// What [`Launch::start`] leaves to do.
+enum Started {
+    Interface(Option<TuiUpdateNotice>),
+    UpdateNow(Installation),
+}
+
 impl Launch {
-    /// The cache's notice and, when due, the check over the client
-    /// `client` makes; nothing when not `allowed` or without a client (a
-    /// debug build without the test release URL).
+    /// On Windows, the executables earlier updates moved aside removed,
+    /// whether the check is on or not. Then the prompt, put to `ask` when
+    /// there is one; then the cache's notice and, when due, the check over
+    /// the client `client` makes. Nothing of the check when not `allowed`
+    /// or without a client (a debug build without the test release URL); no
+    /// prompt without `ask` (a prompt argument).
     fn start(
         self,
         allowed: bool,
         client: impl FnOnce() -> Result<ReleaseClient, UpdateError>,
+        ask: Option<impl FnOnce(TuiUpdatePrompt) -> TuiUpdateChoice>,
         notifier: TuiUpdateNotifier,
-    ) -> Option<TuiUpdateNotice> {
+    ) -> Started {
+        // One directory read; a file a running process still maps stays.
+        sweep_outdated(&self.installation);
         if !allowed {
-            return None;
+            return Started::Interface(None);
         }
         let client = match client() {
             Ok(client) => client,
             Err(error) => {
                 log::debug!("update check: {}", error.kind());
-                return None;
+                return Started::Interface(None);
             }
         };
         let cache = UpdateCache::load(&self.data_dir);
-        let cached = cache
+        let newer = cache
             .latest_version
             .as_ref()
-            .filter(|latest| is_newer(latest, &self.current))
-            .map(|latest| notice(latest, &self.installation));
+            .filter(|latest| is_newer(latest, &self.current));
+        let action = newer.map(|_| self.installation.action());
+        if let (Some(latest), Some(action), Some(ask)) = (newer, &action, ask) {
+            let offered = prompt::offer(
+                latest,
+                cache.dismissed_version.as_ref(),
+                action,
+                &self.current,
+            );
+            match offered.map(ask) {
+                Some(TuiUpdateChoice::UpdateNow) => return Started::UpdateNow(self.installation),
+                Some(TuiUpdateChoice::SkipVersion) => prompt::dismiss(&self.data_dir, latest),
+                Some(TuiUpdateChoice::Skip) | None => {}
+            }
+        }
+        // Shown for a dismissed version too: only the prompt respects it.
+        let cached = newer
+            .zip(action)
+            .map(|(latest, action)| notice(latest, &action));
         if cache.is_due(self.now_ms) {
             Check {
                 client,
@@ -97,7 +154,7 @@ impl Launch {
             }
             .start(notifier);
         }
-        cached
+        Started::Interface(cached)
     }
 }
 
@@ -109,11 +166,12 @@ fn allowed(setting: bool, no_update_check: Option<OsString>, kind: &InstallKind)
         && !matches!(kind, InstallKind::Checkout)
 }
 
-/// The notice of `latest`, with the command that installs it here.
-fn notice(latest: &Version, installation: &Installation) -> TuiUpdateNotice {
+/// The notice of `latest`, with the command that installs it here, where
+/// `action` is what can be done.
+fn notice(latest: &Version, action: &UpdateAction) -> TuiUpdateNotice {
     TuiUpdateNotice {
         version: latest.to_string(),
-        action: action_text(&installation.action()).to_string(),
+        action: action_text(action).to_string(),
     }
 }
 

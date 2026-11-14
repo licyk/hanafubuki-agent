@@ -48,6 +48,8 @@ The layers and their precedence are in [Configuration layers](/docs/config-layer
 
 Without a terminal, both exit with code 2. See [Terminal interface](/docs/terminal-interface#modes).
 
+When an earlier update check found a newer release, both first show the [update prompt](/docs/terminal-interface#update-prompt), before the Agent starts; not when a `PROMPT` is given. Its "Update now" runs [`update`](#update) and ends the program with `update`'s exit code: 0 when it updated or found nothing to install, 1 when it could not; the interface is then not opened. Skip and "Skip until next version" open it as usual.
+
 ## exec [#exec]
 
 ```text
@@ -207,7 +209,7 @@ On a terminal the download line counts up in place; otherwise only its first sta
 
 What it does depends on how the executable was installed:
 
-- **A released binary**: the latest release's archive for this platform (`hanafubuki-agent-VERSION-TARGET.tar.gz`, `.zip` on Windows) is downloaded into a new hidden directory beside the executable (`.hanafubuki-agent-update-…`) and checked against the size and the SHA-256 digest GitHub gives for it; a release without a digest is refused. Only the executable is taken from it, by its exact path (`hanafubuki-agent-VERSION-TARGET/hanafubuki-agent`), and it must answer `--version` with the new version within 10 seconds, which also catches a build for another architecture or, on Linux, a glibc older than 2.35. Then a rename puts it in place: the installed executable is never written into, and nothing before this last step touches it. Through a symbolic link, the file it points to is replaced and the link stays. On Windows, where a running executable cannot be replaced, it is first renamed to `hanafubuki-agent.exe.NUMBER.outdated` beside it (and put back if the new one cannot be put in place); the next update removes that file once no process runs it.
+- **A released binary**: the latest release's archive for this platform (`hanafubuki-agent-VERSION-TARGET.tar.gz`, `.zip` on Windows) is downloaded into a new hidden directory beside the executable (`.hanafubuki-agent-update-…`) and checked against the size and the SHA-256 digest GitHub gives for it; a release without a digest is refused. Only the executable is taken from it, by its exact path (`hanafubuki-agent-VERSION-TARGET/hanafubuki-agent`), and it must answer `--version` with the new version within 10 seconds, which also catches a build for another architecture or, on Linux, a glibc older than 2.35. Then a rename puts it in place: the installed executable is never written into, and nothing before this last step touches it. Through a symbolic link, the file it points to is replaced and the link stays. On Windows, where a running executable cannot be replaced, it is first renamed to `hanafubuki-agent.exe.NUMBER.outdated` beside it (and put back if the new one cannot be put in place); the next update, or the next start of the terminal interface, removes that file once no process runs it.
 - **`cargo install`**: on Linux and macOS it runs `cargo install --locked hanafubuki-agent-cli` (with `--root` when the executable is not in cargo's default root) in a temporary directory, so no project's cargo settings apply, showing cargo's own output; then it asks the executable its version, so a cargo that installed it elsewhere (`CARGO_INSTALL_ROOT`, `install.root`) is noticed. On Windows it only names the command.
 - **A build from a checkout** (`target/debug`, `target/release`, `cargo install --path`), **a directory you cannot write**, or **a platform no release is built for**: it says what to do instead and exits with 1.
 
@@ -223,7 +225,7 @@ It exits with 0 when it updated or there was nothing to install, and with 1 when
 
 ## Which commands start the Agent [#agent-start]
 
-`config`, `providers list`, `roles` and `doctor` without `--online` only read and write the configuration (`roles` and `doctor` also read the installed plugins, writing nothing there), and `update` reads it for its proxy: they do not start the Agent, and work while another Agent process runs. The other commands start it, and need the data directory to themselves.
+`config`, `providers list`, `roles` and `doctor` without `--online` only read and write the configuration (`roles` and `doctor` also read the installed plugins, writing nothing there), and `update` reads it for its proxy: they do not start the Agent, and work while another Agent process runs. The other commands start it, and need the data directory to themselves. The terminal interface's [update prompt](/docs/terminal-interface#update-prompt) comes before its start: "Update now" ends the program without starting the Agent.
 
 Every command reads the configuration first, then installs the crash handler and the log file, before it starts the Agent or changes anything. A management command that starts the Agent also connects the enabled MCP servers in the background, as every start does.
 

@@ -1939,11 +1939,13 @@ dependencies = [
  "hanafubuki-agent-update",
  "log",
  "notify",
+ "portable-pty",
  "serde",
  "serde_json",
  "tempfile",
  "tokio",
  "toml",
+ "vt100",
 ]
 
 [[package]]

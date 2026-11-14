@@ -1,7 +1,8 @@
-//! The update check runs only at the terminal interface's launch: `exec`
-//! and a launch without a terminal never ask, even from an installation
-//! the check would run for (a copy outside the build's profile directory,
-//! with the test release URL set and the setting on).
+//! The update check and the update prompt run only at the terminal
+//! interface's launch: `exec` and a launch without a terminal never ask
+//! and never prompt, even from an installation the check would run for (a
+//! copy outside the build's profile directory, with the test release URL
+//! set and the setting on) with a newer release in the cache.
 
 mod support;
 
@@ -48,6 +49,10 @@ fn exec_and_a_launch_without_a_terminal_make_no_request() {
         Duration::ZERO,
     )]));
     let home = Home::new().with_provider(&model.base_url);
+    // Newer than any build, and due: a check would ask, a prompt would
+    // wait for a key.
+    let cache = r#"{"latestVersion": "99.0.0"}"#;
+    std::fs::write(home.home.join("update-check.json"), cache).unwrap();
     let run = |arguments: &[&str]| {
         let mut command = home.command();
         command
@@ -83,5 +88,5 @@ fn exec_and_a_launch_without_a_terminal_make_no_request() {
     // A check would have asked by now; give a stray thread time anyway.
     std::thread::sleep(Duration::from_millis(500));
     assert!(release.requests().is_empty(), "{:?}", release.requests());
-    assert!(!home.home.join("update-check.json").exists());
+    assert_eq!(home.file("update-check.json"), cache);
 }

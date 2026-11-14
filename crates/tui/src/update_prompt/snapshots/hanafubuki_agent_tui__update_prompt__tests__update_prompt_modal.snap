@@ -1,0 +1,13 @@
+---
+source: crates/tui/src/update_prompt/tests.rs
+expression: "drawn(&screen(), 80, 12).terminal.backend()"
+---
+
+  Update available · 0.2.0 → 0.3.0
+  Release notes: https://github.com/licyk/hanafubuki-agent/releases/tag/v0.3.0
+
+› 1. Update now (downloads 0.3.0 and replaces this executable)
+  2. Skip
+  3. Skip until next version
+
+  enter continue · esc skip

@@ -6,7 +6,8 @@
 //! scrolling, selection, search and copying. The transcript's mode is
 //! chosen at launch: owned (Fullscreen) by default, or written into the
 //! terminal's own scrollback (Scrollback). It drives the Agent through the
-//! facade alone (`agent_bridge`).
+//! facade alone (`agent_bridge`). Before the Agent starts, the command line
+//! may show the update prompt (`update_prompt`), from text it words itself.
 
 mod agent_bridge;
 mod agents_center;
@@ -56,8 +57,10 @@ mod tui;
 mod tui_state;
 mod ui_consts;
 mod update_notice;
+mod update_prompt;
 mod user_message;
 mod wrapping;
 
 pub use interface::{run, TuiEvents, TuiOptions, TuiResume};
 pub use update_notice::{TuiUpdateNotice, TuiUpdateNotifier};
+pub use update_prompt::{update_prompt, TuiUpdateChoice, TuiUpdatePrompt};

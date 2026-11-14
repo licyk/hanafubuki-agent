@@ -945,9 +945,34 @@ yank = []
 - 只有稳定版本、且比当前版本新的才算。检查失败（没有网络、GitHub 的速率限制、读不懂的回答）时什么也不显示，下次启动时再检查。从源码检出构建的副本（`target/debug`、`target/release` 或 `cargo install --path`）从不检查。
 - 回答保存在 [`update-check.json`](/docs/data-directory#contents) 中。
 
+### 启动时的更新提示 [#update-prompt]
+
+之前的检查发现的版本比当前版本新时，下一次启动会先询问，再启动 Agent：此时 Agent 的任何部分都还没有运行，所以不会获取锁，也没有插件占用更新要替换的可执行文件。界面与 Codex 的相同：
+
+```text
+
+  Update available · 0.2.0 → 0.3.0
+  Release notes: https://github.com/licyk/hanafubuki-agent/releases/tag/v0.3.0
+
+› 1. Update now (downloads 0.3.0 and replaces this executable)
+  2. Skip
+  3. Skip until next version
+
+  enter continue · esc skip
+```
+
+- **Update now** 在终端中运行 [`hanafubuki-agent update`](/docs/cli-reference#update)：清空屏幕，重新查询最新版本（可能比显示的更新，这次查询会像 `update` 一样发送 `GITHUB_TOKEN`），打印它的各行输出，然后程序结束；再次启动即运行新版本。更新失败时，错误信息会说明保留了什么，可执行文件保持原样，程序以退出码 1 结束，下一次启动会再次询问。对于用 `cargo install` 安装的副本（Linux 和 macOS），这一项显示为 ``Update now (runs `cargo install --locked hanafubuki-agent-cli`)``，安装在其他位置时带 `--root`，并运行 cargo。
+- **Skip** 启动界面；下一次启动会再次询问。
+- **Skip until next version** 启动界面，在发现更新的版本之前不再询问；这个版本以 `dismissedVersion` 保存在 `update-check.json` 中。底栏的提示仍然显示它。
+- 上方向键或 `k`、下方向键或 `j` 移动高亮，到头后回绕；Enter 选择高亮项；`1`、`2`、`3` 立即选择；Esc、Ctrl+C 和 Ctrl+D 相当于 Skip。界面出现之前输入的内容会被丢弃，所以程序启动时按下的 Enter 永远不会选择 Update now。
+- 它在 `hanafubuki-agent` 和 `hanafubuki-agent resume` 中显示；在命令行中给出了提示词时（`hanafubuki-agent "fix the tests"`、`resume ID PROMPT`）、检查关闭时、从源码检出构建的副本都不显示，`exec` 中和没有终端时也从不显示。这个副本无法在这里更新时（不可写的目录、没有发布二进制文件的平台、Windows 上用 cargo 安装的副本）也不显示：底栏的提示会改为说明该怎么做。
+- 在两种呈现方式下它都占据整个屏幕，做出选择后、界面启动前被清除；滚动缓冲区中不会留下它的任何内容。窗口较窄或较矮时它会换行，并保持高亮项和按键说明那一行可见，最小约到 20 列、4 行；空行先让出空间，其次是标题和发布说明。
+- 同时启动的两个窗口可能都会询问。两者都选择 Update now 时，第二个会发现可执行文件已经更新，并如实说明（`… is already 0.3.0 (another process updated it).`）。
+- 在 Windows 上，启动时还会删除之前的更新留下的、已经没有程序在运行的可执行文件（`hanafubuki-agent.exe.NUMBER.outdated`），无论检查是否开启。
+
 检查发送的内容：一个 HTTPS 请求，`GET https://api.github.com/repos/licyk/hanafubuki-agent/releases/latest`，带有 `Accept: application/vnd.github+json` 和 `User-Agent: hanafubuki-agent/VERSION`（这个副本的版本），经过 [`network.proxy`](/docs/network-logging#proxy-scope)。不发送任何令牌、Cookie 或标识（`GITHUB_TOKEN` 也不发送），也不发送你的配置、会话或项目的任何内容；GitHub 看到的是请求的地址和版本，和下载时一样。失败只以其类别记录在 `debug` 级别的日志中。
 
-关闭它：设置 `tui.checkForUpdates = false`（[配置参考](/docs/config-reference#tui)），或把 `HANAFUBUKI_AGENT_NO_UPDATE_CHECK` 设为任意非空值（[环境变量](/docs/environment#read)）：这样不发送任何请求，也不显示提示，之前的检查发现的版本也不显示。两者都在下次启动时生效。
+关闭它：设置 `tui.checkForUpdates = false`（[配置参考](/docs/config-reference#tui)），或把 `HANAFUBUKI_AGENT_NO_UPDATE_CHECK` 设为任意非空值（[环境变量](/docs/environment#read)）：这样不发送任何请求，底栏的提示和启动时的更新提示都不显示，之前的检查发现的版本也不显示。两者都在下次启动时生效。
 
 ## 终端要求 [#terminal]
 

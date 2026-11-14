@@ -77,7 +77,7 @@ pub(crate) fn update(
             if let Some(backup) = installed.backup.as_ref().and_then(|path| path.file_name()) {
                 println!(
                     "The previous executable is kept as {} until it no longer runs; the next \
-                     update removes it.",
+                     update or start removes it.",
                     backup.to_string_lossy()
                 );
             }

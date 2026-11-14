@@ -9,7 +9,7 @@ use hanafubuki_agent_tui::{TuiEvents, TuiOptions, TuiResume};
 use crate::agent::Standalone;
 use crate::cli::GlobalArgs;
 use crate::exit::{Failure, SUCCESS};
-use crate::update_check;
+use crate::update_check::{self, AtLaunch};
 
 /// `resume [ID] [PROMPT]`, `resume --last [PROMPT]`: with neither an id nor
 /// `--last`, the interface opens on the resume picker.
@@ -53,7 +53,16 @@ pub(crate) fn run(
         ..AgentRuntimeHost::default()
     };
     let standalone = Standalone::open(global, host)?;
-    let update_notice = update_check::at_launch(&standalone, events.update_notifier());
+    // Before the start: the update prompt may end the process, and the
+    // Agent has then neither run nor taken the data directory's lock.
+    let update_notice =
+        match update_check::at_launch(&standalone, events.update_notifier(), prompt.is_some()) {
+            AtLaunch::Interface(notice) => notice,
+            AtLaunch::Exit(result) => {
+                standalone.shutdown();
+                return result;
+            }
+        };
     let directory = match &global.cd {
         Some(directory) => directory.display().to_string(),
         None => std::env::current_dir()

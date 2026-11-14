@@ -44,11 +44,7 @@ impl InputReader {
     /// Reads again, after dropping what the terminal holds: keys typed
     /// while another program had it were not meant for the interface.
     pub(crate) fn resume(&mut self) -> std::io::Result<()> {
-        while event::poll(Duration::ZERO).unwrap_or(false) {
-            if event::read().is_err() {
-                break;
-            }
-        }
+        discard_input();
         self.spawn()
     }
 
@@ -68,6 +64,17 @@ impl InputReader {
 impl Drop for InputReader {
     fn drop(&mut self) {
         self.pause();
+    }
+}
+
+/// Drops what the terminal holds unread: keys typed before the reader
+/// starts (or while another program had the terminal) and the answers to
+/// queries nothing waits for any more.
+pub(crate) fn discard_input() {
+    while event::poll(Duration::ZERO).unwrap_or(false) {
+        if event::read().is_err() {
+            break;
+        }
     }
 }
 

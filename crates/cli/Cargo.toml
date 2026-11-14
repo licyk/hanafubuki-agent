@@ -36,3 +36,9 @@ notify = "8"
 hanafubuki-agent = { workspace = true, features = ["test-support"] }
 hanafubuki-agent-update = { workspace = true, features = ["test-support"] }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
+
+# The update prompt through the binary on a pseudo-terminal, its screen read
+# with vt100: the versions the process and TUI crates use.
+[target.'cfg(unix)'.dev-dependencies]
+portable-pty = "0.9"
+vt100.workspace = true

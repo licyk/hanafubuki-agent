@@ -902,4 +902,5 @@ mod subagents;
 mod thinking;
 mod tools;
 mod update_notice;
+mod update_prompt;
 mod workspace_commands;
