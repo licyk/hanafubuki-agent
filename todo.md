@@ -1,3 +1,59 @@
+## Plan: the model list's facts and its loading state (2026-11-14)
+
+The plan is [docs/plan-model-list-facts.md](docs/plan-model-list-facts.md),
+read from main `f1d5808`.
+
+Findings that changed the request's premises (the plan's §1):
+
+- `/model` opens nothing until **every** Provider's listing is back (one
+  reply from a `JoinSet` over all of them): no view and no indicator while
+  the slowest answers, up to its retries.
+- The rows show only what the listing itself reports, so a "no" and "not
+  known" look alike, and a window the Agent knows from a model's settings,
+  models.dev or the built-in table is not shown (OpenAI's own listing
+  reports none).
+- Resolving from the store after a listing is recorded is not reliable (the
+  shrink guard; 4 096 routes against 1 000 entries a listing): the entry is
+  the reported source of the resolution instead.
+- A session's facts fold in the model policy's window and image switch; the
+  facade's `model_metadata` does not. The rows show the model's, the policy
+  is said once.
+- There is no animations setting; `selected_description` would replace the
+  selected row's facts; a disabled row cannot take Enter. Source names exist
+  in three copies, the policy form printing `built_in`/`catalog`; the
+  settings center's **List models** says `Saving…`.
+
+Each milestone is one commit on main with green CI, strictly in order: L1 →
+L2 → L3, after M8 and before O1 (no file of M6–M8's lists; four files with
+O1's, each for another function: the plan's §6). Each records, when done:
+what landed and any deviation, the validation commands that ran and those
+skipped, the CI run's URL (no Windows or macOS claim from a Linux run),
+whether goldens changed (none expected), what Hanafubuki must change at its
+next pin, and any module-size exception.
+
+- [ ] Decisions: D1–D14 of the plan's §2 and the questions Q1–Q10 of §5
+      answered (the plan assumes each recommendation).
+- [ ] L1: `list_provider_models` gives each model its resolved facts
+      (`AgentListedModel { entry, metadata }`, the entry flattened in
+      JSON), resolved per Provider with the listing as the reported source
+      and `providers.toml` read once. model-api's
+      `ModelMetadataSource::label`, `supports_reasoning`,
+      `supports_image_input` are the one vocabulary: `/status`, the policy
+      form (`built-in`, `models.dev`) and `doctor --online` (no per-model
+      call; `vision`, `thinking`) use it.
+- [ ] L2: `/model` opens at once with a loading line (spinner, Providers
+      answered, elapsed), the session's model pinned first with its facts,
+      each Provider's models filling its section as it answers in a fixed
+      order, the selection, search and scroll kept. Rows show `Context`,
+      `Thinking`, `Vision` columns (`200K`, `yes`/`no`/`?`), stacked below
+      about 51 columns, and the selected model's facts with their sources
+      under the list. Enter on a failed Provider lists it again. The shared
+      row renderer gains opt-in fact columns and `replace_items`; existing
+      snapshots unchanged.
+- [ ] L3: the Provider page's **Choose the model** takes the loading line
+      and the columns; the settings center's busy notice names the action
+      (`List models…`, not `Saving…`).
+
 ## W1: a POSIX shell for `exec_command` on Windows (2026-11-13)
 
 - [x] W1: `shell: "posix"` on Windows runs the bash (else sh) of Git for
