@@ -1863,7 +1863,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -1917,7 +1917,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-approval"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "hanafubuki-agent-foundation",
  "log",
@@ -1930,7 +1930,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "clap",
@@ -1950,7 +1950,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-compression"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "regex",
  "serde",
@@ -1960,7 +1960,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-config"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "dirs",
  "hanafubuki-agent-foundation",
@@ -1977,7 +1977,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-contracts"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "hanafubuki-agent-approval",
  "hanafubuki-agent-foundation",
@@ -1995,7 +1995,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-execution"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "hanafubuki-agent-approval",
  "hanafubuki-agent-foundation",
@@ -2013,7 +2013,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-foundation"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "http",
  "log",
@@ -2027,7 +2027,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-history"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "hanafubuki-agent-foundation",
@@ -2045,7 +2045,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-hooks"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "hanafubuki-agent-foundation",
  "hanafubuki-agent-packages",
@@ -2062,7 +2062,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-host"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "hanafubuki-agent-foundation",
  "kardia-core",
@@ -2076,7 +2076,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-kernel"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "base64 0.23.1",
  "hanafubuki-agent-approval",
@@ -2099,7 +2099,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-mcp"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -2126,7 +2126,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-memory"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "hanafubuki-agent-foundation",
  "hanafubuki-agent-model-api",
@@ -2143,7 +2143,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-model-api"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "base64 0.23.1",
  "bytes",
@@ -2160,7 +2160,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-packages"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "hanafubuki-agent-foundation",
@@ -2178,7 +2178,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-plugin-execution"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "hanafubuki-agent-approval",
  "hanafubuki-agent-contracts",
@@ -2195,7 +2195,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-plugin-hooks"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "hanafubuki-agent-contracts",
  "hanafubuki-agent-foundation",
@@ -2213,7 +2213,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-plugin-mcp"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "futures-util",
  "hanafubuki-agent-approval",
@@ -2232,7 +2232,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-plugin-packages"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "futures-util",
  "hanafubuki-agent-approval",
@@ -2261,7 +2261,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-plugin-web"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "hanafubuki-agent-approval",
  "hanafubuki-agent-contracts",
@@ -2277,7 +2277,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-plugin-workspace-fs"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "hanafubuki-agent-approval",
  "hanafubuki-agent-contracts",
@@ -2292,7 +2292,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-plugin-worktree"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "hanafubuki-agent-contracts",
  "hanafubuki-agent-foundation",
@@ -2306,7 +2306,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-process"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "encoding_rs",
@@ -2326,7 +2326,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-runtime"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "hanafubuki-agent-foundation",
  "parking_lot",
@@ -2335,7 +2335,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-sandbox"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "hanafubuki-agent-foundation",
  "landlock",
@@ -2348,7 +2348,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-skills"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "hanafubuki-agent-foundation",
  "hex",
@@ -2365,7 +2365,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-tool-contracts"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "base64 0.23.1",
  "serde",
@@ -2375,7 +2375,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-tui"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "arboard",
  "base64 0.23.1",
@@ -2407,7 +2407,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-update"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "flate2",
  "hanafubuki-agent-foundation",
@@ -2427,7 +2427,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-web-search"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "dom_query",
  "futures-util",
@@ -2445,7 +2445,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-workspace-fs"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "getrandom 0.4.3",
  "grep-matcher",
@@ -2466,7 +2466,7 @@ dependencies = [
 
 [[package]]
 name = "hanafubuki-agent-worktree"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "hanafubuki-agent-foundation",
  "hanafubuki-agent-process",

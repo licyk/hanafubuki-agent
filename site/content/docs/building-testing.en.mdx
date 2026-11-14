@@ -119,7 +119,7 @@ bun run format:check:site
 - prettier formats MDX (tables, wrapping) but not Markdown (`.prettierignore` leaves out `**/*.md`).
 - After a build, check that every page was prerendered.
 - `patches/` holds a Bun patch of `@tanstack/start-static-server-functions`, which fetches its prerendered results from the origin root; the patch prefixes Vite's base. Bumping that package means regenerating the patch (`bun patch`): without it, first loads under the base still work but client-side navigation fails.
-- Dependency snippets in the pages are written as `hanafubuki-agent = "0.2"`, which `cargo xtask version` keeps current when the requirement users write changes.
+- Dependency snippets in the pages are written as `hanafubuki-agent = "0.3"`, which `cargo xtask version` keeps current when the requirement users write changes.
 
 ## CI [#ci]
 
