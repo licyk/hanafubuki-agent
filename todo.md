@@ -1298,11 +1298,16 @@ From CI's failed jobs over the last 60 runs; each passed on a re-run.
   Linux, Windows and macOS green at the first attempt, each running the reopen test, the three `cleanup::shutdown_*`
   contract tests, the supervisor's lease tests and the linked guest's check; Site [run 43593958153](https://github.com/licyk/hanafubuki-agent/actions/runs/43593958153)
   green. One green run says little about an intermittent failure.
-- **Open, not investigated**: `plugin-packages` `linked::tests::a_replaced_directory_is_watched_anew_though_its_removal_is_not_reported`
-  timed out on macOS (`linked/tests.rs:107`, its 5 s wait for the replaced directory to be armed anew) in
-  [run 43595332941](https://github.com/licyk/hanafubuki-agent/actions/runs/43595332941) (O3's `26edcde`); it passed in
-  43593958208 and on Linux and Windows. The unit test the 6d61cc8 fix added, not the guests harness's check changed
-  above.
+- **Open**: `plugin-packages` `linked::tests::a_replaced_directory_is_watched_anew_though_its_removal_is_not_reported`
+  (macOS 1×, [run 43595332941](https://github.com/licyk/hanafubuki-agent/actions/runs/43595332941), on O3's `26edcde`;
+  the first in the last 100 CI runs, since 6d61cc8 added it): `timed out` at its 5 s wait (`linked/tests.rs:107`),
+  the test ending at 5.02 s with no panic from the watch's thread; the message does not say which of its two waits
+  (the first arm, or the replaced directory armed anew). Not from the guests-harness change above (`tests/guests/linked.rs` only; the watch's
+  code is unchanged). Its watcher is a fake that records paths, so no FSEvents latency is involved: within its 100 ms
+  polls the watch re-arms once the directory's (device, inode) differs, and the copy is made before the original is
+  removed, so on APFS they should differ. No cause found from the code; 500 of 500 runs on Linux under CPU load. The
+  wait now says what the watcher was asked to watch and whether the watch still runs, so a recurrence tells a missed
+  re-arm (one path: a product bug on macOS) from a watch that ended or re-armed twice.
 - Already fixed, not recurring: `bottom_pane::tests::tabs_within_a_paste_burst_are_the_pastes_and_send_nothing` (6e36de1),
   `crates/plugin-packages/tests/guests/linked.rs:124` (6d61cc8), and the macOS
   `output::a_poll_behind_the_retained_output_says_exactly_what_it_missed` (BSD `seq` printing `1e+06`, replaced by `awk`

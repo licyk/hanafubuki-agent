@@ -73,7 +73,7 @@ fn a_replaced_directory_is_watched_anew_though_its_removal_is_not_reported() {
             );
         })
     };
-    wait_until(|| watched_paths.lock().len() == 1);
+    wait_for_watches(&watched_paths, 1, &worker);
 
     // Replaced as an export replaces it, between two polls: the watcher
     // reports the file's removal only.
@@ -90,7 +90,7 @@ fn a_replaced_directory_is_watched_anew_though_its_removal_is_not_reported() {
         .unwrap();
 
     // The new directory is watched: its path is asked of the watcher again.
-    wait_until(|| watched_paths.lock().len() == 2);
+    wait_for_watches(&watched_paths, 2, &worker);
     cancellation.cancel();
     worker.join().unwrap();
     let _ = std::fs::remove_dir_all(&root);
@@ -101,10 +101,28 @@ fn fs_reset(directory: &Path) {
     std::fs::create_dir_all(directory).unwrap();
 }
 
-fn wait_until(condition: impl Fn() -> bool) {
+/// Waits up to 5 s until the watcher was asked to watch `count` paths; a
+/// timeout says what it was asked and whether the watch still runs.
+fn wait_for_watches(
+    watched: &Mutex<Vec<PathBuf>>,
+    count: usize,
+    worker: &std::thread::JoinHandle<()>,
+) {
     let deadline = Instant::now() + Duration::from_secs(5);
-    while !condition() {
-        assert!(Instant::now() < deadline, "timed out");
+    loop {
+        let paths = watched.lock().clone();
+        if paths.len() == count {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "{count} watches expected within 5 s; asked to watch {paths:?}, the watch {}",
+            if worker.is_finished() {
+                "ended"
+            } else {
+                "still runs"
+            }
+        );
         std::thread::sleep(Duration::from_millis(10));
     }
 }
