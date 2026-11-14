@@ -5075,6 +5075,11 @@ its next pin, and any module-size exception.
       - Hanafubuki at its next pin: `ExecCommandRequest.timeout_ms` where it
         builds one (0 is refused); the `pluginOptions.execution` section
         reaches its settings page from the catalog with no code.
+      - CI on `49717be`: CI
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43588186505
+        (Linux, macOS and Windows: success); Site
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43588186465
+        (success).
 - [ ] R5: background terminals wake their owner. The kernel queues the
       end on a terminal status of a call not in flight and withdraws it on
       disposal; `!command` and `Cancelled` are excluded. Adds the execution
