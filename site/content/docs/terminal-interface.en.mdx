@@ -633,6 +633,43 @@ Answers, plans and thinking show their Markdown as Codex does:
 - **Long addresses.** A web address is kept whole on a row when it fits there, moved to the next row rather than split. One wider than the conversation is cut at the edge of each row, as the terminal would wrap it, and each piece opens the whole address. In a table cell an address wraps within its column. The interface's selection copies, and its find bar searches, the text shown: where the address is hidden, `/raw` shows the Markdown with its addresses.
 - **Math.** TeX math shows in Unicode notation, as in Codex. Inline between `$…$` or `\(…\)`: `$\alpha^2 + \beta_{10}$` shows `α² + β₁₀`, `$\sqrt{x}$` shows `√(x)`, `$\frac{a}{b}$` shows `((a)/(b))`. As a display between `$$…$$` or `\[…\]` standing on lines of their own, over several rows where it needs them: a fraction as its numerator over a bar over its denominator, a sum's or an integral's limits above and below it, `aligned` equations in columns, a `pmatrix` in tall parentheses, `\boxed` in a frame. Greek letters, operators, relations, arrows, set and logic symbols, `\mathbb`, `\mathcal`, accents, `\text`, `\left`/`\right` delimiters and the characters that have a Unicode superscript or subscript are converted; another script is written out (`x_{gpt}`). A formula is shown as its source, wrapped like text, when it uses a command the converter does not know (`\unknown`, `\sqrt[3]`, `matrix`), when a display is wider than the conversation less four columns, or when a display of several rows is inside a list or a quote. Math in code, in a link or in HTML stays as it is; so does a ` ```latex ` fence, which is code. A formula is never linked or styled as an address.
 - **Dollar signs that stay text.** A single `$` starts a formula only when it is not escaped (`\$`) and not followed by a space, `(` or `{` (`$(cmd)`, `${HOME}`), and a closing `$` follows on the same line, within 4 KiB, not after a space and not followed by a letter or a digit (`$5 and $10`, `$HOME/$USER`, `$x=$y`); a number without an operator (`($5) or ($10)`) and an upper-case word (`$USD$`) are not formulas either. A CJK character counts as a letter: `公式 $x^2$ 很` is math, `公式$x^2$很` is not (`\(x^2\)` is math anywhere). `$$` and `\[` open a display only with nothing before them on their line, a list marker or a quote's `>` included (`echo $$` and `- $$x$$` stay text), and a display of several lines whose closer has text after it on its line is not one. These are Codex's rules, with their limits: a closing `$` followed by punctuation makes a formula of text such as `s/^a$/b$/` (shown `s/^a/b/`); a `$$` after text pairs with the next `$$` that is not at a line's start, within 4 KiB, and a formula between the two is shown as written; a line that starts with `$$` or `\[` and is never closed shows the rest of the answer as written; and `\(…\)` and `\[…\]` have no guard, so Markdown's escaped parentheses and brackets are math too: `f\(x\)` shows `fx`, `s/\(a\)\(b\)/\2\1/` shows `s/ab/\2\1/`, a line `\[note\]` shows `note`, and an empty `foo\(\)` keeps its backslashes, where Markdown alone shows the parentheses and brackets (with math off they keep their backslashes). In code (`` `…` ``) none of this happens.
+- **Diagrams.** A closed ` ```mermaid ` fence is drawn as a text diagram with box-drawing characters, as in Codex, when it is one of the subsets Codex draws: a flowchart (`flowchart` or `graph`, top-down unless it says `LR`, `RL` or `BT`; rectangles `A[…]`, decisions `A{…}` shown with `◇`, stadiums `A([…])` with rounded corners, `<br>` in a node's label; solid, dashed and two-way edges with their labels; `&` groups, chains and loops); a sequence diagram (`participant` and `actor`, aliases, the arrows `->`, `->>`, `-->`, `-->>`, `-x` and `--x`, messages to oneself, `Note over` one or two participants, `loop`, `alt` with one `else`, `opt`, `critical` and `break`, nested); a flat state diagram (`stateDiagram-v2` or `stateDiagram`, `[*]` as start and end, labelled transitions, descriptions); a class diagram (members, inheritance, composition, aggregation, association, dependency and realization, cardinalities, labels); or an entity-relationship diagram (attributes with `PK`, `FK`, `UK` and a comment, the four cardinalities). The nodes stand one after another in the diagram's direction and every edge has a lane of its own, so lines never merge; a crossing is `╪`. Boxes take the syntax theme's type color and lines its comment color. A CJK character or an emoji in a label counts two columns. Nothing in a diagram is linked or styled as an address.
+- **Diagrams that stay code.** A fence that cannot be drawn shows a dim line saying why, then its code as any code block shows it: another kind of diagram (`pie`, `gantt`, `gitGraph`, `mindmap`, …); syntax outside the subset (subgraphs, other node shapes, styles, `click`, directives such as `%%{init: …}%%`, HTML other than a node label's `<br>`, entities such as `&amp;`, combining or zero-width characters, identifiers that are not ASCII); or a diagram past a limit: a source over 16 KiB, more than 16 nodes, 24 edges (each `&` expanded) or 16 members in a node, more than 8 participants, 64 events or 4 nested fragments, a label line over 40 columns, or a drawing over 65,536 cells, whatever the width. A drawing wider than the conversation, less a list's or a quote's indent, shows the line `This Mermaid diagram doesn't fit the current terminal width.` and the code. A fence the answer never closes shows its code with no notice; an empty one shows nothing.
+
+For example, this fence in an answer:
+
+```text
+flowchart TD
+    A[Request] --> B{Valid?}
+    B -->|yes| C[Reply]
+    B -->|no| A
+```
+
+is drawn at 40 columns as:
+
+```text
+┌──────────┐
+│ Request  │
+│          ├────────┐
+│          ├◄───────╪───┐
+└──────────┘        │   │
+                    │   │
+                    │   │
+┌──────────┐        │   │
+│ ◇ Valid? │        │   │
+│          ├◄───────┘   │
+│          ├──yes─────┐ │
+│          ├──no──────╪─┘
+└──────────┘          │
+                      │
+                      │
+┌──────────┐          │
+│ Reply    │          │
+│          ├◄─────────┘
+└──────────┘
+```
+
+Each edge leaves its source at `├` and enters its target at `├◄`; its label is written where it leaves. The same diagram with `flowchart LR` is laid out left to right, 41 columns wide, so at 40 columns it shows the notice and the code instead.
 
 While an answer or a plan streams, it shows as it arrives, as in Codex:
 
@@ -641,16 +678,18 @@ While an answer or a plan streams, it shows as it arrives, as in Codex:
 - The line still arriving is shown as it grows (its last 8 KiB at most), outside a table or a fence; a link shows `[its text]` until its address is complete.
 - A display formula shows as its source while it arrives, from its opening line on, and stays after the committed rows until its closer comes; then it is laid out. The line still arriving inside it shows as its source, wrapped, and so does a line that opens a display (`$$\frac{1}{2}$$`) until its newline. An answer that ends, or is interrupted, before the closer keeps the formula's source.
 - A fenced code block is highlighted a line at a time as it arrives.
+- A ` ```mermaid ` fence shows as code while it arrives, highlighted a line at a time, and stays after the committed rows; its closing fence turns it into its diagram (or its notice and code), which stays there until another block starts, so a resize meanwhile can still change it. An answer that ends, or is interrupted, inside the fence keeps its code.
 - In Fullscreen and in the transcript a list streams without blank lines between its items; once the answer has ended it is spaced as above, so an answer whose list has an item of several rows gains rows then.
 - When the answer ends, its rows give way to the answer laid out from its Markdown. When a committed row differs from it (a `===` line making the line above a heading, a link's definition arriving after its use, a resize), Scrollback writes the conversation again once more.
 
-An answer and a plan keep their Markdown and are laid out for the width they are shown at: after a resize, a table goes from its columns to records or back, a display formula to its source or back, and lists, prose and code wrap for the new width, in Fullscreen, in the transcript and in Scrollback's rewrite ([Reading the conversation](#reading)). While one streams, a resize lays out what it has not committed at the new width; the rows it committed keep the old width until it ends, when they give way to the answer laid out from its Markdown. A resumed session's answers and plans are laid out from their Markdown from the start. A selection or a search match keeps the rows it was made on, wrapped for the new width, until it ends.
+An answer and a plan keep their Markdown and are laid out for the width they are shown at: after a resize, a table goes from its columns to records or back, a display formula to its source or back, a diagram to its notice and code or back, and lists, prose and code wrap for the new width, in Fullscreen, in the transcript and in Scrollback's rewrite ([Reading the conversation](#reading)). While one streams, a resize lays out what it has not committed at the new width; the rows it committed keep the old width until it ends, when they give way to the answer laid out from its Markdown. A resumed session's answers and plans are laid out from their Markdown from the start. A selection or a search match keeps the rows it was made on, wrapped for the new width, until it ends.
 
-Three settings turn these off, for what is shown from then on and for an answer or a plan laid out again after a resize (the [settings center](#config)'s Interface tab, or `config set`):
+Four settings turn these off, for what is shown from then on and for an answer or a plan laid out again after a resize (the [settings center](#config)'s Interface tab, or `config set`):
 
 - `tui.rendering.tables = false` shows a table, and a ` ```md ` fence that holds one, as its source.
 - `tui.rendering.lists = false` shows `-` and `[ ]`/`[x]` as written.
 - `tui.rendering.math = false` shows each formula as written, its delimiters and TeX included. Formulas are still found by the rules above, so their backslashes, `*` and `_` are not read as Markdown: `\(x^{2}\)` keeps its backslashes, which Markdown alone would take away. A display still open while an answer streams is held as above.
+- `tui.rendering.mermaid = false` shows a ` ```mermaid ` fence as the code block it is, with no notice, and lets it stream as any code block.
 
 ## Syntax highlighting [#highlighting]
 

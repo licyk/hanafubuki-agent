@@ -669,6 +669,18 @@ path = "crates/tui/src/app/tests/math.rs"
 reason = "An answer's math end to end on an emulated terminal in both presentations: rendered, replayed by /resume, streamed, interrupted inside a display, and the setting turned off; written for the math port."
 
 [[original]]
+path = "crates/tui/src/app/tests/mermaid.rs"
+reason = "An answer's Mermaid diagram end to end on an emulated terminal in both presentations: drawn, replayed by /resume, streamed, interrupted inside an open fence, and the setting turned off; written for the Mermaid port."
+
+[[original]]
+path = "crates/tui/src/markdown_render/mermaid/tests/widths.rs"
+reason = "Every Mermaid family at three widths, each fallback, wide labels, nesting, an unwrapped Markdown fence, no links, a resize and the setting off, through the writer; written for the Mermaid port."
+
+[[original]]
+path = "crates/tui/src/markdown_render/mermaid/tests/robustness.rs"
+reason = "Malformed Mermaid sources (truncations, generated punctuation, deep nesting, huge inputs) that must neither panic nor take long; written for the Mermaid port."
+
+[[original]]
 path = "crates/tui/src/markdown_render/math/tests/ordinary_text.rs"
 reason = "Dollar signs in prices, shell, Makefiles, regular expressions, PHP, Perl and jQuery that must stay text, and the limits of Codex's rules pinned; written for the math port."
 

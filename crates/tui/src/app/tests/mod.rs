@@ -846,6 +846,7 @@ mod features;
 mod history_search;
 mod hyperlinks;
 mod math;
+mod mermaid;
 mod paste_image;
 mod plugins;
 mod preferences;

@@ -2783,7 +2783,181 @@ and any module-size exception.
         `AgentTuiRendering` field beside `math`. A renderer whose output
         must not be URL-scanned can emit `InlineMath`-like events or go
         through `push_span`.
-- [ ] M6: mermaid, as `crates/tui/src/mermaid/` (D22).
+- [x] M6: mermaid, as `crates/tui/src/mermaid/` (D22).
+      Done (2026-11-14):
+      - Renderer (`mermaid/`, Codex 57a808a392's `codex-mermaid` crate as a
+        module, no crate, no dependency: hand-written over `unicode-width`):
+        `mod.rs` the entry (`render_spans`, `RenderError`, the graph types
+        and limits), `syntax.rs` (statements: `%%` comments, `;`, quotes,
+        `%%{…}%%` directives and `&name;`/`#name;` entities refused),
+        `parse.rs` (flowchart/graph), `relations.rs` (class and ER, the
+        relationship operator split out as `relationship`), `state.rs`,
+        `sequence.rs` (split into `parse`, `message` and `draw`), `draw.rs`
+        (the graph layout: nodes one after another in the direction, a lane
+        and endpoints per edge, `╪` at crossings, horizontal layouts drawn
+        transposed), `output.rs` (cells to spans of a role: node, edge,
+        text). Sizes in lines with comments: mod 166, draw 265 (`render` 187
+        code lines), sequence 333, relations 261, parse 229, state 116,
+        syntax 103, output 71. Let chains rewritten (edition 2021); the
+        member limit named (`MAX_MEMBERS`); Codex's `Display` impl and its
+        `examples/render.rs` not ported; the `String` `render` is
+        test-only.
+      - Writer (`markdown_render/mermaid.rs`, Codex's caller): the code
+        block's range reaches `end_codeblock`, and the last text event's end
+        is kept (`code_block_content_end`), so `has_closing_fence` tells a
+        closed fence from one pulldown-cmark ended at the input's end. A
+        closed ```` ```mermaid ```` fence (the info string's first word) with
+        `tui.rendering.mermaid` on is drawn for the width less its list or
+        quote prefix (120 without a width), boxes in the theme's
+        `entity.name.type`/`support.type`/`variable` foreground (else cyan),
+        lines in its `comment` foreground (else dim), labels unstyled; its
+        rows are pushed as code (`push_span` in a code block: neither
+        wrapped nor URL-scanned). Otherwise the fence is a dim notice
+        (Unsupported: "This Mermaid diagram uses features the terminal
+        renderer doesn't support."; Limit: "… exceeds the terminal
+        renderer's size limits."; TooWide: "… doesn't fit the current
+        terminal width.", wrapped by textwrap to the width) and its
+        highlighted code. An unclosed fence, an empty one, and every fence
+        with the setting off take the code-block path unchanged.
+        `render/highlight`: `foreground_for_scopes_with_theme`.
+      - Streaming: the tracker marks a Mermaid fence (setting on) as the
+        last block's `mutable_fence_start`, nested in a list or a quote
+        too, mapped back through unwrapped ```` ```md ```` fences as before;
+        so its code is held in the tail while it arrives, its closer turns
+        it into the diagram (or the notice and code), which stays the
+        tail's until another block starts, and a resize meanwhile lays it
+        out again (diagram ↔ code). `OpenCodeFence::detect` is left as
+        Codex has it (deviation 1).
+      - Setting: `tui.rendering.mermaid` (`AgentTuiRendering.mermaid`,
+        default `true` as Codex's, Boolean spec "Mermaid diagrams" in the
+        Interface tab, live like the others).
+      - Supported (Codex's subsets): flowchart/graph (TD/TB default, BT,
+        LR, RL; `[…]`, `{…}` as `◇`, `([…])` rounded; `-->`, `---`, `<-->`,
+        `-.->`, `-.-`, `<-.->`, pipe and infix labels, quoted labels, `<br>`
+        in node labels, `&` groups, chains, loops); sequenceDiagram
+        (participant/actor, aliases, `->`, `->>`, `-->`, `-->>`, `-x`,
+        `--x`, self-messages, `Note over A[,B]`, nested
+        loop/alt/opt/critical/break, one `else` per `alt`); stateDiagram-v2
+        and stateDiagram (flat: `state "label" as ID`, descriptions,
+        labelled transitions, `[*]`, direction); classDiagram (bodies,
+        `ID : member`, every relationship kind, quoted cardinalities,
+        labels, direction); erDiagram (attribute bodies with PK/FK/UK and a
+        comment, the four cardinalities, identifying and non-identifying,
+        labels). Fall back: every other type (pie, gantt, journey, gitGraph,
+        mindmap, …), subgraphs, other shapes, styles, click, directives,
+        entities, HTML but `<br>`, combining/zero-width characters,
+        non-ASCII identifiers, compound states, activations.
+      - Limits (Codex's, unchanged; each a `Limit` fallback): 16 KiB of
+        source, 16 nodes, 24 edges after `&` expansion, 24 references in a
+        `&` group, 16 members per node, 8 participants, 64 events, 4
+        fragment levels, 40 display columns per label line, 40-byte
+        identifiers, 65,536 cells per drawing whatever the width. Wider
+        than the width given: `TooWide`. No time limit (Codex has none):
+        every loop is bounded by these sizes.
+      - What the user sees while it streams: the fence's code, highlighted
+        a line at a time, after the committed rows (in Scrollback in the
+        tail, never written meanwhile); at its closer the diagram replaces
+        it there; once another block starts the diagram is committed. An
+        answer that ends or is interrupted inside the fence keeps its code,
+        with no notice.
+      - Deviations: (1) the M3 record and the brief asked to leave Mermaid
+        out of `OpenCodeFence::detect`; Codex keeps it in, and so does this
+        port: the rows are held by `mutable_fence_start` already (the fast
+        path keeps the value the opening line's whole render set), the fast
+        path's rows equal the whole render's (pinned by
+        `an_open_mermaid_fence_appends_the_whole_renders_rows`), and leaving
+        it out makes a long open fence quadratic — the 10,000-line stream
+        test took 0.23 s with the fast path and did not finish in 3 minutes
+        without it. (2) The brief's "falls back to the code block": Codex's
+        fallback (followed here) puts a dim notice before the code; only an
+        unclosed fence and the setting off show the code alone. (3) Not
+        ported: Codex's raw-mode stages (`set_render_mode`, the Raw stage of
+        `mermaid_stream_closes_resizes_and_preserves_raw_source`, whose
+        snapshot is Codex's minus that stage) and copy targets
+        (`extract_copy_targets`); the controller test compares the
+        committed source instead. (4) The theme test runs without Codex's
+        `with_test_default_colors` wrapper (no terminal palette here); its
+        snapshot is Codex's byte for byte all the same. (5) Thinking renders
+        through the same writer, so a closed fence in a thought is drawn
+        too, as in Codex.
+      - Tests: Codex's crate tests (`mermaid/tests/{mod,families}.rs`: 21,
+        among them the 512 three-node graphs in four directions, truncations
+        at every character, every family's limits, the canvas cap) and its
+        7 `.snap` oracles; Codex's writer tests
+        (`markdown_render/mermaid/tests/mod.rs`, 9) and their 6 oracles;
+        Codex's streaming tests (`streaming/controller/tests/mermaid.rs`, 3)
+        and `disabled_mermaid_keeps_unsupported_source_without_notice`, the
+        `disabled_renderers` sample and the preferences sweep of
+        `streaming/render/tests.rs` with Mermaid. The oracles' bodies
+        compared by script with Codex's: all 13 identical, the streaming one
+        identical but for the Raw stage. New: every family at 120/80/40
+        (snapshot, rows within the width); each fallback (five other types,
+        a syntax error, a subgraph, comments only, a directive, 17 nodes, too
+        wide; notice dim, code as a code block's), an empty fence; CRLF; CJK
+        and emoji labels (borders aligned); a diagram in a list item, a
+        quote and a quoted list fitting under its prefix and falling back one
+        column narrower; a diagram unwrapped from a ```` ````md ```` fence
+        with a table; no hyperlink in a diagram (URLs in labels, messages and
+        notes; the same URL in prose linked); a resize both ways; the setting
+        off equal to the code-block path, styles included; 12 stream samples
+        (every family, nested, unwrapped, unsupported, CRLF, two unterminated
+        at the end) by line, by character, two arbitrary chunkings and whole
+        at None/80/40/20, on and off, equal to the full render with no
+        repair; the open fence held line by line; a 10,000-line open fence
+        streamed by line under 60 s (0.23 s here); the malformed sweep
+        (`robustness.rs`: six valid diagrams cut at every character, closed
+        and unclosed, through the renderer at widths 0 to `usize::MAX` and
+        the writer; 4,000 generated punctuation sources; 1,000 nested loops,
+        5,000 brackets, nested class/ER bodies, a 3,000-reference `&` group,
+        a fence in 100 quote levels; a 10,000-line fence, a source just under
+        16 KiB, a 16,000-column label — no panic, each under 60 s, all of
+        them 0.5 s here); app end to end (`app/tests/mermaid.rs`, both
+        presentations: drawn and replayed by `/resume`, streamed a few bytes
+        a tick with no code committed and no repair, an interrupt inside an
+        open fence at 80/20/80, the setting off in the settings center) and
+        a resize 100↔24 (`app/tests/resize.rs`). Fail-first: the ported
+        snapshots and the new ones had no stored file and failed; the
+        ported ones then matched Codex's oracles. By mutation, each seen
+        failing then restored: no diagram in the writer (20 tests), the
+        tracker's Mermaid clause removed (5 controller tests and the app
+        streaming test), every fence taken as closed (3), the prefix not
+        subtracted from the width (the list/quote test), every fence drawn
+        whatever the setting (2 app tests), Mermaid left out of the fast path
+        (the 10,000-line test, past its bound).
+      - Snapshots changed: the settings center's Interface tab at 140
+        columns (the "Mermaid diagrams" row; height 23 → 24 so Presets still
+        shows) and `disabled_renderers` (the Mermaid sample, and the
+        `mermaid` field in each `AgentTuiRendering` line). No other.
+      - Goldens: none changed. Dependencies: none added.
+      - Docs (both languages): `terminal-interface#rendering` (Diagrams and
+        Diagrams that stay code bullets with the subsets, limits and
+        notices, an example fence and its drawing in `text` fences, the
+        streaming bullet, resize, the setting), `config-reference#tui` (the
+        key), `architecture` (a Mermaid bullet; the Markdown and Streaming
+        bullets), `internals#tui-details` (the mutable fence).
+      - Hanafubuki at its next pin: `AgentTuiRendering` gains `mermaid:
+        bool` (a struct literal needs it or `..Default::default()`); the
+        settings catalog has one more Boolean spec,
+        `tui.rendering.mermaid`.
+      - Module size: no exception added or raised.
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo
+        clippy --workspace --all-targets --all-features -- -D warnings`;
+        `cargo xtask check` (the notices check first failed on the three new
+        original test files, then listed as original; the config-reference
+        check failed on the new key until its rows were added); `cargo test
+        --workspace --all-features --no-fail-fast` (4645 passed, none
+        failed, no flake seen); `bun install --frozen-lockfile`, `bun run
+        format:site`, `bun run format:check:site`, `bun run site:check`,
+        `bun run site:test` (28 passed), and the eight changed pages
+        compiled with the store's `@mdx-js/mdx` 3.1.1 with remark-gfm (the
+        examples are `text` fences, so the site draws no diagram);
+        `VITE_BASE_PATH=/hanafubuki-agent/ bun run site:build` not run
+        locally (port 3000 held by another project's server); CI's Site run
+        covers it.
+      - For M7–M8: a diagram's rows are code rows (`push_span` in a code
+        block); M8's tool-output formats do not render Markdown, so no
+        fence there is drawn.
 - [ ] M7: SGR colour in command output, live and on replay (D21).
 - [ ] M8: JSON pretty-printing, MCP content summaries, the diff
       improvements.

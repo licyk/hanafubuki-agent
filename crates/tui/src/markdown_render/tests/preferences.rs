@@ -21,6 +21,7 @@ fn agent_text(source: &str) -> String {
 #[test]
 fn disabled_renderers_preserve_source_independently() {
     let samples = [
+        "```mermaid\nflowchart LR\nA[Request] --> B[Reply]\n```\n",
         "Inline $\\alpha_1$ and \\(x^{2}\\).\n\n\\[\n\\frac{a}{b}\n\\]\n",
         "| **Name** | Value |\n|---|---|\n| `a` | path\\_1 &amp; \\* |\n",
         "- [ ] Pending\n- [x] Done\n- Ordinary\n",
@@ -28,6 +29,10 @@ fn disabled_renderers_preserve_source_independently() {
     let defaults = samples.map(render_markdown_text);
     let mut snapshot = Vec::new();
     for rendering in [
+        AgentTuiRendering {
+            mermaid: false,
+            ..Default::default()
+        },
         AgentTuiRendering {
             math: false,
             ..Default::default()
@@ -44,7 +49,13 @@ fn disabled_renderers_preserve_source_independently() {
         preferences::set(rendering);
         for (index, source) in samples.iter().enumerate() {
             let rendered = render_markdown_text(source);
-            if [rendering.math, rendering.tables, rendering.lists][index] {
+            if [
+                rendering.mermaid,
+                rendering.math,
+                rendering.tables,
+                rendering.lists,
+            ][index]
+            {
                 assert_eq!(rendered, defaults[index]);
             } else {
                 snapshot.push(format!("{rendering:?}\n{rendered}"));
@@ -101,6 +112,21 @@ fn disabled_lists_keep_dashes_and_brackets() {
     assert_eq!(
         render_markdown_text("- one\n  - [x] two\n1. [ ] three\n").to_string(),
         "- one\n    - [x] two\n\n1. [ ] three"
+    );
+}
+
+#[test]
+fn disabled_mermaid_keeps_unsupported_source_without_notice() {
+    preferences::set(AgentTuiRendering {
+        mermaid: false,
+        ..Default::default()
+    });
+    let source = "```mermaid\npie\n\"Cats\": 2\n```\n";
+    let rendered = render_markdown_text(source);
+    preferences::set(AgentTuiRendering::default());
+    assert_eq!(
+        rendered.to_string(),
+        render_markdown_text(&source.replacen("mermaid", "unknown", 1)).to_string(),
     );
 }
 

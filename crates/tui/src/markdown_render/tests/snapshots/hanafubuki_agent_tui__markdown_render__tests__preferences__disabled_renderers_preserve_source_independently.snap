@@ -1,9 +1,15 @@
 ---
 source: crates/tui/src/markdown_render/tests/preferences.rs
-assertion_line: 54
+assertion_line: 65
 expression: "snapshot.join(\"\\n\\n---\\n\\n\")"
 ---
-AgentTuiRendering { tables: true, lists: true, math: false }
+AgentTuiRendering { tables: true, lists: true, math: true, mermaid: false }
+flowchart LR
+A[Request] --> B[Reply]
+
+---
+
+AgentTuiRendering { tables: true, lists: true, math: false, mermaid: true }
 Inline $\alpha_1$ and \(x^{2}\).
 
 \[
@@ -12,14 +18,14 @@ Inline $\alpha_1$ and \(x^{2}\).
 
 ---
 
-AgentTuiRendering { tables: false, lists: true, math: true }
+AgentTuiRendering { tables: false, lists: true, math: true, mermaid: true }
 | **Name** | Value |
 |---|---|
 | `a` | path\_1 &amp; \* |
 
 ---
 
-AgentTuiRendering { tables: true, lists: false, math: true }
+AgentTuiRendering { tables: true, lists: false, math: true, mermaid: true }
 - [ ] Pending
 - [x] Done
 - Ordinary

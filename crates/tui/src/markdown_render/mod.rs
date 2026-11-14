@@ -20,8 +20,10 @@
 //! - TeX math between `$…$`, `\(…\)`, `$$…$$` and `\[…\]` is found before
 //!   the parser reads the source and shown in Unicode notation, or as its
 //!   source when it cannot be (`math`).
-//! - `tui.rendering` turns tables, list markers or math off (`preferences`);
-//!   what is off is shown as written.
+//! - A closed ```` ```mermaid ```` fence is drawn as a text diagram, or
+//!   shown as code under a notice when it cannot be (`mermaid`).
+//! - `tui.rendering` turns tables, list markers, math or diagrams off
+//!   (`preferences`); what is off is shown as written.
 
 mod blocks;
 mod links;
@@ -29,6 +31,7 @@ mod list_spacing;
 mod lists;
 mod local_links;
 mod math;
+mod mermaid;
 mod output;
 pub(crate) mod preferences;
 mod source_tables;
@@ -200,6 +203,8 @@ struct Writer<'a> {
     /// in `code_block_buffer` and highlighted at its end.
     code_block_lang: Option<String>,
     code_block_buffer: String,
+    /// Where the block's last text ends: a fence closed comes after it.
+    code_block_content_end: usize,
     wrap_width: Option<usize>,
     cwd: Option<&'a str>,
     current_line_content: Option<HyperlinkLine>,
@@ -244,6 +249,7 @@ impl<'a> Writer<'a> {
             in_code_block: false,
             code_block_lang: None,
             code_block_buffer: String::new(),
+            code_block_content_end: 0,
             wrap_width,
             cwd,
             current_line_content: None,
@@ -275,8 +281,13 @@ impl<'a> Writer<'a> {
         self.prepare_for_event(&event);
         match event {
             Event::Start(tag) => self.start_tag(tag, range, iter),
-            Event::End(tag) => self.end_tag(tag),
-            Event::Text(text) => self.text(text),
+            Event::End(tag) => self.end_tag(tag, range),
+            Event::Text(text) => {
+                if self.in_code_block {
+                    self.code_block_content_end = range.end;
+                }
+                self.text(text)
+            }
             Event::Code(code) => self.code(code),
             Event::SoftBreak => self.soft_break(),
             Event::HardBreak => self.hard_break(),
@@ -324,7 +335,7 @@ impl<'a> Writer<'a> {
                     CodeBlockKind::Fenced(lang) => Some(lang.to_string()),
                     CodeBlockKind::Indented => None,
                 };
-                self.start_codeblock(lang, indent)
+                self.start_codeblock(lang, indent, range.end)
             }
             Tag::List(start) => {
                 // A list that starts on a line of its own after its parent's
@@ -360,7 +371,7 @@ impl<'a> Writer<'a> {
         }
     }
 
-    fn end_tag(&mut self, tag: TagEnd) {
+    fn end_tag(&mut self, tag: TagEnd, range: Range<usize>) {
         match tag {
             TagEnd::Paragraph => self.end_paragraph(),
             TagEnd::Heading(_) => self.end_heading(),
@@ -368,7 +379,7 @@ impl<'a> Writer<'a> {
                 self.flush_current_line();
                 self.end_blockquote();
             }
-            TagEnd::CodeBlock => self.end_codeblock(),
+            TagEnd::CodeBlock => self.end_codeblock(range),
             TagEnd::List(_) => self.end_list(),
             TagEnd::Item => self.end_item(),
             TagEnd::Emphasis | TagEnd::Strong | TagEnd::Strikethrough => self.pop_inline_style(),

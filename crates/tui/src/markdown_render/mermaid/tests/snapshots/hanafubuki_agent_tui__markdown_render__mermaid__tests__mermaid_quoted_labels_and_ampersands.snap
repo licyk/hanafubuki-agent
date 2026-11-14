@@ -1,0 +1,14 @@
+---
+source: crates/tui/src/markdown_render/mermaid/tests/mod.rs
+expression: output
+---
+┌──────────────────┐  ┌──────────────────┐  ┌───────────────────┐
+│ Your saved order │  │ Review & confirm │  │ DoorDash checkout │
+└┬─────────────────┘  └┬─┬───────────────┘  └┬──────────────────┘
+ │                     ▲ │                   ▲
+ │                     │ │                   │
+ │                     │ │                   │
+ │                     │ │                   │
+ └─────────────────────┘ │                   │
+                         │                   │
+                         └───────────────────┘

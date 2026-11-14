@@ -7,8 +7,11 @@
 use pulldown_cmark::{CowStr, Event, HeadingLevel};
 use ratatui::text::{Line, Span};
 
-use super::{IndentContext, ListSpacing, Writer};
-use crate::render::highlight::highlight_code_to_lines;
+use std::ops::Range;
+
+use super::output::spans_display_width;
+use super::{mermaid, preferences, IndentContext, ListSpacing, Writer};
+use crate::render::highlight::{current_syntax_theme, highlight_code_to_lines};
 
 impl Writer<'_> {
     pub(super) fn start_paragraph(&mut self) {
@@ -251,7 +254,12 @@ impl Writer<'_> {
         }
     }
 
-    pub(super) fn start_codeblock(&mut self, lang: Option<String>, indent: Option<Span<'static>>) {
+    pub(super) fn start_codeblock(
+        &mut self,
+        lang: Option<String>,
+        indent: Option<Span<'static>>,
+        block_end: usize,
+    ) {
         self.flush_current_line();
         // Under uniform spacing, a code block that starts an item follows
         // its marker without a blank line.
@@ -274,6 +282,7 @@ impl Writer<'_> {
             .filter(|lang| !lang.is_empty())
             .map(str::to_string);
         self.code_block_buffer.clear();
+        self.code_block_content_end = block_end;
         self.indent_stack.push(IndentContext::new(
             vec![indent.unwrap_or_default()],
             None,
@@ -282,11 +291,26 @@ impl Writer<'_> {
         self.needs_newline = true;
     }
 
-    pub(super) fn end_codeblock(&mut self) {
+    /// The block's code, highlighted; a closed ```` ```mermaid ```` fence's
+    /// as its diagram, rows the writer never wraps nor scans for links.
+    pub(super) fn end_codeblock(&mut self, range: Range<usize>) {
         if let Some(lang) = self.code_block_lang.take() {
             let code = std::mem::take(&mut self.code_block_buffer);
             if !code.is_empty() {
-                for line in highlight_code_to_lines(&code, &lang) {
+                let diagram = preferences::current().mermaid
+                    && lang == "mermaid"
+                    && mermaid::has_closing_fence(self.input, range, self.code_block_content_end);
+                let lines = if diagram {
+                    let indent = spans_display_width(&self.prefix_spans(self.pending_marker_line));
+                    mermaid::render(
+                        &code,
+                        self.wrap_width.map(|width| width.saturating_sub(indent)),
+                        &current_syntax_theme(),
+                    )
+                } else {
+                    highlight_code_to_lines(&code, &lang)
+                };
+                for line in lines {
                     self.push_line(Line::default());
                     for span in line.spans {
                         self.push_span(span);

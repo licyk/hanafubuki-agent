@@ -432,27 +432,52 @@ fn rendering_preferences_match_incremental_and_full_renders() {
     let source = concat!(
         "Before.\n\n",
         "```markdown\n| A | B |\n|---|---|\n| `a` | \\(x_1\\) |\n```\n\n",
+        "```mermaid\nflowchart LR\nA --> B\n```\n\n",
         "Inline \\(\\alpha_1\\) and $x^2$.\n\n\\[\n\\frac{a}{b}\n\\]\n\n",
         "| Name | Value |\n|---|---|\n| **a** | $x^2$ |\n\n",
         "Prose after the table.\n\nOne.\n\nTwo.\n\nThree.\n\nFour.\n\n",
         "| **Name** | Value |\n|---|---|\n| `a` | b |\n\nAfter.\n"
     );
-    for math in [true, false] {
-        for tables in [true, false] {
-            crate::markdown_render::preferences::set(AgentTuiRendering {
-                math,
-                tables,
-                ..Default::default()
-            });
-            let mut source = source.to_owned();
-            if !math {
-                source.insert_str(
-                    0,
-                    "$$\n# heading\none\ntwo\nthree\nfour\nfive\n```rust\nx\n```\n$$\n\n",
-                );
+    for mermaid in [true, false] {
+        for math in [true, false] {
+            for tables in [true, false] {
+                crate::markdown_render::preferences::set(AgentTuiRendering {
+                    mermaid,
+                    math,
+                    tables,
+                    ..Default::default()
+                });
+                let mut source = source.to_owned();
+                if !math {
+                    source.insert_str(
+                        0,
+                        "$$\n# heading\none\ntwo\nthree\nfour\nfive\n```rust\nx\n```\n$$\n\n",
+                    );
+                }
+                let chunks: Vec<&str> = source.split_inclusive('\n').collect();
+                assert_stream_matches_full_render(&chunks, Some(80));
             }
-            let chunks: Vec<&str> = source.split_inclusive('\n').collect();
-            assert_stream_matches_full_render(&chunks, Some(80));
         }
     }
+}
+
+/// A top-level Mermaid fence arriving a line at a time: while it is open
+/// the rows appended a line at a time (`code_fence.rs`) are the whole
+/// render's, links and spans included; its closer gives the diagram.
+#[test]
+fn an_open_mermaid_fence_appends_the_whole_renders_rows() {
+    let chunks = [
+        "Intro.\n\n",
+        "```mermaid\n",
+        "flowchart LR\n",
+        "A[Request https://example.com] --> B[Reply]\n",
+        "B --> C\n",
+        "```\n",
+    ];
+    let (_, render) = assert_stream_matches_full_render(&chunks, Some(80));
+    let rows = lines_to_plain_strings(&crate::terminal_hyperlinks::visible_lines(
+        render.lines.clone(),
+    ));
+    assert!(rows.iter().any(|row| row.starts_with('┌')), "{rows:#?}");
+    assert!(render.lines.iter().all(|line| line.hyperlinks.is_empty()));
 }

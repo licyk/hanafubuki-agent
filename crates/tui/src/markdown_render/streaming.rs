@@ -31,9 +31,11 @@ pub(crate) struct StreamingMarkdownRender {
     /// The first block is raw HTML, which follows the blocks before it
     /// without a blank row.
     pub(crate) first_top_level_block_is_html: bool,
-    /// The last top-level block holds a ```` ```md ```` fence: what it
-    /// shows is decided when it closes (unwrapped around a table, or the
-    /// table's source with tables off), so it stays the stream's to change.
+    /// The last top-level block holds a ```` ```md ```` fence or, with
+    /// diagrams on, a ```` ```mermaid ```` one: what it shows is decided
+    /// when it closes (unwrapped around a table, or the table's source with
+    /// tables off; a diagram, or its code under a notice) and may change
+    /// with the width, so it stays the stream's to change.
     pub(crate) mutable_fence_start: Option<usize>,
     /// The last row ends with a local file link's target, which a `:` on
     /// the next line joins.
@@ -130,9 +132,13 @@ where
             }
         }
         // Codex holds a Markdown fence only with tables off; an open one
-        // with tables on is unwrapped or not only once it closes, too.
+        // with tables on is unwrapped or not only once it closes, too. A
+        // Mermaid fence is code until it closes, then its diagram, and a
+        // diagram may give way to its code at another width.
         if let Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(info))) = &event {
-            if is_markdown_fence_info(info, 0) {
+            let mermaid = preferences::current().mermaid
+                && info.split([',', ' ', '\t']).next() == Some("mermaid");
+            if mermaid || is_markdown_fence_info(info, 0) {
                 self.mutable_fence_start.get_or_insert(self.last_start);
             }
         }

@@ -142,7 +142,12 @@ pub(crate) fn exceeds_highlight_limits(total_bytes: usize, total_lines: usize) -
 pub(crate) fn foreground_for_scopes(scopes: &[&str]) -> Option<Color> {
     let theme = theme_lock();
     let theme = theme.read();
-    let highlighter = Highlighter::new(&theme);
+    foreground_for_scopes_with_theme(&theme, scopes)
+}
+
+/// [`foreground_for_scopes`] in `theme` (a Mermaid diagram's colours).
+pub(crate) fn foreground_for_scopes_with_theme(theme: &Theme, scopes: &[&str]) -> Option<Color> {
+    let highlighter = Highlighter::new(theme);
     scopes.iter().find_map(|scope| {
         let scope = Scope::new(scope).ok()?;
         convert_syntect_color(highlighter.style_mod_for_stack(&[scope]).foreground?)

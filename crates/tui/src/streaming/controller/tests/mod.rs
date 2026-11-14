@@ -4,6 +4,7 @@
 mod equality;
 mod links;
 mod math;
+mod mermaid;
 mod preview;
 mod resize;
 mod visible;

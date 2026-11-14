@@ -130,6 +130,9 @@ pub struct AgentTuiRendering {
     /// TeX math between `$…$`, `\(…\)`, `$$…$$` and `\[…\]` in Unicode
     /// notation; off, each formula's source as written.
     pub math: bool,
+    /// A ```` ```mermaid ```` fence drawn as a text diagram when its family
+    /// and size allow; off, shown as code.
+    pub mermaid: bool,
 }
 
 impl Default for AgentTuiRendering {
@@ -138,6 +141,7 @@ impl Default for AgentTuiRendering {
             tables: true,
             lists: true,
             math: true,
+            mermaid: true,
         }
     }
 }
@@ -327,6 +331,14 @@ pub(crate) fn section() -> SettingsSection {
             described(
                 SettingSpec::new("tui.rendering.math", "Math", SettingKind::Boolean),
                 "TeX formulas in Unicode notation; off, shown as written",
+            ),
+            described(
+                SettingSpec::new(
+                    "tui.rendering.mermaid",
+                    "Mermaid diagrams",
+                    SettingKind::Boolean,
+                ),
+                "```mermaid fences drawn as text diagrams; off, shown as code",
             ),
         ],
     )

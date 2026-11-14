@@ -20,6 +20,7 @@ static RENDERING: parking_lot::RwLock<AgentTuiRendering> =
         tables: true,
         lists: true,
         math: true,
+        mermaid: true,
     });
 
 #[cfg(test)]

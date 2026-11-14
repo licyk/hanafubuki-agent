@@ -373,3 +373,34 @@ fn after_a_resize_math_is_laid_out_for_the_new_width() {
         }
     }
 }
+
+/// A diagram is laid out again for the new width too: one that no longer
+/// fits turns to its notice and its code, and back to the diagram.
+#[test]
+fn after_a_resize_a_diagram_is_laid_out_for_the_new_width() {
+    const DIAGRAM: &str = "Intro text.\n\n```mermaid\nflowchart LR\n    A[Request] --> B[Reply] --> C[Done]\n```\n\nAfter.\n";
+    for mode in PRESENTATIONS {
+        for (from, to) in [(100, 24), (24, 100)] {
+            let mut resized = Harness::at_width(mode, from);
+            let mut fresh = Harness::at_width(mode, to);
+            for n in 1..=3 {
+                resized.turn(&format!("Question {n}?"), DIAGRAM);
+                fresh.turn(&format!("Question {n}?"), DIAGRAM);
+            }
+            resized.resize(to);
+            resized.settle();
+            assert_same_screen(&resized, &fresh, &format!("{mode:?} {from} -> {to}"));
+            let screen = resized.screen();
+            assert_eq!(
+                screen.contains("│ Request │  │ Reply │"),
+                to == 100,
+                "{mode:?} {from} -> {to}:\n{screen}"
+            );
+            assert_eq!(
+                screen.contains("A[Request]"),
+                to == 24,
+                "{mode:?} {from} -> {to}:\n{screen}"
+            );
+        }
+    }
+}
