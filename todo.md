@@ -5564,12 +5564,76 @@ its next pin, and any module-size exception.
         (Linux, macOS and Windows: success); Site
         https://github.com/licyk/hanafubuki-agent/actions/runs/43588186465
         (success).
-- [ ] R5: background terminals wake their owner. The kernel queues the
-      end on a terminal status of a call not in flight and withdraws it on
-      disposal; `!command` and `Cancelled` are excluded. Adds the execution
-      plugin's `background_terminals` fragment, which states the
-      configured timeout, and `exec` waiting for terminals. The 14
-      `exec_command` goldens are regenerated.
+- [x] R5: background terminals wake their owner.
+      Implemented (2026-11-14), recovered from Claude's interrupted worktree:
+      - The kernel tracks model-started executions by id and generation in
+        session runtime state. Its first exit, failure or timeout queues
+        the command, elapsed time and last plain-text output in the same
+        checkpoint as execution progress. A call's disposal withdraws its
+        end before the next step reads the queue. The Agent's own reports,
+        cancellations, disabled policies and `!command` queue nothing.
+      - Correction to the plan: no in-flight-call set. A command can exit
+        after its tool returned a session id but before that result is
+        committed. Ignoring an in-flight call's end loses that update;
+        disposal is the evidence that the call reported it. The regression
+        covers this interleaving. Duplicate starts preserve the tracking,
+        repeated statuses queue once, and stale-generation disposal cannot
+        remove another execution. Tracking and the queue roll back together.
+      - The execution plugin contributes `background_terminals` only
+        when `exec_command` is offered and `TurnWake` is on. It reads
+        the current command timeout each step. Goldens intentionally
+        regenerated; the frozen pre-wake fixture stays unchanged.
+      - `background_status` and continuation work include terminals;
+        `exec` waits for them, reports what it waits for, and writes the
+        last woken turn's answer. The TUI waiting line includes terminals.
+      - Tests: nine kernel terminal contracts (yield/commit, poll withdrawal,
+        duplicate start, stale disposal, output bounds, timeout, policy,
+        cancellation and `!` exclusion); three agent tests using real
+        file-gated commands; plugin guidance and timeout delivery; CLI
+        waiting through a real command's exit and a second root turn.
+      - Validation on Linux: `cargo fmt --all --check`;
+        `cargo xtask check`; `cargo test -p hanafubuki-agent-kernel
+        --all-features --test loop_contract terminals`; `cargo test -p
+        hanafubuki-agent-plugin-execution --all-features`; `cargo test -p
+        hanafubuki-agent --all-features background_terminals -- --nocapture`;
+        `cargo test -p hanafubuki-agent-cli --all-features --test exec
+        exec_waits_for_a_terminal -- --nocapture`;
+        `HANAFUBUKI_AGENT_UPDATE_GOLDEN=1 cargo test -p hanafubuki-agent
+        --lib golden` (24 passed); `cargo clippy -p hanafubuki-agent-kernel
+        -p hanafubuki-agent-plugin-execution -p hanafubuki-agent
+        -p hanafubuki-agent-cli -p hanafubuki-agent-tui --all-targets
+        --all-features -- -D warnings`.
+      - Full workspace checks/tests and native CI are left to integration
+        with R3/R4; no Windows/macOS execution claimed from these results.
+        Documentation-only site edits were reviewed without site builds.
+        No module-size exception added or raised.
+      - Hanafubuki at its next pin: regenerate its request goldens for the
+        execution guidance. No history-format change.
+      - R3 integration: the shared `Wakes::status` counts model-started
+        terminals before reading the queue. `background_tasks` lists terminals
+        of the root and its agents, with owner/title and recent output;
+        feed comparison omits recent output and the changing update timestamp.
+        Durable terminal starts, terminal states, disposal and cleanup failure
+        notify `BackgroundWorkChanged`; output does not. The terminal round-trip
+        test checks the task snapshot and start/end change hints. Passed on
+        Linux: three agent background-terminal tests, the CLI terminal-wait
+        test, scoped agent/CLI clippy with all targets/features and warnings
+        denied, `cargo xtask check`, `bun run format:check:site`, and diff
+        validation. Integration also fixes R5's four documentation tables
+        flagged by the site formatter.
+      - R4 integration: kernel work sums terminals across the two-level tree
+        and keeps every agent with live descendant work counted. Successful
+        parent answers wait for their own and descendant terminals; child
+        turns retain TurnWake. A real file-gated grandchild command proves
+        two Waiting agents plus one terminal, leaf-to-parent wake delivery,
+        and exactly one final root completion. The host snapshot includes
+        authoritative work counts and every terminal owner. Combined goldens
+        regenerated intentionally (24 passed). Integration validation on Linux:
+        the new nested-terminal test, three existing real terminal tests,
+        nine kernel terminal contracts, agent/CLI/TUI all-target all-feature
+        check, scoped agent/kernel/CLI/TUI clippy with warnings denied,
+        xtask, fmt, diff, and full site formatting check. No full workspace
+        or native platform test rerun; no site build/test for these docs.
 - [ ] R6: `close_subagent` (cascade), `close_background_terminal`, and
       `/stop` as the person's close. Each wakes the owner; archive, delete
       and side close do not.

@@ -126,6 +126,9 @@ pub(in crate::service) struct SessionRuntime {
     /// Whether the queue is delivered; never persisted, given again at each
     /// activation.
     pub(in crate::service) wake_policy: crate::AgentWakePolicy,
+    /// The executions its model's calls started in this run, whose ends
+    /// wake it; never persisted (no process outlives the run).
+    pub(in crate::service) background_terminals: crate::service::wake::BackgroundTerminals,
 }
 
 /// Bounded rollback state for one staged durable mutation: every group but
@@ -206,6 +209,7 @@ impl SessionRuntime {
             sent_request: None,
             wake_queue: Default::default(),
             wake_policy: Default::default(),
+            background_terminals: Default::default(),
         }
     }
 }

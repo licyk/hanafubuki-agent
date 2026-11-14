@@ -179,6 +179,7 @@ impl AgentService {
                 // The source's background work stays the source's.
                 wake_queue: Default::default(),
                 wake_policy: Default::default(),
+                background_terminals: Default::default(),
             },
         };
         let cell = self.inner.sessions.insert(record, &self.inner.accepting)?;

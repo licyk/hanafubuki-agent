@@ -103,6 +103,8 @@ Sub-agents’ approvals use the same `--approve` policy, whether the root is wor
 
 ## Waiting for sub-agents [#subagents]
 
+`exec` also waits for background terminals started by the model. It reports what it is waiting for, runs the turn woken by an exit, failure or timeout, and writes that last turn’s answer to `-o`. A command that does not exit by itself keeps `exec` waiting until its configured `pluginOptions.execution.commandTimeoutMinutes` expires (10 minutes by default). Ctrl-C stops the wait and shuts down the Agent.
+
 When the turn completes while [sub-agents](/docs/tools#subagents) it spawned still work, `exec` does not exit: it waits for them, running nothing meanwhile. When one of them ends or sends the session a message, `exec` runs the turn that wakes the session for what was reported, printed as any turn's: each report as a note first (``· background update: Sub-agent `counter` (agent id 2) completed: Twelve files.``, on standard error with `--json`), then the turn. It goes on until no sub-agent works and nothing is left to read, then exits with how the last turn ended, and `-o` writes that turn's final answer.
 
 It exits at the turn's end, as before, when `wakeOnBackgroundTasks` is off, when the turn did not complete, and after the sub-agents woke the session 100 times (with a note). Ctrl-C while `exec` waits exits with 130, and the sub-agents stop with the Agent.

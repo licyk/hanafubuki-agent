@@ -149,6 +149,7 @@ impl AgentService {
                 sent_request: None,
                 wake_queue: runtime.wake_queue,
                 wake_policy: Default::default(),
+                background_terminals: Default::default(),
             },
         };
         // A state that was lost (it could not be read) is rebuilt from the

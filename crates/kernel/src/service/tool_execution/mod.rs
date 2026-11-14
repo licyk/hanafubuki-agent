@@ -19,7 +19,7 @@ pub(in crate::service) use skills::active_skills;
 #[cfg(test)]
 use skills::turn_has_skill_context;
 pub(in crate::service) use user_shell::{
-    unfinished_user_shell_command, user_shell_command_display,
+    is_user_shell_call_id, unfinished_user_shell_command, user_shell_command_display,
 };
 
 #[cfg(test)]

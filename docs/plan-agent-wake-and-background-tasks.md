@@ -146,7 +146,7 @@ timeout a setting. D12 records that answer.
 | **D8** | **A child's end, as its parent hears it.** *Completed* is reported once the child's own subtree is quiet (no live sub-agent, no running terminal). An end while it still waits on them is not reported, so the parent is not woken for an interim "I am waiting". *Errored*, *closed by the user* and *lost at a restart* are reported at once. An interrupt the parent made itself (`interrupt_agent`) is not reported, as today. | The parent should wake once, when the delegated work is done. Failures and closes are news it must act on. | Reporting every child turn end, which wakes the parent for each interim yield. |
 | **D9** | **Nesting.** A session's depth is its count of `Subagent` ancestors up to the root (`parent_session_id`). A session spawns when it is a root, or a `Subagent` at depth 1. Depth 2 is refused, and so are side conversations and reviews (§3.5 has the texts). Wake events go to the **direct** parent only. `list_agents`, `interrupt_agent`, `send_message`, `followup_task` and `wait_agent` address direct children, as today. | This is the request's two levels. Each agent coordinates what it spawned. | One flat namespace per tree: a depth-1 agent's children would leak into the root's tools. |
 | **D10 · Q2/Q3** | **`maximumRunningAgents`: default 8, range 1..16, counting live agents in the root's tree.** `spawn_agent` and a `followup_task` that would make an idle agent live are refused at the cap. A woken turn never is: a woken agent is already live, or becomes live only through an event about its own work. | Eight agents of the whole tree work at once. A suspended agent holds no turn but is not done, and counting it keeps the bound strict without refusing wakes. | Running turns per parent: 8 at the root and 8 under each child allow 72. Running turns across the tree: wakes past the cap would have to be refused or allowed to exceed it. |
-| **D11** | **Terminal wakes.** Every background terminal of a **model's** `exec_command` (never a `!command`'s, which its own turn waits for) queues an event on its owner when it ends: exited, failed or timed out, with no call having reported that end. The kernel produces it as it applies the terminal `ExecutionStatus` in the session's progress queue (`stage_execution_progress`, `progress.rs:488`), when the call the update belongs to (`call_id`) is not in flight in the session's turn. It is **withdrawn** when that execution's `ExecutionDisposed` is applied: a model's poll reported the end, or the Agent disposed of it. A `Cancelled` status (only the Agent's own stops produce it) queues nothing. No argument is added. | The monitor already orders a terminal status after its output and before disposal (`monitor_execution`, `plugin-execution/src/monitor.rs:197`; internals "Execution progress"). The kernel knows the session, the call and the turn. The withdrawal covers a `write_stdin` poll that saw the end, since its call id is not the execution's. | Producing it in the execution plugin: it would need per-execution state shared between calls and the monitor, and its own ordering against disposal. An opt-in `notify_on_exit` argument: a schema change in every golden, and a model that forgets it is never resumed. |
+| **D11** | **Terminal wakes.** Every background terminal of a **model's** `exec_command` (never a `!command`'s, which its own turn waits for) queues an event on its owner when it ends: exited, failed or timed out, with no call having reported that end. The kernel produces it as it applies the terminal `ExecutionStatus` in the session's progress queue (`stage_execution_progress`, `progress.rs:488`), for the tracked execution (the disposal, not whether the call is in flight, proves its result reported the end; see §3.8). It is **withdrawn** when that execution's `ExecutionDisposed` is applied: a model's poll reported the end, or the Agent disposed of it. A `Cancelled` status (only the Agent's own stops produce it) queues nothing. No argument is added. | The monitor already orders a terminal status after its output and before disposal (`monitor_execution`, `plugin-execution/src/monitor.rs:197`; internals "Execution progress"). The kernel knows the session, the call and the turn. The withdrawal covers a `write_stdin` poll that saw the end, since its call id is not the execution's. | Producing it in the execution plugin: it would need per-execution state shared between calls and the monitor, and its own ordering against disposal. An opt-in `notify_on_exit` argument: a schema change in every golden, and a model that forgets it is never resumed. |
 | **D12 · Q4** | **The command timeout becomes a setting: `pluginOptions.execution.commandTimeoutMinutes`**, an integer from 1 to 1440, default 10 (today's limit). It bounds every `exec_command` execution, the model's and a `!command`'s, from its start. A change applies to the commands started after it, never to a running one, and restarts nothing. A timeout is a wake event that says how long the command ran (§3.13). | The user's answer to Q4. With terminals waking their owner, a command that outlives its limit is news rather than a poll, and a person who runs long builds or development servers can let them live. The default stays 10 minutes, so a hung command fails, and holds a waiting owner or `exec`, no longer than today unless the person chooses. | Keeping 10 minutes fixed: §1.1's development server would always be killed at 10 minutes. A longer default: every hung command would hold a sub-agent's completion and `exec` that much longer. A `timeout` argument of `exec_command`: a schema change in every golden, and the model, not the person, would choose how long a process lives. |
 | **D13 · Q9** | **Manual close.** *Closing a sub-agent* closes its live sub-agents first (depth 2), then interrupts its turn and waits for confirmation, stops its terminals, marks it `Closed`, and queues "closed by the user" on its parent, which wakes. The session stays, so a follow-up task can reuse it. *Closing a terminal* is `stop_confirmed` plus the stop's progress, then "stopped by the user" queued on its owner. `/stop` closes every terminal of the session this way. Archive, delete, side close and shutdown stop terminals and children **without** queuing anything, through the internal path (`quiesce_background_terminals`, split from the facade's `stop_background_terminals_confirmed`). | This is request [4]. The person's close is news for the agent; the Agent's own teardown is not, and its owner is going away. | Archiving a closed sub-agent: closing should not take its history out of the parent's view. Cascading `interrupt_agent`: the model's own interrupt redirects one agent and leaves the rest to it. |
 | **D14** | **The host contract** (§3.7). `AgentBackgroundEventSink`, installed at launch, receives `Woken`, `Changed { root }` and `Child { root, session_id, event }`. `Child` forwards a child turn's approval, question and terminal events: child turns get a forwarding sink. The snapshot is `background_tasks(root)`. The calls are `submit_wake_turn_with_sink`, `close_subagent` and `close_background_terminal`. | Polling child journals every 400 ms is how the TUI finds a child's approval today; it does not scale to two levels or to `exec`. | Forwarding every child event (streamed deltas included): a shown sub-agent's transcript is followed from its journal, as today. |
@@ -631,7 +631,7 @@ sub-agent shown in the terminal interface is still followed from it.
 
 | Call | Returns / does |
 | --- | --- |
-| `background_tasks(root)` | `AgentBackgroundTasks { agents, terminals, pending_wake_events, wake }`. `agents` is a `Vec<AgentSubagentStatus>` over the tree in tree order, with `parent_session_id`, `depth` and the elapsed time of the current turn or wait. `terminals` is a `Vec<AgentBackgroundTerminal { owner: AgentSessionId, owner_title: Option<String>, terminal: AgentBackgroundTerminalSnapshot }>`, each owner's `list_background_terminals`. `wake` is `On`, `Paused { reason: PersonInterrupted \| RunawayBound }` or `Off`. Blocks: call it off the async runtime. |
+| `background_tasks(root)` | `AgentBackgroundTasks { work, agents, terminals, pending_wake_events, wake }`. `agents` is a `Vec<AgentSubagentStatus>` over the tree in tree order, with `parent_session_id`, `depth` and the elapsed time of the current turn or wait. `terminals` is a `Vec<AgentBackgroundTerminal { owner: AgentSessionId, owner_title: Option<String>, terminal: AgentBackgroundTerminalSnapshot }>`, each owner's `list_background_terminals`. `wake` is `On`, `Paused { reason: PersonInterrupted \| RunawayBound }` or `Off`. Async: the facade reads the tree on its blocking pool. |
 | `submit_wake_turn_with_sink(session_id, sink)` | `Option<AgentTurnAccepted>` (§3.1), for a root. The facade prepares it as `submit_turn_with_sink` does. |
 | `close_subagent(session_id)` (async) | §3.9. `InvalidInput` for a session that is not a sub-agent. |
 | `close_background_terminal(session_id, execution_id)` | §3.9. `InvalidInput` for an execution that is not one of the session's background terminals. |
@@ -654,31 +654,34 @@ sub-agent shown in the terminal interface is still followed from it.
 
 ### 3.8 Terminal wakes [3]
 
-The kernel's `stage_execution_progress` (`progress.rs:488`), for one queued
-update:
+The kernel stages execution progress and terminal tracking together. The
+runtime map records each model-started execution by id and generation,
+with its command, whether it ended and whether its end is queued.
 
 | Update | Condition | Wake |
 | --- | --- | --- |
-| `ExecutionStatus` terminal: `Exited`, `Failed`, `TimedOut` | the update came from a tool's sink, so it has a `call_id` (the Agent's own reports through `report_session_execution_progress`, `progress.rs:460`, have none and never queue: a stop re-reports a terminal's projected status before disposing of it), the execution activity exists, it is not disposed, that `call_id` is not a call in flight in the session's turn, the call is not a `!command`'s (`user-shell-…`), the policy is on | queue `Terminal { Ended { … } }`, with its last output from the activity's preview |
-| `ExecutionStatus` `Cancelled` | — | none: only the Agent's stops (archive, delete, a person's close, shutdown) cancel |
-| `ExecutionDisposed` | an event of that execution is queued | withdraw it (`take_wake_events`) |
+| `ExecutionStarted` | from a model tool call, not `user-shell-…`; the activity accepted this start | track the execution and the starting call's presentation subject |
+| First terminal `ExecutionStatus`: `Exited`, `Failed`, `TimedOut` | matching tracked generation, from a tool sink, wake policy on, session not archived | queue `Terminal { Ended { … } }` with duration and last output |
+| `ExecutionStatus` `Cancelled`, or the Agent's own report | — | mark ended, queue nothing |
+| `ExecutionDisposed` from a tool | matching tracked generation | remove tracking and withdraw its queued end: the call result reported it |
+| `ExecutionDisposed` from the Agent | matching tracked generation | remove tracking, preserving an end already queued: no call reported it |
 
-- **In flight**: the running turn records the call ids of the step it is
-  executing (R5 adds the set to `TurnRecord` if the tool execution does not
-  already keep it). A command that ends within its own `exec_command` call
-  is returned by that call, and its status arrives in flight, so nothing
-  is queued.
-- **A poll that sees the end** (`write_stdin` in flight, a different call
-  id) may let the event be queued. Its result then reports the disposal
-  (`tool.rs:294-300`), which the monitor orders after the status, and the
-  event is withdrawn before the next step drains (§3.1 flushes first).
-- **A status after disposal** (the tool reported the disposal of an
-  execution that ended within its call before the monitor's 100 ms poll
-  saw it) finds the activity disposed, so nothing is queued.
-- The `command` text is the activity's presentation subject, as `/ps`
-  shows it. The output is the activity's tail lines, at most 4 KiB.
-- Nothing is added to `activity.rs` (at its 647 ceiling): the check reads
-  the activity snapshot it returns.
+An in-flight call set is deliberately unnecessary. A command can exit
+after `exec_command` has returned its session id but before the kernel
+commits the result. Ignoring an end while that call is in flight loses
+the update. Instead, the disposal proves that the call reported the end;
+steps flush progress before delivering wake events, and turn completion
+also flushes progress. A command that finishes within its call, or a
+`write_stdin` poll that reports its end, therefore leaves no duplicate
+update. Tests cover the yield-to-commit interleaving explicitly.
+
+Tracking is not persisted: no process survives this Agent run. It is
+part of the session runtime rollback, so a failed append restores it and
+the queue together. Duplicate starts do not reset it, repeated statuses
+queue once, and a stale generation cannot dispose another execution.
+The command comes from the starting tool's presenter, evaluated outside
+the session lock. Output is the activity's plain-text tail, bounded by
+the queue to 4 KiB. Nothing changes in `activity.rs`.
 
 ### 3.9 Manual close [4]
 
@@ -1374,14 +1377,14 @@ deadline of 20 s or more, never a fixed sleep.
 - **R5 — terminals wake their owner** ([3]; D11, D12, §3.8).
   - Scope:
     - kernel production and withdrawal of terminal events;
-    - the in-flight call set if it is missing;
+    - execution tracking and withdrawal after a call reports the end;
     - the execution plugin's `background_terminals` fragment, which
       states R4b's current `commandTimeoutMinutes`;
     - `!command` excluded;
     - `exec` also waits for terminals.
   - Files: `kernel/src/service/progress.rs` (`stage_execution_progress`),
     `service/wake/terminal.rs` (new: the check and the event),
-    `service/mod.rs` (`TurnRecord`'s in-flight calls, if needed),
+    `service/state/record.rs` (runtime execution tracking),
     `plugin-execution/src/{plugin,prompt}.rs` (`prompt.rs` new; it reads
     the value `ExecServices` holds), `cli/src/exec/mod.rs`.
   - Tests (`crates/agent/src/tests/executions.rs` and

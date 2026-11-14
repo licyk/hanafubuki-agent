@@ -17,6 +17,7 @@ mod models;
 mod nesting;
 mod pause;
 mod roles;
+mod terminals;
 mod wake;
 
 use std::sync::Arc;

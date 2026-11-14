@@ -35,14 +35,22 @@ const DETAILS_MAX_LINES: usize = 3;
 /// the person's message resumes it. `None` when nothing holds it open, or
 /// it is not woken for it.
 pub(crate) fn waiting_line(background: &AgentBackgroundStatus) -> Option<String> {
-    let agents = background.work.agents;
-    if agents == 0 {
+    let count = |count: usize, one: &str| match count {
+        0 => None,
+        1 => Some(format!("1 {one}")),
+        count => Some(format!("{count} {one}s")),
+    };
+    let work = [
+        count(background.work.agents, "agent"),
+        count(background.work.terminals, "terminal"),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(" · ");
+    if work.is_empty() {
         return None;
     }
-    let work = match agents {
-        1 => "1 agent".to_string(),
-        agents => format!("{agents} agents"),
-    };
     match background.wake {
         AgentWakeState::On => Some(format!("Waiting for {work} — resumes by itself")),
         AgentWakeState::Paused { .. } => Some(format!(

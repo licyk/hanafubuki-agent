@@ -12,7 +12,10 @@ use super::*;
 use crate::{AgentWakeFilter, AgentWakePolicy, AgentWakeQueued, AgentWakeSource};
 
 mod admission;
+mod terminal;
 mod work;
+
+pub(in crate::service) use terminal::{track_background_terminal, BackgroundTerminals};
 
 impl AgentService {
     /// Queues `source` on `session_id`, durably. A sub-agent's or a
@@ -83,7 +86,7 @@ impl AgentService {
             (StagedPersistence::commit(&cell, record, previous), taken)
         };
         self.persist_staged(staged).await?;
-        self.notify_wake_events_left(session_id);
+        self.notify_background_work_changed(session_id);
         Ok(taken)
     }
 
@@ -105,12 +108,15 @@ impl AgentService {
     /// Delivers the queued wake events to the running turn as one item, at
     /// a step boundary; the sequence of the last one it delivered, if any
     /// (the turn then takes another step). Nothing with the policy off.
+    /// What the step's calls reported is applied first, so the end of a
+    /// terminal a call's result reported is withdrawn, never delivered.
     pub(super) async fn consume_pending_wake_events(
         &self,
         identity: TurnIdentity,
         event_sink: &dyn AgentEventSink,
     ) -> Result<Option<u64>, AgentError> {
         let cell = self.session(identity.session_id)?;
+        self.flush_execution_progress(&cell).await;
         let (staged, history_event, last) = {
             let mut guard = cell.lock_after_persistence().await?;
             let record = &mut *guard;
@@ -156,13 +162,12 @@ impl AgentService {
         };
         self.persist_staged(staged).await?;
         event_sink.emit(history_event);
-        self.notify_wake_events_left(identity.session_id);
+        self.notify_background_work_changed(identity.session_id);
         Ok(Some(last))
     }
 
-    /// Tells the observers that events left `session_id`'s queue, once
-    /// that is durable.
-    pub(super) fn notify_wake_events_left(&self, session_id: AgentSessionId) {
+    /// Tells observers that background work changed after its durable commit.
+    pub(super) fn notify_background_work_changed(&self, session_id: AgentSessionId) {
         self.inner
             .registries
             .observers
