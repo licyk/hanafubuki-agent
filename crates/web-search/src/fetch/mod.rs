@@ -1,3 +1,27 @@
+// Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent.
+//
+// The MIT License (MIT)
+//
+// Copyright (c) 2026 dsh-free-search contributors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 use parking_lot::Mutex;
 use std::collections::VecDeque;
 use std::net::{IpAddr, SocketAddr};
@@ -32,6 +56,10 @@ const MAX_DOCUMENT_CACHE_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Clone)]
 pub(crate) struct WebPageFetcher {
+    options: options::FetchOptions,
+    exa_keys: Vec<String>,
+    firecrawl_keys: Vec<String>,
+    crawl4ai_key: String,
     direct_timeout: Duration,
     reader_timeout: Duration,
     total_timeout: Duration,
@@ -49,6 +77,7 @@ pub(crate) struct WebPageFetcher {
 }
 
 struct RawPage {
+    fetched_bytes: usize,
     final_url: Url,
     content_type: String,
     body: Vec<u8>,
@@ -57,6 +86,7 @@ struct RawPage {
 
 #[derive(Clone)]
 struct FetchedDocument {
+    updated_at: Option<String>,
     final_url: String,
     title: Option<String>,
     content: String,
@@ -118,6 +148,26 @@ impl WebPageFetcher {
             })
             .collect::<Result<Vec<_>, WebFetchError>>()?;
         Ok(Self {
+            options: config.search.fetch.clone(),
+            exa_keys: config
+                .search
+                .engines
+                .get(&crate::WebSearchProvider::Exa)
+                .cloned()
+                .unwrap_or_default()
+                .keys(crate::WebSearchProvider::Exa),
+            firecrawl_keys: config
+                .search
+                .engines
+                .get(&crate::WebSearchProvider::Firecrawl)
+                .cloned()
+                .unwrap_or_default()
+                .keys(crate::WebSearchProvider::Firecrawl),
+            crawl4ai_key: if config.search.fetch.crawl4ai_api_key.is_empty() {
+                std::env::var("CRAWL4AI_API_KEY").unwrap_or_default()
+            } else {
+                config.search.fetch.crawl4ai_api_key.clone()
+            },
             direct_timeout: config.page_fetch_timeout,
             reader_timeout: config.jina_reader_timeout,
             total_timeout: config.page_fetch_total_timeout,
@@ -138,6 +188,8 @@ impl WebPageFetcher {
         &self,
         request: WebFetchRequest,
         cancellation: CancellationToken,
+        budget: Option<&crate::service::research::SearchBudget>,
+        runner: Option<&dyn crate::LocalWebRunner>,
     ) -> Result<WebFetchResponse, WebFetchError> {
         let mut target = request.url.clone();
         target.set_fragment(None);
@@ -152,28 +204,9 @@ impl WebPageFetcher {
         }
         let expected_generation = request.content_generation.clone();
         let operation = async {
-            let direct = tokio::select! {
-                result = tokio::time::timeout(
-                    self.direct_timeout,
-                    self.fetch_direct(target.clone(), &cancellation),
-                ) => result.unwrap_or(Err(WebFetchError::Timeout)),
-                _ = wait_cancelled(&cancellation) => return Err(WebFetchError::Cancelled),
-            };
-            let document = match direct {
-                Ok(page) => project_direct_document(page),
-                Err(error) if self.jina_reader_enabled && error.may_use_reader_fallback() => {
-                    tokio::select! {
-                        result = tokio::time::timeout(
-                            self.reader_timeout,
-                            self.fetch_jina(target, &cancellation),
-                        ) => result.map_err(|_| WebFetchError::Timeout)?,
-                        _ = wait_cancelled(&cancellation) => {
-                            return Err(WebFetchError::Cancelled);
-                        }
-                    }
-                }
-                Err(error) => return Err(error),
-            }?;
+            let document = self
+                .document_with_fallback(target.clone(), &cancellation, budget, runner)
+                .await?;
             Ok(finalize_document(document, &requested_url))
         };
         let document = tokio::select! {
@@ -194,13 +227,20 @@ impl WebPageFetcher {
     }
 }
 
+mod browser;
 mod cache;
+mod charset;
 mod direct;
 mod document;
 mod extract;
+mod fake_ip;
 mod http;
 mod markdown;
+mod metadata;
+mod options;
 mod reader;
+mod upstream;
+pub use options::{FetchOptions, FetchPreference};
 mod target_policy;
 
 use document::{finalize_document, page_document, project_direct_document};

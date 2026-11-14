@@ -460,6 +460,7 @@ impl AgentApplicationService {
                     workspace: workspace.clone(),
                     files: files.clone(),
                     executions: executions.clone(),
+                    executor: executor.clone(),
                     mcp: mcp.clone(),
                     memory: memory.clone(),
                     skills: skills.clone(),

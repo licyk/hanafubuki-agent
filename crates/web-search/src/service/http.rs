@@ -1,3 +1,27 @@
+// Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent.
+//
+// The MIT License (MIT)
+//
+// Copyright (c) 2026 dsh-free-search contributors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 use super::{WebSearchService, CANCELLATION_POLL_INTERVAL};
 use crate::model::{WebSearchError, MAX_WEB_SEARCH_BODY_BYTES};
 use futures_util::StreamExt;
@@ -20,19 +44,50 @@ impl WebSearchService {
         request: RequestBuilder,
         cancellation: &CancellationToken,
     ) -> Result<Vec<u8>, WebSearchError> {
+        self.send_bounded_limit(request, cancellation, MAX_WEB_SEARCH_BODY_BYTES)
+            .await
+    }
+
+    pub(super) async fn send_bounded_limit(
+        &self,
+        request: RequestBuilder,
+        cancellation: &CancellationToken,
+        maximum_bytes: usize,
+    ) -> Result<Vec<u8>, WebSearchError> {
+        let _permit = tokio::select! {
+            permit = self.inner.concurrency.acquire() => permit.map_err(|_| WebSearchError::Cancelled)?,
+            _ = wait_cancelled(cancellation) => return Err(WebSearchError::Cancelled),
+        };
         self.wait_for_rate_limit(cancellation).await?;
+        if let Some(budget) = &self.search_budget {
+            budget.charge()?;
+        }
         let sent = tokio::select! {
             result = request.send() => result,
             _ = wait_cancelled(cancellation) => return Err(WebSearchError::Cancelled),
         }
         .map_err(map_reqwest_error)?;
         let status = sent.status();
-        if !status.is_success() {
-            return Err(WebSearchError::HttpStatus(status.as_u16()));
-        }
+        let retry_after = sent
+            .headers()
+            .get("retry-after")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| {
+                s.parse::<u64>()
+                    .ok()
+                    .map(|s| std::time::Duration::from_secs(s.clamp(5, 7 * 86400)))
+                    .or_else(|| {
+                        chrono::DateTime::parse_from_rfc2822(s).ok().map(|d| {
+                            std::time::Duration::from_secs(
+                                (d.timestamp() - chrono::Utc::now().timestamp()).clamp(5, 7 * 86400)
+                                    as u64,
+                            )
+                        })
+                    })
+            });
         if sent
             .content_length()
-            .is_some_and(|length| length > MAX_WEB_SEARCH_BODY_BYTES as u64)
+            .is_some_and(|length| length > maximum_bytes as u64)
         {
             return Err(WebSearchError::ResponseTooLarge);
         }
@@ -45,15 +100,31 @@ impl WebSearchService {
             };
             let Some(chunk) = next else { break };
             let chunk = chunk.map_err(map_reqwest_error)?;
-            if body.len().saturating_add(chunk.len()) > MAX_WEB_SEARCH_BODY_BYTES {
+            if body.len().saturating_add(chunk.len()) > maximum_bytes {
                 return Err(WebSearchError::ResponseTooLarge);
             }
             body.extend_from_slice(&chunk);
         }
+        if !status.is_success() {
+            let (class, delay) =
+                crate::engines::backoff::classify(status.as_u16(), &String::from_utf8_lossy(&body));
+            if let Some(delay) = retry_after.or(delay) {
+                return Err(WebSearchError::ProviderBackoff { class, delay });
+            }
+            if matches!(
+                class,
+                crate::FailureClass::Quota
+                    | crate::FailureClass::BotWall
+                    | crate::FailureClass::Region
+            ) {
+                return Err(WebSearchError::ProviderFailure(class));
+            }
+            return Err(WebSearchError::HttpStatus(status.as_u16()));
+        }
         Ok(body)
     }
 
-    async fn wait_for_rate_limit(
+    pub(super) async fn wait_for_rate_limit(
         &self,
         cancellation: &CancellationToken,
     ) -> Result<(), WebSearchError> {

@@ -680,7 +680,22 @@ async fn the_status_lists_what_each_manifest_plugin_contributes_and_its_group() 
     assert_eq!(&names[..2], ["agent-host-services", "agent-kernel"]);
     let web = status_of(&statuses, "web");
     assert_eq!(web.group, AgentPluginGroup::Capability);
-    assert_eq!(web.contributions.tools, ["web_search", "fetch_web_page"]);
+    assert_eq!(
+        web.contributions.tools,
+        [
+            "web_search",
+            "advanced_search",
+            "multi_search",
+            "platform_search",
+            "video_search",
+            "weather",
+            "domain_search",
+            "free_search_test",
+            "research",
+            "cache_search",
+            "fetch_web_page"
+        ]
+    );
     let mcp = status_of(&statuses, "mcp");
     assert_eq!(mcp.contributions.tool_sources.len(), 1);
     assert!(mcp
@@ -726,7 +741,7 @@ async fn set_plugin_enabled_persists_the_choice_and_applies_it_to_the_running_pl
             .filter(|entry| entry.owner() == "web")
             .count()
     };
-    assert_eq!(web_tools(), 2);
+    assert_eq!(web_tools(), 11);
 
     let settings = service
         .set_plugin_enabled("web".into(), false)
@@ -758,7 +773,7 @@ async fn set_plugin_enabled_persists_the_choice_and_applies_it_to_the_running_pl
         .unwrap();
     assert!(settings.disabled_plugins.is_empty());
     eventually(|| {
-        state_of(&service.plugin_status(), "web") == AgentPluginState::Active && web_tools() == 2
+        state_of(&service.plugin_status(), "web") == AgentPluginState::Active && web_tools() == 11
     })
     .await;
     let _ = std::fs::remove_dir_all(paths.app_data_dir);

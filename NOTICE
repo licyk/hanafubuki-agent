@@ -483,3 +483,152 @@ https://github.com/ranxianglei/acp-kernel （及 https://github.com/ranxianglei/
   commit 57a808a392, with their original headers and COPYING unchanged.
   The Linux sandbox links this helper; its build and entry-point wrappers
   are adapted from Codex (Apache-2.0).
+
+- dsh-free-search (https://github.com/DDDMUC/dsh-free-search), v0.9.50,
+  commit `6ab5168`, Copyright (c) 2026 dsh-free-search contributors.
+  Native Rust port of engine adapters, routing, research, extraction and tools;
+  host settings, typed contracts, approvals and owned processes replace DSH
+  bindings. The following sources retain its MIT permission notice:
+  - `crates/plugin-web/src/config.rs`
+  - `crates/plugin-web/src/lib.rs`
+  - `crates/plugin-web/src/local/commands.rs`
+  - `crates/plugin-web/src/local/mod.rs`
+  - `crates/plugin-web/src/options/mod.rs`
+  - `crates/plugin-web/src/options/research.rs`
+  - `crates/plugin-web/src/plugin.rs`
+  - `crates/plugin-web/src/presenter.rs`
+  - `crates/plugin-web/src/tools/args.rs`
+  - `crates/plugin-web/src/tools/auxiliary.rs`
+  - `crates/plugin-web/src/tools/fetch.rs`
+  - `crates/plugin-web/src/tools/local_permission.rs`
+  - `crates/plugin-web/src/tools/mod.rs`
+  - `crates/plugin-web/src/tools/search.rs`
+  - `crates/plugin-web/tests/plugin.rs`
+  - `crates/web-search/src/engines/backoff.rs`
+  - `crates/web-search/src/engines/catalog.rs`
+  - `crates/web-search/src/engines/config.rs`
+  - `crates/web-search/src/engines/language.rs`
+  - `crates/web-search/src/engines/mod.rs`
+  - `crates/web-search/src/engines/plan.rs`
+  - `crates/web-search/src/engines/runtime.rs`
+  - `crates/web-search/src/engines/store.rs`
+  - `crates/web-search/src/fetch/browser.rs`
+  - `crates/web-search/src/fetch/charset.rs`
+  - `crates/web-search/src/fetch/direct.rs`
+  - `crates/web-search/src/fetch/document.rs`
+  - `crates/web-search/src/fetch/fake_ip.rs`
+  - `crates/web-search/src/fetch/fake_ip/tests.rs`
+  - `crates/web-search/src/fetch/http.rs`
+  - `crates/web-search/src/fetch/mod.rs`
+  - `crates/web-search/src/fetch/options.rs`
+  - `crates/web-search/src/fetch/upstream.rs`
+  - `crates/web-search/src/lib.rs`
+  - `crates/web-search/src/local.rs`
+  - `crates/web-search/src/model.rs`
+  - `crates/web-search/src/service/auxiliary/domain/academic.rs`
+  - `crates/web-search/src/service/auxiliary/domain/academic/tests.rs`
+  - `crates/web-search/src/service/auxiliary/domain/facts.rs`
+  - `crates/web-search/src/service/auxiliary/domain/finance.rs`
+  - `crates/web-search/src/service/auxiliary/domain/imf.rs`
+  - `crates/web-search/src/service/auxiliary/domain/mod.rs`
+  - `crates/web-search/src/service/auxiliary/domain/news_legal.rs`
+  - `crates/web-search/src/service/auxiliary/domain/packages.rs`
+  - `crates/web-search/src/service/auxiliary/domain/registries.rs`
+  - `crates/web-search/src/service/auxiliary/domain/security.rs`
+  - `crates/web-search/src/service/auxiliary/mod.rs`
+  - `crates/web-search/src/service/auxiliary/platform.rs`
+  - `crates/web-search/src/service/auxiliary/platform/tests.rs`
+  - `crates/web-search/src/service/auxiliary/video.rs`
+  - `crates/web-search/src/service/auxiliary/video/tests.rs`
+  - `crates/web-search/src/service/auxiliary/wire.rs`
+  - `crates/web-search/src/service/auxiliary/youtube.rs`
+  - `crates/web-search/src/service/cache.rs`
+  - `crates/web-search/src/service/diagnostics.rs`
+  - `crates/web-search/src/service/http.rs`
+  - `crates/web-search/src/service/mod.rs`
+  - `crates/web-search/src/service/normalize.rs`
+  - `crates/web-search/src/service/providers/api_request.rs`
+  - `crates/web-search/src/service/providers/duckduckgo.rs`
+  - `crates/web-search/src/service/providers/html.rs`
+  - `crates/web-search/src/service/providers/instances.rs`
+  - `crates/web-search/src/service/providers/local.rs`
+  - `crates/web-search/src/service/providers/mcp.rs`
+  - `crates/web-search/src/service/providers/mod.rs`
+  - `crates/web-search/src/service/providers/models.rs`
+  - `crates/web-search/src/service/providers/regional.rs`
+  - `crates/web-search/src/service/providers/rest.rs`
+  - `crates/web-search/src/service/providers/searxng.rs`
+  - `crates/web-search/src/service/providers/wire.rs`
+  - `crates/web-search/src/service/providers/yandex.rs`
+  - `crates/web-search/src/service/quality.rs`
+  - `crates/web-search/src/service/ranking.rs`
+  - `crates/web-search/src/service/research/budget.rs`
+  - `crates/web-search/src/service/research/cache.rs`
+  - `crates/web-search/src/service/research/clusters.rs`
+  - `crates/web-search/src/service/research/config.rs`
+  - `crates/web-search/src/service/research/enrichment.rs`
+  - `crates/web-search/src/service/research/intent.rs`
+  - `crates/web-search/src/service/research/mod.rs`
+  - `crates/web-search/src/service/research/model.rs`
+  - `crates/web-search/src/service/research/run/documents.rs`
+  - `crates/web-search/src/service/research/run/fetch.rs`
+  - `crates/web-search/src/service/research/run/followup.rs`
+  - `crates/web-search/src/service/research/run/mod.rs`
+  - `crates/web-search/src/service/research/tests/fixtures.rs`
+  - `crates/web-search/src/service/research/tests/mod.rs`
+  - `crates/web-search/src/service/research/tests/pipeline.rs`
+  - `crates/web-search/src/service/research/tests/text.rs`
+  - `crates/web-search/src/service/research/windows.rs`
+  - `crates/web-search/src/service/routing.rs`
+  - `crates/web-search/src/service/snippet.rs`
+  - `crates/web-search/src/service/weather/codes.rs`
+  - `crates/web-search/src/service/weather/mod.rs`
+  - `crates/web-search/src/time_range.rs`
+  - `crates/web-search/tests/engines/main.rs`
+  - `crates/web-search/tests/http_contract.rs`
+
+  - `crates/plugin-web/src/local/tests.rs`
+
+  - `crates/plugin-web/src/options/tests/mod.rs`
+
+  - `crates/plugin-web/src/tools/description.rs`
+
+  - `crates/plugin-web/src/tools/local_permission/tests.rs`
+
+  - `crates/web-search/src/engines/runtime/tests.rs`
+
+  - `crates/web-search/src/fetch/browser/tests.rs`
+
+  - `crates/web-search/src/fetch/charset/tests.rs`
+
+  - `crates/web-search/src/fetch/metadata.rs`
+
+  - `crates/web-search/src/service/providers/local/tests.rs`
+
+  - `crates/web-search/src/service/providers/redirects.rs`
+
+  - `crates/web-search/src/service/providers/redirects/tests.rs`
+
+  - `crates/web-search/tests/fetch_contract/extraction.rs`
+
+The MIT License (MIT)
+
+Copyright (c) 2026 dsh-free-search contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

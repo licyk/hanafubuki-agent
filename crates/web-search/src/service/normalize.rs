@@ -1,3 +1,27 @@
+// Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent.
+//
+// The MIT License (MIT)
+//
+// Copyright (c) 2026 dsh-free-search contributors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 use crate::model::{
     WebSearchFailure, WebSearchRequest, WebSearchResponse, WebSearchResult,
     MAX_WEB_SEARCH_SNIPPET_BYTES, MAX_WEB_SEARCH_TITLE_BYTES, MAX_WEB_SEARCH_URL_BYTES,
@@ -34,7 +58,10 @@ pub(super) fn normalize_results(
         normalized.push(WebSearchResult {
             title,
             url,
-            snippet: truncate_utf8(result.snippet.trim(), MAX_WEB_SEARCH_SNIPPET_BYTES),
+            snippet: truncate_utf8(
+                &super::snippet::clean(&result.snippet, &result.source),
+                MAX_WEB_SEARCH_SNIPPET_BYTES,
+            ),
             source: truncate_utf8(result.source.trim(), 256),
             engines,
             published_at: result
@@ -60,7 +87,26 @@ pub(super) fn normalize_result_url(raw: &str) -> Option<String> {
         .filter(|(key, _)| {
             let lower = key.to_ascii_lowercase();
             !lower.starts_with("utm_")
-                && !matches!(lower.as_str(), "fbclid" | "gclid" | "mc_cid" | "mc_eid")
+                && !matches!(
+                    lower.as_str(),
+                    "fbclid"
+                        | "gclid"
+                        | "gclsrc"
+                        | "dclid"
+                        | "yclid"
+                        | "igshid"
+                        | "ttclid"
+                        | "msclkid"
+                        | "mc_cid"
+                        | "mc_eid"
+                        | "_gl"
+                        | "spm"
+                        | "spm_id_from"
+                        | "vd_source"
+                        | "share_medium"
+                        | "share_source"
+                        | "share_plat"
+                )
         })
         .map(|(key, value)| (key.into_owned(), value.into_owned()))
         .collect::<Vec<_>>();
@@ -110,5 +156,6 @@ pub(super) fn empty_response(
         suggestions: Vec::new(),
         partial_failures: failures,
         cache_hit: false,
+        uncertainty: None,
     }
 }

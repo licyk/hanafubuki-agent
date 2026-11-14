@@ -62,7 +62,15 @@ pub fn agent_plugin_descriptors() -> Vec<AgentPluginDescriptor> {
             "agent-wake",
             "Resumes a conversation when its background work reports",
         ),
-        row("web", "Web search and page fetching for the model"),
+        row(
+            "web",
+            "Multi-engine search, research and page fetching for the model",
+        )
+        .with_options({
+            PluginOptionSchema {
+                options: hanafubuki_agent_plugin_web::web_option_schema(),
+            }
+        }),
         row(
             "workspace-fs",
             "Listing, searching, reading and editing the workspace's files",

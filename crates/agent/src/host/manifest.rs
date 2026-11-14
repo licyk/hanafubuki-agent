@@ -47,6 +47,7 @@ pub(crate) struct AgentPluginInputs {
     pub(crate) workspace: Arc<dyn WorkspaceRootsPort>,
     pub(crate) files: WorkspaceFsService,
     pub(crate) executions: AgentExecutionService,
+    pub(crate) executor: hanafubuki_agent_process::executor::ExecutorManager,
     pub(crate) mcp: Arc<McpManager>,
     pub(crate) memory: AgentMemoryApplication,
     pub(crate) skills: AgentSkillApplication,
@@ -98,15 +99,21 @@ pub(crate) fn agent_plugin_manifest(
     host: Vec<(AgentPluginRow, AgentPluginDescriptor)>,
 ) -> AgentPluginManifest {
     use AgentPluginGroup::{Capability, Context, Core};
+    let web_state_directory = inputs.user_instructions_dir.join("web-search");
     let mut rows = vec![
         // The last core row: wakes cannot be turned off but by the option.
         AgentPluginRow::unconfigured(
             Core,
             wake_plugin(inputs.driver.clone(), inputs.wakes.clone()),
         ),
-        AgentPluginRow::from_settings(Capability, web_plugin(), |settings| {
-            serde_json::to_value(web_config(settings)?).map_err(|error| error.to_string())
-        }),
+        AgentPluginRow::from_settings(
+            Capability,
+            web_plugin(Some(inputs.executor), Some(web_state_directory)),
+            |settings| {
+                let config = web_config(settings)?;
+                serde_json::to_value(config).map_err(|error| error.to_string())
+            },
+        ),
         AgentPluginRow::unconfigured(Capability, workspace_fs_plugin(inputs.files.clone())),
         AgentPluginRow::unconfigured(Capability, view_image_plugin(inputs.files)),
         AgentPluginRow::from_settings(
@@ -158,6 +165,9 @@ pub(crate) fn agent_plugin_manifest(
 fn web_config(settings: &AgentPluginSettings) -> Result<WebPluginConfig, String> {
     let agent = &settings.agent;
     Ok(WebPluginConfig {
+        search: hanafubuki_agent_plugin_web::search_options_from_value(
+            settings.options_value("web")?,
+        )?,
         provider: match agent.web_search_provider {
             AgentWebSearchProvider::Auto => WebProviderSetting::Auto,
             AgentWebSearchProvider::Duckduckgo => WebProviderSetting::Duckduckgo,

@@ -229,7 +229,7 @@ maximumRunningAgents = 4
 defaultWaitSeconds = 60
 ```
 
-这个表按插件和键跨层合并，就像 `[plugins]` 按条目合并：某层设置的键替换下层的，其余键保留。每个键单独读取：类型不对的值，或不合适的文本，取选项的默认值；越界的整数被截取到边界；两者都会产生一条警告，指明层、插件和键（`/warnings`，以及 `/plugins` 中该插件的选项）。插件不接受的键保留在文件中但被忽略，并有一条警告；插件没有选项的表没有意义，就像 `disabledPlugins` 中的未知名字。写入是严格的：`config set pluginOptions.名字.键 值`、设置中心、选项表单以及门面的 `write_setting_values` 和 `set_plugin_options` 按插件的选项检查每个值，在写入任何内容之前带着原因拒绝不合适的值；`config get pluginOptions.名字.键` 打印各层解析出的值，没有设置时打印默认值。配置档或项目的 `pluginOptions` 需要手动编写。Agent 写入的更改立即生效：`execution` 就地接受新的命令超时，作用于此后启动的命令，正在运行的命令保留启动时的超时；`subagents` 就地接受新的运行中代理上限，对新的等待界限则重新启动，它运行的子代理继续运行。`web` 插件的设置仍是上面的 `webSearchProvider`、`searxngBaseUrl`、`webFetchUseJinaReader` 和 `webFetchResolveThroughProxy`，即设置中心的 Web tools 分节（Tools 标签页）。
+这个表按插件和键跨层合并，就像 `[plugins]` 按条目合并：某层设置的键替换下层的，其余键保留。每个键单独读取：类型不对的值，或不合适的文本，取选项的默认值；越界的整数被截取到边界；两者都会产生一条警告，指明层、插件和键（`/warnings`，以及 `/plugins` 中该插件的选项）。插件不接受的键保留在文件中但被忽略，并有一条警告；插件没有选项的表没有意义，就像 `disabledPlugins` 中的未知名字。写入是严格的：`config set pluginOptions.名字.键 值`、设置中心、选项表单以及门面的 `write_setting_values` 和 `set_plugin_options` 按插件的选项检查每个值，在写入任何内容之前带着原因拒绝不合适的值；`config get pluginOptions.名字.键` 打印各层解析出的值，没有设置时打印默认值。配置档或项目的 `pluginOptions` 需要手动编写。Agent 写入的更改立即生效：`execution` 就地接受新的命令超时，作用于此后启动的命令，正在运行的命令保留启动时的超时；`subagents` 就地接受新的运行中代理上限，对新的等待界限则重新启动，它运行的子代理继续运行。`web` 插件在 `[pluginOptions.web]` 下提供[引擎、研究与抓取选项](/docs/web-search#configuration)；原有顶层 Web 设置继续承担宿主限制及网络/抓取策略。
 
 ### 角色 [#agents]
 

@@ -1,0 +1,105 @@
+---
+title: 网络搜索与研究
+description: 搜索引擎、平台与专业数据源、研究证据、网页抓取和 Web 插件设置。
+icon: Search
+---
+
+内置 `web` 插件以 Rust 移植 [dsh-free-search](https://github.com/DDDMUC/dsh-free-search) v0.9.50（`6ab5168`）的搜索实现，无需安装 Node.js 或 DSH。搜索结果、网页正文、缓存片段和提供方摘要都是不可信外部数据，其中的指令不能成为 Agent 的操作授权。
+
+## 工具 [#tools]
+
+| 工具 | 用途 |
+| --- | --- |
+| `web_search`、`advanced_search` | 指定引擎搜索，或使用自动回退链。 |
+| `multi_search` | 按语言池并发搜索，合并重复 URL 和相似片段，分散来源域名并保留引擎出处。 |
+| `platform_search` | GitHub、V2EX 热门主题、Bilibili、Reddit、Hacker News（`hackernews`）、Stack Overflow、Wikipedia、npm、YouTube、Vimeo、掘金、豆瓣、Qiita、X。 |
+| `video_search` | Bing Videos 与 DuckDuckGo Videos，支持自动回退。 |
+| `weather` | Open-Meteo 当前天气和 1–7 日预报，包含时区及单位。 |
+| `domain_search` | 直接查询专业数据源，按问题选择相应引擎。 |
+| `research` | 汇集有界证据包，可选重排，并按证据缺口补搜一轮。 |
+| `cache_search` | 无网络请求地查询近七日抓取的研究文档。 |
+| `fetch_web_page` | 提取公开网页并分页，使用返回的偏移和内容版本继续读取。 |
+| `free_search_test` | 探测引擎并查看错误、冷却和统计；显式探测付费引擎会消耗额度。 |
+
+`timeRange` 支持 `day`、`week`、`month`、`year`，`12h`、`3d`、`2w`、`3mo` 等时长，以及绝对日期 `YYYY-MM-DD`。只有粗粒度时间过滤的引擎会近似映射时长，其他引擎使用起始日期。引擎出处表示“由谁检索到”，不代表独立验证。
+
+39 个具体搜索引擎为 `duckduckgo`（上游 `ddg`）、`ddg-lite`、`bing`、`searxng`、`degoog`、`anysearch`、`exa`、`tavily`、`keenable`、`firecrawl`、`parallel`、`perplexity`、`serpbase`、`serply`、`outcrawl`、`google`、`metaso`、`yandex`、`yuanbao`、`deepseek-official`、`deepseek-tools`、`you`、`baidu`、`kimi`、`aliyun`、`doubao`、`tinyfish`、`jina`、`zhihu_global`、`zhihu_site`、`agy`、`openai`、`gemini`、`claude`、`baidu-html`、`so360`、`sogou`、`wechat`、`toutiao`。
+
+Metaso、Yandex、Yuanbao、OpenAI、Gemini 和 Claude 需要显式选择或宿主允许列表；五个 SERP 适配器（`baidu-html`、`so360`、`sogou`、`wechat`、`toutiao`）需要主动启用。可选凭据、账户额度、区域限制与网页变化仍然适用。协议替身测试不等于所有提供方的在线可用性验证。
+
+## 专业数据引擎 [#specialized-engines]
+
+| 类别 | 引擎 ID |
+| --- | --- |
+| 软件包与生命周期 | `pypi`, `crates`, `github_releases`, `endoflife`, `registries`, `huggingface` |
+| 学术文献 | `crossref`, `openalex`, `s2`, `arxiv`, `pubmed`, `europepmc`, `dblp`, `zenodo`, `doaj` |
+| 漏洞信息 | `nvd`, `osv`, `cisakev` |
+| 财经 | `yahoofinance`, `coingecko`, `frankfurter`, `sec_edgar`, `imf`, `cfets`, `cninfo` |
+| 公共数据 | `worldbank`, `wikidata`, `holidays`, `worldclock`, `openmeteo`, `rdap`, `gleif` |
+| 新闻 | `googlenews`, `gdelt`, `aihot` |
+| 法律资料 | `federalregister`, `courtlistener`, `openlegaldata`, `uk_legislation` |
+| 补充网页搜索 | `so360`, `sogou` |
+
+## 配置 [#configuration]
+
+打开 `/config pluginOptions.web`，或 `/plugins` 中 `web` 的选项表单。选项保存在 `config.toml` 的 `[pluginOptions.web]` 下，遵循常规配置分层。例如：
+
+```toml
+webSearchProvider = "auto"
+
+[pluginOptions.web]
+provider = "multi"
+language = "zh"
+promptLanguage = "en"
+zhPool = ["bing", "baidu", "aliyun", "anysearch"]
+enPool = ["bing", "exa", "tavily"]
+multiMaxEngines = 3
+multiMinSources = 2
+multiMaxResults = 20
+blockedDomains = ["example.com"]
+cacheEnabled = true
+cacheTtlMinutes = 5
+```
+
+原有顶层 `webSearchProvider` 仍是宿主限制：固定为 `duckduckgo` 或 `searxng` 会覆盖模型选择的引擎。使用完整插件引擎目录时应设为 `auto`。全局网络代理、`searxngBaseUrl`、`webFetchUseJinaReader`、`webFetchResolveThroughProxy` 继续生效。
+
+| 选项 | 含义 |
+| --- | --- |
+| `provider`、`allowedEngines`、`disabledEngines` | 默认模式/引擎和宿主限制；空允许列表采用自动可用引擎。 |
+| `fallbackOrder`、`fallbackOn` | 回退优先级及允许回退的失败类型：`quota`、`auth`、`region`、`bot-wall`、`transient`、`invalid-response`、`unknown`。 |
+| `zhPool`、`enPool` | CJK 与其他语言池；自动路由还会考虑任务和时间要求。 |
+| `multiMaxEngines`、`multiMinSources`、`multiMaxResults` | 并发引擎上限（`0` 表示整个池）、成功引擎目标数和合并结果上限（1–50）；目标数不代表保证。 |
+| `language`、`bingMarket`、`region`、`safeSearch` | 提供方语言、可选 Bing 市场覆盖、区域和安全搜索。 |
+| `promptLanguage` | 英文或中文工具描述，与搜索语言独立；自定义用户指令使用 Agent 的 `AGENTS.md` 或宿主指令设施。 |
+| `platforms`、`disabledTools`、`blockedDomains` | 平台允许列表、从目录中移除的工具和排除域名（含子域名）。 |
+| `cacheEnabled`、`cacheTtlMinutes` | 内存搜索缓存及 0–5 分钟有效期。 |
+| `<engine>ApiKeys`、`<engine>Endpoint`、`<engine>Model` | 密钥组、端点和受支持的模型覆盖；密钥用逗号、分号或换行分隔，留空则读取相应环境变量。引擎 ID 中连字符/下划线转换为 camelCase 前缀，例如 `deepseekOfficialApiKeys`、`zhihuGlobalApiKeys`。 |
+| `googleCseId`、`metasoScope`、`yandexFolderId`、`yandexSearchType`、`yuanbaoMode`、`yuanbaoSite` | 提供方专用参数。 |
+| `searxngInstances`、`degoogInstances` | 实例回退列表；Degoog 需要配置实例。 |
+| `researchPrimaryPool`、`researchEscalationPool` | 研究首轮与补搜引擎。 |
+| `rerankKey`、`rerankEndpoint`、`decisionKey`、`decisionEndpoint` | 可选 SiliconFlow 重排/嵌入及决策服务；未配置或失败时使用规则并报告未完成评估。 |
+| `fetchPrefer`、`fetchExaEndpoint`、`fetchFirecrawlEndpoint`、`fetchCrawl4aiEndpoint`、`crawl4aiApiKey` | 抓取回退顺序（`exa` 或 `firecrawl`）及端点/凭据；Exa、Firecrawl 使用其搜索引擎密钥组。 |
+| `localHelpersEnabled`、`browserFetch` | 启用已安装的本地辅助程序，以及其中的浏览器渲染；本地辅助程序默认关闭。 |
+| `allowFakeIpCidrs` | 透明代理使用的显式保留 DNS 网段，例如 `198.18.0.0/15`；回环、IPv4 私网、链路本地和多播仍被阻止。 |
+
+密钥字段在表单中掩码显示，也可以通过环境变量避免写入 `config.toml`。DSH 的凭据中心、安装/更新器、网页设置和提示词分页编辑器改由 Agent 的配置、发布、插件及指令设施承接，不自动导入 DSH 配置。
+
+认证、额度和限流失败会轮换密钥。认证拒绝只持续到当前服务实例结束；有过期时间的冷却跨重启保存，仅记录 SHA-256 标识，不保存原始密钥。识别有界的重试/重置提示，额度冷却默认 45 分钟，月度/区域限制默认 24 小时。SERP 反爬会同时暂停同类引擎十分钟。工具诊断不包含提供方原始错误体或凭据。
+
+## 研究与抓取 [#research]
+
+研究深度为 1–5。每次最多 90 秒、12 次实际搜索请求（含回退/重试）、两倍深度的正文，以及“两倍深度加四”的抓取尝试。候选重排和窗口重排共享 12 个候选、48 个窗口的上限，每篇最多六个窗口进入随深度增长的证据预算；代码块和表格保持完整。每次研究中 Firecrawl 和 Crawl4AI 另外限制为三次、两次提取调用。
+
+补搜填充比较缺口时保留首轮证据；缓存命中保留原始抓取时间；正文、提供方摘要与搜索片段明确区分。标题/URL 聚类和语义相似度属于检索信号。正文折叠要求极高相似度、相同的已知发布日期和兼容的数字陈述。第二轮需要检测到缺口、评估成功且充分性判定不通过，不会无条件加搜。缺失凭据、评估失败、预算耗尽与部分结果均写入报告。
+
+研究文档和有期冷却使用 Agent 数据目录下 `web-search/` 的 SQLite 缓存；`RESEARCH_CACHE_DIR` 可以调整文档缓存位置。无法打开的数据库保留原样，当前实例停用缓存。缓存搜索返回的是片段，不代表重新抓取或最新内容。
+
+网页提取依次尝试直接 HTTP、可选本地浏览器、按配置排序的 Exa/Firecrawl、Crawl4AI，以及原有可选 Jina Reader。过短或不支持的页面可进入下一层。直接 HTTP 检查每次重定向并固定已验证 DNS 地址；浏览器 HTTP/CONNECT 代理也检查重定向和子资源的公开目标。提取前解码声明的字符集（包括 GBK），可取得的页面更新时间仍作为元数据。所有层保留时间/字节边界及现有内容版本分页约定。
+
+## 可选本地辅助程序 [#local-helpers]
+
+AGY 需要安装并登录 Antigravity CLI（`AGY_BIN`，可选 `AGY_MODEL`）；X 需要登录 Grok CLI（`GROK_BIN`）。浏览器自动发现 Chrome/Chromium/Edge，也可设置 `WEB_SEARCH_BROWSER`。缺失辅助程序时仍可使用 HTTP/提取回退。
+
+显式启用 `localHelpersEnabled` 后，可能使用本地辅助程序的调用需要匹配的沙箱提升审批：已登录 CLI 在 Agent 沙箱外运行，可访问账户和本地文件。辅助程序使用独立临时目录、输出/时间限制及 Agent 进程所有权。取消或丢弃调用会清理对应进程凭据；无法确认终止时保留所有权供停机处理。浏览器使用全新配置目录，不关闭浏览器自身沙箱。浏览器转发层目前只在全局代理设为 Disabled 时启用；使用 System 或显式代理时跳过浏览器层，继续遵循代理配置的远程提取回退。
+
+嵌入方可使用 `web_plugin(Some(executor), Some(cache_directory))` 传入 Agent 所属执行器，或传入 `None` 仅使用 HTTP。Web 领域 crate 提供类型化 `LocalWebRunner` 端口，不依赖 process；插件负责进程适配和审批边界。

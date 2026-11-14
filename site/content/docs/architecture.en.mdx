@@ -390,3 +390,9 @@ Compared with Codex (`codex-rs`), which the Agent's mechanisms were checked agai
 - The built-in context windows cover only families whose limits are published (GPT, o-series, Claude, Gemini 2.5); any other model needs the Provider's listing or the setting before it compacts automatically.
 - Native sandbox tests run on Linux, Windows and macOS. The dedicated `Sandbox platforms` workflow checks only the sandbox crate on `test/sandbox-platforms`; it does not substitute for whole-workspace CI.
 - Not verified off Linux: the `notify` watcher's macOS and Windows backends, Windows paths in the directories the Skill catalog shows, the MCP stdio exit reason and a dead child's disposal on Windows, and the memory artifact install rename on Windows.
+
+## Native web search [#native-web-search]
+
+The [web plugin](/docs/web-search) ports dsh-free-search v0.9.50 (`6ab5168`) into the web-search domain: engine routing and cooldowns, native adapters, extraction and bounded research. HTTP and extraction stay in the domain crate; a typed `LocalWebRunner` port delegates optional CLI/browser processes to plugin-web, which depends on process and verifies an exact sandbox-escalation approval before invocation. The facade supplies its owned executor and data-directory cache location. Each service instance owns its key rotation, gates, caches and statistics. Persisted cooldowns use hashed key identities; unreadable cache files stay untouched.
+
+Browser traffic passes through a bounded local HTTP/CONNECT proxy that validates and pins public destinations, including redirected and subresource connections. Native helpers use isolated temporary directories and exact executor receipts. Research shares physical-request and extraction budgets across retries and rounds and retains completed evidence on deadline. Model-visible tool changes are covered by the Agent request goldens; protocol fixtures do not prove live provider or native Windows/macOS acceptance.

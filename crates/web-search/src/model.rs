@@ -1,3 +1,27 @@
+// Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent.
+//
+// The MIT License (MIT)
+//
+// Copyright (c) 2026 dsh-free-search contributors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -9,7 +33,7 @@ pub const DEFAULT_WEB_FETCH_CONTENT_BYTES: usize = 50_000;
 pub const MAX_WEB_FETCH_DOCUMENT_BYTES: usize = 1024 * 1024;
 pub(crate) const MAX_WEB_SEARCH_BODY_BYTES: usize = 1024 * 1024;
 pub(crate) const MAX_WEB_SEARCH_TITLE_BYTES: usize = 512;
-pub(crate) const MAX_WEB_SEARCH_SNIPPET_BYTES: usize = 2 * 1024;
+pub(crate) const MAX_WEB_SEARCH_SNIPPET_BYTES: usize = 8 * 1024;
 pub(crate) const MAX_WEB_SEARCH_URL_BYTES: usize =
     hanafubuki_agent_foundation::url_policy::MAX_URL_BYTES;
 pub(crate) const MAX_WEB_SEARCH_ANSWER_BYTES: usize = 1024;
@@ -20,14 +44,7 @@ pub(crate) const MAX_WEB_FETCH_DIRECT_BODY_BYTES: usize = 8 * 1024 * 1024;
 pub(crate) const MAX_WEB_FETCH_READER_BODY_BYTES: usize = 2 * 1024 * 1024;
 pub(crate) const MAX_WEB_FETCH_REDIRECTS: usize = 5;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum WebSearchProvider {
-    #[default]
-    Auto,
-    Duckduckgo,
-    Searxng,
-}
+pub use crate::engines::WebSearchProvider;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum WebSearchProviderPreference {
@@ -58,34 +75,7 @@ impl WebSearchCategory {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum WebSearchTimeRange {
-    Day,
-    Week,
-    Month,
-    Year,
-}
-
-impl WebSearchTimeRange {
-    pub(crate) const fn as_searxng(self) -> &'static str {
-        match self {
-            Self::Day => "day",
-            Self::Week => "week",
-            Self::Month => "month",
-            Self::Year => "year",
-        }
-    }
-
-    pub(crate) const fn as_duckduckgo(self) -> &'static str {
-        match self {
-            Self::Day => "d",
-            Self::Week => "w",
-            Self::Month => "m",
-            Self::Year => "y",
-        }
-    }
-}
+pub use crate::time_range::WebSearchTimeRange;
 
 /// A search as the caller bounded it (`web_search` checks its arguments): a
 /// trimmed query of 1 to [`MAX_WEB_SEARCH_QUERY_BYTES`] without control
@@ -93,6 +83,8 @@ impl WebSearchTimeRange {
 /// [`MAX_WEB_SEARCH_REGION_BYTES`] ASCII letters, digits or hyphens.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WebSearchRequest {
+    /// Explicit pool for multi search; subject to the host's allow/deny policy.
+    pub engines: Vec<WebSearchProvider>,
     pub query: String,
     pub maximum_results: usize,
     pub provider: WebSearchProvider,
@@ -110,6 +102,8 @@ pub enum WebSearchProxy {
 
 #[derive(Clone, Debug)]
 pub struct WebSearchConfig {
+    pub state_directory: Option<std::path::PathBuf>,
+    pub search: crate::engines::SearchOptions,
     pub provider_preference: WebSearchProviderPreference,
     pub searxng_base_url: Option<String>,
     pub proxy: WebSearchProxy,
@@ -134,6 +128,8 @@ pub struct WebSearchConfig {
 impl Default for WebSearchConfig {
     fn default() -> Self {
         Self {
+            state_directory: None,
+            search: crate::engines::SearchOptions::default(),
             provider_preference: WebSearchProviderPreference::Auto,
             searxng_base_url: None,
             proxy: WebSearchProxy::System,
@@ -191,6 +187,10 @@ pub struct WebFetchRequest {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WebFetchBackend {
+    Exa,
+    Firecrawl,
+    Crawl4ai,
+    Browser,
     DirectHtml,
     DirectText,
     JinaReader,
@@ -199,6 +199,8 @@ pub enum WebFetchBackend {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebFetchResponse {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<String>,
     pub final_url: String,
     pub title: Option<String>,
     pub content: String,
@@ -218,6 +220,7 @@ pub struct WebFetchResponse {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WebFetchError {
+    BudgetExhausted,
     InvalidRequest(&'static str),
     InvalidConfiguration(&'static str),
     BlockedTarget,
@@ -253,6 +256,7 @@ impl WebFetchError {
 impl std::fmt::Display for WebFetchError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::BudgetExhausted => formatter.write_str("web fetch attempt budget exhausted"),
             Self::InvalidRequest(message) => {
                 write!(formatter, "invalid web fetch request: {message}")
             }
@@ -303,6 +307,10 @@ pub struct WebSearchResult {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WebSearchFailureCode {
+    Quota,
+    Auth,
+    BotWall,
+    CoolingDown,
     ProviderUnavailable,
     Timeout,
     RequestFailed,
@@ -322,6 +330,8 @@ pub struct WebSearchFailure {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebSearchResponse {
+    #[serde(default)]
+    pub uncertainty: Option<crate::SearchUncertainty>,
     pub query: String,
     pub providers: Vec<WebSearchProvider>,
     pub results: Vec<WebSearchResult>,
@@ -333,6 +343,15 @@ pub struct WebSearchResponse {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WebSearchError {
+    ProviderBackoff {
+        class: crate::engines::FailureClass,
+        delay: std::time::Duration,
+    },
+    BudgetExhausted,
+    NoResults,
+    InvalidQuery(&'static str),
+    ProviderFailure(crate::engines::FailureClass),
+    CoolingDown,
     InvalidConfiguration(&'static str),
     Cancelled,
     Timeout,
@@ -345,6 +364,19 @@ pub enum WebSearchError {
 impl WebSearchError {
     pub(crate) const fn failure_code(&self) -> WebSearchFailureCode {
         match self {
+            Self::ProviderBackoff { .. } => WebSearchFailureCode::CoolingDown,
+            Self::BudgetExhausted => WebSearchFailureCode::ProviderUnavailable,
+            Self::NoResults => WebSearchFailureCode::NoResults,
+            Self::InvalidQuery(_) => WebSearchFailureCode::InvalidResponse,
+            Self::ProviderFailure(crate::engines::FailureClass::Quota) => {
+                WebSearchFailureCode::Quota
+            }
+            Self::ProviderFailure(crate::engines::FailureClass::Auth) => WebSearchFailureCode::Auth,
+            Self::ProviderFailure(crate::engines::FailureClass::BotWall) => {
+                WebSearchFailureCode::BotWall
+            }
+            Self::ProviderFailure(_) => WebSearchFailureCode::RequestFailed,
+            Self::CoolingDown => WebSearchFailureCode::CoolingDown,
             Self::InvalidConfiguration(_) => WebSearchFailureCode::ProviderUnavailable,
             Self::Timeout => WebSearchFailureCode::Timeout,
             Self::RequestFailed => WebSearchFailureCode::RequestFailed,
@@ -359,6 +391,19 @@ impl WebSearchError {
 impl std::fmt::Display for WebSearchError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::ProviderBackoff { class, .. } => write!(
+                formatter,
+                "web search provider requires cooldown: {class:?}"
+            ),
+            Self::BudgetExhausted => formatter.write_str("web search request budget exhausted"),
+            Self::NoResults => formatter.write_str("web search returned no results"),
+            Self::InvalidQuery(message) => write!(formatter, "invalid web query: {message}"),
+            Self::ProviderFailure(class) => {
+                write!(formatter, "web search provider failed: {class:?}")
+            }
+            Self::CoolingDown => {
+                formatter.write_str("web search engine or credentials are cooling down")
+            }
             Self::InvalidConfiguration(message) => {
                 write!(formatter, "invalid web search configuration: {message}")
             }

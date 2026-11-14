@@ -382,3 +382,9 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 - 内置的上下文窗口只覆盖公开了上限的模型系列（GPT、o 系列、Claude、Gemini 2.5）；其他模型需要 Provider 的列表或设置才能自动压缩。
 - 沙箱原生测试在 Linux、Windows 和 macOS 上运行。`test/sandbox-platforms` 分支的专用 `Sandbox platforms` 工作流只检查沙箱 crate，不等同于完整工作区 CI。
 - 在 Linux 之外未验证：`notify` 监视器的 macOS 与 Windows 后端、Skill 目录中显示的 Windows 路径、Windows 上 MCP stdio 的退出原因和已退出子进程的释放，以及 Windows 上记忆制品的安装重命名。
+
+## 原生网络搜索 [#native-web-search]
+
+[Web 插件](/docs/web-search) 将 dsh-free-search v0.9.50（`6ab5168`）的引擎路由与冷却、原生适配器、抓取和有界研究移植到 web-search 领域。HTTP 与提取留在领域 crate；类型化 `LocalWebRunner` 端口将可选 CLI/浏览器进程交给 plugin-web，由它依赖 process 并在调用前核对匹配的沙箱提升审批。门面传入其所属执行器和数据目录缓存位置。每个服务实例独立管理密钥轮换、并发门、缓存和统计；持久化冷却使用密钥散列标识，无法读取的缓存文件保持原样。
+
+浏览器流量通过有界的本地 HTTP/CONNECT 代理校验并固定公开目标，覆盖重定向与子资源连接。本地辅助程序使用独立临时目录及精确执行器凭据。研究的重试和各轮共享实际请求与提取预算，到时保留已完成证据。模型可见工具变化由 Agent 请求快照覆盖；协议替身测试不等于提供方在线或 Windows/macOS 实机验收。

@@ -18,11 +18,11 @@ fn a_search_shows_its_query_and_results() {
     .output;
 
     assert_eq!(
-        WebPresenter.subject(WEB_SEARCH, &arguments).as_deref(),
+        WebPresenter.subject("web_search", &arguments).as_deref(),
         Some("rust async")
     );
     assert_eq!(
-        WebPresenter.display(WEB_SEARCH, &arguments, &output),
+        WebPresenter.display("web_search", &arguments, &output),
         Some(AgentToolDisplay::WebSearch {
             query: "rust async".to_string(),
             results: vec![AgentWebResult {
@@ -49,11 +49,13 @@ fn a_fetched_page_shows_its_text_and_an_error_takes_the_fallback() {
     };
 
     assert_eq!(
-        WebPresenter.subject(FETCH_WEB_PAGE, &arguments).as_deref(),
+        WebPresenter
+            .subject("fetch_web_page", &arguments)
+            .as_deref(),
         Some("https://example.com")
     );
     assert_eq!(
-        WebPresenter.display(FETCH_WEB_PAGE, &arguments, &page(None)),
+        WebPresenter.display("fetch_web_page", &arguments, &page(None)),
         Some(AgentToolDisplay::WebPage {
             url: "https://example.com/".to_string(),
             title: Some("Example".to_string()),
@@ -62,14 +64,14 @@ fn a_fetched_page_shows_its_text_and_an_error_takes_the_fallback() {
         })
     );
     let Some(AgentToolDisplay::WebPage { truncated, .. }) =
-        WebPresenter.display(FETCH_WEB_PAGE, &arguments, &page(Some(5)))
+        WebPresenter.display("fetch_web_page", &arguments, &page(Some(5)))
     else {
         panic!("a page with more to read is a page");
     };
     assert!(truncated);
     let failed = ToolResult::model_visible_error(json!({ "error": "blocked" })).output;
     assert_eq!(
-        WebPresenter.display(FETCH_WEB_PAGE, &arguments, &failed),
+        WebPresenter.display("fetch_web_page", &arguments, &failed),
         None
     );
 }

@@ -1,7 +1,31 @@
+// Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent.
+//
+// The MIT License (MIT)
+//
+// Copyright (c) 2026 dsh-free-search contributors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 use super::*;
 
 pub(super) fn project_direct_document(page: RawPage) -> Result<FetchedDocument, WebFetchError> {
-    let fetched_bytes = page.body.len();
+    let fetched_bytes = page.fetched_bytes;
     let is_html = matches!(
         page.content_type.as_str(),
         "text/html" | "application/xhtml+xml"
@@ -17,6 +41,11 @@ pub(super) fn project_direct_document(page: RawPage) -> Result<FetchedDocument, 
         (None, content, truncated)
     };
     Ok(FetchedDocument {
+        updated_at: if is_html {
+            super::metadata::updated(&page.body)
+        } else {
+            None
+        },
         final_url: page.final_url.to_string(),
         title,
         content,
@@ -48,12 +77,19 @@ pub(super) fn finalize_document(
         WebFetchBackend::DirectHtml => b"direct_html".as_slice(),
         WebFetchBackend::DirectText => b"direct_text".as_slice(),
         WebFetchBackend::JinaReader => b"jina_reader".as_slice(),
+        WebFetchBackend::Exa => b"exa".as_slice(),
+        WebFetchBackend::Firecrawl => b"firecrawl".as_slice(),
+        WebFetchBackend::Crawl4ai => b"crawl4ai".as_slice(),
+        WebFetchBackend::Browser => b"browser".as_slice(),
     });
     hasher.update([0]);
     if let Some(title) = document.title.as_deref() {
         hasher.update(title.as_bytes());
     }
     hasher.update([0, u8::from(document.document_truncated)]);
+    if let Some(date) = &document.updated_at {
+        hasher.update(date.as_bytes());
+    }
     hasher.update(document.content.as_bytes());
     document.generation = hex::encode(hasher.finalize());
     document
@@ -81,6 +117,7 @@ pub(super) fn page_document(
     let content = document.content[request.from_offset..end].to_string();
     let next_offset = (end < document.content.len()).then_some(end);
     Ok(WebFetchResponse {
+        updated_at: document.updated_at.clone(),
         final_url: document.final_url.clone(),
         title: document.title.clone(),
         content_bytes: content.len(),

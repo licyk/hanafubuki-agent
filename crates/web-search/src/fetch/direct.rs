@@ -1,6 +1,42 @@
+// Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent.
+//
+// The MIT License (MIT)
+//
+// Copyright (c) 2026 dsh-free-search contributors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 use super::*;
 
 impl WebPageFetcher {
+    pub(crate) async fn public_json<T: serde::de::DeserializeOwned>(
+        &self,
+        address: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<T, WebFetchError> {
+        let url = validate_page_url(address)?;
+        let page = tokio::time::timeout(self.total_timeout, self.fetch_direct(url, cancellation))
+            .await
+            .map_err(|_| WebFetchError::Timeout)??;
+        serde_json::from_slice(&page.body).map_err(|_| WebFetchError::UnsupportedContentType)
+    }
+
     pub(super) async fn fetch_direct(
         &self,
         mut current: Url,
@@ -27,13 +63,20 @@ impl WebPageFetcher {
                 return Err(WebFetchError::HttpStatus(response.status().as_u16()));
             }
             let content_type = supported_content_type(&response)?;
+            let declared_type = response
+                .headers()
+                .get(CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("")
+                .to_string();
             ensure_identity_encoding(&response)?;
             let body =
                 read_bounded(response, MAX_WEB_FETCH_DIRECT_BODY_BYTES, cancellation).await?;
             return Ok(RawPage {
+                fetched_bytes: body.len(),
                 final_url: current,
                 content_type,
-                body,
+                body: super::charset::decode(&body, &declared_type),
                 redirect_count,
             });
         }
@@ -48,7 +91,11 @@ impl WebPageFetcher {
         url: &Url,
         cancellation: &CancellationToken,
     ) -> Result<Option<SocketAddr>, WebFetchError> {
-        let host = url.host_str().ok_or(WebFetchError::BlockedTarget)?;
+        let host = url
+            .host_str()
+            .ok_or(WebFetchError::BlockedTarget)?
+            .trim_start_matches('[')
+            .trim_end_matches(']');
         let port = url
             .port_or_known_default()
             .ok_or(WebFetchError::BlockedTarget)?;
@@ -63,7 +110,10 @@ impl WebPageFetcher {
             return Err(WebFetchError::BlockedTarget);
         }
         if let Ok(ip) = host.parse::<IpAddr>() {
-            if !test_allowed && !is_public_ip(ip) {
+            if !test_allowed
+                && !is_public_ip(ip)
+                && !super::fake_ip::allowed(ip, &self.options.allow_fake_ip_cidrs)
+            {
                 return Err(WebFetchError::BlockedTarget);
             }
             return Ok(Some(SocketAddr::new(ip, port)));
@@ -81,7 +131,12 @@ impl WebPageFetcher {
                 Err(WebFetchError::DnsResolutionFailed)
             };
         }
-        if !test_allowed && addresses.iter().any(|address| !is_public_ip(address.ip())) {
+        if !test_allowed
+            && addresses.iter().any(|address| {
+                !is_public_ip(address.ip())
+                    && !super::fake_ip::allowed(address.ip(), &self.options.allow_fake_ip_cidrs)
+            })
+        {
             return Err(WebFetchError::BlockedTarget);
         }
         Ok(Some(addresses[0]))

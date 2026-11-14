@@ -1,3 +1,27 @@
+// Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent.
+//
+// The MIT License (MIT)
+//
+// Copyright (c) 2026 dsh-free-search contributors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 //! The web plugin registers its tools while it runs and removes them when it
 //! stops or is reconfigured.
 
@@ -47,12 +71,29 @@ fn names(tools: &ToolRegistry) -> Vec<String> {
 }
 
 #[tokio::test]
-async fn registers_both_read_only_tools_and_removes_them_when_stopped() {
+async fn registers_web_tools_and_removes_them_when_stopped() {
     let (root, tools) = root_with_tools().await;
-    let fiber = root.plugin_def(&web_plugin(), Value::Null).unwrap();
+    let fiber = root
+        .plugin_def(&web_plugin(None, None), Value::Null)
+        .unwrap();
     fiber.settled().await.unwrap();
     assert_eq!(fiber.state(), FiberState::Active);
-    assert_eq!(names(&tools), ["fetch_web_page", "web_search"]);
+    assert_eq!(
+        names(&tools),
+        [
+            "advanced_search",
+            "cache_search",
+            "domain_search",
+            "fetch_web_page",
+            "free_search_test",
+            "multi_search",
+            "platform_search",
+            "research",
+            "video_search",
+            "weather",
+            "web_search"
+        ]
+    );
     for tool in tools.registry().snapshot().items() {
         let descriptor = tool.descriptor();
         assert_eq!(descriptor.effect, ToolEffect::ReadOnly);
@@ -72,7 +113,22 @@ async fn registers_both_read_only_tools_and_removes_them_when_stopped() {
         .await
         .unwrap();
     assert_eq!(fiber.state(), FiberState::Active);
-    assert_eq!(names(&tools), ["fetch_web_page", "web_search"]);
+    assert_eq!(
+        names(&tools),
+        [
+            "advanced_search",
+            "cache_search",
+            "domain_search",
+            "fetch_web_page",
+            "free_search_test",
+            "multi_search",
+            "platform_search",
+            "research",
+            "video_search",
+            "weather",
+            "web_search"
+        ]
+    );
 
     fiber.dispose().await.unwrap();
     assert!(names(&tools).is_empty());
@@ -105,11 +161,29 @@ async fn an_unusable_searxng_endpoint_costs_only_web_search() {
     ] {
         let (root, tools) = root_with_tools().await;
         let fiber = root
-            .plugin_def(&web_plugin(), serde_json::to_value(&config).unwrap())
+            .plugin_def(
+                &web_plugin(None, None),
+                serde_json::to_value(&config).unwrap(),
+            )
             .unwrap();
         fiber.settled().await.unwrap();
         assert_eq!(fiber.state(), FiberState::Active, "{config:?}");
-        assert_eq!(names(&tools), ["fetch_web_page", "web_search"]);
+        assert_eq!(
+            names(&tools),
+            [
+                "advanced_search",
+                "cache_search",
+                "domain_search",
+                "fetch_web_page",
+                "free_search_test",
+                "multi_search",
+                "platform_search",
+                "research",
+                "video_search",
+                "weather",
+                "web_search"
+            ]
+        );
         assert_eq!(
             availability(&tools, "web_search"),
             ToolAvailability::Omitted
@@ -142,7 +216,10 @@ async fn a_configuration_fault_outside_search_still_fails_the_plugin() {
         ..WebPluginConfig::default()
     };
     let fiber = root
-        .plugin_def(&web_plugin(), serde_json::to_value(config).unwrap())
+        .plugin_def(
+            &web_plugin(None, None),
+            serde_json::to_value(config).unwrap(),
+        )
         .unwrap();
     let _ = fiber.settled().await;
     assert_eq!(fiber.state(), FiberState::Failed);
