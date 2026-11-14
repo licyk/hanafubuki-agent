@@ -1282,6 +1282,10 @@ From CI's failed jobs over the last 60 runs; each passed on a re-run.
   kill not confirmed in 5 s, a second defect. Left as is: such a turn ends before its stop is confirmed (its
   `ExecutionDisposed` progress comes after the turn). Locally: 30 of 30 runs with the 2 s hold (the only runs that
   exercise the race on Linux), 240 of 240 without it under CPU load, the contract tests 500 of 500.
+- **`memory::supervisor::tests::operation_heartbeats_until_completion`** (Windows 1×, 43395635357): a test fault. It
+  expected two ticks of a 10 ms heartbeat within a 45 ms operation on the real clock, which Windows' ~15.6 ms timer
+  granularity does not give. Fix: the supervisor's lease tests run on Tokio's paused clock (the supervisor keeps only
+  Tokio time) and expect exactly 4 renewals; 500 of 500 runs under CPU load.
 - **`plugin-packages` `guests` `linked.rs:33`** (Linux, locally: "signalled after 259 ms", "10.8 ms"): a test fault.
   The debounce was timed from after `fs::write` returned, and on a loaded ext4 disk closing the rewritten file blocks
   while ext4 flushes its data, after the events the debounce counts from. Under three `dd … conv=fdatasync` writers,

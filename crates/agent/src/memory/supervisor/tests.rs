@@ -23,7 +23,10 @@ fn repository() -> (TempDir, AgentMemoryRepository) {
     (temporary, repository)
 }
 
-#[tokio::test]
+// The supervisor keeps Tokio's time only, so these tests pause it: on a
+// real clock Windows' ~15.6 ms timer granularity leaves a 10 ms heartbeat
+// one tick or none within a 45 ms operation.
+#[tokio::test(start_paused = true)]
 async fn operation_heartbeats_until_completion() {
     let renewals = AtomicUsize::new(0);
     let operation_cancellation = CancellationToken::default();
@@ -48,11 +51,12 @@ async fn operation_heartbeats_until_completion() {
     .unwrap();
 
     assert_eq!(result.0, "complete");
-    assert!(renewals.load(Ordering::SeqCst) >= 2);
+    // One renewal at each 10 ms tick before the operation ends at 45 ms.
+    assert_eq!(renewals.load(Ordering::SeqCst), 4);
     assert!(!operation_cancellation.is_cancelled());
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn lease_loss_cancels_the_operation() {
     let operation_cancellation = CancellationToken::default();
     let result = run_lease_bound_operation(
@@ -73,7 +77,7 @@ async fn lease_loss_cancels_the_operation() {
     assert!(operation_cancellation.is_cancelled());
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn renewal_failure_cancels_the_operation() {
     let operation_cancellation = CancellationToken::default();
     let result = run_lease_bound_operation(
@@ -96,7 +100,7 @@ async fn renewal_failure_cancels_the_operation() {
     assert!(operation_cancellation.is_cancelled());
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn total_deadline_cancels_independently_of_heartbeat() {
     let operation_cancellation = CancellationToken::default();
     let result = run_lease_bound_operation(
@@ -122,7 +126,7 @@ async fn total_deadline_cancels_independently_of_heartbeat() {
     assert!(operation_cancellation.is_cancelled());
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn supervisor_cancellation_cancels_the_exact_operation() {
     let supervisor_cancellation = CancellationToken::default();
     let operation_cancellation = CancellationToken::default();
@@ -379,7 +383,8 @@ fn an_old_session_is_claimed_behind_pages_of_newer_extracted_ones() {
         .shutdown(std::time::Instant::now() + Duration::from_secs(5))
         .into_iter()
         .for_each(drop);
-    assert!(workers
-        .shutdown(std::time::Instant::now() + Duration::from_secs(2))
-        .is_empty());
+    assert_eq!(
+        workers.shutdown(std::time::Instant::now() + Duration::from_secs(2)),
+        []
+    );
 }
