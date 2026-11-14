@@ -523,6 +523,11 @@ next pin, and any module-size exception.
         pages compiled with the store's `@mdx-js/mdx` 3.1.1 with
         remark-gfm. `site:build` not run locally (port 3000 is another
         project's); CI's Site run covers it.
+      - CI on af9a069:
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43569561655,
+        Linux, Windows and macOS passed at the first attempt. Site on
+        af9a069: .../runs/43569561577, passed, its build and deploy
+        included.
 - L1–L3 are done: every model list (`/model`, the Provider page) shows
   each model's window, thinking and vision with their sources, and a
   loading line while it lists.
