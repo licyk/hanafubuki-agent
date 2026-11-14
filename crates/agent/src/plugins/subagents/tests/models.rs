@@ -25,7 +25,7 @@ const FAST: &str = "description = \"Fast.\"\nmodel = \"fast-model\"\nreasoningEf
 /// An Agent whose default Provider `provider-1` (Fixture Provider, policy
 /// effort `medium`) is `first`, beside `provider-2` (Second) at `second`,
 /// with the role `fast`, after `configure`.
-async fn with_two_providers(
+pub(super) async fn with_two_providers(
     name: &str,
     first: &FakeServer,
     second: &FakeServer,
@@ -44,7 +44,7 @@ async fn with_two_providers(
 }
 
 /// Records the listing of `provider_id` from its server.
-async fn list(service: &AgentApplicationService, provider_id: &str) {
+pub(super) async fn list(service: &AgentApplicationService, provider_id: &str) {
     let listed = service
         .list_provider_models(AgentProviderModelCatalogRequest {
             provider_ids: Some(vec![provider_id.to_string()]),
@@ -71,7 +71,7 @@ async fn settle(subagents: &Arc<SubagentService>, parent: AgentSessionId) {
 
 /// Spawns `task_name` with `arguments` beside its task and no history,
 /// and waits for its turn; returns spawn's result.
-async fn spawned(
+pub(super) async fn spawned(
     subagents: &Arc<SubagentService>,
     parent: AgentSessionId,
     task_name: &str,
@@ -106,7 +106,7 @@ fn child(service: &AgentApplicationService, result: &Value) -> AgentSessionRunti
 }
 
 /// What the result says the agent runs on.
-fn runs_on(result: &Value) -> (&str, &str, Option<&str>) {
+pub(super) fn runs_on(result: &Value) -> (&str, &str, Option<&str>) {
     (
         result["provider"].as_str().unwrap(),
         result["model"].as_str().unwrap(),

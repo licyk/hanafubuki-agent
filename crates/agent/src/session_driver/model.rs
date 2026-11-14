@@ -1,9 +1,10 @@
 //! A session's model selection, which the facade's `set_session_model` and
 //! a spawned agent share, and a spawned agent's Provider, model and
 //! reasoning effort: resolved and checked before the agent exists, then
-//! applied to it in one commit.
+//! applied to it in one commit. Also what a parent may spawn agents on, as
+//! its guidance lists it, from the known models the checks use.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 
 use hanafubuki_agent_config::{AgentProviderRegistrySettings, AgentProviderSettings};
 use hanafubuki_agent_foundation::blocking::run_blocking_operation;
@@ -17,6 +18,50 @@ use crate::service::{configured_model_facts, resolve_settings_provider};
 use crate::{
     model_api_protocol, AgentModelInfo, AgentSessionModelSelectionRequest, ResolvedAgentProvider,
 };
+
+/// The longest model id a spawn takes, in bytes: the kernel's bound.
+pub(crate) const MAXIMUM_MODEL_ID_BYTES: usize = 256;
+/// The most enabled Providers, and known models of each, the guidance lists.
+const MAXIMUM_CATALOG_PROVIDERS: usize = 8;
+const MAXIMUM_CATALOG_MODELS: usize = 8;
+/// The longest model id the guidance lists, in characters: a longer one is
+/// left out rather than cut, since a cut id cannot be passed.
+const MAXIMUM_CATALOG_MODEL_ID_CHARS: usize = 128;
+
+/// What a parent may spawn agents on: its Provider and model, and the
+/// enabled Providers, its own first, then by display name (case aside) and
+/// id, each with the models known of it as a spawn's checks know them; at
+/// most [`MAXIMUM_CATALOG_PROVIDERS`] Providers of
+/// [`MAXIMUM_CATALOG_MODELS`] models each.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SpawnModelCatalog {
+    pub(crate) provider_id: String,
+    pub(crate) model: String,
+    pub(crate) providers: Vec<SpawnProvider>,
+    /// The enabled Providers left out.
+    pub(crate) more_providers: usize,
+}
+
+/// An enabled Provider of a [`SpawnModelCatalog`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SpawnProvider {
+    pub(crate) id: String,
+    pub(crate) display_name: String,
+    /// Whether a listing of it is recorded; without one, a spawn passes any
+    /// model id to it.
+    pub(crate) listed: bool,
+    /// Its first known models, with the reasoning efforts each takes.
+    pub(crate) models: Vec<(String, KnownReasoning)>,
+    /// Its known models left out.
+    pub(crate) more_models: usize,
+}
+
+/// The models a Provider is known to serve, in the order the guidance
+/// lists them, and whether its listing is recorded.
+struct KnownModels {
+    ids: Vec<String>,
+    listed: bool,
+}
 
 /// What a spawn asks of its agent's model: what the model passed, and
 /// what the role it is spawned as sets.
@@ -134,13 +179,13 @@ impl AgentSessionDriver {
         if explicit_pair {
             self.discovery.request(Some(&provider.definition.id));
             let known = self.known_models(&registry, &provider.definition, parent);
-            if known.as_ref().is_some_and(|known| !known.contains(&model)) {
+            if known.listed && !known.ids.contains(&model) {
                 return Err(ChildModelError::UnknownModel {
                     model,
                     explicit: explicit_model,
                     provider_id: provider.definition.id.clone(),
                     provider_name: provider.definition.display_name.clone(),
-                    known: known.unwrap_or_default(),
+                    known: known.ids.into_iter().collect(),
                 });
             }
         }
@@ -261,27 +306,92 @@ impl AgentSessionDriver {
         .await?
     }
 
-    /// The models `provider` is known to serve: its recorded listing, the
-    /// ids configured for it, the policy's model when it is the default
-    /// Provider and `parent`'s when it is `parent`'s; none known without
-    /// a recorded listing.
+    /// What `parent` may spawn agents on ([`SpawnModelCatalog`]): the
+    /// cached Provider registry, each Provider's known models
+    /// ([`Self::known_models`]) and the known reasoning of those listed,
+    /// leaving out an id `model` cannot pass. (Every Provider the registry
+    /// holds resolves: its reader drops one whose token or headers do
+    /// not.) Blocks; makes no request.
+    pub(crate) fn spawn_model_catalog(
+        &self,
+        parent: &AgentSessionRuntimeSnapshot,
+    ) -> Result<SpawnModelCatalog, String> {
+        let registry = self.config.providers()?;
+        let mut enabled = registry
+            .providers
+            .iter()
+            .filter(|provider| provider.enabled)
+            .collect::<Vec<_>>();
+        enabled.sort_by_cached_key(|provider| {
+            (
+                provider.id != parent.provider_id,
+                provider.display_name.to_lowercase(),
+                provider.id.clone(),
+            )
+        });
+        let providers = enabled
+            .iter()
+            .take(MAXIMUM_CATALOG_PROVIDERS)
+            .map(|provider| {
+                let known = self.known_models(&registry, provider, parent);
+                let total = known.ids.len();
+                let models = known
+                    .ids
+                    .into_iter()
+                    .filter(|id| catalog_model_id(id))
+                    .take(MAXIMUM_CATALOG_MODELS)
+                    .map(|id| {
+                        let reasoning = self.known_reasoning(provider, &id);
+                        (id, reasoning)
+                    })
+                    .collect::<Vec<_>>();
+                SpawnProvider {
+                    id: provider.id.clone(),
+                    display_name: provider.display_name.clone(),
+                    listed: known.listed,
+                    more_models: total - models.len(),
+                    models,
+                }
+            })
+            .collect::<Vec<_>>();
+        Ok(SpawnModelCatalog {
+            provider_id: parent.provider_id.clone(),
+            model: parent.model.clone(),
+            more_providers: enabled.len() - providers.len(),
+            providers,
+        })
+    }
+
+    /// The models `provider` is known to serve, each once, in this order:
+    /// `parent`'s when it is `parent`'s Provider, the ids configured for it
+    /// (`models."<id>"`), the policy's model when it is the default
+    /// Provider, then its recorded listing by id; and whether a listing is
+    /// recorded, without which a spawn passes any model.
     fn known_models(
         &self,
         registry: &AgentProviderRegistrySettings,
         provider: &AgentProviderSettings,
         parent: &AgentSessionRuntimeSnapshot,
-    ) -> Option<BTreeSet<String>> {
-        let mut known = self
+    ) -> KnownModels {
+        let listing = self
             .core
-            .listed_models(model_api_protocol(provider.protocol), &provider.base_url)?;
-        known.extend(provider.models.keys().cloned());
-        if registry.default_provider_id.as_deref() == Some(provider.id.as_str()) {
-            known.insert(registry.model_policy.model.trim().to_string());
-        }
+            .listed_models(model_api_protocol(provider.protocol), &provider.base_url);
+        let mut ids = Vec::new();
         if parent.provider_id == provider.id {
-            known.insert(parent.model.clone());
+            ids.push(parent.model.clone());
         }
-        Some(known)
+        ids.extend(provider.models.keys().cloned());
+        let policy_model = registry.model_policy.model.trim();
+        if registry.default_provider_id.as_deref() == Some(provider.id.as_str())
+            && !policy_model.is_empty()
+        {
+            ids.push(policy_model.to_string());
+        }
+        let listed = listing.is_some();
+        ids.extend(listing.into_iter().flatten());
+        let mut seen = HashSet::new();
+        ids.retain(|id| seen.insert(id.clone()));
+        KnownModels { ids, listed }
     }
 
     /// The reasoning efforts `model` of `provider` is known to take.
@@ -356,6 +466,21 @@ fn enabled_provider<'a>(
                 .collect(),
         }),
     }
+}
+
+/// Whether the guidance lists the model id `id`: one `spawn_agent`'s
+/// `model` takes as it is (one line, trimmed, at most
+/// [`MAXIMUM_MODEL_ID_BYTES`]), of at most
+/// [`MAXIMUM_CATALOG_MODEL_ID_CHARS`], with no backtick or control
+/// character to break the text it is quoted in.
+fn catalog_model_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= MAXIMUM_MODEL_ID_BYTES
+        && id.chars().count() <= MAXIMUM_CATALOG_MODEL_ID_CHARS
+        && id.trim() == id
+        && !id
+            .chars()
+            .any(|character| character == '`' || character.is_control())
 }
 
 /// Whether a model whose known levels are `known` refuses `effort`.

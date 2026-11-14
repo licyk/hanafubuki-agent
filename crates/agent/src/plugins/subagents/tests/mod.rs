@@ -4,8 +4,10 @@
 //! one; an interrupt; the depth and running limits; the inherited
 //! permission mode; and the plugin turned off. Agents spawned as roles
 //! are `roles.rs`'s; an agent's Provider, model and reasoning effort
-//! `models.rs`'s.
+//! `models.rs`'s; the Providers and models the guidance lists
+//! `guidance.rs`'s.
 
+mod guidance;
 mod models;
 mod roles;
 

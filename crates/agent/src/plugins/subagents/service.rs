@@ -45,7 +45,7 @@ use super::models::refusal;
 use super::options::SubagentLimits;
 use super::{AgentSubagentState, AgentSubagentStatus};
 use crate::roles::{AgentRoleCatalogReader, AgentSessionRole, DEFAULT_ROLE};
-use crate::session_driver::{AgentSessionDriver, ChildModelRequest};
+use crate::session_driver::{AgentSessionDriver, ChildModelRequest, SpawnModelCatalog};
 
 /// The longest last answer the facade's status carries.
 const ANSWER_EXCERPT_CHARS: usize = 400;
@@ -458,6 +458,25 @@ impl SubagentService {
     ) -> Result<AgentSessionRuntimeSnapshot, AgentError> {
         self.blocking(move |driver| driver.snapshot(session_id))
             .await
+    }
+
+    /// What the session may spawn agents on, when it is not an agent
+    /// itself.
+    pub(super) async fn spawn_models(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<Option<SpawnModelCatalog>, AgentError> {
+        self.blocking(move |driver| {
+            let session = driver.snapshot(session_id)?;
+            if session.parent_session_id.is_some() {
+                return Ok(None);
+            }
+            driver
+                .spawn_model_catalog(&session)
+                .map(Some)
+                .map_err(AgentError::Persistence)
+        })
+        .await
     }
 
     fn ensure_capacity(&self, parent: AgentSessionId) -> Result<(), AgentError> {

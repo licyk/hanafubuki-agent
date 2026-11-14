@@ -349,7 +349,12 @@ async fn the_guidance_lists_the_spawnable_roles_bounded_and_sorted() {
         .filter_map(|item| item["content"][0]["text"].as_str())
         .find(|text| text.contains("<subagents>"))
         .unwrap();
-    let listed = guidance
+    // The roles' paragraph; the Models part after it lists Providers.
+    let roles_part = guidance
+        .split("\n\n")
+        .find(|part| part.starts_with("`spawn_agent`'s `agent_type`"))
+        .unwrap();
+    let listed = roles_part
         .lines()
         .filter_map(|line| line.strip_prefix("- `"))
         .collect::<Vec<_>>();

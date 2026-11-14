@@ -7,12 +7,14 @@
 //! prepares every turn the facade admits
 //! (the session's Provider, its permission mode, the world state and the
 //! turn's extensions), so a turn a plugin runs is prepared like a user's.
-//! A session's model selection, and the model of an agent a session
-//! spawns, are their own (`model.rs`).
+//! A session's model selection, the model of an agent a session spawns,
+//! and what it may spawn agents on, are their own (`model.rs`).
 
 mod model;
 
-pub(crate) use self::model::{ChildModelError, ChildModelRequest};
+pub(crate) use self::model::{
+    ChildModelError, ChildModelRequest, SpawnModelCatalog, SpawnProvider, MAXIMUM_MODEL_ID_BYTES,
+};
 
 use std::ops::ControlFlow;
 use std::sync::Arc;

@@ -146,7 +146,7 @@ model = "gpt-5.4"
 
 模型用 `spawn_agent` 的 `agent_type`（沿用 Codex 的名字）给[子代理](/docs/sessions#subagents)一个角色：必须是**可派生**的角色，即 `spawnable` 为 `true` 的角色（两个内置角色都是）。
 
-- **模型读到什么。** 子代理指引按名字列出可派生的角色及其描述（`agent_type` 的描述指向它）：最多 16 个角色，按名字排序，每条描述占一行，截断到 200 个字符。所以角色的 `description` 要写给这位读者看：什么时候该选它。
+- **模型读到什么。** 子代理指引按名字列出可派生的角色及其描述（`agent_type` 的描述指向它）：最多 16 个角色，按名字排序，每条描述占一行，截断到 200 个字符。所以角色的 `description` 要写给这位读者看：什么时候该选它。角色之后，它列出已启用的 Provider 及其已知的模型和推理强度，`spawn_agent` 的 `provider`、`model` 和 `reasoning_effort` 可以传入这些值来取代角色的（[工具](/docs/tools#subagents)）。
 - **不带 `agent_type`**，或者用 `default`，子代理保留父会话的角色：它的收窄和它的指令。
 - **带一个角色时**，子代理的指令是基础指令加上这个角色的指令；它的收窄是父会话的收窄再按角色进一步收窄，所以子代理永远不会有父会话没有的工具；它的模型是角色的 `model`（父会话的 Provider 下的），否则是父会话的；推理强度是角色的 `reasoningEffort`，否则是父会话的；除非 `spawn_agent` 的 `model`、`reasoning_effort` 或 `provider` 另有规定：逐项而言，参数优先于角色（[工具](/docs/tools#subagents)）。角色自己的推理强度在派生时从不检查，它的模型也只在传入了 `provider` 或 `model` 时才检查：否则 Provider 不提供的模型会在子代理的第一个请求时失败。它始终使用父会话的权限模式，并受角色的 `permissionModeCap` 限制。
 - 未知的、不可用的或不可派生的角色会被拒绝：模型读到一条指明 `agent_type` 并列出可派生角色的错误，不会创建子代理。

@@ -4449,9 +4449,149 @@ exception.
         reuse). For O3: the child's pair is the session's; `list_agents`
         can read it from the summary. For R: no new code in `service.rs`
         beyond the call order in `spawn`; `steer` now loads the session.
-- [ ] O2: the guidance lists the enabled Providers with their known models
+- [x] O2: the guidance lists the enabled Providers with their known models
       and levels, bounded (8 × 8), stable for the prompt cache, built in
       `prepare`. The 11 goldens with the guidance regenerated on purpose.
+      Done (2026-11-14):
+      - Driver (`session_driver/model.rs`): `spawn_model_catalog(parent)
+        -> SpawnModelCatalog` (blocking; the cached `config.providers()`,
+        `listed_models`, `known_reasoning`; no request, no discovery
+        asked): the enabled Providers (all resolve: the registry's reader
+        drops one whose token or headers do not), the parent's first, then by
+        display name (lowercase) and id; at most 8, each with at most 8
+        known models and the count of the rest. `known_models` is now one
+        ordered list for both the check and the catalog (the parent's
+        model on its Provider, `models."<id>"` in key order, the policy's
+        model on the default Provider, the recorded listing by id; each
+        once; `listed` false = pass-through, as O1): the check reads
+        `listed && contains`, so O1's rule and texts are unchanged. An id
+        is listed only if `model` takes it as it is (`catalog_model_id`:
+        trimmed, at most `MAXIMUM_MODEL_ID_BYTES` = 256, now the driver's
+        constant `tools.rs` uses too, at most 128 characters, no backtick
+        or control character); the others are counted in "more".
+      - Plugin: `models.rs` renders the Models part (`models_guidance`)
+        beside the refusals and shares their naming: `provider_label`
+        (`` `provider-2` (Second) ``, the name on one line, cut at 64
+        characters), `levels` (`low, medium (default), high`) and "takes
+        no reasoning effort". At most 8 efforts per model (`and N more`),
+        `  - … and N more` per Provider, `- … and N more enabled
+        Providers`; the part at most 4096 bytes, stopped on a whole line
+        by `- … the rest of this list is left out; what it leaves out is
+        still accepted`. A Provider without a recorded listing reads
+        `with no listing known (any model id is passed to it as given)`;
+        a recorded empty one `whose listing names no model`. `prompt.rs`:
+        `MaySpawn { models }`, prepared by `SubagentService::spawn_models`
+        (one blocking hop: snapshot, `None` for a child, the catalog);
+        the part is its own paragraph after the roles, before
+        `</subagents>`; `one_line` takes its bound; the Codex notice and
+        module docs say the guidance ends with the models.
+      - The text changes only with the Provider settings (Providers,
+        `models."<id>"`, the policy's model), a recorded listing with
+        other ids or levels, a learned "no reasoning" (and its expiry or
+        forgetting), or the parent's pair (`/model`): each is one cache
+        miss from the guidance's place in the opening run (Capabilities,
+        130) on; so does the expiry of levels reported for a model the
+        latest listing no longer names but the part still shows
+        (configured, the parent's), 7 days after they were seen; and, as
+        before O2, the roles and the running-agent limit. No observation
+        order, not the parent's effort.
+        Re-read at every step; with nothing changed, steps and turns are
+        byte-identical (tested).
+      - Tests: `plugins/subagents/tests/guidance.rs` (new; `models.rs` is
+        at 760 lines, so not there): case (b) in full (levels with the
+        default, more than 8 levels, a learned "no reasoning", unknown
+        levels, `and 212 more`, a Provider with no listing, an empty
+        listing, `and 3 more enabled Providers`, a two-line name); the
+        4 KiB bound with 128-character ids, 8 efforts and 70-character
+        CJK names (cut at 64 with `…`), and a part that fits whole; over
+        the driver, case (c) in full: 10 enabled Providers + 1 disabled,
+        parent's first, then by name case aside with a tie by id (`Delta`
+        `provider-7` before `delta` `provider-9`), 8 shown, 9 configured
+        models give 8 + `and 2 more`, duplicates within a Provider once,
+        `shared-model` under two Providers, a listing's 129- and
+        200-character ids, a 270-byte CJK id, a backtick and a control
+        character left out and counted (`and 5 more`); on the fake server,
+        cases (a) and (b) in full: two steps of one turn and two later
+        turns byte-identical, a listing recorded between turns changes it
+        once, no token, header value or base URL in any request; every
+        Provider, model and effort parsed from the request's guidance
+        spawns through the tool (9 spawns, each on that pair and effort),
+        and the refusals name a Provider (`use one of` + the guidance's
+        labels, `is not a model Provider` + the label) and a model's
+        levels (`use one of` + the guidance's levels) as the guidance
+        does; a learned reasoning refusal (`REASONING_REFUSAL`) turns
+        `low, medium (default)` into `takes no reasoning effort` from the
+        next turn and `forget_learned_model_facts` turns it back (the
+        7-day expiry is the model metadata's, not tested here); a
+        sub-agent's and a Plan-mode session's requests carry none.
+        `roles.rs`' role-list test reads the roles' paragraph only.
+        Side conversations and reviews: their unchanged goldens pin that
+        they carry no guidance. By mutation, each seen failing then
+        restored: no id filter (the catalog test), the parent's Provider
+        last (2 tests), no dedup (2 tests), the byte budget without room
+        for the closing line (the bound test), the refusal joining levels
+        with ` | ` (O1's refusal test and the agreement test), "takes no
+        reasoning effort" rendered as nothing (3 tests, the learned one
+        among them), the catalog given to a child too (the absence test
+        and the spawn test of `mod.rs`).
+      - Goldens: 13 files, 17 guidance blocks, regenerated on purpose (the
+        plan counted 11: `hierarchical_requests.json` has 4 blocks,
+        `tool_search_round_trip.json` 2; and R1's new
+        `wake_events_request.json`, a top-level request offering
+        `spawn_agent`, regenerated after the rebase onto R1); the word diff
+        of every file is the one added Models part, case (a), nothing else.
+        `side_conversation_request.json`, `review_request.json`,
+        `explorer_request.json` and `plan_mode_request.json` unchanged.
+      - Docs (both languages): `tools#subagents` (the Guidance bullet:
+        what is listed, order, bounds, when it changes), `roles#subagents`
+        (What the model reads), `plugin-rules` (the `subagents` row; the
+        update-hook bullet), `architecture` (Subagents: the catalog, its
+        agreement with the checks, the cache). `sessions` does not
+        describe the guidance: unchanged. Each changed page compiled with
+        `@mdx-js/mdx` 3.1.1 and remark-gfm.
+      - Deviations: (1) the tests are in `tests/guidance.rs`, not
+        `tests/models.rs` (size). (2) The intro names the parent's pair as
+        the plan does, and its Provider also lists the parent's model, so
+        "one Provider with no known models" does not occur: the smallest
+        part is one Provider with no listing and the parent's model, 387
+        bytes (the 12 goldens). (3) The left-out line reads "the rest of
+        this list is left out; what it leaves out is still accepted"
+        (the plan's "the Provider's other ids" named one Provider). (4) No
+        filter for a Provider whose token or headers do not resolve: the
+        registry cannot hold one (validated when read and written). (5) A
+        `prepare` that cannot read the Provider
+        registry (only before its first cached read) fails the
+        contributor for the step, as any prepare error does, rather than
+        showing the guidance without models: the session's own turn
+        reads it first. (6) `MAXIMUM_MODEL_ID_BYTES` moved from `tools.rs`
+        to the driver so the listing and the argument share the bound.
+      - Hanafubuki at its next pin: its integration goldens (the
+        guidance's Models part). No facade type changed.
+      - Module size: no exception added or raised; `subagents/prompt.rs`
+        118, `subagents/models.rs` 186, `subagents/service.rs` 493,
+        `session_driver/model.rs` 397, `session_driver/mod.rs` 520 code
+        lines; `tests/guidance.rs` 545, `tests/models.rs` 679.
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo
+        clippy --workspace --all-targets --all-features -- -D warnings`;
+        `cargo xtask check`; `cargo test --workspace --all-features
+        --no-fail-fast` (4937 passed, none failed, no flake seen); `bun
+        install --frozen-lockfile`, `bun run format:site`, `bun run
+        format:check:site`, `bun run site:check`, `bun run site:test` (28
+        passed); `site:build` not run locally (port 3000 is another
+        project's); CI's Site run covers it.
+      - For O3: nothing of O2 is in `list_agents`; a child's pair is read
+        from its summary. For R2/R4: the Models part is its own paragraph
+        after the roles (`{models}` in `guidance`), built from
+        `MaySpawn.models`; R2's bullet and R4's first paragraph are
+        untouched, and `MaySpawn` takes their depth and policy as fields
+        beside `models`. The first paragraph's "with your model and your
+        tools unless its role says otherwise" predates `model`/`provider`
+        (the Models part says what they do): R4 may reword it. A depth-1
+        sub-agent that R4 lets spawn would get the Models part too
+        (`spawn_models` returns none for any child today); its "yours" is
+        then its own pair. R1's new golden, if a top-level request with
+        `spawn_agent`, carries the Models part.
 - [ ] O3: a child's Provider, model and effort in `list_agents`,
       `AgentSubagentStatus` and `/subagents` (status cell and picker).
 

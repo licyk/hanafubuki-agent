@@ -46,14 +46,13 @@ use super::service::{
     AgentRunStatus, Delivery, ListedAgent, SpawnRequest, SubagentService, WaitOutcome,
 };
 use crate::roles::{AgentRoleCatalogReader, DEFAULT_ROLE};
+use crate::session_driver::MAXIMUM_MODEL_ID_BYTES;
 
 /// The longest message an agent is sent, as the kernel's steering bound.
 const MAXIMUM_MESSAGE_BYTES: usize = 64 * 1024;
 const MAXIMUM_TASK_NAME_CHARS: usize = 64;
 const MAXIMUM_TARGET_CHARS: usize = 256;
 const MAXIMUM_AGENT_TYPE_CHARS: usize = 256;
-/// The kernel's bound on a model id.
-const MAXIMUM_MODEL_BYTES: usize = 256;
 const MAXIMUM_PROVIDER_BYTES: usize = 128;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -302,7 +301,7 @@ fn spawn_arguments(
         fork,
         role,
         provider: optional_text(arguments, "provider", MAXIMUM_PROVIDER_BYTES)?,
-        model: optional_text(arguments, "model", MAXIMUM_MODEL_BYTES)?,
+        model: optional_text(arguments, "model", MAXIMUM_MODEL_ID_BYTES)?,
         reasoning_effort,
     })
 }
