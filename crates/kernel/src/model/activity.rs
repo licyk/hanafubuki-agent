@@ -31,8 +31,22 @@ pub enum AgentActivityPhase {
 pub struct AgentExecutionActivityRef {
     pub execution_id: u64,
     pub generation: u64,
+    /// The call that started this execution, never a later stdin call.
+    #[serde(
+        default,
+        deserialize_with = "tolerant_call_id",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub initiating_call_id: Option<String>,
     pub status: AgentExecutionProgressStatus,
     pub exit_code: Option<i32>,
+}
+
+fn tolerant_call_id<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error> {
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(value.and_then(|value| serde_json::from_value(value).ok()))
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

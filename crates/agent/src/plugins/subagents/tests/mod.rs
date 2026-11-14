@@ -16,6 +16,7 @@ mod listing;
 mod models;
 mod nesting;
 mod pause;
+mod restart;
 mod roles;
 mod terminals;
 mod wake;

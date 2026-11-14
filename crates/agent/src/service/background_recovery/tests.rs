@@ -93,6 +93,86 @@ fn held() -> Vec<u8> {
     [HOLD.as_bytes(), &assistant_events("Too late.")].concat()
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn a_crashed_user_command_does_not_hide_an_earlier_model_terminal() {
+    let server = FakeServer::start(Vec::new()).await;
+    let (service, paths, config, events, root) = setup("lost-user-command", &server).await;
+    service
+        .set_session_permission_mode(
+            root,
+            hanafubuki_agent_kernel::AgentPermissionMode::FullAccess,
+        )
+        .unwrap();
+    service
+        .set_session_sandbox_mode(root, crate::AgentSandboxMode::FullAccess)
+        .unwrap();
+    for (id, call) in [(77, Some("model-exec".into())), (78, None)] {
+        let sink = service.core.execution_progress_sink(root, call);
+        sink.report(AgentToolProgressUpdate::ExecutionStarted {
+            execution_id: id,
+            generation: 1,
+            action: hanafubuki_agent_contracts::AgentActivityAction::fixed("exec_command"),
+            status: AgentExecutionProgressStatus::Running,
+        });
+    }
+    service
+        .core
+        .flush_session_execution_progress(root)
+        .await
+        .unwrap();
+    #[cfg(not(windows))]
+    let command = "sleep 120";
+    #[cfg(windows)]
+    let command = "Start-Sleep -Seconds 120";
+    service
+        .submit_user_shell_command_with_sink(
+            root,
+            command.into(),
+            Arc::new(crate::session_driver::Discard),
+        )
+        .await
+        .unwrap();
+    tokio::time::timeout(TEST_WAIT, async {
+        loop {
+            let snapshot = service.snapshot(root).unwrap();
+            if snapshot.active_activities.iter().any(|activity| {
+                activity.execution.as_ref().is_some_and(|execution| {
+                    execution
+                        .initiating_call_id
+                        .as_deref()
+                        .is_some_and(|id| id.starts_with("user-shell-"))
+                })
+            }) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+    service.flush_for_diagnostics().unwrap();
+    let saved = rollouts(&paths.data_dir.join("agent-test/history/active"));
+    stop(&service);
+    drop(service);
+    restore(&paths, saved);
+    let service = open(&paths, &config, &events);
+    service.start_plugins().await;
+    let queued = service.core.test_wake_queue(root).unwrap();
+    assert_eq!(queued.len(), 1, "{queued:?}");
+    assert!(matches!(
+        queued[0].source,
+        AgentWakeSource::Terminal {
+            execution_id: 77,
+            event: AgentTerminalWake::Lost,
+            ..
+        }
+    ));
+    assert_eq!(events.woken(root), 0);
+    assert!(server.requests().is_empty());
+    stop(&service);
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
 // Only canonical rollouts are copied. Reopening reconstructs the index as
 // after a crash; no live SQLite file is copied.
 fn rollouts(directory: &Path) -> Vec<(PathBuf, Vec<u8>)> {
@@ -145,7 +225,15 @@ async fn shutdown_reports_a_running_child_only_after_the_parent_stops() {
     requested(&server, 1).await;
     let child_turn = tokio::spawn({
         let driver = service.driver.clone();
-        async move { driver.run_turn(subagent, "Keep working.".into()).await }
+        async move {
+            driver
+                .run_turn(
+                    subagent,
+                    "Keep working.".into(),
+                    Arc::new(crate::session_driver::Discard),
+                )
+                .await
+        }
     });
     requested(&children, 1).await;
     stop(&service);
@@ -189,7 +277,15 @@ async fn a_crash_reports_the_lost_subtree_once_even_after_wait_agent_consumes_it
     let grandchild = child(&service, subagent);
     let turn = tokio::spawn({
         let driver = service.driver.clone();
-        async move { driver.run_turn(grandchild, "Keep working.".into()).await }
+        async move {
+            driver
+                .run_turn(
+                    grandchild,
+                    "Keep working.".into(),
+                    Arc::new(crate::session_driver::Discard),
+                )
+                .await
+        }
     });
     requested(&server, 1).await;
     service.flush_for_diagnostics().unwrap();
