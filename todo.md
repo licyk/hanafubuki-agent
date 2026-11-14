@@ -1,3 +1,5 @@
+Windows ordinary-user setup: [plan](docs/plan-windows-user-setup.md).
+
 ## Sandbox completion (2026-11-14)
 
 Active work: [docs/plan-sandbox-parity.md](docs/plan-sandbox-parity.md).

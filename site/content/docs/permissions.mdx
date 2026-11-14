@@ -54,6 +54,8 @@ hanafubuki-agent config set sandboxWorkspaceWrite.networkAccess true
 - **macOS**：Seatbelt。沙箱中的命令在 `/usr/bin/sandbox-exec` 下运行（只用这个路径，绝不用在 `PATH` 中找到的）：它施加一个拒绝该模式所不允许的一切的策略，然后变成那个命令。这个策略是 Codex 的。可写根目录会先被解析，所以 `/tmp` 即 `/private/tmp`，符号链接形式的根目录授予的是它的目标；不存在的根目录保持不可写。在可写根目录之下，已存在的 `.git`（如果 `.git` 是文件，还有它指向的仓库）、`.agents` 和 `.hanafubuki-agent` 保持只读，就像 Codex 保护 `.git`、`.agents` 和 `.codex` 那样：否则命令可以添加 Git 钩子，或修改项目的 `sandboxMode`。
 - **Windows**：先运行 [`/setup-default-sandbox`](/docs/terminal-interface#commands) 并批准 UAC 提示。初始化会为联网和离线命令分别创建标准沙箱账户，以 DPAPI 和仅所有者/管理员可访问的 ACL 保护凭据，并安装持久 Windows Filtering Platform 规则，阻断离线账户的网络（含回环）。成功后保存 `windows.sandbox = "elevated"` 和 `sandboxMode = "workspace-write"`；更高优先级配置可能覆盖这些值。命令以沙箱账户、受限令牌、独立桌面和关闭即终止的作业运行，不以管理员身份运行。可写根目录上的 ACL 条目会保留，已存在的仓库/配置元数据保持只读。初始化状态位于 `%LOCALAPPDATA%/hanafubuki-agent/sandbox`，可重新运行初始化修复。无需初始化也可使用 `windows.sandbox = "unelevated"`：它以当前身份限制写入，但只设置离线环境变量，**不阻断网络**。未配置 Windows 沙箱时仍默认完全访问。
 
+Windows 初始化会给发起 UAC 的用户授予本次安装的 WFP 规则读取权，只有管理员和 SYSTEM 能管理规则，因此 Agent 无需以管理员身份运行即可检查沙箱状态。如果旧安装提示 `read sandbox network block ... Windows error 5`，请更新 Agent 后，从普通用户会话重新运行 `/setup-default-sandbox`，批准一次 UAC 以修复规则权限。
+
 `hanafubuki-agent doctor` 会报告当前生效的沙箱模式，以及这台机器能否提供它。
 
 ### 沙箱不可用时 [#sandbox-unavailable]
