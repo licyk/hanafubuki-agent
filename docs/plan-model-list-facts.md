@@ -15,6 +15,10 @@ Repositories, read from source on 2026-11-14:
 - Hanafubuki (`/root/code_workspace/Hanafubuki-dev`), only to measure what a
   facade change costs it.
 
+The user agreed to the decisions of §2 on 2026-11-14 and decided the
+questions of §5, each as recommended, and the milestones' place in the
+queue: after M8, before O1 (§6).
+
 The request has three parts. Numbers in brackets refer to them throughout:
 
 - [1] **Facts per model.** Each entry of the model list shows, besides its
@@ -89,7 +93,9 @@ exist yet is a file its milestone creates; it is marked "(new)".
 
 ## 2. Decisions
 
-Each is what the plan assumes until §5 says otherwise.
+Each gives what is decided, why, and the alternative rejected. The user
+agreed to every one on 2026-11-14, those that were also questions (§5) as
+recommended.
 
 - **D1 — Rows show resolved facts.** The window, thinking and vision of a
   row are the model's resolved facts: its own settings (`models."<id>"`),
@@ -302,7 +308,7 @@ drawn by a script that applies those rules, not by the renderer: the
 milestone's snapshots are the real thing, and may differ by a column. In
 them, "answered" counts listed and failed Providers alike.
 
-**Option A (recommended): fact columns at the right edge, with a header.**
+**Option A (chosen, §5 Q1): fact columns at the right edge, with a header.**
 Needs a small extension of the shared row renderer (§3.3.1).
 
 ```text
@@ -426,8 +432,9 @@ capability is named when yes, `no …` when no, `… ?` when not known.
 Nothing aligns, so every row must be read to compare, and narrow rows wrap
 into three lines as in B.
 
-**A, because** the three facts are compared down a column, which only A
-lays out at every width, and its renderer change is opt-in (§3.3.1).
+**A was chosen** (Q1) because the three facts are compared down a column,
+which only A lays out at every width, and its renderer change is opt-in
+(§3.3.1).
 
 **Priorities as the width shrinks** (A):
 
@@ -646,42 +653,51 @@ Both languages (`x.en.mdx` and `x.mdx`):
 | `/model` in a side conversation | Unavailable there, as today (`crates/tui/src/app/tests/side.rs:95-96`). |
 | The policy disables images or sets a window | Rows show the model's facts; the subtitle says the policy's (D9). |
 
-## 5. Open questions
+## 5. The questions, answered
 
-Each has the recommendation the plan assumes.
+The user answered every question on 2026-11-14, each as recommended. Each
+entry keeps the question and records the decision; none is open.
 
-- **Q1 — Presentation.** A, B or C (§3.3)? **A.**
-- **Q2 — The "not known" mark.** `?`, `—`, or `unknown`? **`?`**, with
-  `? not known` in the hint.
+- **Q1 — Presentation.** A, B or C (§3.3)? **Decided by the user on
+  2026-11-14, as recommended: A**, aligned columns with a header, `yes`,
+  `no` or `?`, and the detail line.
+- **Q2 — The "not known" mark.** `?`, `—`, or `unknown`? **Decided by
+  the user on 2026-11-14, as recommended: `?`**, with `? not known` in the
+  hint.
 - **Q3 — A models.dev hint.** With models.dev off (the default) and a shown
   row at `?`, add `· models.dev can fill these: /config modelMetadata` to the
   hint? The bridge reads `modelMetadata.modelsDev` from `settings_view()`
   and `Started` carries it; a dozen lines in L2. Turning it on sends a daily request to a third party,
-  so the hint only names it. **Yes.**
+  so the hint only names it. **Decided by the user on 2026-11-14, as
+  recommended: yes.**
 - **Q4 — Pinning.** The session's model first (D6), or in its section?
-  **First.**
+  **Decided by the user on 2026-11-14, as recommended: first.**
 - **Q5 — Search scope.** Also the display name and the Provider's name
-  (D11)? **Yes.**
+  (D11)? **Decided by the user on 2026-11-14, as recommended: yes.**
 - **Q6 — Cancel on close.** Leave the listings to finish (D12), or add
-  cancellation to the facade's request? **Finish.**
+  cancellation to the facade's request? **Decided by the user on
+  2026-11-14, as recommended: finish**; no cancellation is added.
 - **Q7 — A stale list at once.** Show the last recorded listing (model ids
   from `ListingState.models`, `state.rs:55-64`, which O1 exposes as
   `listed_models`) at once, marked "listed 3 h ago · refreshing…", then the
   live one? It needs a facade read, the display names (not recorded), and a
   section whose rows change under the cursor when the live listing arrives.
   The pinned row and per-Provider arrival already give feedback at once.
-  **Not now;** revisit after O1, if a slow Provider still annoys.
-- **Q8 — A `models` CLI subcommand.** **No:** the request is the terminal
+  **Decided by the user on 2026-11-14, as recommended: not now;** revisit
+  after O1, if a slow Provider still annoys.
+- **Q8 — A `models` CLI subcommand.** **Decided by the user on
+  2026-11-14, as recommended: no.** The request is the terminal
   interface; `doctor --online` already prints the default Provider's models
   with their facts.
 - **Q9 — Capabilities in the built-in table.** Mark the families it lists
   (gpt-5, o3, claude-, gemini-2.5) as reasoning or reading images, so
   OpenAI's rows lose their `?`? It changes `resolve`'s capability rule and
-  what the image gate and `/effort` see, beyond display. **No;** Q3's hint
-  points at models.dev instead.
+  what the image gate and `/effort` see, beyond display. **Decided by the
+  user on 2026-11-14, as recommended: no;** Q3's hint points at models.dev
+  instead.
 - **Q10 — `doctor`'s words.** `images`/`reasoning` become `vision`/`thinking`
   (§3.2)? The CLI's text output has no stability rule (only `exec --json`
-  does). **Yes.**
+  does). **Decided by the user on 2026-11-14, as recommended: yes.**
 
 ## 6. Milestones
 
@@ -695,11 +711,11 @@ already exists; L1: `label` and the two accessors),
 `resolve_listing`, the facts of a **live** listing's entries: the names
 differ on purpose), and `tui/src/model_facts.rs` (O1: `effort_options`;
 L1–L3: the cells and the detail line). Whichever lands second rebases.
-Recommended place in the queue: after M8, before O1 (§8). Each milestone
-records in `todo.md`: what landed and any deviation, the validation commands
-run and skipped, the CI run's URL (no Windows or macOS claim from a Linux
-run), whether goldens changed, what Hanafubuki must change at its next pin,
-and any module-size exception.
+Their place in the queue, decided by the user on 2026-11-14: after M8,
+before O1 (§8). Each milestone records in `todo.md`: what landed and any
+deviation, the validation commands run and skipped, the CI run's URL (no
+Windows or macOS claim from a Linux run), whether goldens changed, what
+Hanafubuki must change at its next pin, and any module-size exception.
 
 Every milestone runs AGENTS.md's matrix (`cargo fmt --all --check`;
 `RUSTFLAGS="-D warnings" cargo check --workspace --all-targets
@@ -869,10 +885,10 @@ the tests' discovery is off and the listings are the tests' own.
 
 ## 8. Fit with other work
 
-- **The queue.** After M8, before O1. The L milestones share no file with
-  M6–M8 (mermaid, command colour, JSON and diffs), so they could also run
-  beside them if another agent is free; with O1 they share four files, for
-  different functions (§6). Before O1 because O2's guidance and O3's
+- **The queue.** After M8, before O1, as decided by the user on
+  2026-11-14. The L milestones share no file with M6–M8 (mermaid, command
+  colour, JSON and diffs); with O1 they share four files, for different
+  functions (§6). Before O1 because O2's guidance and O3's
   `/subagents` name models and should use the same vocabulary, and because
   O1's `listed_models` then lands beside `resolve_listing` knowing it.
 - **O1–O3** (`docs/plan-subagent-model-overrides.md`): O2's model list in

@@ -31,8 +31,8 @@ skipped, the CI run's URL (no Windows or macOS claim from a Linux run),
 whether goldens changed (none expected), what Hanafubuki must change at its
 next pin, and any module-size exception.
 
-- [ ] Decisions: D1–D14 of the plan's §2 and the questions Q1–Q10 of §5
-      answered (the plan assumes each recommendation).
+- [x] Decisions: D1–D14 of the plan's §2 and the questions Q1–Q10 of §5,
+      decided by the user on 2026-11-14: each as recommended.
 - [ ] L1: `list_provider_models` gives each model its resolved facts
       (`AgentListedModel { entry, metadata }`, the entry flattened in
       JSON), resolved per Provider with the listing as the reported source
