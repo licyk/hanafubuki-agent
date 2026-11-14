@@ -1294,6 +1294,15 @@ From CI's failed jobs over the last 60 runs; each passed on a re-run.
   the write's start. 0 of 180 runs failed under the same load (whether a stall occurred in those runs was not recorded).
 - Other first-attempt CI failures of 2026-11-14 were real test faults, fixed with their work: K4's pointer-mode tests,
   I1's Ctrl+Alt+V test, U1's running-copy test.
+- CI on the three fixes of 2026-11-14 (`907e428`…`67a0705`): [run 43593958208](https://github.com/licyk/hanafubuki-agent/actions/runs/43593958208),
+  Linux, Windows and macOS green at the first attempt, each running the reopen test, the three `cleanup::shutdown_*`
+  contract tests, the supervisor's lease tests and the linked guest's check; Site [run 43593958153](https://github.com/licyk/hanafubuki-agent/actions/runs/43593958153)
+  green. One green run says little about an intermittent failure.
+- **Open, not investigated**: `plugin-packages` `linked::tests::a_replaced_directory_is_watched_anew_though_its_removal_is_not_reported`
+  timed out on macOS (`linked/tests.rs:107`, its 5 s wait for the replaced directory to be armed anew) in
+  [run 43595332941](https://github.com/licyk/hanafubuki-agent/actions/runs/43595332941) (O3's `26edcde`); it passed in
+  43593958208 and on Linux and Windows. The unit test the 6d61cc8 fix added, not the guests harness's check changed
+  above.
 - Already fixed, not recurring: `bottom_pane::tests::tabs_within_a_paste_burst_are_the_pastes_and_send_nothing` (6e36de1),
   `crates/plugin-packages/tests/guests/linked.rs:124` (6d61cc8), and the macOS
   `output::a_poll_behind_the_retained_output_says_exactly_what_it_missed` (BSD `seq` printing `1e+06`, replaced by `awk`
