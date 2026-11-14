@@ -130,7 +130,7 @@ fn the_windows_sandbox_setting_chooses_a_backend_only_on_windows() {
             let chosen = available.with_windows_sandbox_on(windows, setting);
             assert_eq!(
                 matches!(chosen.status(), SandboxStatus::Unavailable { .. }),
-                windows,
+                windows && (setting.is_none() || super::elevated_ready().is_err()),
                 "{setting:?}"
             );
         }

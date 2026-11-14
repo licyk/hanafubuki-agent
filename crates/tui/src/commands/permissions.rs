@@ -123,11 +123,13 @@ pub(super) fn on_reply(context: &mut CommandContext<'_>, reply: SessionReply) {
             configured,
             sandbox,
             sandbox_available,
+            sandbox_reason,
         } => show_presets(
             context,
             session.unwrap_or(configured),
             sandbox,
             sandbox_available,
+            sandbox_reason,
         ),
         SessionReply::PermissionModeSet(mode) => {
             context.add_to_history(history_cell::new_info_event(
@@ -170,8 +172,9 @@ fn show_presets(
     mode: AgentPermissionMode,
     sandbox: AgentSandboxMode,
     sandbox_available: bool,
+    sandbox_reason: Option<String>,
 ) {
-    let items = PRESETS
+    let mut items: Vec<_> = PRESETS
         .iter()
         .map(|preset| {
             let (preset_mode, preset_sandbox) = (preset.mode, preset.sandbox);
@@ -182,8 +185,11 @@ fn show_presets(
                 description: Some(preset.description.to_string()),
                 is_current: (preset_mode, preset_sandbox) == (mode, sandbox),
                 is_disabled: unavailable,
-                disabled_reason: unavailable
-                    .then(|| "The sandbox is unavailable on this machine".to_string()),
+                disabled_reason: unavailable.then(|| {
+                    sandbox_reason
+                        .clone()
+                        .unwrap_or_else(|| "The sandbox is unavailable on this machine".to_string())
+                }),
                 actions: vec![Box::new(move |tx| match preset_mode {
                     AgentPermissionMode::FullAccess => {
                         send_step(tx, &PERMISSIONS, confirm_full_access)
@@ -195,6 +201,19 @@ fn show_presets(
             }
         })
         .collect();
+    if cfg!(windows) && !sandbox_available {
+        items.push(SelectionItem {
+            name: "Set up Windows sandbox".into(),
+            description: Some(
+                "Windows asks for administrator consent once; enables sandboxed presets".into(),
+            ),
+            actions: vec![Box::new(|tx| {
+                send_session_call(tx, SessionCall::SetupWindowsSandbox)
+            })],
+            dismiss_on_select: true,
+            ..Default::default()
+        });
+    }
     context.show_selection_view(SelectionViewParams {
         title: Some("Select Permissions".to_string()),
         subtitle: Some(

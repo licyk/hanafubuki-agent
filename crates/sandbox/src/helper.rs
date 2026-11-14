@@ -36,8 +36,21 @@ static HELPER: OnceLock<PathBuf> = OnceLock::new();
 /// starts any thread: without it, a command that asks for a sandbox fails.
 pub fn helper_dispatch() {
     let mut args = std::env::args_os();
-    if args.nth(1).is_some_and(|first| first == HELPER_ARG) {
-        run_helper(args.collect());
+    if let Some(first) = args.nth(1) {
+        let args: Vec<_> = args.collect();
+        #[cfg(windows)]
+        if let Some(result) = crate::windows::elevated::dispatch(&first, args.clone().into_iter()) {
+            match result {
+                Ok(code) => std::process::exit(code as i32),
+                Err(error) => {
+                    eprintln!("hanafubuki-agent sandbox: {error}");
+                    std::process::exit(HELPER_FAILURE_EXIT_CODE);
+                }
+            }
+        }
+        if first == HELPER_ARG {
+            run_helper(args);
+        }
     }
     if let Ok(program) = std::env::current_exe() {
         let _ = HELPER.set(program);
@@ -135,6 +148,38 @@ impl HelperRequest {
 }
 
 fn run_helper(args: Vec<OsString>) -> ! {
+    #[cfg(windows)]
+    if args.first().is_some_and(|arg| arg == "--elevated") {
+        let args = args.into_iter().skip(1).collect();
+        let result = HelperRequest::parse(args).and_then(crate::windows::elevated::run);
+        match result {
+            Ok(code) => std::process::exit(code as i32),
+            Err(error) => {
+                eprintln!("hanafubuki-agent sandbox: {error}");
+                std::process::exit(HELPER_FAILURE_EXIT_CODE);
+            }
+        }
+    }
+    #[cfg(target_os = "linux")]
+    if args
+        .first()
+        .is_some_and(|arg| arg == "--bubblewrap" || arg == "--network-only")
+    {
+        let mut args = args.into_iter();
+        let flag = args.next();
+        let error = match HelperRequest::parse(args.collect()) {
+            Ok(request) => {
+                if flag.as_deref() == Some(std::ffi::OsStr::new("--bubblewrap")) {
+                    crate::linux::bubblewrap::run(request)
+                } else {
+                    crate::linux::network_and_exec(request)
+                }
+            }
+            Err(error) => error,
+        };
+        eprintln!("hanafubuki-agent sandbox: {error}");
+        std::process::exit(HELPER_FAILURE_EXIT_CODE);
+    }
     let error = match HelperRequest::parse(args) {
         Ok(request) => confine_and_exec(request),
         Err(error) => error,

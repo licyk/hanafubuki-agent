@@ -13,6 +13,7 @@ use std::process::Command;
 
 use crate::helper::HelperRequest;
 
+pub(crate) mod bubblewrap;
 mod filesystem;
 mod network;
 
@@ -41,6 +42,24 @@ pub(crate) fn confine_and_exec(request: HelperRequest) -> String {
     if let Err(error) = confine(&request) {
         return error;
     }
+    exec(request)
+}
+
+pub(crate) fn network_and_exec(request: HelperRequest) -> String {
+    // SAFETY: no pointer arguments; the inner helper has no privileges to gain.
+    if unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) } != 0 {
+        return format!(
+            "cannot set no_new_privs: {}",
+            std::io::Error::last_os_error()
+        );
+    }
+    if let Err(error) = network::restrict_network(request.network_access) {
+        return error;
+    }
+    exec(request)
+}
+
+fn exec(request: HelperRequest) -> String {
     let Some((program, args)) = request.command.split_first() else {
         return "no command to run".to_string();
     };

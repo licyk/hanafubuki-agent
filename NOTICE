@@ -477,3 +477,9 @@ these notices in the shipped documentation satisfies this term.
 https://github.com/ranxianglei/acp-kernel （及 https://github.com/ranxianglei/billion-context，
 涉及时）的链接。纯服务端或内嵌、无用户可见界面的用途，随附文档中包含上述声明即可。
 
+
+- Bubblewrap 0.11.2 (https://github.com/containers/bubblewrap), LGPL-2.0-or-later:
+  `crates/sandbox/vendor/bubblewrap` contains the C sources from Codex
+  commit 57a808a392, with their original headers and COPYING unchanged.
+  The Linux sandbox links this helper; its build and entry-point wrappers
+  are adapted from Codex (Apache-2.0).

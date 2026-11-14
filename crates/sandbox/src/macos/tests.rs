@@ -253,3 +253,17 @@ fn a_plugin_reads_only_the_platform_defaults_its_readable_roots_and_its_writable
     assert!(!text.contains("(allow user-preference-read)"), "{text}");
     assert!(params.contains(&("READABLE_ROOT_0".to_string(), "/package".to_string())));
 }
+
+#[test]
+fn overlapping_writable_roots_cannot_grant_protected_metadata_back() {
+    let (text, _) = policy(
+        &[root("/work", &["/work/.git"]), root("/work/.git", &[])],
+        None,
+        false,
+    );
+    let deny = text
+        .find("(deny file-write* (literal (param \"WRITABLE_ROOT_0_EXCLUDED_0\"))")
+        .unwrap();
+    let allow = text.find("(allow file-write*").unwrap();
+    assert!(deny > allow, "{text}");
+}

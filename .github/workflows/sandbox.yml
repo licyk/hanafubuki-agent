@@ -1,0 +1,52 @@
+name: Sandbox platforms
+
+on:
+  push:
+    branches: [test/sandbox-platforms]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sandbox-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sandbox:
+    name: Sandbox (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          components: rustfmt, clippy
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libcap-dev pkg-config
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          key: sandbox
+      - run: cargo check -p hanafubuki-agent-sandbox --all-targets
+        env:
+          RUSTFLAGS: -D warnings
+      - run: cargo clippy -p hanafubuki-agent-sandbox --all-targets -- -D warnings
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $sandboxTemp = New-Item -ItemType Directory -Force -Path (Join-Path $env:RUNNER_TEMP sandbox-tests)
+          icacls $sandboxTemp /grant "${env:USERNAME}:(OI)(CI)F" | Out-Null
+          "TEMP=$sandboxTemp", "TMP=$sandboxTemp" | Add-Content -Path $env:GITHUB_ENV
+      - name: Native sandbox tests
+        run: cargo test -p hanafubuki-agent-sandbox -- --nocapture
+        env:
+          HANAFUBUKI_TEST_ELEVATED_SANDBOX: ${{ runner.os == 'Windows' && '1' || '' }}
+      - name: Legacy Landlock compatibility
+        if: runner.os == 'Linux'
+        run: cargo test -p hanafubuki-agent-sandbox --test linux -- --nocapture
+        env:
+          HANAFUBUKI_AGENT_USE_LEGACY_LANDLOCK: '1'

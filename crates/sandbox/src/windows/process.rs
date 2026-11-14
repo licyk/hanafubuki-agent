@@ -150,7 +150,7 @@ fn standard_handle(which: u32) -> Option<HANDLE> {
     (!handle.is_null() && handle != INVALID_HANDLE_VALUE).then_some(handle)
 }
 
-fn kill_on_close_job() -> Result<OwnedHandle, String> {
+pub(crate) fn kill_on_close_job() -> Result<OwnedHandle, String> {
     // SAFETY: an unnamed job with the default security; owned below.
     let job = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
     if job.is_null() {

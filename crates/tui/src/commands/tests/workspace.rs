@@ -100,6 +100,7 @@ fn permissions_with_a_mode_sets_it_and_without_one_lists_the_presets() {
             configured: AgentPermissionMode::AutoReview,
             sandbox: AgentSandboxMode::WorkspaceWrite,
             sandbox_available: true,
+            sandbox_reason: None,
         },
     );
     let shown = screen(&chat, 100);
@@ -153,6 +154,7 @@ fn the_sandboxed_presets_are_disabled_without_a_sandbox() {
             configured: AgentPermissionMode::Manual,
             sandbox: AgentSandboxMode::FullAccess,
             sandbox_available: false,
+            sandbox_reason: None,
         },
     );
     assert!(screen(&chat, 100).contains("The sandbox is unavailable on this machine"));
@@ -172,6 +174,7 @@ fn full_access_from_the_list_asks_first_and_cancel_is_selected() {
                 configured: AgentPermissionMode::AutoReview,
                 sandbox: AgentSandboxMode::WorkspaceWrite,
                 sandbox_available: true,
+                sandbox_reason: None,
             },
         );
         // The session's own mode and the sandbox make Default the preset in

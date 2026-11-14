@@ -60,6 +60,7 @@ pub(crate) enum SessionCall {
     /// `/permissions`: the session's own mode and the configured one, and
     /// the sandbox in effect.
     PermissionModes,
+    SetupWindowsSandbox,
     SetPermissionMode(AgentPermissionMode),
     /// A preset: the session's permission mode and sandbox mode.
     SetPreset(AgentPermissionMode, AgentSandboxMode),
@@ -131,7 +132,9 @@ pub(crate) enum SessionReply {
         sandbox: AgentSandboxMode,
         /// Whether this machine can give a sandbox.
         sandbox_available: bool,
+        sandbox_reason: Option<String>,
     },
+    WindowsSandboxReady,
     PermissionModeSet(AgentPermissionMode),
     PresetSet(AgentPermissionMode, AgentSandboxMode),
     /// The session's latest denials, newest first.
@@ -178,6 +181,7 @@ impl SessionCall {
             Self::PermissionModes | Self::SetPermissionMode(_) | Self::SetPreset(..) => {
                 "permissions"
             }
+            Self::SetupWindowsSandbox => "setup-default-sandbox",
             Self::Denials | Self::ApproveDenial(_) => "approve",
             Self::ChangeDirectory(_) => "cd",
             Self::WorktreeMenu
@@ -365,6 +369,10 @@ impl AgentBridge {
             }
             SessionCall::SetPermissionMode(mode) => self.set_permission_mode(mode)?,
             SessionCall::SetPreset(mode, sandbox) => self.set_preset(mode, sandbox)?,
+            SessionCall::SetupWindowsSandbox => {
+                self.setup_windows_sandbox();
+                return Ok(None);
+            }
             SessionCall::Denials => self.denials(),
             SessionCall::ApproveDenial(review_id) => self.approve_denial(review_id)?,
             SessionCall::ChangeDirectory(path) => {

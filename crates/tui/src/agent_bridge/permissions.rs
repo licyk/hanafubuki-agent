@@ -91,9 +91,29 @@ impl AgentBridge {
                     .or(settings.sandbox_mode)
                     .unwrap_or_else(platform_default_mode),
                 sandbox_available: matches!(sandbox_status, SandboxStatus::Available { .. }),
+                sandbox_reason: match sandbox_status {
+                    SandboxStatus::Unavailable { reason } => Some(reason),
+                    _ => None,
+                },
             })
         });
         Ok(())
+    }
+
+    pub(super) fn setup_windows_sandbox(&self) {
+        self.spawn_session_call("setup-default-sandbox", move |agent| async move {
+            tokio::task::spawn_blocking(hanafubuki_agent::sandbox::setup_windows_sandbox)
+                .await.map_err(|error| format!("sandbox setup worker: {error}"))??;
+            let changes = [("windows.sandbox", "elevated"), ("sandboxMode", "workspace-write")]
+                .into_iter().map(|(key, value)| hanafubuki_agent::SettingChange {
+                    key: key.into(), op: hanafubuki_agent::SettingWriteOp::Set(value.into()),
+                }).collect();
+            let outcome = agent.write_setting_values(hanafubuki_agent::SettingsWrite { changes }).await?;
+            if !outcome.shadowed.is_empty() {
+                return Err("Sandbox installed, but a higher configuration layer overrides its settings; inspect /config windows".into());
+            }
+            Ok(SessionReply::WindowsSandboxReady)
+        });
     }
 
     /// A preset: both of the session's modes. The next turn takes them.

@@ -18,6 +18,8 @@ mod acl;
 #[cfg(windows)]
 mod desktop;
 #[cfg(windows)]
+pub(crate) mod elevated;
+#[cfg(windows)]
 mod process;
 #[cfg(windows)]
 mod token;
@@ -31,13 +33,12 @@ mod token;
 /// access the command only gets an offline environment.
 #[cfg(windows)]
 pub(crate) fn run(request: crate::helper::HelperRequest) -> Result<u32, String> {
-    let command = request
-        .command
-        .iter()
-        .map(|arg| arg.to_str().map(str::to_string))
-        .collect::<Option<Vec<_>>>()
-        .ok_or("the command must be UTF-8")?;
-    let command_line = plan::command_line(&command)?;
+    prepare(&request)?;
+    run_prepared(request)
+}
+
+#[cfg(windows)]
+fn prepare(request: &crate::helper::HelperRequest) -> Result<(), String> {
     let plan = plan::acl_plan(&crate::roots::resolve_roots(&request.writable_roots));
     let capabilities = plan
         .grants
@@ -55,6 +56,23 @@ pub(crate) fn run(request: crate::helper::HelperRequest) -> Result<u32, String> 
         // A root left without its ACE is only unwritable, as in Codex.
         let _ = acl::ensure_allow_write_ace(grant.root.system(), sid);
     }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn run_prepared(request: crate::helper::HelperRequest) -> Result<u32, String> {
+    let command = request
+        .command
+        .iter()
+        .map(|arg| arg.to_str().map(str::to_string))
+        .collect::<Option<Vec<_>>>()
+        .ok_or("the command must be UTF-8")?;
+    let command_line = plan::command_line(&command)?;
+    let capabilities = plan::acl_plan(&crate::roots::resolve_roots(&request.writable_roots))
+        .grants
+        .iter()
+        .map(|grant| token::LocalSid::from_string(&grant.sid))
+        .collect::<Result<Vec<_>, _>>()?;
     let token = token::restricted_token(&capabilities)?;
     for sid in &capabilities {
         acl::allow_null_device(sid);

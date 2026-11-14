@@ -2337,10 +2337,14 @@ dependencies = [
 name = "hanafubuki-agent-sandbox"
 version = "0.3.0"
 dependencies = [
+ "cc",
  "hanafubuki-agent-foundation",
  "landlock",
  "libc",
+ "pkg-config",
  "seccompiler",
+ "serde",
+ "serde_json",
  "sha2 0.11.1",
  "tempfile",
  "windows-sys 0.61.2",

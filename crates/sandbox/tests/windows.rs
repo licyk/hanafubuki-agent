@@ -31,10 +31,6 @@ mod windows {
             off.wrap(&SandboxPolicy::ReadOnly, cmd("echo")).is_err(),
             "an unset windows.sandbox must refuse"
         );
-        let elevated = detected.with_windows_sandbox(Some(AgentWindowsSandbox::Elevated));
-        assert!(elevated
-            .wrap(&SandboxPolicy::ReadOnly, cmd("echo"))
-            .is_err());
         let sandbox = detected.with_windows_sandbox(Some(AgentWindowsSandbox::Unelevated));
         assert!(
             matches!(sandbox.status(), SandboxStatus::Available { .. }),
@@ -68,6 +64,20 @@ mod windows {
         for (name, check) in checks {
             check(&sandbox);
             eprintln!("ok: {name}");
+        }
+        if std::env::var_os("HANAFUBUKI_TEST_ELEVATED_SANDBOX").is_some() {
+            hanafubuki_agent_sandbox::setup_windows_sandbox().unwrap();
+            let elevated = detected.with_windows_sandbox(Some(AgentWindowsSandbox::Elevated));
+            assert!(
+                matches!(elevated.status(), SandboxStatus::Available { .. }),
+                "{:?}",
+                elevated.status()
+            );
+            for (name, check) in checks {
+                check(&elevated);
+                eprintln!("ok: elevated {name}");
+            }
+            elevated_network_is_enforced(&elevated);
         }
     }
 
@@ -238,5 +248,31 @@ mod windows {
         );
         assert!(String::from_utf8_lossy(&output.stderr).contains("hanafubuki-agent sandbox:"));
         assert!(!marker.exists());
+    }
+    fn elevated_network_is_enforced(sandbox: &Sandbox) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let workspace = directory();
+        let powershell = std::env::var("SystemRoot").unwrap()
+            + r"\System32\WindowsPowerShell\v1.0\powershell.exe";
+        let script = format!("try {{ $c = New-Object Net.Sockets.TcpClient; $c.Connect('127.0.0.1', {port}); $c.Dispose(); exit 0 }} catch {{ exit 7 }}");
+        let command = || {
+            vec![
+                powershell.clone(),
+                "-NoLogo".into(),
+                "-NoProfile".into(),
+                "-NonInteractive".into(),
+                "-Command".into(),
+                script.clone(),
+            ]
+        };
+        let blocked = run_confined(
+            sandbox,
+            &workspace_write(workspace.path(), false),
+            command(),
+        );
+        assert_eq!(blocked.status.code(), Some(7), "{blocked:?}");
+        let allowed = run_confined(sandbox, &workspace_write(workspace.path(), true), command());
+        assert!(allowed.status.success(), "{allowed:?}");
     }
 }

@@ -1,3 +1,9 @@
+## Sandbox completion (2026-11-14)
+
+Active work: [docs/plan-sandbox-parity.md](docs/plan-sandbox-parity.md).
+The user requested the elevated Windows implementation and cross-platform
+sandbox completion against Codex, including native validation.
+
 ## Plan: the update check, the update prompt and self-update (2026-11-14)
 
 The plan is [docs/plan-self-update.md](docs/plan-self-update.md), read from

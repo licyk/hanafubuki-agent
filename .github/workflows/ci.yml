@@ -58,6 +58,8 @@ jobs:
         with:
           components: rustfmt, clippy
           targets: wasm32-unknown-unknown
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libcap-dev pkg-config
       - uses: Swatinem/rust-cache@v2.9.3
       - run: cargo fmt --all --check
       - run: cargo check --workspace --all-targets --all-features
@@ -76,3 +78,5 @@ jobs:
           icacls $temp /grant "${env:USERNAME}:(OI)(CI)F" | Out-Null
           "TEMP=$temp", "TMP=$temp" | Add-Content -Path $env:GITHUB_ENV
       - run: cargo test --workspace --all-features --no-fail-fast
+        env:
+          HANAFUBUKI_TEST_ELEVATED_SANDBOX: ${{ runner.os == 'Windows' && '1' || '' }}

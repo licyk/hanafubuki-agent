@@ -52,7 +52,7 @@ mod roles;
 /// sandbox fails.
 pub mod sandbox {
     pub use hanafubuki_agent_sandbox::{
-        helper_dispatch, platform_default_mode, Sandbox, SandboxStatus,
+        helper_dispatch, platform_default_mode, setup_windows_sandbox, Sandbox, SandboxStatus,
     };
 }
 mod service;

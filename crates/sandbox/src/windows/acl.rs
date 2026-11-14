@@ -17,7 +17,7 @@ use std::path::Path;
 use windows_sys::Win32::Foundation::{LocalFree, ERROR_SUCCESS, HANDLE, HLOCAL};
 use windows_sys::Win32::Security::Authorization::{
     GetSecurityInfo, SetEntriesInAclW, SetSecurityInfo, ACCESS_MODE, DENY_ACCESS,
-    EXPLICIT_ACCESS_W, SET_ACCESS, SE_FILE_OBJECT, SE_KERNEL_OBJECT, SE_OBJECT_TYPE,
+    EXPLICIT_ACCESS_W, GRANT_ACCESS, SET_ACCESS, SE_FILE_OBJECT, SE_KERNEL_OBJECT, SE_OBJECT_TYPE,
     TRUSTEE_IS_SID, TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
 };
 use windows_sys::Win32::Security::{
@@ -73,6 +73,17 @@ pub(crate) fn ensure_allow_write_ace(path: &Path, sid: &LocalSid) -> Result<(), 
     }
     let file = open(path, READ_CONTROL | WRITE_DAC)?;
     dacl.set_with(&file, SE_FILE_OBJECT, sid, WRITE_ALLOW_MASK, SET_ACCESS)
+}
+
+/// Grants an elevated sandbox identity the reads its command needs.
+pub(crate) fn ensure_allow_read_ace(path: &Path, sid: &LocalSid) -> Result<(), String> {
+    let mask = FILE_GENERIC_READ | FILE_GENERIC_EXECUTE;
+    let dacl = Dacl::of(&open(path, READ_CONTROL)?, SE_FILE_OBJECT)?;
+    if dacl.allows(sid, mask) {
+        return Ok(());
+    }
+    let file = open(path, READ_CONTROL | WRITE_DAC)?;
+    dacl.set_with(&file, SE_FILE_OBJECT, sid, mask, GRANT_ACCESS)
 }
 
 /// Denies `sid` writing `path` and everything under it, unless it is denied

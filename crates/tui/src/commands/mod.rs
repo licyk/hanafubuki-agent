@@ -315,6 +315,7 @@ pub(crate) fn session_reply_command(reply: &SessionReply) -> Option<&'static Com
         SessionReply::PermissionModes { .. }
         | SessionReply::PermissionModeSet(_)
         | SessionReply::PresetSet(..) => &permissions::PERMISSIONS,
+        SessionReply::WindowsSandboxReady => &setup_sandbox::SETUP_DEFAULT_SANDBOX,
         SessionReply::Denials(_) | SessionReply::Approved(_) => &permissions::APPROVE,
         SessionReply::DirectoryChanged(_) => &cd::CD,
         SessionReply::WorktreeMenu { .. }
@@ -348,6 +349,7 @@ pub(crate) fn on_session_reply(context: &mut CommandContext<'_>, reply: SessionR
         SessionReply::Terminals(_) | SessionReply::TerminalsStopped { .. } => {
             terminals::on_reply(context, reply)
         }
+        SessionReply::WindowsSandboxReady => setup_sandbox::on_ready(context),
         SessionReply::Roots(roots) => pwd::on_reply(context, roots),
         SessionReply::PermissionModes { .. }
         | SessionReply::PermissionModeSet(_)

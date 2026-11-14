@@ -134,10 +134,31 @@ pub(crate) fn policy(
     });
     // The denies come last: the last rule that matches decides.
     sections.push("(deny mach-lookup (xpc-service-name-prefix \"\"))".to_string());
+    // An overlapping writable root must not grant an exclusion back. Seatbelt
+    // combines the allow rules, so the final denies apply across every root.
+    for (index, root) in roots.iter().enumerate() {
+        for excluded in 0..root.read_only.len() {
+            let key = format!("WRITABLE_ROOT_{index}_EXCLUDED_{excluded}");
+            sections.push(format!(
+                "(deny file-write* (literal (param \"{key}\")) (subpath (param \"{key}\")))"
+            ));
+        }
+    }
     // These fcntls change a file through a read-only descriptor, past
     // file-write*: F_MAKECOMPRESSED (80) and F_TRANSFEREXTENTS (110).
     sections.push("(deny system-fcntl (fcntl-command 80 110))".to_string());
     (sections.join("\n"), params)
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn already_confined() -> bool {
+    #[link(name = "sandbox")]
+    unsafe extern "C" {
+        fn sandbox_check(pid: i32, operation: *const std::ffi::c_char, kind: i32) -> i32;
+    }
+    // A null operation asks whether the process already has a Seatbelt profile.
+    // macOS cannot apply a second profile to a sandboxed process.
+    unsafe { sandbox_check(std::process::id() as i32, std::ptr::null(), 0) > 0 }
 }
 
 /// Readable roots resolved, as the policy names them; one that does not

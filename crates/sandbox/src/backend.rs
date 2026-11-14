@@ -46,6 +46,16 @@ enum Backend {
         allow(dead_code, reason = "only macOS has Seatbelt")
     )]
     Seatbelt,
+    #[cfg_attr(
+        not(target_os = "linux"),
+        allow(dead_code, reason = "Linux mount sandbox")
+    )]
+    Bubblewrap {
+        helper: PathBuf,
+    },
+    WindowsElevated {
+        helper: PathBuf,
+    },
     Unavailable {
         reason: String,
     },
@@ -139,10 +149,18 @@ impl Sandbox {
         }
         match setting {
             Some(AgentWindowsSandbox::Unelevated) => self.clone(),
-            Some(AgentWindowsSandbox::Elevated) => Self::unavailable(
-                "the elevated Windows sandbox is not available yet; \
-                 set windows.sandbox to \"unelevated\" for the restricted-token sandbox",
-            ),
+            Some(AgentWindowsSandbox::Elevated) => match elevated_ready() {
+                Ok(()) => match &self.backend {
+                    Backend::Helper { helper, .. } => Self {
+                        backend: Backend::WindowsElevated {
+                            helper: helper.clone(),
+                        },
+                    },
+                    _ => self.clone(),
+                },
+                Err(reason) => Self::unavailable(reason),
+            },
+
             None => Self::unavailable(
                 "the Windows sandbox is off; set windows.sandbox to \"unelevated\" to turn it on",
             ),
@@ -153,6 +171,13 @@ impl Sandbox {
         match &self.backend {
             Backend::Helper { confinement, .. } => SandboxStatus::Available {
                 backend: confinement.clone(),
+            },
+            Backend::Bubblewrap { .. } => SandboxStatus::Available {
+                backend: "bubblewrap mount namespaces and seccomp".into(),
+            },
+            Backend::WindowsElevated { .. } => SandboxStatus::Available {
+                backend: "Windows sandbox accounts, restricted tokens and WFP network isolation"
+                    .into(),
             },
             Backend::Seatbelt => SandboxStatus::Available {
                 backend: format!("Seatbelt ({})", crate::macos::SANDBOX_EXEC),
@@ -169,7 +194,10 @@ impl Sandbox {
         SandboxEnforcement {
             blocks_network: match &self.backend {
                 Backend::Helper { blocks_network, .. } => *blocks_network,
-                Backend::Seatbelt | Backend::Unavailable { .. } => true,
+                Backend::Bubblewrap { .. }
+                | Backend::Seatbelt
+                | Backend::WindowsElevated { .. }
+                | Backend::Unavailable { .. } => true,
             },
         }
     }
@@ -201,6 +229,32 @@ impl Sandbox {
             ),
         };
         match &self.backend {
+            Backend::Bubblewrap { helper } => {
+                let mut argv = helper_command(
+                    helper,
+                    HelperRequest {
+                        writable_roots,
+                        readable_roots,
+                        network_access,
+                        command: command.into_iter().map(Into::into).collect(),
+                    },
+                )?;
+                argv.insert(2, "--bubblewrap".into());
+                Ok(argv)
+            }
+            Backend::WindowsElevated { helper } => {
+                let mut argv = helper_command(
+                    helper,
+                    HelperRequest {
+                        writable_roots,
+                        readable_roots,
+                        network_access,
+                        command: command.into_iter().map(Into::into).collect(),
+                    },
+                )?;
+                argv.insert(2, "--elevated".into());
+                Ok(argv)
+            }
             Backend::Helper { helper, .. } => helper_command(
                 helper,
                 HelperRequest {
@@ -229,6 +283,17 @@ impl Sandbox {
     }
 }
 
+fn elevated_ready() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        crate::windows::elevated::ready()
+    }
+    #[cfg(not(windows))]
+    {
+        Err("the elevated Windows sandbox is only available on Windows".into())
+    }
+}
+
 fn helper_command(helper: &Path, request: HelperRequest) -> Result<Vec<String>, SandboxError> {
     let mut command = vec![
         helper.to_str().ok_or(SandboxError::NotUtf8)?.to_string(),
@@ -245,11 +310,21 @@ fn detect_backend() -> Backend {
             reason: "this program does not run the sandbox helper".to_string(),
         };
     };
+    if std::env::var_os("HANAFUBUKI_AGENT_USE_LEGACY_LANDLOCK").is_none() {
+        return Backend::Bubblewrap {
+            helper: helper.clone(),
+        };
+    }
     linux_backend(helper.clone(), crate::linux::landlock_abi())
 }
 
 #[cfg(target_os = "macos")]
 fn detect_backend() -> Backend {
+    if crate::macos::already_confined() {
+        return Backend::Unavailable {
+            reason: "this Agent already runs inside a Seatbelt sandbox; macOS cannot nest another sandbox; start the Agent outside that host sandbox".into(),
+        };
+    }
     if Path::new(crate::macos::SANDBOX_EXEC).is_file() {
         Backend::Seatbelt
     } else {
