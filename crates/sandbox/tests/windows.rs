@@ -512,11 +512,13 @@ mod windows {
             assert!(read.status.success(), "{shell} read-only startup: {read:?}");
             assert_eq!(read.stdout, b"hello");
             // A native parent must also confine an indirectly launched MSYS child.
-            let indirect = run_confined(
-                sandbox,
-                &policy,
-                cmd(&format!(r#"""{shell}" -c "printf again > '{root}/file'"""#)),
-            );
+            let script = workspace.path().join("indirect.cmd");
+            std::fs::write(
+                &script,
+                format!("@\"{shell}\" -c \"printf again > '{root}/file'\"\r\n"),
+            )
+            .unwrap();
+            let indirect = run_confined(sandbox, &policy, cmd(&script.display().to_string()));
             assert!(indirect.status.success(), "{shell} indirect: {indirect:?}");
             assert_eq!(
                 std::fs::read(workspace.path().join("file")).unwrap(),
