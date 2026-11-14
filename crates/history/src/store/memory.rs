@@ -310,6 +310,15 @@ fn memory_evidence_text(item: &ConversationItem) -> Option<EvidenceText> {
             Some(serde_json::json!({ "cmd": command })),
             Some(call_id.clone()),
         )),
+        // What background work reported, as the output of a call of that
+        // name: data, never the person's words.
+        ConversationItem::WakeEvents { events } => Some((
+            AgentMemoryEvidenceRole::Tool,
+            hanafubuki_agent_kernel::wake_events_record(events),
+            Some("background_events".to_string()),
+            None,
+            None,
+        )),
         ConversationItem::CanonicalInitialContext { .. }
         | ConversationItem::Reasoning { .. }
         | ConversationItem::TurnStart { .. }

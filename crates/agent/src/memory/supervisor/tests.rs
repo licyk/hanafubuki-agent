@@ -268,6 +268,7 @@ fn idle_session(
         id: session_id,
         forked_from_session_id: None,
         parent_session_id: None,
+        wake_queue: Default::default(),
         origin: None,
         cwd: None,
         branch: None,

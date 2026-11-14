@@ -139,6 +139,9 @@ impl ChatWidget {
                 ReplayedItem::UserShellCommand { call_id, display } => cells.push(Box::new(
                     history_cell::new_user_shell_command(call_id, display),
                 )),
+                ReplayedItem::BackgroundUpdates(summaries) => {
+                    cells.push(Box::new(history_cell::new_background_updates(summaries)))
+                }
                 ReplayedItem::Compacted => cells.push(Box::new(history_cell::new_info_event(
                     "Context compacted".to_string(),
                     None,

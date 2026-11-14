@@ -43,7 +43,7 @@ thought for 3s
 user: Explain what this repository does
 ```
 
-`show` prints the session's latest 200 items, the latest first: your messages (`user:`, or `user (steering):` for one sent while a turn ran), how long the model thought (`thought for 3s`, in whole seconds, rounded down; not its text), the model's answers (`assistant:`), its tool calls (`→ TOOL`) and their results (`done` or `failed`), and the commands you ran with `!` (`user ran: COMMAND`, with `(exit N)` or `(failed)` when it did not succeed). Older items are left out, and `(older items are not shown)` says so first. Context only the model reads is not shown.
+`show` prints the session's latest 200 items, the latest first: your messages (`user:`, or `user (steering):` for one sent while a turn ran), how long the model thought (`thought for 3s`, in whole seconds, rounded down; not its text), the model's answers (`assistant:`), its tool calls (`→ TOOL`) and their results (`done` or `failed`), the commands you ran with `!` (`user ran: COMMAND`, with `(exit N)` or `(failed)` when it did not succeed), and what the session's background work reported, a line per event (`background: …`, [Wake events](/docs/internals#wake-events)). Older items are left out, and `(older items are not shown)` says so first. Context only the model reads is not shown.
 
 `--json` prints that page of the transcript as JSON, with every field of each item, the thinking's text included. The terminal interface shows the thinking too when you resume the session.
 
@@ -71,6 +71,7 @@ This is …
 
 - Each message is a `## User` or `## Assistant` section, as written; a message sent during a turn is a `## User` too, and its images are named (`[Image #1]`). A plan the model proposed is a `## Plan`.
 - Each tool call is a `## Activity` section, indented as a code block: the tool's name with its arguments on one line (cut after 200 characters), `· failed` when it failed, then the first 10 lines of its output and how many more there were. A command you ran with `!` ([Terminal interface](/docs/terminal-interface#composer)) is one too: `!` and the command, `· exit N` when it exited with another code than 0 or `· failed` when it did not finish, then its output the same way. A context compaction is `Context compacted`.
+- What the session's background work reported (its sub-agents and background terminals) is a `## Background updates` section, a line per event.
 - The model's thinking and the context only the model reads are left out. A session with nothing to show is not exported.
 
 ## Archiving and deleting [#archive-delete]

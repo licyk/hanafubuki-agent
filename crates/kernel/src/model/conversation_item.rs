@@ -267,6 +267,13 @@ pub enum ConversationItem {
         )]
         styled: Option<hanafubuki_agent_contracts::AgentStyledText>,
     },
+    /// What happened to the session's background work, delivered at a
+    /// turn's admission or step; the model reads it as user-role context
+    /// (`<background_events>`, `model/wake.rs`).
+    WakeEvents {
+        #[serde(default, deserialize_with = "super::tolerant_wake_events")]
+        events: Vec<super::AgentWakeEvent>,
+    },
 }
 
 impl ConversationItem {
@@ -348,6 +355,7 @@ impl ConversationItem {
                 .saturating_add(cwd.as_ref().map_or(0, String::len))
                 .saturating_add(output.len())
                 .saturating_add(self.display_bytes()),
+            Self::WakeEvents { events } => json_bytes(events),
         }
     }
 
@@ -506,6 +514,14 @@ impl ConversationItem {
                     output,
                 ),
             },
+            Self::WakeEvents { events } if events.is_empty() => return None,
+            Self::WakeEvents { events } => {
+                hanafubuki_agent_model_api::ModelInputItem::ContextFragment {
+                    role: hanafubuki_agent_model_api::ModelContextRole::User,
+                    kind: super::BACKGROUND_EVENTS_FRAGMENT.to_string(),
+                    content: super::wake_events_record(events),
+                }
+            }
         })
     }
 

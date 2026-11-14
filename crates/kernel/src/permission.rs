@@ -187,6 +187,13 @@ pub fn build_permission_review_evidence(
                     output,
                 ),
             ),
+            // What background work reported: data, as a tool's result is.
+            ConversationItem::WakeEvents { events } => non_empty_evidence(
+                PermissionReviewEvidenceRole::ToolResult {
+                    name: Some(crate::model::BACKGROUND_EVENTS_FRAGMENT.to_string()),
+                },
+                crate::model::wake_events_record(events),
+            ),
             ConversationItem::ContinuationContext { .. } => approved_action_note_text(item)
                 .and_then(|text| {
                     non_empty_evidence(PermissionReviewEvidenceRole::UserApproval, text.to_string())

@@ -125,6 +125,14 @@ pub(super) fn render_markdown(items: &[ConversationItem]) -> Option<String> {
                 body.push_str(&output_excerpt(output));
                 section(&mut markdown, "Activity", &body, true);
             }
+            ConversationItem::WakeEvents { events } => {
+                let body = events
+                    .iter()
+                    .map(|event| format!("- {}", event.source.summary()))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                section(&mut markdown, "Background updates", &body, false);
+            }
             ConversationItem::CompactionSummary { .. } => {
                 section(&mut markdown, "Activity", "Context compacted", true)
             }

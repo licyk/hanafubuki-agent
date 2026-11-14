@@ -466,6 +466,13 @@ pub struct AgentSessionRuntimeSnapshot {
     pub active_activities: Vec<AgentActivitySnapshot>,
     pub recent_activities: Vec<AgentActivitySnapshot>,
     pub next_event_sequence: AgentEventSequence,
+    /// The wake events queued and not yet delivered.
+    #[serde(default)]
+    pub pending_wake_events: usize,
+    /// Whether they are delivered; off for a session read from the history
+    /// store, which keeps no policy.
+    #[serde(default)]
+    pub wake_policy: super::AgentWakePolicy,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

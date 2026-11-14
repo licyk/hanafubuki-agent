@@ -182,8 +182,10 @@ fn item_message(item: &AgentHistoryItem, tool_names: &HashMap<&str, &str>) -> Op
         | ConversationItem::ToolSelection { .. }
         | ConversationItem::PermissionReview { .. }
         | ConversationItem::ContinuationContext { .. }
-        // What the person ran stays as it is, as the person's messages do.
-        | ConversationItem::UserShellCommand { .. } => return None,
+        // What the person ran stays as it is, as the person's messages do,
+        // and so do the background work's reports.
+        | ConversationItem::UserShellCommand { .. }
+        | ConversationItem::WakeEvents { .. } => return None,
     })
 }
 

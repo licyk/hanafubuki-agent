@@ -367,6 +367,17 @@ pub(crate) fn new_info_event(message: String, hint: Option<String>) -> PlainHist
     PlainHistoryCell::new(vec![line.into()])
 }
 
+/// What the session's background work reported (a `WakeEvents` item): one
+/// line per event.
+pub(crate) fn new_background_updates(summaries: Vec<String>) -> PlainHistoryCell {
+    let mut lines: Vec<Line<'static>> = vec![vec!["• ".dim(), "Background updates".into()].into()];
+    lines.extend(summaries.into_iter().enumerate().map(|(index, summary)| {
+        let branch = if index == 0 { "  └ " } else { "    " };
+        Line::from(vec![branch.dim(), summary.dim()])
+    }));
+    PlainHistoryCell::new(lines)
+}
+
 pub(crate) fn new_error_event(message: String) -> PlainHistoryCell {
     PlainHistoryCell::new(vec![vec![format!("■ {message}").red()].into()])
 }

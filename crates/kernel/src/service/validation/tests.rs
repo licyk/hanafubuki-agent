@@ -529,3 +529,50 @@ fn persisted_usage_without_cache_figures_decodes_and_recovers() {
     };
     assert!(validate_persisted_usage(Some(regressed), &config).is_err());
 }
+
+/// Wake events open a turn when no user message follows (a wake turn), and
+/// may precede one (a person's turn delivering them); they never stand
+/// outside a turn.
+#[test]
+fn wake_events_open_a_turn_or_precede_its_message() {
+    let turn = |id: u64| ConversationItem::TurnStart {
+        turn_id: AgentTurnId::new(id),
+    };
+    let wake = ConversationItem::WakeEvents { events: Vec::new() };
+    let user = ConversationItem::UserMessage {
+        text: "go on".to_string(),
+        images: Vec::new(),
+    };
+    let answer = ConversationItem::AssistantMessage {
+        message_id: AgentMessageId::new(1),
+        phase: None,
+        text: "done".to_string(),
+        model_text: None,
+        proposed_plan: None,
+        sampling_step: 1,
+        memory_citations: Vec::new(),
+    };
+    for valid in [
+        vec![turn(1), wake.clone()],
+        vec![turn(1), wake.clone(), answer.clone()],
+        vec![turn(1), wake.clone(), answer.clone(), turn(2), user.clone()],
+        vec![turn(1), wake.clone(), user.clone(), answer.clone()],
+        vec![
+            turn(1),
+            user.clone(),
+            answer.clone(),
+            wake.clone(),
+            answer.clone(),
+        ],
+    ] {
+        assert!(validate_turn_boundaries(&valid).is_ok(), "{valid:?}");
+    }
+    for invalid in [
+        vec![wake.clone()],
+        vec![turn(1), wake.clone(), answer.clone(), user.clone()],
+        vec![turn(1), turn(2), wake],
+        vec![turn(1), answer],
+    ] {
+        assert!(validate_turn_boundaries(&invalid).is_err(), "{invalid:?}");
+    }
+}

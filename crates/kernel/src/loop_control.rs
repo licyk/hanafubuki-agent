@@ -15,6 +15,8 @@ pub enum AgentFollowUpReason {
     HookContinuation,
     ContextRollover,
     RetryRecovery,
+    /// Wake events were delivered at the step.
+    BackgroundEvents,
 }
 
 /// Codex-compatible result of driving one model response stream.

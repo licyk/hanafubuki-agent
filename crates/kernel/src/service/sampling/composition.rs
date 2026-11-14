@@ -165,9 +165,11 @@ struct InputBytes {
 impl InputBytes {
     fn add(&mut self, item: &ModelInputItem, bytes: usize) {
         let group = match item {
-            // What the person ran counts with the calls and their outputs.
+            // What the person ran, and what background work reported, count
+            // with the calls and their outputs.
             ModelInputItem::ContextFragment { kind, .. }
-                if kind == crate::model::USER_SHELL_COMMAND_FRAGMENT =>
+                if kind == crate::model::USER_SHELL_COMMAND_FRAGMENT
+                    || kind == crate::model::BACKGROUND_EVENTS_FRAGMENT =>
             {
                 &mut self.tool_calls
             }

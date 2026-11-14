@@ -7,6 +7,7 @@ mod mcp_server;
 mod model_server;
 mod plugins;
 mod service;
+mod wake;
 
 #[cfg(unix)]
 pub use mcp_server::{annotated_tool, scripted_tool, McpCallHold, ScriptedMcpServers};
@@ -23,6 +24,7 @@ pub use service::{
     service_with_host, test_host, test_paths, FixedProxy, FixedWorkspaceRoots, NoHostContext,
     TestBlockingOperationPort, TestPaths, TEST_SHUTDOWN_DEADLINE, TEST_WAIT,
 };
+pub use wake::{queue_wake_event, set_wake_policy};
 
 /// A secure store in memory.
 pub use hanafubuki_agent_foundation::secrets::MemorySecretStore;

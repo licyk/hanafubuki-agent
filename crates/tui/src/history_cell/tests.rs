@@ -164,3 +164,14 @@ fn a_message_of_yours_over_twelve_rows_has_a_control() {
     assert_eq!(short.activity_disclosure(40), None);
     assert_ne!(cell.activity_ids(), short.activity_ids());
 }
+
+/// A `WakeEvents` item replayed: the heading, then each event's line.
+#[test]
+fn background_updates_list_each_event_snapshot() {
+    let cell = new_background_updates(vec![
+        "Sub-agent `explore_api` (agent id 41) completed: The API has three endpoints.".to_string(),
+        "Terminal session 12 (`cargo test`) exited with code 101 after 252 seconds: running 3 tests"
+            .to_string(),
+    ]);
+    insta::assert_snapshot!(render_lines(&cell.display_lines(120)).join("\n"));
+}

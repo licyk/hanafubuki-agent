@@ -142,7 +142,8 @@ pub(in crate::service) fn interrupted_tool_outputs(
             | ConversationItem::ContinuationContext { .. }
             | ConversationItem::CompactionSummary { .. }
             | ConversationItem::ProviderCompaction { .. }
-            | ConversationItem::UserShellCommand { .. } => {}
+            | ConversationItem::UserShellCommand { .. }
+            | ConversationItem::WakeEvents { .. } => {}
         }
     }
     Ok(calls

@@ -89,6 +89,13 @@ impl AgentService {
                 needs_follow_up = true;
                 reasons.insert(AgentFollowUpReason::PendingUserInput);
             }
+            if self
+                .consume_pending_wake_events(identity, event_sink)
+                .await?
+            {
+                needs_follow_up = true;
+                reasons.insert(AgentFollowUpReason::BackgroundEvents);
+            }
 
             if needs_follow_up {
                 let digest =

@@ -58,6 +58,9 @@ mod structured_output;
 mod titles;
 mod tools;
 mod user_shell;
+mod wake;
+#[cfg(target_os = "linux")]
+mod wake_golden;
 mod workspace;
 mod worktrees;
 mod world_state;

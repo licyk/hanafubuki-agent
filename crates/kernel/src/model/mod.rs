@@ -12,6 +12,7 @@ mod scope;
 mod session;
 mod turn;
 mod user_shell_command;
+mod wake;
 mod world_state;
 
 pub use activity::{
@@ -86,6 +87,13 @@ pub use turn::{
     PermissionReviewStatus, PermissionRiskLevel, PermissionUserAuthorization,
 };
 pub(crate) use user_shell_command::{user_shell_command_record, USER_SHELL_COMMAND_FRAGMENT};
+pub(crate) use wake::{tolerant_wake_events, BACKGROUND_EVENTS_FRAGMENT};
+pub use wake::{
+    wake_events_record, AgentSubagentWake, AgentTerminalWake, AgentWakeEvent, AgentWakeFilter,
+    AgentWakePolicy, AgentWakeQueue, AgentWakeQueued, AgentWakeSource,
+    MAXIMUM_QUEUED_WAKE_MESSAGES, MAXIMUM_WAKE_ANSWER_BYTES, MAXIMUM_WAKE_COMMAND_BYTES,
+    MAXIMUM_WAKE_OUTPUT_BYTES,
+};
 pub(crate) use world_state::{
     effective_world_state, full_world_state_checkpoint, kernel_context_renderers,
     remove_world_state_section, replace_world_state_section, world_state_diff,

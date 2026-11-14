@@ -198,6 +198,10 @@ pub struct PersistedAgentRuntimeState {
     )]
     pub compression_update: Option<crate::AgentCompressionUpdate>,
     pub turn: Option<PersistedAgentTurn>,
+    /// The wake events not yet delivered; left out by a session that never
+    /// queued one, and read one event at a time.
+    #[serde(default, skip_serializing_if = "crate::AgentWakeQueue::is_unused")]
+    pub wake_queue: crate::AgentWakeQueue,
     pub activities: Vec<AgentActivitySnapshot>,
     pub task_plan: Option<AgentTaskPlanSnapshot>,
     pub pending_user_input: Option<AgentUserInputRequest>,

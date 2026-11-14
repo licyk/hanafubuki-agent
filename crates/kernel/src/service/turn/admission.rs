@@ -158,7 +158,7 @@ impl AgentService {
     /// and only then spawns the turn's task, so nothing the turn commits is
     /// told before its admission and an observer can already reach the
     /// session's sink.
-    pub(super) fn spawn_managed_turn(
+    pub(in crate::service) fn spawn_managed_turn(
         &self,
         admitted: AdmittedTurn,
         event_sink: Arc<dyn AgentEventSink>,

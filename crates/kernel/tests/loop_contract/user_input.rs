@@ -1,5 +1,41 @@
 use super::*;
 
+/// Proposes a plan, then implements it.
+#[derive(Clone, Default)]
+struct PlanThenImplementModel {
+    attempts: Arc<AtomicUsize>,
+    requests: Arc<Mutex<Vec<ModelRequest>>>,
+}
+
+impl PlanThenImplementModel {
+    fn requests(&self) -> Vec<ModelRequest> {
+        self.requests.lock().unwrap().clone()
+    }
+}
+
+impl ModelPort for PlanThenImplementModel {
+    fn stream(
+        &self,
+        request: ModelRequest,
+        _cancellation: CancellationToken,
+    ) -> ModelFuture<'_, ModelResult<ModelStream>> {
+        self.requests.lock().unwrap().push(request);
+        let attempt = self.attempts.fetch_add(1, Ordering::SeqCst);
+        let events = if attempt == 0 {
+            deterministic_assistant_events(
+                "<proposed_plan>\n# Plan\n\n- Apply the change.\n</proposed_plan>",
+            )
+        } else {
+            deterministic_assistant_events("Implemented")
+        };
+        Box::pin(async move {
+            Ok(Box::new(RecordedEventStream {
+                events: events.into(),
+            }) as ModelStream)
+        })
+    }
+}
+
 struct ProtocolIndependentPlanModel;
 
 impl ModelPort for ProtocolIndependentPlanModel {

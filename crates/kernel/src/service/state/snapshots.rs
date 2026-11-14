@@ -66,6 +66,8 @@ pub(in crate::service) fn snapshot(
         active_activities,
         recent_activities,
         next_event_sequence: AgentEventSequence::new(record.journal.next_event_sequence),
+        pending_wake_events: record.runtime.wake_queue.len(),
+        wake_policy: record.runtime.wake_policy,
     }
 }
 
@@ -136,6 +138,8 @@ pub(in crate::service) fn persisted_runtime_snapshot(
             model_session_generation: turn.model_session_generation,
             permission_mode: turn.permission_mode,
         }),
+        pending_wake_events: runtime.wake_queue.len(),
+        wake_policy: Default::default(),
         active_activities,
         recent_activities,
         next_event_sequence: AgentEventSequence::new(1),

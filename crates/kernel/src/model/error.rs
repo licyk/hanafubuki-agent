@@ -13,6 +13,10 @@ pub enum AgentError {
     TurnNotRunning,
     TurnNotEditable,
     SteeringPending,
+    /// Wake events were queued after the turn's last step took them.
+    WakeEventsPending,
+    /// A wake turn was asked for, but its queue is empty.
+    NoWakeEvents,
     ApprovalNotFound,
     StaleApproval,
     UserInputNotFound,
@@ -113,6 +117,8 @@ impl fmt::Display for AgentError {
                 "agent turn is not editable because it is unavailable, active, or compacted",
             ),
             Self::SteeringPending => formatter.write_str("agent turn has pending steering input"),
+            Self::WakeEventsPending => formatter.write_str("agent turn has pending wake events"),
+            Self::NoWakeEvents => formatter.write_str("agent session has no wake events queued"),
             Self::ApprovalNotFound => formatter.write_str("agent approval request not found"),
             Self::StaleApproval => formatter.write_str("stale agent approval request"),
             Self::UserInputNotFound => formatter.write_str("agent user input request not found"),

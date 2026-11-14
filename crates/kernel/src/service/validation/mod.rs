@@ -14,8 +14,8 @@ pub(in crate::service) use activities::{
     validate_bounded_identifier, validate_persisted_activities,
 };
 pub(in crate::service) use config::{
-    assert_valid_limits, normalize_session_config, resolve_turn_items, validate_host_context,
-    validate_session_config,
+    assert_valid_limits, normalize_session_config, resolve_turn_items, turn_start_items,
+    validate_host_context, validate_session_config,
 };
 pub(in crate::service) use counters::validate_persisted_counters;
 pub(in crate::service) use history::{

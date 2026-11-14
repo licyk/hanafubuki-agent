@@ -446,6 +446,7 @@ pub(super) fn conversation_commit(
                 model_session_generation: turn.model_session_generation,
                 permission_mode: turn.permission_mode,
             }),
+            wake_queue: record.runtime.wake_queue.clone(),
             activities: record.runtime.activities.persisted_snapshots(),
             task_plan: record.runtime.task_plan.clone(),
             pending_user_input: record.runtime.pending_user_input.clone(),

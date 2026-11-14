@@ -273,6 +273,12 @@ pub use hanafubuki_agent_kernel::{
     request_reasoning_effort, AgentConfiguredModelFacts, KnownReasoning, ModelMetadata,
     ModelMetadataSource, ModelReasoningSupport, Sourced,
 };
+/// What a session's background work reported, as its `WakeEvents` history
+/// item carries it.
+pub use hanafubuki_agent_kernel::{
+    wake_events_record, AgentSubagentWake, AgentTerminalWake, AgentWakeEvent, AgentWakePolicy,
+    AgentWakeQueued, AgentWakeSource,
+};
 /// What a role narrows (`AgentResolvedRole::scope`), and what a session's
 /// snapshot shows of it.
 pub use hanafubuki_agent_kernel::{

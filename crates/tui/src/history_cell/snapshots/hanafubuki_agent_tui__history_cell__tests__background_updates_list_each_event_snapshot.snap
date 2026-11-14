@@ -1,0 +1,7 @@
+---
+source: crates/tui/src/history_cell/tests.rs
+expression: "render_lines(&cell.display_lines(120)).join(\"\\n\")"
+---
+• Background updates
+  └ Sub-agent `explore_api` (agent id 41) completed: The API has three endpoints.
+    Terminal session 12 (`cargo test`) exited with code 101 after 252 seconds: running 3 tests

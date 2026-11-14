@@ -583,6 +583,7 @@ fn conversation_item_type(item: &ConversationItem) -> &'static str {
         ConversationItem::CompactionSummary { .. } => "compaction_summary",
         ConversationItem::ProviderCompaction { .. } => "provider_compaction",
         ConversationItem::UserShellCommand { .. } => "user_shell_command",
+        ConversationItem::WakeEvents { .. } => "wake_events",
     }
 }
 

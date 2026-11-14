@@ -287,6 +287,9 @@ enum TurnAdmission {
     Regular,
     ImplementPlan(crate::AgentPlanImplementationRequest),
     UserShellCommand(crate::AgentUserShellCommand),
+    /// A turn whose only opener is the session's wake events: no user
+    /// message, its input's text, images and Skills unread.
+    Wake,
 }
 
 /// What an admitted turn runs.
@@ -323,6 +326,7 @@ mod tool_display;
 mod tool_execution;
 mod turn;
 mod validation;
+mod wake;
 
 pub use tool_display::AgentToolCallDisplay;
 

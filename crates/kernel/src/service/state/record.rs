@@ -121,6 +121,11 @@ pub(in crate::service) struct SessionRuntime {
     /// The last request a sampling step sent, for `/context`; never
     /// persisted, and dropped when a compaction replaces the history.
     pub(in crate::service) sent_request: Option<Arc<crate::model::AgentSentRequest>>,
+    /// The wake events not yet delivered, persisted with the runtime.
+    pub(in crate::service) wake_queue: crate::AgentWakeQueue,
+    /// Whether the queue is delivered; never persisted, given again at each
+    /// activation.
+    pub(in crate::service) wake_policy: crate::AgentWakePolicy,
 }
 
 /// Bounded rollback state for one staged durable mutation: every group but
@@ -199,6 +204,8 @@ impl SessionRuntime {
             compression_runtime: Default::default(),
             reasoning_narrowing_logged: false,
             sent_request: None,
+            wake_queue: Default::default(),
+            wake_policy: Default::default(),
         }
     }
 }

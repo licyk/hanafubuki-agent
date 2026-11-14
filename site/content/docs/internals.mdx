@@ -55,6 +55,18 @@ icon: Microscope
 
 `cancel_turn_confirmed` 请求取消后，先等待 500 毫秒让轮次协作地结束（`COOPERATIVE_GRACE`），然后中止它的托管任务（除非轮次已在记录的锁下暂存了它的结束：那次提交持久化后它才发出结束的事件，慢速磁盘可能让这超过宽限时间，此时中止会丢掉这些事件），并在 5 秒期限（`CONFIRMATION_DEADLINE`）的剩余时间里等待取消持久化；超过则返回 `CancellationNotConfirmed`。两次等待都是异步的，所以取消不占用阻塞工作线程。
 
+## 唤醒事件 [#wake-events]
+
+会话的后台工作（它的子代理和后台终端）发生的事，以唤醒事件的形式排在该会话上；某个轮次取走它们时，模型以一条历史条目读到它们，且只读一次。目前 Agent 中还没有任何地方排入事件：子代理、终端和宿主的唤醒在后续步骤中加入，在此之前只有测试支持会这样做（`test_support::queue_wake_event` 和 `set_wake_policy`）。
+
+- **事件**（`AgentWakeEvent`，`kernel/src/model/wake.rs`）：每会话的 `sequence`、`queued_at` 和一个来源。子代理的来源（`session_id`、任务名 `name`）为 `Completed { answer, truncated }`、`Errored { error }`、`ClosedByUser`、`Lost`（被重启中止）或 `Message { text }`；后台终端的来源（`execution_id`、`command`）为 `Ended { status, exit_code, duration_millis, output, truncated }`、`StoppedByUser { exit_code }` 或 `Lost`。
+- **队列**（`AgentWakeQueue`）属于会话的运行时，也属于它的检查点（`PersistedAgentRuntimeState.wake_queue`，从未排入事件的会话的记录不含此字段）。`enqueue_wake_event` 和 `take_wake_events` 提交一个不增加修订号的检查点，与设置项相同。读取时逐个事件解码：无法解码的事件（未知种类、类型错误的字段）带警告丢弃，其余事件和会话保留；已提交条目中的事件同样如此。
+- **键与上限。** 子代理或终端的最终事件会替换同一 `session_id` 或 `execution_id` 已排队的那一个，并排到末尾；消息则追加，第 17 条未读消息被拒绝（`LimitExceeded`，`MAXIMUM_QUEUED_WAKE_MESSAGES` 为 16）。回答截断到 32 KiB（`truncated`），终端输出保留最后 4 KiB 并从其所在行的行首开始，命令截断到 1 KiB。
+- **策略**（`AgentWakePolicy`，`On` 或 `Off`，`set_session_wake_policy`）只保存在内存中，在被赋予之前会话的策略为关闭；快照在 `pending_wake_events` 旁携带它。策略关闭时不投递任何事件，也不接受唤醒轮次，只有子代理的最终状态会排队（其余事件 `enqueue_wake_event` 返回 `Disabled` 并丢弃）。
+- **投递**（策略开启时）：每个会采样模型的轮次在准入时把整个队列取为一条 `ConversationItem::WakeEvents`，在 `TurnStart` 和发生变化的世界状态之后、消息之前提交；每一步在转向消息之后立即取走队列，轮次随后再走一步（`AgentFollowUpReason::BackgroundEvents`）；若最终回答会留下排队的事件，轮次不会完成（`WakeEventsPending`），而是再走一步来投递它们。`!` 命令的轮次不采样模型，什么也不取。
+- **唤醒轮次**（`TurnAdmission::Wake`；内核和门面上的 `submit_wake_turn_with_sink`）：一个 `Programmatic` 轮次，唯一的开场是该条目（位于发生变化的世界状态之后），没有用户消息：它的请求以用户角色的事件结尾。队列为空或有轮次在运行时（由那个轮次投递）返回 `None`，策略关闭时被拒绝。
+- **模型读到的内容**：该条目被降为一个用户角色、种类为 `background_events` 的上下文片段，即 `<background_events>`，其中有一行说明这不是用户写的，然后按队列顺序每个事件一段（`wake_events_record`）。审查者把它读作名为 `background_events` 的工具结果，记忆把它读作同名调用的输出；分层压缩保留它的原样，标准压缩把它与其余内容一起摘要；`/context` 把它计入工具调用及其输出；导出、`sessions show` 和终端界面的回放为每个事件显示一行（`AgentWakeSource::summary`）。
+
 ## 历史存储的拒绝规则 [#history-refusals]
 
 `FileAgentHistoryStore`（`hanafubuki-agent-history`）：每个会话一份 JSONL rollout，它是权威的；SQLite 索引（`index.sqlite3`）是 rollout 的投影（[存储](/docs/architecture#storage)）。存储无法使用的东西只损失它自己的会话，从不损失整个存储，也从不损失文件。只有索引或布局（其 schema、SQL、目录 I/O）的问题会让存储打开失败，并因此让 Agent 的构造失败。

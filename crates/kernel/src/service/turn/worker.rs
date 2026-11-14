@@ -104,6 +104,16 @@ impl AgentService {
                         self.observe_follow_up_progress(identity, digest).await?;
                         continue;
                     }
+                    Err(AgentError::WakeEventsPending) => {
+                        self.consume_pending_wake_events(identity, event_sink)
+                            .await?;
+                        let reasons = std::collections::BTreeSet::from([
+                            AgentFollowUpReason::BackgroundEvents,
+                        ]);
+                        let digest = sampling_progress_digest(&[], &[], &reasons);
+                        self.observe_follow_up_progress(identity, digest).await?;
+                        continue;
+                    }
                     result => return result,
                 },
                 Err(AgentError::Cancelled) if deadline_cancelled => {

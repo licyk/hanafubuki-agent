@@ -16,14 +16,17 @@ impl AgentService {
     /// admission and the managed task's spawn are never separated). The
     /// observers are told by `spawn_managed_turn`, once the session's sink
     /// is retained and before the turn's task can commit anything.
-    pub(super) fn begin_turn_with_admission(
+    pub(in crate::service) fn begin_turn_with_admission(
         &self,
         session_id: AgentSessionId,
         input: crate::AgentTurnInput,
         admission: TurnAdmission,
         event_sink: &dyn AgentEventSink,
     ) -> Result<AdmittedTurn, AgentError> {
-        validate_turn_input(&input)?;
+        // A wake turn's opener is its events, not the input.
+        if !matches!(admission, TurnAdmission::Wake) {
+            validate_turn_input(&input)?;
+        }
         self.refresh_session_image_input_capability_blocking(session_id)?;
         let cell = self.session(session_id)?;
         let admitted = {
@@ -164,52 +167,15 @@ impl AgentService {
         {
             return Err(AgentError::CompactionAlreadyRunning);
         }
-        let (implementing_plan, kind) = match admission {
-            TurnAdmission::ImplementPlan(request) => {
-                validate_plan_implementation(record, session_id, &request)?;
-                (true, TurnKind::Regular)
-            }
-            TurnAdmission::Regular => (false, TurnKind::Regular),
-            TurnAdmission::UserShellCommand(command) => {
-                if record.settings.config.mode == crate::AgentSessionMode::Plan {
-                    return Err(AgentError::InvalidInput(
-                        "`!` commands do not run in Plan mode, whose tools only read".to_string(),
-                    ));
-                }
-                (false, TurnKind::UserShellCommand(command))
-            }
-        };
-        if !input.images.is_empty() && !record.settings.effective_input_capabilities.image_input {
-            return Err(AgentError::InvalidInput(
-                "the configured model does not support image input".to_string(),
-            ));
-        }
         let extensions = input.turn.clone();
-        let turn_items = match &kind {
-            TurnKind::Regular => resolve_turn_items(turn_id, &record.conversation.history, input)?,
-            TurnKind::UserShellCommand(command) => vec![
-                ConversationItem::TurnStart { turn_id },
-                unfinished_user_shell_command(turn_id, command),
-            ],
-        };
-        let selected_skill_count = turn_items
-            .iter()
-            .filter(|item| matches!(item, ConversationItem::SkillContext { .. }))
-            .count();
-        for item in &turn_items {
-            if let ConversationItem::SkillContext { skill, .. } = item {
-                log::info!(
-                    "agent_diag stage=turn.skill.select session_id={} skill={} scope={} reason=explicit_reference_or_dollar_mention selected_count={}",
-                    session_id,
-                    skill,
-                    skill.scope(),
-                    selected_skill_count,
-                );
-            }
+        let opened = admission_items(record, session_id, turn_id, input, admission)?;
+        log_selected_skills(session_id, &opened.items);
+        validate_history_append(record, &opened.items, self.inner.limits)?;
+        if opened.delivers_wake_events {
+            record.runtime.wake_queue.events.clear();
         }
-        validate_history_append(record, &turn_items, self.inner.limits)?;
         self.refresh_context_window(record);
-        if implementing_plan {
+        if opened.implementing_plan {
             record.settings.config.mode = crate::AgentSessionMode::Default;
         }
         record.runtime.task_plan = None;
@@ -229,7 +195,7 @@ impl AgentService {
             generation,
         };
         record.runtime.turn = Some(TurnRecord {
-            kind,
+            kind: opened.kind,
             id: turn_id,
             generation,
             phase: AgentTurnPhase::Sampling,
@@ -256,7 +222,7 @@ impl AgentService {
             compression_fallback: false,
         });
         let history_start = record.conversation.history.len();
-        append_history(record, &turn_items);
+        append_history(record, &opened.items);
         let started_event = record_event(
             record,
             identity,
@@ -270,7 +236,7 @@ impl AgentService {
             identity,
             AgentEventKind::HistoryCommitted {
                 start_index: history_start,
-                item_count: turn_items.len(),
+                item_count: opened.items.len(),
                 usage: None,
             },
             self.inner.limits,
@@ -327,11 +293,127 @@ struct StagedAdmission {
 }
 
 /// A durably admitted turn and what the observers are told about it.
-pub(super) struct AdmittedTurn {
+pub(in crate::service) struct AdmittedTurn {
     pub(super) identity: TurnIdentity,
     origin: hanafubuki_agent_contracts::AgentTurnOrigin,
     /// The session's title after the admission, when the Agent gave it.
     automatic_title: Option<String>,
+}
+
+/// What an admission opens its turn with, and what the turn runs.
+struct OpenedTurn {
+    implementing_plan: bool,
+    kind: TurnKind,
+    items: Vec<ConversationItem>,
+    /// `items` carry every queued wake event, which the admission takes.
+    delivers_wake_events: bool,
+}
+
+/// Checks `admission` against the session and builds its turn's first
+/// items: `TurnStart` and the world state that changed, then the queued wake
+/// events when the policy delivers them (never in a `!command`'s turn, which
+/// samples no model), then the admission's opener (Skills and the user
+/// message; a wake turn has none, so its request ends with the user-role
+/// events).
+fn admission_items(
+    record: &SessionRecord,
+    session_id: AgentSessionId,
+    turn_id: AgentTurnId,
+    input: crate::AgentTurnInput,
+    admission: TurnAdmission,
+) -> Result<OpenedTurn, AgentError> {
+    let delivering = record.runtime.wake_policy == crate::AgentWakePolicy::On;
+    let wake = (delivering && !record.runtime.wake_queue.is_empty()).then(|| {
+        ConversationItem::WakeEvents {
+            events: record.runtime.wake_queue.events.clone(),
+        }
+    });
+    let (implementing_plan, kind) = match admission {
+        TurnAdmission::ImplementPlan(request) => {
+            validate_plan_implementation(record, session_id, &request)?;
+            (true, TurnKind::Regular)
+        }
+        TurnAdmission::Regular => (false, TurnKind::Regular),
+        TurnAdmission::Wake if !delivering => {
+            return Err(AgentError::InvalidInput(
+                "wake events are not delivered in this session".to_string(),
+            ));
+        }
+        TurnAdmission::Wake if wake.is_none() => return Err(AgentError::NoWakeEvents),
+        TurnAdmission::Wake => {
+            let mut items =
+                turn_start_items(turn_id, &record.conversation.history, input.world_state)?;
+            items.push(wake.expect("a wake turn has events"));
+            return Ok(OpenedTurn {
+                implementing_plan: false,
+                kind: TurnKind::Regular,
+                items,
+                delivers_wake_events: true,
+            });
+        }
+        TurnAdmission::UserShellCommand(command) => {
+            if record.settings.config.mode == crate::AgentSessionMode::Plan {
+                return Err(AgentError::InvalidInput(
+                    "`!` commands do not run in Plan mode, whose tools only read".to_string(),
+                ));
+            }
+            let items = vec![
+                ConversationItem::TurnStart { turn_id },
+                unfinished_user_shell_command(turn_id, &command),
+            ];
+            return Ok(OpenedTurn {
+                implementing_plan: false,
+                kind: TurnKind::UserShellCommand(command),
+                items,
+                delivers_wake_events: false,
+            });
+        }
+    };
+    if !input.images.is_empty() && !record.settings.effective_input_capabilities.image_input {
+        return Err(AgentError::InvalidInput(
+            "the configured model does not support image input".to_string(),
+        ));
+    }
+    let mut items = resolve_turn_items(turn_id, &record.conversation.history, input)?;
+    let delivers_wake_events = wake.is_some();
+    if let Some(wake) = wake {
+        // After the turn's start and its world state: the events are what
+        // the person's message follows.
+        let at = items
+            .iter()
+            .position(|item| {
+                !matches!(
+                    item,
+                    ConversationItem::TurnStart { .. } | ConversationItem::WorldStateUpdate { .. }
+                )
+            })
+            .unwrap_or(items.len());
+        items.insert(at, wake);
+    }
+    Ok(OpenedTurn {
+        implementing_plan,
+        kind,
+        items,
+        delivers_wake_events,
+    })
+}
+
+fn log_selected_skills(session_id: AgentSessionId, items: &[ConversationItem]) {
+    let selected_skill_count = items
+        .iter()
+        .filter(|item| matches!(item, ConversationItem::SkillContext { .. }))
+        .count();
+    for item in items {
+        if let ConversationItem::SkillContext { skill, .. } = item {
+            log::info!(
+                "agent_diag stage=turn.skill.select session_id={} skill={} scope={} reason=explicit_reference_or_dollar_mention selected_count={}",
+                session_id,
+                skill,
+                skill.scope(),
+                selected_skill_count,
+            );
+        }
+    }
 }
 
 /// A turn's input holds text or an image.

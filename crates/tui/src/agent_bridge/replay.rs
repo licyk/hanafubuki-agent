@@ -73,6 +73,8 @@ pub(crate) enum ReplayedItem {
         call_id: String,
         display: AgentToolCallDisplay,
     },
+    /// What the session's background work reported, one line per event.
+    BackgroundUpdates(Vec<String>),
     Compacted,
 }
 
@@ -196,6 +198,11 @@ pub(crate) fn transcript(
                     ),
                 },
             }),
+            ConversationItem::WakeEvents { events } if !events.is_empty() => {
+                transcript.push(ReplayedItem::BackgroundUpdates(
+                    events.iter().map(|event| event.source.summary()).collect(),
+                ))
+            }
             _ => {}
         }
     }

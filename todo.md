@@ -4495,12 +4495,150 @@ its next pin, and any module-size exception.
       §5, decided by the user on 2026-11-13: each as recommended, except
       Q4, where the command timeout becomes the setting
       `pluginOptions.execution.commandTimeoutMinutes` (D12, §3.13, R4b).
-- [ ] R1: the kernel's durable wake queue (`AgentWakeEvent`, keyed per
+- [x] R1: the kernel's durable wake queue (`AgentWakeEvent`, keyed per
       sub-agent and terminal, bounded), `ConversationItem::WakeEvents`
       rendered as `<background_events>`, drained at every admission and
       every step, `TurnAdmission::Wake` and `submit_wake_turn_with_sink`.
       Inert: only test support queues events. New golden
       `wake_events_request.json`.
+      Done (2026-11-14), before O2 and O3 by the coordinator's decision
+      (kernel-only and inert; it touches no file of the subagents plugin,
+      the session driver or the model metadata):
+      - Kernel model (`model/wake.rs`, new): `AgentWakeEvent { sequence,
+        queued_at: u64, source }`, `AgentWakeSource::{Subagent { session_id,
+        name, event: AgentSubagentWake }, Terminal { execution_id, command,
+        event: AgentTerminalWake }}`, `AgentSubagentWake::{Completed { answer,
+        truncated }, Errored { error }, ClosedByUser, Lost, Message { text }}`,
+        `AgentTerminalWake::{Ended { status, exit_code, duration_millis,
+        output, truncated }, StoppedByUser { exit_code }, Lost}`,
+        `AgentWakePolicy::{Off (default), On}`, `AgentWakeQueued::{Delivering,
+        Waiting, Disabled}`, `AgentWakeFilter::{SubagentStatuses, Terminal {
+        execution_id }}`, `AgentWakeQueue { events, last_sequence }` (keyed
+        replacement to the end, 16 unread messages, answer 32 KiB, output's
+        last 4 KiB from a line start, command 1 KiB), `wake_events_record`
+        (§3.2's text) and `AgentWakeSource::summary` (one line for a person,
+        its detail cut at 200 characters). Decoded one event at a time in the
+        queue and in the item; a counter or an item's list that does not
+        decode costs no event.
+      - `ConversationItem::WakeEvents { events }`, lowered to a user-role
+        `background_events` fragment (none when every event failed to
+        decode), placed after `TurnStart` and the world state that changed
+        (the plan had it right after `TurnStart`; the wake turn's request
+        then ended with developer-role world state, so it ends with the
+        user-role events now, which every protocol takes); the persisted
+        runtime's `wake_queue` (left out when never
+        used); `SessionRuntime.{wake_queue, wake_policy}`; the snapshot's
+        `pending_wake_events` and `wake_policy`; `AgentError::{WakeEventsPending,
+        NoWakeEvents}`; `AgentFollowUpReason::BackgroundEvents`.
+      - `service/wake/{mod,admission}.rs` (new): `enqueue_wake_event`,
+        `take_wake_events`, `set_session_wake_policy`, the step's
+        `consume_pending_wake_events`, `submit_wake_turn_with_sink`.
+        `TurnAdmission::Wake`. `stage_turn_admission` (196 code lines) was
+        split first: its openers per admission and the delivered queue are
+        `admission_items` (state.rs) and the Skill log `log_selected_skills`;
+        it is 159 now. `resolve_turn_items`' start is `turn_start_items`, which
+        the wake admission shares. The turn-boundary check takes the item as
+        an opener (alone, or before the message), and in a compacted prefix as
+        steering is.
+      - Every `ConversationItem` match given an arm: kernel `permission.rs`
+        (a `background_events` tool result), `compression/adapter.rs` (kept
+        whole), `validation/{persistence,tool_pairs}.rs`, `sampling/
+        composition.rs` (counted with the calls), `conversation_item.rs`;
+        history `store/mod.rs` (`wake_events`), `store/memory.rs` (a
+        `background_events` call's output); agent `service/export.rs` (`##
+        Background updates`, a line per event); cli `sessions.rs`
+        (`background: …`); TUI `agent_bridge/replay.rs` and
+        `chatwidget/replay.rs` (a `• Background updates` cell). The wildcard
+        matches (conversation reader, rewind, edit, recent messages, center
+        reads, images, standard compaction) were read: they skip it, which is
+        right for a non-message.
+      - Facade: `submit_wake_turn_with_sink(session_id, sink) ->
+        Result<Option<AgentTurnAccepted>, String>` (`service/turns.rs`), the
+        re-exported types, and `test_support::{queue_wake_event,
+        set_wake_policy}`.
+      - Tests: `model/wake/tests.rs` (every kind's text, bounds, keyed
+        replacement, message bound and filters, an undecodable event dropped
+        in the queue and the item, the item's round trip inside a mutation);
+        `validation/tests.rs` (boundaries); `permission/tests.rs`;
+        `loop_contract/wake.rs` (a step delivers and follows up, the finish
+        takes another step, an admission delivers before the message, the wake
+        turn's only opener, `None` on an empty queue or a running turn and
+        refused with the policy off, the policy off, `take_wake_events`, the
+        message bound); `persistence_contract/wake.rs` (survives a reopen,
+        sequences continue, an undecodable event dropped and the session
+        recovered); history `tests/memory.rs` (through the file store); agent
+        `tests/wake.rs` (an idle session woken once and the item as history,
+        export and `/context`; an event during a running turn reaches its next
+        step; queue and item across a cold reopen; a `!` command's turn
+        delivers nothing; a compaction summarizes it); cli
+        `sessions/tests.rs`; the TUI cell's snapshot. The `/context` test
+        failed first (the fragment counted as a section, before the
+        composition's arm); by mutation, the step drain, the finish check, the
+        admission drain, the per-event decoding and the keyed replacement each
+        failed their test.
+      - Goldens: every existing one unchanged (`git status` showed only the
+        new file); new `wake_events_request.json` (a wake turn's request, one
+        event of each kind). It carries the sub-agent guidance and
+        `spawn_agent`'s spec, so O2, O3, R2 and R4 regenerate it with the
+        others.
+      - Deviations and reconciliations: queuing commits a checkpoint without
+        a revision (a delta carries no runtime state); `queued_at` is `u64`
+        milliseconds; the policy is in memory, off until given, as §3.10
+        reconciles it at each activation (setting it waits for no staged
+        commit, so no rollback undoes it); `submit_wake_turn_with_sink`
+        returns `None` while a turn runs (the plan; that turn delivers);
+        `WakeEventQueued` is left to R2 with its consumer, as the observer
+        contract requires (a notification also becomes a guest-visible event
+        in `plugin-packages`); `start_wake_turn` and `background_work` left to
+        their consumers; no `admit_pending_input_items(1)` (the item is never
+        pending in the turn); no execution-progress flush before the step's
+        drain (R5's withdrawal needs it); the step's drain is in
+        `service/wake/mod.rs` beside the queue; the facade call is in
+        `turns.rs`. Text the plan left open: a `Completed` without an answer
+        ("completed without a final answer."), a `Cancelled` end ("was stopped
+        after N seconds"). A fork does not take the source's queue. Docs:
+        `json-events` and `architecture` unchanged (no event or flow of `exec`
+        changes before R2).
+      - For R2: kernel `enqueue_wake_event(session, source).await ->
+        Result<AgentWakeQueued, AgentError>`, `take_wake_events(session,
+        filter).await`, `set_session_wake_policy(session, policy).await ->
+        Result<bool, _>` (the driver must give it at every activation: it is
+        off by default, which keeps side conversations and reviews off),
+        `submit_wake_turn_with_sink(session, AgentTurnInput, sink) ->
+        Result<Option<AgentTurnAccepted>, AgentError>` (on a runtime, like
+        `submit_turn_with_sink`); the facade's `submit_wake_turn_with_sink(
+        session, sink)`; the snapshot's `pending_wake_events` and
+        `wake_policy`; test support's `queue_wake_event` and
+        `set_wake_policy`. R2 adds `WakeEventQueued` (and decides its guest
+        event) with the dispatcher. R5 flushes execution progress before the
+        step's drain. Editing a message forks before its `TurnStart`, which
+        drops the `WakeEvents` that admission delivered (the fork takes no
+        queue). Repeated `BackgroundEvents` follow-ups at the finish share one
+        progress digest, as steering's do, so a stream of events there may
+        count as stalled steps. Hierarchical compression keeps the item whole
+        by its adapter arm, which no test covers.
+      - Docs (both languages): `internals#wake-events` (new),
+        `embedding#events-and-history` (the item, the call, the snapshot
+        fields, the export section), `sessions#show` and `#export`. Each
+        changed page compiled with `@mdx-js/mdx` and remark-gfm.
+      - Module sizes (code lines, before → after): `conversation_item.rs` 579
+        → 592, `conversation/mod.rs` 587 → 589, `stage_turn_admission` 196 →
+        159, `loop_contract/main.rs` 900 → 869 (`PlanThenImplementModel` moved
+        to `user_input.rs`, its only user), `golden.rs` 865 (unchanged; the
+        new golden is `wake_golden.rs`). No exception added or raised.
+      - Validation (Linux): `cargo fmt --all --check`; `RUSTFLAGS="-D
+        warnings" cargo check --workspace --all-targets --all-features`;
+        `cargo clippy --workspace --all-targets --all-features -- -D
+        warnings`; `cargo xtask check`; `cargo test --workspace
+        --all-features --no-fail-fast`; `bun install --frozen-lockfile`, `bun
+        run format:check:site`, `bun run site:check`, `bun run site:test`.
+        Skipped: `site:build` (left to the Site workflow). Windows and macOS:
+        CI only.
+      - Hanafubuki at its next pin: `ConversationItem::WakeEvents` to render
+        or skip; `AgentError::{WakeEventsPending, NoWakeEvents}` and
+        `AgentFollowUpReason::BackgroundEvents` in exhaustive matches; the
+        snapshot's two fields; `PersistedAgentRuntimeState.wake_queue` if it
+        builds one. Nothing queues events yet.
 - [ ] R2: the main agent suspends and wakes on its sub-agents. Adds
       `wakeOnBackgroundTasks` (default on), the dispatcher, the person's
       pause and the 100-turn runaway bound. `wait_agent` reads the queue

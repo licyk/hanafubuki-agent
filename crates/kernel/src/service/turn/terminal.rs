@@ -57,9 +57,15 @@ impl AgentService {
             let mut guard = cell.lock_after_persistence().await?;
             let record = &mut *guard;
             let previous = record.rollback_state();
+            let wake_pending = super::super::wake::wake_events_pending(record);
             let turn = exact_turn_mut(record, identity)?;
             if !turn.pending_steering.is_empty() {
                 return Err(AgentError::SteeringPending);
+            }
+            // Events queued after the last step's check: one more step
+            // delivers them (a `!command`'s turn samples no model).
+            if wake_pending && matches!(turn.kind, TurnKind::Regular) {
+                return Err(AgentError::WakeEventsPending);
             }
             let final_answer_message_id = answer.as_ref().map(|(message_id, _)| *message_id);
             if let Some((final_answer_message_id, message)) = &answer {

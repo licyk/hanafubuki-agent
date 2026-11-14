@@ -147,6 +147,8 @@ impl AgentService {
                 compression_runtime: Default::default(),
                 reasoning_narrowing_logged: false,
                 sent_request: None,
+                wake_queue: runtime.wake_queue,
+                wake_policy: Default::default(),
             },
         };
         // A state that was lost (it could not be read) is rebuilt from the

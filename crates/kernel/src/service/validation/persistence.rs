@@ -131,7 +131,8 @@ pub(in crate::service) fn validate_persisted_history(
             | ConversationItem::ToolSelection { .. }
             | ConversationItem::ContinuationContext { .. }
             | ConversationItem::CompactionSummary { .. }
-            | ConversationItem::ProviderCompaction { .. } => {}
+            | ConversationItem::ProviderCompaction { .. }
+            | ConversationItem::WakeEvents { .. } => {}
         }
         Ok::<_, AgentError>(total.saturating_add(item.retained_bytes()))
     })?;
@@ -354,6 +355,7 @@ fn validate_turn_boundary_refs(history: &[&ConversationItem]) -> Result<(), Agen
                         | ConversationItem::UserMessage { .. }
                         | ConversationItem::AssistantMessage { .. }
                         | ConversationItem::SteeringMessage { .. }
+                        | ConversationItem::WakeEvents { .. }
                         | ConversationItem::CompactionSummary { .. }
                         | ConversationItem::ProviderCompaction { .. }
                 )
@@ -378,19 +380,24 @@ fn validate_turn_boundary_refs(history: &[&ConversationItem]) -> Result<(), Agen
     let mut turn_ids = HashSet::new();
     let mut has_turn = false;
     let mut awaiting_user = false;
+    // The turn's opening items carry wake events: they open it when no user
+    // message follows (a wake turn).
+    let mut woken = false;
     let mut initial_world_state = false;
     for (index, item) in history.iter().enumerate() {
         match *item {
             ConversationItem::TurnStart { turn_id } => {
-                if awaiting_user || !turn_ids.insert(*turn_id) {
+                if (awaiting_user && !woken) || !turn_ids.insert(*turn_id) {
                     return Err(AgentError::Persistence(
                         "Agent history contains an invalid or duplicate turn boundary".to_string(),
                     ));
                 }
                 has_turn = true;
                 awaiting_user = true;
+                woken = false;
                 initial_world_state = false;
             }
+            ConversationItem::WakeEvents { .. } if has_turn && awaiting_user => woken = true,
             ConversationItem::WorldStateUpdate { .. } if has_turn && awaiting_user => {
                 if initial_world_state {
                     return Err(AgentError::Persistence(
@@ -418,15 +425,15 @@ fn validate_turn_boundary_refs(history: &[&ConversationItem]) -> Result<(), Agen
                     "Agent history contains an item outside its turn boundary".to_string(),
                 ));
             }
-            _ if !has_turn || awaiting_user => {
+            _ if !has_turn || (awaiting_user && !woken) => {
                 return Err(AgentError::Persistence(
                     "Agent history contains an incomplete turn boundary".to_string(),
                 ));
             }
-            _ => {}
+            _ => awaiting_user = false,
         }
     }
-    if awaiting_user {
+    if awaiting_user && !woken {
         return Err(AgentError::Persistence(
             "Agent history ends with an incomplete turn boundary".to_string(),
         ));

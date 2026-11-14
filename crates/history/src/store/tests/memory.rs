@@ -329,3 +329,75 @@ fn fork_memory_evidence_contains_only_child_local_jsonl_items() {
         .shutdown(Instant::now() + Duration::from_secs(2))
         .is_empty());
 }
+
+/// A `WakeEvents` item, written to and read back from the session's file,
+/// is what background work reported: a call's output of that name.
+#[test]
+fn memory_evidence_reads_wake_events_as_a_background_events_output() {
+    let (_temporary, _paths, workers, store) = open_store();
+    let session_id = store.allocate_session_id().unwrap();
+    let mut user = item(1, 0, "start the agents");
+    user.source_session_id = session_id;
+    let wake = AgentHistoryItem {
+        source_session_id: session_id,
+        item_id: hanafubuki_agent_kernel::AgentHistoryItemId::new(2),
+        item_revision: 0,
+        turn_id: Some(AgentTurnId::new(1)),
+        logical_segment: 0,
+        logical_order: 1,
+        turn_working_millis: None,
+        content: ConversationItem::WakeEvents {
+            events: vec![hanafubuki_agent_kernel::AgentWakeEvent {
+                sequence: 1,
+                queued_at: 5,
+                source: hanafubuki_agent_kernel::AgentWakeSource::Subagent {
+                    session_id: AgentSessionId::new(41),
+                    name: "explore_api".to_string(),
+                    event: hanafubuki_agent_kernel::AgentSubagentWake::Completed {
+                        answer: Some("three endpoints".to_string()),
+                        truncated: false,
+                    },
+                },
+            }],
+        },
+    };
+    store
+        .create_session(AgentConversationCommit {
+            runtime: terminal_runtime(session_id, 0, 3),
+            history_mutations: vec![
+                AgentHistoryMutation::AppendItem { item: user },
+                AgentHistoryMutation::AppendItem { item: wake },
+            ],
+        })
+        .unwrap();
+
+    let evidence = store
+        .load_memory_evidence(
+            crate::AgentMemoryHistoryCandidate {
+                session_id,
+                source_revision: AgentRevision::new(0),
+                updated_at: 1_800_000_000_000,
+            },
+            10,
+            10_000,
+        )
+        .unwrap();
+    assert_eq!(evidence.items.len(), 2);
+    let wake = &evidence.items[1];
+    assert_eq!(wake.role, AgentMemoryEvidenceRole::Tool);
+    assert_eq!(wake.tool_name.as_deref(), Some("background_events"));
+    assert!(
+        wake.text.starts_with("<background_events>"),
+        "{}",
+        wake.text
+    );
+    assert!(wake.text.contains("three endpoints"), "{}", wake.text);
+
+    store
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .into_iter()
+        .for_each(drop);
+    assert!(workers
+        .shutdown(Instant::now() + Duration::from_secs(2))
+        .is_empty());
+}

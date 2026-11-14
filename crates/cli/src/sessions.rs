@@ -140,6 +140,15 @@ fn transcript_line(item: &ConversationItem) -> Option<String> {
             Some(code) => format!("user ran: {command}  (exit {code})"),
             None => format!("user ran: {command}  (failed)"),
         }),
+        // One line per event of the session's background work.
+        ConversationItem::WakeEvents { events } => Some(
+            events
+                .iter()
+                .map(|event| format!("background: {}", event.source.summary()))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
+        .filter(|lines| !lines.is_empty()),
         _ => None,
     }
 }
@@ -151,3 +160,6 @@ fn to_json(value: &impl serde::Serialize) -> Result<String, Failure> {
 fn failure(error: impl ToString) -> Failure {
     Failure::new(error.to_string())
 }
+
+#[cfg(test)]
+mod tests;

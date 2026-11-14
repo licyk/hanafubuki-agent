@@ -21,7 +21,7 @@ pub(in crate::service) fn resolve_turn_items(
     // much of its document one turn carries. A second opinion at this boundary
     // can only ever disagree with the first, and when it does it fails the
     // whole turn over a Skill that loaded correctly.
-    validate_world_state_snapshot(&world_state)?;
+    let mut items = turn_start_items(turn_id, history, world_state)?;
     let selectable = selectable_skills(&turn);
     let mention_exclusions = turn
         .get::<hanafubuki_agent_contracts::SelectableSkills>()
@@ -69,14 +69,6 @@ pub(in crate::service) fn resolve_turn_items(
             limit: MAXIMUM_SELECTED_SKILLS_PER_TURN,
         });
     }
-    let mut items = Vec::with_capacity(requested.len().saturating_add(3));
-    items.push(ConversationItem::TurnStart { turn_id });
-    let world_state_updates = crate::model::world_state_diff(history, world_state);
-    if !world_state_updates.is_empty() {
-        items.push(ConversationItem::WorldStateUpdate {
-            updates: world_state_updates,
-        });
-    }
     // A Skill the user referenced explicitly must resolve: without the Skill
     // catalog (its contributor was left out of this admission) the turn is
     // refused rather than run without what was asked for.
@@ -109,6 +101,22 @@ pub(in crate::service) fn resolve_turn_items(
         ));
     }
     items.push(ConversationItem::UserMessage { text, images });
+    Ok(items)
+}
+
+/// A turn's first items: its start, and the world state that changed since
+/// the one the history last recorded.
+pub(in crate::service) fn turn_start_items(
+    turn_id: AgentTurnId,
+    history: &[Arc<AgentHistoryItem>],
+    world_state: crate::AgentWorldStateSnapshot,
+) -> Result<Vec<ConversationItem>, AgentError> {
+    validate_world_state_snapshot(&world_state)?;
+    let mut items = vec![ConversationItem::TurnStart { turn_id }];
+    let updates = crate::model::world_state_diff(history, world_state);
+    if !updates.is_empty() {
+        items.push(ConversationItem::WorldStateUpdate { updates });
+    }
     Ok(items)
 }
 

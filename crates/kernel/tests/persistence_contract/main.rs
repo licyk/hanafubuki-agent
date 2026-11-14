@@ -582,3 +582,4 @@ mod progress;
 mod recovery;
 mod request_images;
 mod session_config;
+mod wake;

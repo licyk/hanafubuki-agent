@@ -176,6 +176,9 @@ impl AgentService {
                     .forked(source.runtime.compression.as_deref()),
                 reasoning_narrowing_logged: false,
                 sent_request: None,
+                // The source's background work stays the source's.
+                wake_queue: Default::default(),
+                wake_policy: Default::default(),
             },
         };
         let cell = self.inner.sessions.insert(record, &self.inner.accepting)?;
