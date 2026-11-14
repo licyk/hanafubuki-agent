@@ -5343,6 +5343,13 @@ its next pin, and any module-size exception.
         `terminals` is 0. For R8: `SessionStatus.background` and
         `waiting_line` are what the status item and the `/tasks` hint build
         on.
+      - CI on `8e78086` (the three commits, pushed together; the first
+        two were checked alone with clippy and the touched crates' tests):
+        CI
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43603725416
+        (Linux, macOS and Windows: success at the first attempt); Site
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43603725504
+        (success, its build and deploy included).
 - [ ] R3: the background feed: `background_tasks(root)`, `Changed`, and
       `Child` events from a forwarding sink on child turns. The TUI's
       400 ms watch goes, and `exec` answers children's approvals.
