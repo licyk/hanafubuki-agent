@@ -1307,7 +1307,16 @@ From CI's failed jobs over the last 60 runs; each passed on a re-run.
   polls the watch re-arms once the directory's (device, inode) differs, and the copy is made before the original is
   removed, so on APFS they should differ. No cause found from the code; 500 of 500 runs on Linux under CPU load. The
   wait now says what the watcher was asked to watch and whether the watch still runs, so a recurrence tells a missed
-  re-arm (one path: a product bug on macOS) from a watch that ended or re-armed twice.
+  re-arm (one path: a product bug on macOS) from a watch that ended or re-armed twice. On that commit (`b1bc11d`),
+  [run 43598048804](https://github.com/licyk/hanafubuki-agent/actions/runs/43598048804) ran it green on all three.
+- **Open, not investigated**: `tests::shutdown::shutdown_cancels_the_active_model_and_joins_the_tool_worker` (macOS 1×,
+  [run 43598048804](https://github.com/licyk/hanafubuki-agent/actions/runs/43598048804); not in the 100 runs before):
+  the turn ended `ModelStreamRetriesExhausted { retries: 0, message: "model response stream ended before a terminal
+  event" }` instead of `Cancelled`, its shutdown diagnostics empty. The code suggests a product race: in
+  `kernel/src/service/sampling/request.rs` a `ModelStreamInterrupted` that arrives once the turn is cancelled skips the
+  retry arm (`!cancellation.is_cancelled()`) and falls to `ModelStreamRetriesExhausted`, so a stream the shutdown ended
+  reads as the model's failure rather than the cancellation. Not from the execution sweep change (the test runs no
+  command, so the sweep has no record).
 - Already fixed, not recurring: `bottom_pane::tests::tabs_within_a_paste_burst_are_the_pastes_and_send_nothing` (6e36de1),
   `crates/plugin-packages/tests/guests/linked.rs:124` (6d61cc8), and the macOS
   `output::a_poll_behind_the_retained_output_says_exactly_what_it_missed` (BSD `seq` printing `1e+06`, replaced by `awk`
