@@ -3,12 +3,15 @@
 //! servers in the settings center, driven by keys, with what they wrote
 //! read back from the configuration.
 
-use hanafubuki_agent::test_support::assistant_events;
+use std::sync::Arc;
+
+use hanafubuki_agent::test_support::{assistant_events, FakeListing};
 use hanafubuki_agent::{
     AgentModelPolicyWriteRequest, AgentProviderRegistrySnapshot, McpApplicationSnapshot,
     McpCredentialKey, McpServerId, McpTransportConfig,
 };
 use ratatui::crossterm::event::KeyCode;
+use tokio::sync::Notify;
 
 use super::Harness;
 use crate::agent_bridge::{AgentReply, McpReply, TurnUpdate};
@@ -322,6 +325,87 @@ fn the_reported_window_is_shown_in_the_policy_the_picker_and_status() {
             .transcript()
             .contains("Nothing was learned of fixture-model to forget.")
     });
+}
+
+/// The test Provider's listing, held: the default model with a window and
+/// images, and another reporting nothing.
+fn held_listing(release: &Arc<Notify>) -> FakeListing {
+    FakeListing::ok(
+        r#"{"data":[{"id":"fixture-model","context_window":200000,"input_modalities":["text","image"]},{"id":"first-model"}]}"#,
+    )
+    .held(release.clone())
+}
+
+/// The test Provider's record in the center, at `action`.
+fn at_provider_action(harness: &mut Harness, action: &str) {
+    harness.type_and_submit("/providers");
+    harness.pump_until_screen_shows("Settings › Providers");
+    harness.select_setting("Fixture Provider");
+    harness.key(KeyCode::Enter);
+    harness.select_setting(action);
+    harness.key(KeyCode::Enter);
+}
+
+/// The Provider page's model list shows the loading line until its listing
+/// answers, then its models in `/model`'s columns with the selected one's
+/// facts under them; the model chosen is saved as the policy's.
+#[test]
+fn the_provider_page_lists_with_the_loading_line_then_the_fact_columns() {
+    for mode in [TranscriptMode::Terminal, TranscriptMode::Owned] {
+        let release = Arc::new(Notify::new());
+        let mut harness = Harness::listing(vec![held_listing(&release)], mode, |_| {});
+        at_provider_action(&mut harness, "Choose the model");
+        let screen = harness.pump_until_screen_shows("Listing the models…");
+        assert!(!screen.contains("first-model"), "{mode:?}:\n{screen}");
+
+        release.notify_one();
+        let screen = harness.pump_until_screen_shows("first-model");
+        assert!(
+            !screen.contains("Listing the models…"),
+            "{mode:?}:\n{screen}"
+        );
+        assert!(screen.contains("Context  Thinking  Vision"), "{screen}");
+        let row = |text: &str| {
+            screen
+                .lines()
+                .find(|line| line.contains(text))
+                .unwrap_or_else(|| panic!("no row {text}:\n{screen}"))
+                .to_string()
+        };
+        assert!(
+            row("fixture-model (current)").contains("200K  ?         yes"),
+            "{screen}"
+        );
+        assert!(row("first-model").contains("?  ?         ?"), "{screen}");
+        let unwrapped: String = screen.split_whitespace().collect();
+        assert!(
+            unwrapped.contains("fixture-model·FixtureProvider:context200K(reported)"),
+            "{screen}"
+        );
+
+        // The listing comes sorted, first-model above the default one.
+        harness.key(KeyCode::Up);
+        harness.key(KeyCode::Enter);
+        harness.pump_until("the model to be saved", |harness| {
+            harness.registry().model_policy.model == "first-model"
+        });
+    }
+}
+
+/// List models says so while its listing is held, then what it listed.
+#[test]
+fn list_models_says_it_lists_until_the_provider_answers() {
+    let release = Arc::new(Notify::new());
+    let mut harness = Harness::listing(
+        vec![held_listing(&release)],
+        TranscriptMode::Terminal,
+        |_| {},
+    );
+    at_provider_action(&mut harness, "List models");
+    let screen = harness.pump_until_screen_shows("List models…");
+    assert!(!screen.contains("Saving…"), "{screen}");
+    release.notify_one();
+    harness.pump_until_screen_shows("2 models: first-model, fixture-model");
 }
 
 #[test]

@@ -605,6 +605,10 @@ path = "crates/tui/src/commands/model/view.rs"
 reason = "/model's list over the Agent's per-Provider listings: the pinned session's model, a section per Provider, the retry of a failed one and the detail line."
 
 [[original]]
+path = "crates/tui/src/commands/model/footer.rs"
+reason = "The lines under a model list, /model's and the Provider page's: the loading line or what replaced it, the detail line and the keys."
+
+[[original]]
 path = "crates/tui/src/commands/model/tests.rs"
 reason = "The tests of /model's list: its snapshots at three widths, the dropped answers of another list, the kept selection, the retry and the search."
 
@@ -646,7 +650,7 @@ reason = "The settings center driven through the app over the standalone Agent."
 
 [[original]]
 path = "crates/tui/src/commands/providers/tests.rs"
-reason = "The first-run rule."
+reason = "The first-run rule, and the Provider page's model list: its snapshots at three widths, the entry row and the choice saved."
 
 [[original]]
 path = "crates/tui/src/bottom_pane/form/tests.rs"

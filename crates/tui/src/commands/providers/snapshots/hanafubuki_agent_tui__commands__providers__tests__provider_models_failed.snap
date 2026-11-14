@@ -1,0 +1,37 @@
+---
+source: crates/tui/src/commands/providers/tests.rs
+expression: at_widths(&picker)
+---
+--- 100 columns ---
+
+  Choose the model
+  Anthropic becomes the default; new sessions run this model.
+
+  Type to search models
+› Enter a model id…  one the Provider does not list
+
+  The models were not listed: 401 Unauthorized bad token
+  enter choose · esc back
+--- 80 columns ---
+
+  Choose the model
+  Anthropic becomes the default; new sessions run this model.
+
+  Type to search models
+› Enter a model id…  one the Provider does not list
+
+  The models were not listed: 401 Unauthorized bad token
+  enter choose · esc back
+--- 50 columns ---
+
+  Choose the model
+  Anthropic becomes the default; new sessions
+  run this model.
+
+  Type to search models
+› Enter a model id…  one the Provider does not
+                     list
+
+  The models were not listed: 401 Unauthorized bad
+  token
+  enter choose · esc back

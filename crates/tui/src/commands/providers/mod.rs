@@ -13,8 +13,10 @@ mod models;
 use super::{CommandContext, CommandReply, CommandSpec};
 use crate::agent_bridge::ProviderModels;
 use crate::app_event::AgentCommand;
+use crate::bottom_pane::LoadingLine;
 use crate::history_cell;
 use crate::settings_center::{Attach, PageOverride};
+use crate::tui::FrameRequester;
 use models::ModelPicker;
 
 pub(crate) static PROVIDERS: CommandSpec = CommandSpec {
@@ -39,9 +41,12 @@ pub(crate) static MODEL_PAGE: PageOverride = PageOverride {
         let Some(provider_id) = record else {
             return;
         };
+        let tx = context.app_event_tx();
+        let loading = LoadingLine::new(FrameRequester::new(tx.clone()), true);
         context.show_view(Box::new(ModelPicker::new(
             provider_id.to_string(),
-            context.app_event_tx(),
+            tx,
+            loading,
         )));
         context.agent_command(AgentCommand::ProviderModels(provider_id.to_string()));
     },

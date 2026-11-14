@@ -4,7 +4,7 @@ use hanafubuki_agent::{
 };
 
 use super::{
-    effort_options, entry_badges, fact_cells, fact_columns, fact_details, fact_line, row_facts,
+    choose_hint, effort_options, fact_cells, fact_columns, fact_details, fact_line, row_facts,
     step_effort, EffortStep, EffortValue, FACTS_HEADER,
 };
 
@@ -156,39 +156,42 @@ fn the_detail_line_names_each_fact_with_its_source() {
 }
 
 #[test]
-fn a_model_shows_what_is_known_of_it_whatever_the_source() {
-    assert_eq!(entry_badges(&ModelMetadata::default()), None);
+fn the_keys_say_what_esc_does_and_name_models_dev_only_while_it_is_off_and_needed() {
     let known = ModelMetadata {
         context_window: sourced(200_000, ModelMetadataSource::Reported),
-        image_input: sourced(true, ModelMetadataSource::Configured),
-        reasoning: sourced(
-            ModelReasoningSupport::Supported {
-                efforts: Vec::new(),
-                default: None,
-            },
-            ModelMetadataSource::Catalog,
-        ),
+        reasoning: takes_none(ModelMetadataSource::Reported),
+        image_input: sourced(true, ModelMetadataSource::Reported),
         ..ModelMetadata::default()
     };
+    assert!(!fact_cells(&known).has_unknown());
+    for unknown in [
+        ModelMetadata {
+            context_window: None,
+            ..known.clone()
+        },
+        ModelMetadata {
+            reasoning: None,
+            ..known.clone()
+        },
+        ModelMetadata {
+            image_input: None,
+            ..known.clone()
+        },
+    ] {
+        assert!(fact_cells(&unknown).has_unknown(), "{unknown:?}");
+    }
     assert_eq!(
-        entry_badges(&known).as_deref(),
-        Some("200K · vision · reasoning")
+        choose_hint("esc back", false, false),
+        "enter choose · esc back · ? not known"
     );
-    // An OpenAI model reports no window; the built-in table knows it.
-    let built_in = ModelMetadata {
-        context_window: sourced(272_000, ModelMetadataSource::BuiltIn),
-        ..ModelMetadata::default()
-    };
-    assert_eq!(entry_badges(&built_in).as_deref(), Some("272K"));
-    let says_no = ModelMetadata {
-        image_input: sourced(false, ModelMetadataSource::Learned),
-        reasoning: sourced(
-            ModelReasoningSupport::Unsupported,
-            ModelMetadataSource::Reported,
-        ),
-        ..ModelMetadata::default()
-    };
-    assert_eq!(entry_badges(&says_no), None);
+    assert_eq!(
+        choose_hint("esc close", true, false),
+        "enter choose · esc close · ? not known · models.dev can fill these: /config modelMetadata"
+    );
+    assert_eq!(
+        choose_hint("esc close", true, true),
+        "enter choose · esc close · ? not known"
+    );
 }
 
 fn options(choices: &[SettingChoice], current: Option<&str>) -> Vec<(String, bool)> {

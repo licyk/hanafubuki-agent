@@ -36,6 +36,13 @@ pub(crate) fn fact_cells(metadata: &ModelMetadata) -> FactCells {
     }
 }
 
+impl FactCells {
+    /// Some cell says `?`.
+    pub(crate) fn has_unknown(&self) -> bool {
+        self.window == "?" || self.thinking == "?" || self.vision == "?"
+    }
+}
+
 fn answer(known: Option<bool>) -> &'static str {
     match known {
         Some(true) => "yes",
@@ -68,6 +75,17 @@ pub(crate) fn row_facts(metadata: &ModelMetadata) -> RowFacts {
         columns: fact_columns(&cells),
         stacked: fact_line(&cells),
     }
+}
+
+/// The keys of a model list whose model rows Enter chooses, `esc` saying
+/// what Esc does: `? not known`, and, while models.dev is off and a row
+/// `shows_unknown`, where it is turned on.
+pub(crate) fn choose_hint(esc: &str, shows_unknown: bool, models_dev: bool) -> String {
+    let mut hint = format!("enter choose · {esc} · ? not known");
+    if shows_unknown && !models_dev {
+        hint.push_str(" · models.dev can fill these: /config modelMetadata");
+    }
+    hint
 }
 
 /// The detail line of a model: `model` on `provider`, then each fact with
@@ -134,21 +152,6 @@ fn thinking_detail(metadata: &ModelMetadata) -> String {
         (_, Some(false)) => format!("thinking no ({source})"),
         (_, None) => "thinking not known".to_string(),
     }
-}
-
-/// What is known of a model, for a model list: its window, and `vision`
-/// and `reasoning` when it is known to read images and to reason
-/// (`200K · vision`); none when nothing of that is known.
-pub(crate) fn entry_badges(metadata: &ModelMetadata) -> Option<String> {
-    let badges: Vec<String> = metadata
-        .context_window
-        .as_ref()
-        .map(|window| format_tokens_compact(window.value))
-        .into_iter()
-        .chain((metadata.supports_image_input() == Some(true)).then(|| "vision".to_string()))
-        .chain((metadata.supports_reasoning() == Some(true)).then(|| "reasoning".to_string()))
-        .collect();
-    (!badges.is_empty()).then(|| badges.join(" · "))
 }
 
 /// What an effort option sets.

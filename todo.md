@@ -339,6 +339,11 @@ next pin, and any module-size exception.
         checks again.
         `site:build` not run locally (port 3000 is another project's);
         CI's Site run covers it.
+      - CI on 2726e6a:
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43565603954,
+        Linux, Windows and macOS passed at the first attempt. Site on
+        2726e6a: .../runs/43565603953, passed, its build and deploy
+        included. (Recorded by L3: L2's agent handed back while they ran.)
       - For L3: `row_facts`, `FACTS_HEADER` and `fact_details` are the
         Provider page's columns, header and detail line;
         `SelectionViewParams.facts_header` and `SelectionItem.facts` opt a
@@ -347,9 +352,89 @@ next pin, and any module-size exception.
         snapshots) replaces its static `Listing models… esc closes`; the
         detail line goes under the list as `commands/model/view.rs`'
         footer does. Once it drops `entry_badges`, the function goes.
-- [ ] L3: the Provider page's **Choose the model** takes the loading line
+- [x] L3: the Provider page's **Choose the model** takes the loading line
       and the columns; the settings center's busy notice names the action
       (`List models…`, not `Saving…`).
+      Done (2026-11-14):
+      - Shared with `/model` (`commands/model/footer.rs`, new, extracted
+        from `view.rs` by responsibility): `Status` (the loading line, or
+        what is said in its place), `notes` (the detail and the keys),
+        `footer` (the loading line built only when drawing, the rest
+        wrapped at the width less 2) and `render_footed` (the body over
+        those lines, drawn at x + 2). `model_facts.rs`:
+        `FactCells::has_unknown` and `choose_hint(esc, shows_unknown,
+        models_dev)` (`? not known`, the models.dev hint), both lists'.
+        `/model`'s view calls them; its snapshots are unchanged
+        (`INSTA_UPDATE=no`). `entry_badges` and its test are gone.
+      - Provider page (`commands/providers/models.rs`): `ModelPicker::new`
+        takes a `LoadingLine` (`LoadingLine::new(FrameRequester::new(tx),
+        true)` in `MODEL_PAGE.open`, `still()` in snapshots). Listing: the
+        title on the menu surface and `• Listing the models…` (and `· 3s`
+        from the first second); no `esc back` of its own, the center's
+        bottom line says it. Listed: each model's id, its display name as
+        the description (as before), `row_facts` and the `FACTS_HEADER`
+        (stacked when narrow), search by id and display name; under the
+        list the selected model's `fact_details` (with the Provider's name;
+        none on the **Enter a model id…** row) and `choose_hint("esc
+        back", …)`. A failed listing: only the entry row, with `The models
+        were not listed: <error>` (on one line) under it and `enter choose
+        · esc back`. The subtitle wraps at narrow widths, as `/model`'s
+        does with a policy note (it was cut at 50 columns). Choosing still
+        saves the model policy (default Provider + model).
+      - Bridge (`agent_bridge/providers.rs`, beyond the plan's file list):
+        `ProviderModels.models_dev`, read from `settings_view` as
+        `model_list.rs` does, for the models.dev hint.
+      - Settings center: `Notice::Busy(String)`; `send` says `Saving…` for
+        a `Pending::Edit` (a record's field saved through the record's
+        `save` action included) and, for a `Pending::Action`, its action's
+        label from the catalog (`collection::running`): `List models…`,
+        and so `Make default…`, `Delete…`, `Add a Provider…`, `Connect…`,
+        `Save…` (a form's Save and the Provider page's choice), `Trust…`
+        and the other actions' labels. An action that fails still says
+        `Could not save: …` (not covered by the plan; left).
+      - Tests: `commands/providers/tests.rs`: snapshots at 100/80/50 of
+        the Listing stage, the list (columns, header, stacked, detail
+        line, models.dev hint), the failed listing, CJK and an id longer
+        than the screen; the entry row selected (80); models.dev on and
+        every fact known leave the hint out; a model chosen and an id
+        typed in are saved as `modelPolicy`'s `save` with
+        `defaultProviderId`; another Provider's answer is not the page's.
+        `model_facts/tests.rs`: `has_unknown`, `choose_hint`.
+        `settings_center/tests/interaction.rs`: a record's field shows
+        `Saving…`, Make default `Make default…`, then its message.
+        `app/tests/settings.rs`: the Provider page over a held listing in
+        Scrollback and Fullscreen (`Listing the models…` before the reply,
+        then the header, the columns and the detail line, and the model
+        chosen saved), and List models over a held listing (`List
+        models…`, no `Saving…`, then `2 models: …`). Fail-first by
+        mutation, each seen failing then restored: the action's label not
+        used (the interaction and the List models tests), the models.dev
+        hint ignoring the setting (3), a detail line on the entry row (1).
+      - Existing snapshots: none changed. Goldens: none changed.
+        Dependencies: none added. Module size: no exception added or
+        raised (`settings_center/mod.rs` 560, `agent_bridge/mod.rs` 598,
+        `list_selection_view.rs` 580 code lines).
+      - Docs (both languages): `providers-models#interface` (List models'
+        notice; Choose the model's loading line, columns, detail line,
+        keys, failure), `terminal-interface#providers` (the page as the
+        model list), `terminal-interface#config` (the busy notice: the
+        plan names it only if the paragraph did; it lists the notices, so
+        it does).
+      - Hanafubuki at its next pin: nothing (TUI only).
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo
+        clippy --workspace --all-targets --all-features -- -D warnings`;
+        `cargo xtask check` (the notices policy lists `footer.rs` as
+        original); `INSTA_UPDATE=no cargo test --workspace --all-features
+        --no-fail-fast` (4758 passed, none failed, no flake seen); `bun
+        install --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test` (28 passed), and the four changed
+        pages compiled with the store's `@mdx-js/mdx` 3.1.1 with
+        remark-gfm. `site:build` not run locally (port 3000 is another
+        project's); CI's Site run covers it.
+- L1–L3 are done: every model list (`/model`, the Provider page) shows
+  each model's window, thinking and vision with their sources, and a
+  loading line while it lists.
 
 ## W1: a POSIX shell for `exec_command` on Windows (2026-11-13)
 

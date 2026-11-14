@@ -80,8 +80,8 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 
 - **Provider 列表**：每个 Provider 显示协议和基础 URL，默认的一项旁标有 `default`，停用的旁标有 `off`。`a` 添加一个（它的字段由 **Add a Provider** 一起保存），`d` 确认后删除，Enter 打开。
 - **Provider**：名称、是否启用、协议（`responses`、`chat_completions` 或 `anthropic_messages`）、基础 URL、API 令牌和请求头，每个字段改动时即保存。已设置的令牌显示为 `••••`，从不返回：输入新值会替换它，`r` 删除它。请求头是 `NAME=VALUE` 形式的条目，只按名称列出：它们的值从不显示，只写名称的条目保留原来的值。
-- **Make default** 把它设为默认 Provider，**List models** 测试它（显示 Provider 列出的模型数量和前几个，或 Provider 返回的错误），**Delete** 确认后删除它。
-- **Choose the model** 列出它的模型，每个模型旁显示目录报告的信息：窗口（`200K`）、`vision` 和 `reasoning`（`/model` 以列的形式显示它们：[模型列表](/docs/terminal-interface#model-list)）。选中的模型（Provider 没有列出时，用 **Enter a model id…** 手动输入）成为新会话使用的模型，这个 Provider 成为默认 Provider。按 Esc 则保持原来的模型。`/model` 仍然只修改当前会话的模型。
+- **Make default** 把它设为默认 Provider，**List models** 测试它（Provider 回答之前，标题下方一行显示 `List models…`；之后显示 Provider 列出的模型数量和前几个，或 Provider 返回的错误），**Delete** 确认后删除它。
+- **Choose the model** 列出它的模型。Provider 回答之前显示 `• Listing the models…`，从第一秒起附上已等待的时间。之后每个模型显示列表给出的名称（如果有），以及与 `/model` 相同的 `Context`、`Thinking` 和 `Vision` 列（`yes`、`no`，没有任何来源说明时为 `?`），不足约 51 列时堆叠显示；列表下方是选中模型的各项信息及其来源，以及按键说明，末尾是 `? not known`（[模型列表](/docs/terminal-interface#model-list)）。列出失败时只剩 **Enter a model id…**，下方显示 Provider 返回的错误。选中的模型（Provider 没有列出时，用 **Enter a model id…** 手动输入）成为新会话使用的模型，这个 Provider 成为默认 Provider。按 Esc 则保持原来的模型。`/model` 仍然只修改当前会话的模型。
 - **模型策略**（`/providers policy`，或 Model 标签页中的 Model policy）：默认 Provider 和模型、推理强度（旁边写出该模型已知的档位，来自其目录或其[单独设置](#per-model)；按 Enter 时提供的选项与 `/effort` 相同，见[推理强度与思考过程](#reasoning)）、图片输入、上下文窗口（未设置时，旁边写出该模型已知的窗口及其来源）、自动压缩及其阈值、远程压缩，以及 **Custom turn budget**：关闭时回合使用 Agent 的上限；打开时是它的十一个字段，从这些上限开始。模型的单独设置不在其中：它们是 Model 标签页中它旁边的 **Model overrides**（[按模型的设置](#per-model)）。
 - 每次写入都会带上设置中心读取时 `providers.toml` 的版本。如果期间文件被其他地方修改（例如另一个终端中的 `providers` 命令），写入会被拒绝：设置中心重新读取 Provider，保留改动并给出提示，再保存一次即可。
 - 没有默认 Provider 或没有模型时，界面启动时会自动在 Provider 处打开设置中心，见[首次设置](/docs/terminal-interface#setup)。

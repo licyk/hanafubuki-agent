@@ -4,6 +4,7 @@
 //! open at once and filled as each Provider's listing answers, that sets
 //! the session's.
 
+pub(super) mod footer;
 mod view;
 
 use std::sync::atomic::{AtomicU64, Ordering};

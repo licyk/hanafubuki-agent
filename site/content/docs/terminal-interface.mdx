@@ -298,7 +298,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 
 ## Provider [#providers]
 
-`/providers` 在[设置中心](#config)打开 Provider：每一项显示协议和基础 URL，默认的一项旁标有 `default`，停用的旁标有 `off`。Provider 的记录包含它的字段（已设置的令牌显示为 `••••`，不会显示令牌本身）以及动作 **Make default**、**List models**（用于测试）、**Choose the model** 和 **Delete**。`/providers policy` 打开模型策略。字段和模型页面见 [Provider 与模型](/docs/providers-models#interface)。
+`/providers` 在[设置中心](#config)打开 Provider：每一项显示协议和基础 URL，默认的一项旁标有 `default`，停用的旁标有 `off`。Provider 的记录包含它的字段（已设置的令牌显示为 `••••`，不会显示令牌本身）以及动作 **Make default**、**List models**（用于测试）、**Choose the model** 和 **Delete**。**Choose the model** 在 Provider 回答之前显示加载行，之后按[模型列表](#model-list)的列显示它的模型，下方是选中模型的各项信息。`/providers policy` 打开模型策略。字段和模型页面见 [Provider 与模型](/docs/providers-models#interface)。
 
 ## 插件 [#plugins]
 
@@ -896,7 +896,7 @@ yank = []
 
 ## 设置 [#config]
 
-`/config` 在整个屏幕上打开设置中心（Scrollback 下是备用屏幕），仿照 Codex 的 `/config`：Agent 的所有设置，从它的[设置目录](/docs/architecture#settings-catalog)读取，分在几个标签页中（General、Model、Tools、Memory、Context、Network、Interface、Plugins、Advanced；标签页会显示它有几个值存在问题）。每一行是标签 · 值 · 说明：`[x] On` 或 `[ ] Off`、选项的标签、数字、文本（为空时是 `(empty)`）、列表的各项（没有时是 `(none)`）、已设置的机密显示为 `••••`、`(unset)`，当你的 `config.toml` 之上的某一层设置了它时，后面会有暗色的 `· profile NAME`、`· project` 或 `· -c`。某一层的值无法使用时，说明的位置改为显示原因。标题下方显示 `Changes save automatically`，或上一次改动的结果：`Saved`、`Saved · the project layer overrides it`（或 `the profile NAME layer`、`the -c layer`）、`Saved · applies at next launch`、`Saved · applies from the next session`、`Could not save: …`。最底一行说明选中行的按键作用。说明列不足 45 列时，选中行的说明移到列表下方。
+`/config` 在整个屏幕上打开设置中心（Scrollback 下是备用屏幕），仿照 Codex 的 `/config`：Agent 的所有设置，从它的[设置目录](/docs/architecture#settings-catalog)读取，分在几个标签页中（General、Model、Tools、Memory、Context、Network、Interface、Plugins、Advanced；标签页会显示它有几个值存在问题）。每一行是标签 · 值 · 说明：`[x] On` 或 `[ ] Off`、选项的标签、数字、文本（为空时是 `(empty)`）、列表的各项（没有时是 `(none)`）、已设置的机密显示为 `••••`、`(unset)`，当你的 `config.toml` 之上的某一层设置了它时，后面会有暗色的 `· profile NAME`、`· project` 或 `· -c`。某一层的值无法使用时，说明的位置改为显示原因。标题下方显示 `Changes save automatically`，或上一次改动的结果：`Saved`、`Saved · the project layer overrides it`（或 `the profile NAME layer`、`the -c layer`）、`Saved · applies at next launch`、`Saved · applies from the next session`、`Could not save: …`。写入改动期间显示 `Saving…`，动作运行期间显示该动作（`List models…`、`Add a Provider…`）。最底一行说明选中行的按键作用。说明列不足 45 列时，选中行的说明移到列表下方。
 
 - **左**、**右**键切换标签页；上、下、Page Up、Page Down、Home、End 移动；Esc 返回，在标签页上则关闭设置中心。
 - **`/`** 搜索所有标签页：设置、集合、记录和页面的标签、键、值、关键词和摘要。结果的说明是它所在的标签页和分节。Enter 离开搜索框进入结果，Esc 清空搜索。

@@ -281,3 +281,26 @@ pub(super) fn request(
         values: serde_json::Map::new(),
     }
 }
+
+/// What the center says while `request` runs: its action's label
+/// (`List models…`), or its id when the catalog has no such action.
+pub(super) fn running(
+    catalog: Option<&SettingsCatalog>,
+    request: &SettingsActionRequest,
+) -> String {
+    let label = catalog
+        .and_then(|catalog| {
+            catalog
+                .collections
+                .iter()
+                .find(|collection| collection.id == request.collection)
+        })
+        .and_then(|collection| {
+            collection
+                .actions
+                .iter()
+                .find(|action| action.id == request.action)
+        })
+        .map_or(request.action.as_str(), |action| action.label.as_str());
+    format!("{label}…")
+}

@@ -12,6 +12,8 @@ use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::{Paragraph, Widget, Wrap};
 
+use super::footer::{footer, notes, render_footed, Status};
+
 use crate::agent_bridge::model_list::{ModelListEvent, ModelListStart};
 use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
 use crate::bottom_pane::{
@@ -20,9 +22,8 @@ use crate::bottom_pane::{
 };
 use crate::commands::subagents::single_line;
 use crate::commands::CommandReply;
-use crate::model_facts::{fact_cells, fact_details, row_facts, FACTS_HEADER};
+use crate::model_facts::{choose_hint, fact_cells, fact_details, row_facts, FACTS_HEADER};
 use crate::render::renderable::{ColumnRenderable, Renderable};
-use crate::wrapping::word_wrap_lines;
 
 const TITLE: &str = "Select Model";
 const SUBTITLE: &str = "Switch the model of this session.";
@@ -216,35 +217,12 @@ impl ModelListView {
             ),
             Some(Row::Pending { .. }) | None => (None, listing.choose_hint()),
         };
-        detail
-            .map(Line::from)
-            .into_iter()
-            .chain([Line::from(hint.dim())])
-            .collect()
+        notes(detail, hint)
     }
 
-    /// The lines under the list at `width`, wrapped, but the loading line,
-    /// which only drawing builds: it asks for the next frame.
     fn footer(&self, width: u16, draw: bool) -> Vec<Line<'static>> {
-        let mut lines = Vec::new();
-        let mut notes = self.notes();
-        match self.status() {
-            Some(Status::Loading(text)) if draw => lines.push(self.loading.line(&text)),
-            Some(Status::Loading(_)) => lines.push(Line::default()),
-            Some(Status::Said(text)) => notes.insert(0, Line::from(text)),
-            None => {}
-        }
-        lines.extend(wrapped(notes, width));
-        lines
+        footer(&self.loading, self.status(), self.notes(), width, draw)
     }
-}
-
-/// What the line under the list is.
-enum Status {
-    /// Something is still listed: the moving loading line.
-    Loading(String),
-    /// Nothing more will be.
-    Said(String),
 }
 
 impl Listing {
@@ -348,10 +326,7 @@ impl Listing {
                     .position(|row| !matches!(row, Row::Pending { .. }))
             });
         self.shows_unknown = rows.iter().any(|row| match row {
-            Row::Model { metadata, .. } => {
-                let cells = fact_cells(metadata);
-                cells.window == "?" || cells.thinking == "?" || cells.vision == "?"
-            }
+            Row::Model { metadata, .. } => fact_cells(metadata).has_unknown(),
             Row::Pending { .. } | Row::Failed { .. } => false,
         });
         self.list
@@ -360,11 +335,7 @@ impl Listing {
     }
 
     fn choose_hint(&self) -> String {
-        let mut hint = "enter choose · esc close · ? not known".to_string();
-        if self.shows_unknown && !self.start.models_dev {
-            hint.push_str(" · models.dev can fill these: /config modelMetadata");
-        }
-        hint
+        choose_hint("esc close", self.shows_unknown, self.start.models_dev)
     }
 }
 
@@ -472,14 +443,6 @@ fn item(row: &Row) -> SelectionItem {
     }
 }
 
-fn wrapped(lines: Vec<Line<'static>>, width: u16) -> Vec<Line<'static>> {
-    let width = usize::from(width.saturating_sub(2).max(1));
-    lines
-        .into_iter()
-        .flat_map(|line| word_wrap_lines([line], width))
-        .collect()
-}
-
 /// The title and subtitle, before the list is known.
 struct Heading;
 
@@ -558,20 +521,6 @@ impl Renderable for ModelListView {
     }
 
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        if area.is_empty() {
-            return;
-        }
-        let footer = self.footer(area.width, true);
-        let body = Rect {
-            height: area.height.saturating_sub(footer.len() as u16),
-            ..area
-        };
-        self.body().render(body, buf);
-        for (y, line) in (body.bottom()..area.bottom()).zip(footer) {
-            line.render(
-                Rect::new(area.x + 2, y, area.width.saturating_sub(2), 1),
-                buf,
-            );
-        }
+        render_footed(self.body(), self.footer(area.width, true), area, buf);
     }
 }

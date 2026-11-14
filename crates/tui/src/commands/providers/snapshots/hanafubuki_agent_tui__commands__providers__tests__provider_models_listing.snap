@@ -1,0 +1,19 @@
+---
+source: crates/tui/src/commands/providers/tests.rs
+expression: rendered
+---
+--- 100 columns ---
+
+  Choose the model
+
+  • Listing the models…
+--- 80 columns ---
+
+  Choose the model
+
+  • Listing the models…
+--- 50 columns ---
+
+  Choose the model
+
+  • Listing the models…

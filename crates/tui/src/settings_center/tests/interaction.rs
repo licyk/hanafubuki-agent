@@ -162,6 +162,48 @@ fn a_record_field_is_saved_at_the_revision_and_a_refused_one_goes_with_the_next(
 }
 
 #[test]
+fn the_busy_notice_names_the_action_that_runs_and_an_edit_is_saving() {
+    let mut center = center_with(catalog(), Some("providers"));
+    press(&mut center, KeyCode::Enter);
+    // A record's field is an edit, though the record's save writes it.
+    select(&mut center, "Enabled");
+    press(&mut center, KeyCode::Enter);
+    let sent = calls(&mut center);
+    let shown = screen(&mut center, 140, 20);
+    assert!(shown.contains("Saving…"), "{shown}");
+    let saved = Ok(CatalogOutcome::Acted(SettingsActionOutcome::default()));
+    reply(&mut center, sent[0].0, saved, catalog());
+
+    select(&mut center, "Make default");
+    press(&mut center, KeyCode::Enter);
+    let sent = calls(&mut center);
+    let [(id, CatalogCall::Action(request))] = sent.as_slice() else {
+        panic!("{sent:?}");
+    };
+    assert_eq!(request.action, "set_default");
+    let shown = screen(&mut center, 140, 20);
+    assert!(
+        shown.contains("Make default…") && !shown.contains("Saving…"),
+        "{shown}"
+    );
+    let acted = SettingsActionOutcome {
+        record: None,
+        message: Some("Main is the default".to_string()),
+    };
+    reply(
+        &mut center,
+        *id,
+        Ok(CatalogOutcome::Acted(acted)),
+        catalog(),
+    );
+    let shown = screen(&mut center, 140, 20);
+    assert!(
+        shown.contains("Main is the default") && !shown.contains("Make default…"),
+        "{shown}"
+    );
+}
+
+#[test]
 fn a_delete_is_confirmed_first() {
     let mut center = center_with(catalog(), Some("providers"));
     press(&mut center, KeyCode::Down);

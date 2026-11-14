@@ -296,7 +296,7 @@ fn notice_line(notice: &Notice, editor_error: Option<&str>) -> Line<'static> {
     }
     match notice {
         Notice::Ready => Line::from("Changes save automatically".dim()),
-        Notice::Busy => Line::from("Saving…".dim()),
+        Notice::Busy(text) => Line::from(text.clone().dim()),
         Notice::Done(text) => Line::from(text.clone().green()),
         Notice::Failed(text) => Line::from(text.clone().red()),
     }

@@ -143,7 +143,9 @@ enum Pending {
 /// The line under the title.
 enum Notice {
     Ready,
-    Busy,
+    /// What runs: `Saving…` for an edit, an action's label (`List
+    /// models…`).
+    Busy(String),
     Done(String),
     Failed(String),
 }
@@ -449,7 +451,12 @@ impl SettingsCenter {
             self.notice = Notice::Failed("Wait for the last change to be saved.".to_string());
             return;
         }
-        self.notice = Notice::Busy;
+        self.notice = Notice::Busy(match (&pending, &call) {
+            (Pending::Action(..), CatalogCall::Action(request)) => {
+                collection::running(self.catalog.as_ref(), request)
+            }
+            _ => "Saving…".to_string(),
+        });
         self.call(pending, call);
     }
 

@@ -1,0 +1,56 @@
+---
+source: crates/tui/src/commands/providers/tests.rs
+expression: rendered
+---
+--- 100 columns ---
+
+  Choose the model
+  Anthropic becomes the default; new sessions run this model.
+
+  Type to search models
+                                                                         Context  Thinking  Vision
+  通义千问-编程-最新版本                                     通义千问 …    32.8K  yes       ?
+› org/very-long-model-name-very-long-model-name-very-long-…                   2M  ?         yes
+  Enter a model id…                                          one the Provider does not list
+
+  org/very-long-model-name-very-long-model-name-very-long-model-name-very-long-model-name-very-long-
+  model-name-very-long-model-name- · Anthropic: context 2M (reported) · thinking not known · vision
+  yes (reported)
+  enter choose · esc back · ? not known · models.dev can fill these: /config modelMetadata
+--- 80 columns ---
+
+  Choose the model
+  Anthropic becomes the default; new sessions run this model.
+
+  Type to search models
+                                                     Context  Thinking  Vision
+  通义千问-编程-最新版本                 通义千问 …    32.8K  yes       ?
+› org/very-long-model-name-very-long-m…                   2M  ?         yes
+  Enter a model id…                      one the Provider does not list
+
+  org/very-long-model-name-very-long-model-name-very-long-model-name-very-long-
+  model-name-very-long-model-name-very-long-model-name- · Anthropic: context 2M
+  (reported) · thinking not known · vision yes (reported)
+  enter choose · esc back · ? not known · models.dev can fill these: /config
+  modelMetadata
+--- 50 columns ---
+
+  Choose the model
+  Anthropic becomes the default; new sessions
+  run this model.
+
+  Type to search models
+  通义千问-编程-最新版本  通义千问 编程版
+    context 32.8K · thinking yes · vision ?
+› org/very-long-model-name-very-long-model-name…
+    context 2M · thinking ? · vision yes
+  Enter a model id…
+    one the Provider does not list
+
+  org/very-long-model-name-very-long-model-name-
+  very-long-model-name-very-long-model-name-very-
+  long-model-name-very-long-model-name- ·
+  Anthropic: context 2M (reported) · thinking not
+  known · vision yes (reported)
+  enter choose · esc back · ? not known ·
+  models.dev can fill these: /config modelMetadata

@@ -14,6 +14,8 @@ pub(crate) struct ProviderModels {
     pub(crate) name: String,
     /// The model new sessions run, when it is the default Provider.
     pub(crate) current: Option<String>,
+    /// Whether models.dev fills what nothing else says.
+    pub(crate) models_dev: bool,
     pub(crate) result: Result<Vec<AgentListedModel>, String>,
 }
 
@@ -45,6 +47,10 @@ async fn list(agent: &AgentHandle, provider_id: String) -> ProviderModels {
     let current = registry
         .filter(|registry| registry.default_provider_id.as_deref() == Some(provider_id.as_str()))
         .map(|registry| registry.model_policy.model);
+    let models_dev = agent
+        .settings_view()
+        .await
+        .is_ok_and(|view| view.settings.model_metadata.models_dev);
     let result = agent
         .list_provider_models(AgentProviderModelCatalogRequest {
             provider_ids: Some(vec![provider_id.clone()]),
@@ -64,6 +70,7 @@ async fn list(agent: &AgentHandle, provider_id: String) -> ProviderModels {
         provider_id,
         name,
         current,
+        models_dev,
         result,
     }
 }
