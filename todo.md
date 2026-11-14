@@ -2532,6 +2532,11 @@ and any module-size exception.
         `@mdx-js/mdx` 3.1.1; `VITE_BASE_PATH=/hanafubuki-agent/ bun run
         site:build` not run locally (port 3000 held by another project's
         server); CI's Site run covers it.
+      - CI on d2d167b:
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43540464327,
+        Linux, Windows and macOS passed at the first attempt. Site on
+        d2d167b: .../runs/43540464183, passed, its build and deploy
+        included.
       - Not verified without real terminals: whether each listed terminal
         opens the links (and with which gesture), Windows conhost and
         Terminal.app ignoring the sequences cleanly, tmux/Zellij/screen
