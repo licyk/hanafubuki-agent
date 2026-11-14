@@ -4639,6 +4639,11 @@ its next pin, and any module-size exception.
         `AgentFollowUpReason::BackgroundEvents` in exhaustive matches; the
         snapshot's two fields; `PersistedAgentRuntimeState.wake_queue` if it
         builds one. Nothing queues events yet.
+      - CI on `fad4d13`: CI
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43582965018
+        (Linux, macOS and Windows: success); Site
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43582965026
+        (success).
 - [ ] R2: the main agent suspends and wakes on its sub-agents. Adds
       `wakeOnBackgroundTasks` (default on), the dispatcher, the person's
       pause and the 100-turn runaway bound. `wait_agent` reads the queue
