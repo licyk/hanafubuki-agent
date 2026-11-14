@@ -1,6 +1,11 @@
 use super::*;
 
 impl AgentService {
+    /// Whether the kernel still admits operations; false throughout shutdown.
+    pub fn is_accepting(&self) -> bool {
+        self.inner.accepting.load(Ordering::Acquire)
+    }
+
     /// Off the async runtime only: it waits, blocking, until `deadline`.
     pub fn shutdown(&self, deadline: Instant) -> Vec<AgentShutdownDiagnostic> {
         let mut diagnostics = self.stop_operations(deadline);

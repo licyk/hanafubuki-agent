@@ -13,6 +13,7 @@ use crate::{AgentWakeFilter, AgentWakePolicy, AgentWakeQueued, AgentWakeSource};
 
 mod admission;
 mod close;
+mod restart;
 mod terminal;
 mod work;
 

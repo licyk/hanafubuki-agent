@@ -44,7 +44,7 @@ impl AgentService {
                 Ok(recovered) => {
                     let session_id = recovered.runtime.id;
                     let outcome = if seen.insert(session_id) {
-                        self.recover_session(recovered, &model)
+                        self.recover_session(recovered, &model, &mut report)
                     } else {
                         Err(AgentError::Persistence(format!(
                             "duplicate Agent session {session_id}"
@@ -76,6 +76,7 @@ impl AgentService {
         &self,
         mut recovered: crate::AgentRecoveredSession,
         model: &Arc<dyn ModelPort>,
+        report: &mut crate::AgentRecoveryReport,
     ) -> Result<(), AgentError> {
         let contents = history_contents(&recovered.model_context);
         self.validate_persisted_session(
@@ -84,6 +85,25 @@ impl AgentService {
             &contents,
         )?;
         validate_recoverable_turn(&recovered.runtime)?;
+        let interrupted = recovered
+            .runtime
+            .turn
+            .as_ref()
+            .is_some_and(|turn| !turn.phase.is_terminal());
+        let executions = recovered
+            .runtime
+            .activities
+            .iter()
+            .filter(|activity| !activity.phase.is_terminal())
+            .filter_map(|activity| {
+                let execution = activity.execution.as_ref()?;
+                (!execution.status.is_terminal()).then(|| crate::AgentInterruptedExecution {
+                    session_id: recovered.runtime.id,
+                    execution_id: execution.execution_id,
+                    command: activity.presentation.subject.clone().unwrap_or_default(),
+                })
+            })
+            .collect::<Vec<_>>();
         let mut record = self.persisted_record(
             recovered.runtime,
             recovered.model_context,
@@ -98,6 +118,10 @@ impl AgentService {
                 return Err(error);
             }
         }
+        if interrupted {
+            report.interrupted_turns.push(cell.session_id());
+        }
+        report.interrupted_executions.extend(executions);
         Ok(())
     }
 

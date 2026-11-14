@@ -79,14 +79,20 @@ impl AgentApplicationService {
         deadline: Instant,
     ) -> Vec<WorkerShutdownDiagnostic> {
         self.accepting.store(false, Ordering::Release);
-        self.core
+        let lost = self.capture_lost_background_work();
+        let mut diagnostics = self
+            .core
             .stop_operations(deadline)
             .into_iter()
             .map(|diagnostic| WorkerShutdownDiagnostic {
                 worker: "agent-core".to_string(),
                 message: diagnostic.message,
             })
-            .collect()
+            .collect::<Vec<_>>();
+        // Capture while turns are live, then report after cancellation:
+        // an active parent must not consume these during shutdown.
+        diagnostics.extend(self.report_lost_background_work(lost));
+        diagnostics
     }
 
     /// Connects the MCP servers in the background, so the Agent runs without
