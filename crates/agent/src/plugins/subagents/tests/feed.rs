@@ -127,7 +127,7 @@ async fn the_host_is_told_once_for_each_change_of_the_tree() {
     });
     children.hold.notify_one();
     reads.await.unwrap();
-    wait_until("the parent is woken", || told.woken(root) == 1).await;
+    wait_until("the parent is woken", || told.woken(root) >= 1).await;
     feed_settled(&service, &told).await;
     let ending = told.changed(root);
     assert!((2..=3).contains(&ending), "{ending} events for the end");

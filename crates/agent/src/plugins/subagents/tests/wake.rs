@@ -158,7 +158,7 @@ pub(super) async fn settled(service: &AgentApplicationService, woken: &RecordedB
         .await
         .unwrap();
     wait_until("the dispatcher reaches the probe", || {
-        woken.woken(probe) == 1
+        woken.woken(probe) >= 1
     })
     .await;
 }
@@ -330,8 +330,16 @@ async fn a_parent_that_ended_its_turn_is_woken_once_with_its_agents_answer() {
     assert_eq!(woken.woken(root), 0);
 
     children.hold.notify_one();
-    wait_until("the parent is woken", || woken.woken(root) == 1).await;
+    wait_until("the parent is woken", || woken.woken(root) >= 1).await;
     queued(&service, root, 1).await;
+    // A host may request another check before accepting the first hint.
+    // Both notifications still refer to the same queued completion.
+    let notified = woken.woken(root);
+    service.resume_background_wakes(root).unwrap();
+    wait_until("the parent is notified again", || {
+        woken.woken(root) > notified
+    })
+    .await;
     let wake = service
         .submit_wake_turn_with_sink(root, Arc::new(Discard))
         .await
@@ -358,7 +366,14 @@ async fn a_parent_that_ended_its_turn_is_woken_once_with_its_agents_answer() {
         Some("Twelve files.".to_string())
     );
     settled(&service, &woken).await;
-    assert_eq!(woken.woken(root), 1, "woken once");
+    assert!(
+        service
+            .submit_wake_turn_with_sink(root, Arc::new(Discard))
+            .await
+            .unwrap()
+            .is_none(),
+        "the repeated hints admit only one turn"
+    );
     let status = service.background_status(root).unwrap();
     assert_eq!((status.work.agents, status.pending_wake_events), (0, 0));
     finish(service, paths);
@@ -655,7 +670,7 @@ async fn a_queued_status_is_read_with_the_next_message_after_a_restart() {
     let first = person(&service, root, "Delegate the count.").await;
     ended(&service, first).await;
     children.hold.notify_one();
-    wait_until("the parent is woken", || woken.woken(root) == 1).await;
+    wait_until("the parent is woken", || woken.woken(root) >= 1).await;
     let diagnostics = service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE);
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
 
@@ -680,5 +695,8 @@ async fn a_queued_status_is_read_with_the_next_message_after_a_restart() {
     let message = read.find("What did it find?").expect("the message");
     assert!(events < message, "the update comes before the message");
     assert!(read.contains("Twelve files."));
+    assert_eq!(read.matches(UPDATES).count(), 1);
+    assert_eq!(parent.requests().len(), 3);
+    assert_eq!(reopened.snapshot(root).unwrap().pending_wake_events, 0);
     finish(reopened, paths);
 }

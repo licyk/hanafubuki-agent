@@ -454,7 +454,7 @@ async fn a_goal_lets_the_turn_end_while_an_agent_works_and_goes_on_when_woken() 
     );
 
     children.hold.notify_one();
-    wait_until("the parent is woken", || woken.woken(root) == 1).await;
+    wait_until("the parent is woken", || woken.woken(root) >= 1).await;
     let wake = service
         .submit_wake_turn_with_sink(root, Arc::new(Discard))
         .await

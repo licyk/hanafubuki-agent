@@ -159,7 +159,7 @@ async fn settled(service: &AgentApplicationService, woken: &RecordedBackgroundEv
     .await
     .unwrap();
     wait_until("the dispatcher reaches the probe", || {
-        woken.woken(probe) == 1
+        woken.woken(probe) >= 1
     })
     .await;
 }
@@ -252,7 +252,7 @@ async fn a_command_that_ends_after_its_turn_wakes_the_session_once() {
     assert_eq!(tasks.terminals[0].terminal.execution_id.value(), terminal);
 
     std::fs::write(&go, b"").unwrap();
-    wait_until("the end wakes the session", || woken.woken(session_id) == 1).await;
+    wait_until("the end wakes the session", || woken.woken(session_id) >= 1).await;
     wait_until("the terminal end changes the tree", || {
         woken.changed(session_id) > changed
     })
@@ -271,6 +271,7 @@ async fn a_command_that_ends_after_its_turn_wakes_the_session_once() {
         .await
         .unwrap()
         .expect("the end is queued");
+    assert_eq!(accepted.events.len(), 1);
     ended(&service, accepted.turn).await;
 
     let woken_request = body(&server, 2);
@@ -283,7 +284,14 @@ async fn a_command_that_ends_after_its_turn_wakes_the_session_once() {
     );
     assert_eq!(server.requests().len(), 3);
     settled(&service, &woken).await;
-    assert_eq!(woken.woken(session_id), 1, "woken once");
+    assert!(
+        service
+            .submit_wake_turn_with_sink(session_id, Arc::new(Discard))
+            .await
+            .unwrap()
+            .is_none(),
+        "only one turn reads the terminal's end"
+    );
     assert_eq!(
         service
             .background_status(session_id)
