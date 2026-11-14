@@ -2,7 +2,7 @@ name: Sandbox platforms
 
 on:
   push:
-    branches: [test/sandbox-platforms, test/sandbox-user-setup, test/sandbox-msys]
+    branches: [test/sandbox-platforms, test/sandbox-user-setup, test/sandbox-msys, fix/msys-sandbox-isolation]
   workflow_dispatch:
 
 permissions:

@@ -8,8 +8,6 @@ mod pipes;
 mod security;
 mod setup;
 
-pub(super) use security::current_user_sid;
-
 pub(crate) use launch::{run, RUNNER_ARG};
 pub(crate) use setup::{ready, setup, SETUP_ARG};
 

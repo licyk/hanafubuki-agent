@@ -40,3 +40,20 @@ establish full native sandbox acceptance.
 Local cargo fmt --all --check, Windows cross-target clippy and cargo xtask check
 passed. No full-workspace tests ran. Additional MSYS-specific tests now also
 check writes to earlier workspace files and read-only mode.
+
+## Replacement experiment: session IPC ACLs
+
+Branch `fix/msys-sandbox-isolation` removes the reusable account SID from the
+restriction list. On x86_64 the elevated runner debugs its job-owned children
+and intercepts the loaded MSYS runtime's `RtlAddAccessAllowedAce` import before
+its entry point. Only GENERIC_ALL ACEs naming the sandbox account are rewritten
+to the fresh command logon SID. Installed runtimes are not modified. Other ACEs
+and filesystem capability checks keep their original semantics. Unsupported
+runtimes fail without restoring the broad account restriction. Other Windows
+architectures retain the strict token without this compatibility hook.
+
+This is an experiment, not an accepted fix. Native Git Bash/MSYS2 startup,
+pipes/fork, networking, previous-workspace and read-only regressions must pass
+before merging. Debug event handling and MSYS fork compatibility are additional
+acceptance points. Public warnings remain until native evidence supports changing
+them. Run only the sandbox workflow on this branch; do not run the full suite.

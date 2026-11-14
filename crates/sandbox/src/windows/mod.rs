@@ -19,6 +19,8 @@ mod acl;
 mod desktop;
 #[cfg(windows)]
 pub(crate) mod elevated;
+#[cfg(all(windows, target_arch = "x86_64"))]
+mod msys;
 #[cfg(windows)]
 mod process;
 #[cfg(windows)]
@@ -76,7 +78,7 @@ fn run_prepared(
         .iter()
         .map(|grant| token::LocalSid::from_string(&grant.sid))
         .collect::<Result<Vec<_>, _>>()?;
-    let token = token::restricted_token(&capabilities, sandbox_account)?;
+    let token = token::restricted_token(&capabilities)?;
     for sid in &capabilities {
         acl::allow_null_device(sid);
     }
@@ -86,5 +88,5 @@ fn run_prepared(
         }
     }
     let desktop = desktop::PrivateDesktop::create()?;
-    process::run(&token, &command_line, &desktop)
+    process::run(&token, &command_line, &desktop, sandbox_account)
 }
