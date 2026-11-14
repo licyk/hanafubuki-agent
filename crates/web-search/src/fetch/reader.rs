@@ -34,6 +34,7 @@ impl WebPageFetcher {
         let (content, document_truncated) =
             truncate_utf8(markdown.trim(), MAX_WEB_FETCH_DOCUMENT_BYTES);
         Ok(FetchedDocument {
+            updated_at: None,
             final_url: target.to_string(),
             title,
             content,

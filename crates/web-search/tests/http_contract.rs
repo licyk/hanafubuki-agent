@@ -1,3 +1,27 @@
+// Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent.
+//
+// The MIT License (MIT)
+//
+// Copyright (c) 2026 dsh-free-search contributors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 #![cfg(feature = "test-support")]
 
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -71,6 +95,7 @@ async fn start_server(
 
 fn request(provider: WebSearchProvider) -> WebSearchRequest {
     WebSearchRequest {
+        engines: Vec::new(),
         query: "rust cancellation".to_string(),
         maximum_results: 3,
         provider,
@@ -82,6 +107,7 @@ fn request(provider: WebSearchProvider) -> WebSearchRequest {
 
 fn test_config(duckduckgo_search_url: String) -> WebSearchConfig {
     let mut config = WebSearchConfig::default().with_test_duckduckgo_url(duckduckgo_search_url);
+    config.search.allowed_engines = vec![WebSearchProvider::Duckduckgo, WebSearchProvider::Searxng];
     config.proxy = WebSearchProxy::Disabled;
     config.minimum_request_interval = Duration::ZERO;
     config.cache_ttl = Duration::from_secs(60);
@@ -232,7 +258,7 @@ async fn auto_falls_back_from_searxng_with_a_safe_partial_failure() {
         response.partial_failures[0].code,
         WebSearchFailureCode::HttpStatus
     );
-    assert_eq!(server.requests.load(Ordering::SeqCst), 2);
+    assert_eq!(server.requests.load(Ordering::SeqCst), 3);
 }
 
 #[tokio::test]
@@ -320,7 +346,9 @@ async fn a_configured_provider_cannot_be_overridden_by_model_arguments() {
 #[tokio::test]
 async fn total_provider_failures_are_not_cached() {
     let server = start_server(|_| (503, "unavailable".to_string())).await;
-    let service = WebSearchService::new(test_config(format!("{}/html", server.base_url))).unwrap();
+    let mut config = test_config(format!("{}/html", server.base_url));
+    config.search.allowed_engines = vec![WebSearchProvider::Duckduckgo];
+    let service = WebSearchService::new(config).unwrap();
 
     for _ in 0..2 {
         let response = service
@@ -333,8 +361,9 @@ async fn total_provider_failures_are_not_cached() {
         assert!(response.results.is_empty());
         assert!(!response.cache_hit);
     }
-    // Each failed search exercises the POST primary and GET fallback.
-    assert_eq!(server.requests.load(Ordering::SeqCst), 4);
+    // Each failed search retries the POST/GET attempt once. Restrict the pool
+    // to the fixture so a failed provider can never reach public instances.
+    assert_eq!(server.requests.load(Ordering::SeqCst), 8);
 }
 
 #[tokio::test]

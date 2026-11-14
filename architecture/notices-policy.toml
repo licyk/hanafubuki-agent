@@ -1036,3 +1036,984 @@ reason = "Background task manager over the Agent task snapshot and event feed, w
 [[original]]
 path = "crates/tui/src/app/tests/tasks.rs"
 reason = "Background task manager over the Agent task snapshot and event feed, written for this port."
+
+[[derived]]
+path = "crates/plugin-web/src/config.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/plugin-web/src/config.rs"
+
+[[mit]]
+path = "crates/plugin-web/src/config.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/plugin-web/src/lib.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/plugin-web/src/lib.rs"
+
+[[mit]]
+path = "crates/plugin-web/src/lib.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/plugin-web/src/local/commands.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/plugin-web/src/local/commands.rs"
+
+[[mit]]
+path = "crates/plugin-web/src/local/commands.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/plugin-web/src/local/mod.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/plugin-web/src/local/mod.rs"
+
+[[mit]]
+path = "crates/plugin-web/src/local/mod.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/plugin-web/src/options/mod.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/plugin-web/src/options/mod.rs"
+
+[[mit]]
+path = "crates/plugin-web/src/options/mod.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/plugin-web/src/options/research.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/plugin-web/src/options/research.rs"
+
+[[mit]]
+path = "crates/plugin-web/src/options/research.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/plugin-web/src/plugin.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/plugin-web/src/plugin.rs"
+
+[[mit]]
+path = "crates/plugin-web/src/plugin.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/plugin-web/src/presenter.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/plugin-web/src/presenter.rs"
+
+[[mit]]
+path = "crates/plugin-web/src/presenter.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/plugin-web/src/tools/args.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/plugin-web/src/tools/args.rs"
+
+[[mit]]
+path = "crates/plugin-web/src/tools/args.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/plugin-web/src/tools/auxiliary.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/plugin-web/src/tools/auxiliary.rs"
+
+[[mit]]
+path = "crates/plugin-web/src/tools/auxiliary.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/plugin-web/src/tools/fetch.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/plugin-web/src/tools/fetch.rs"
+
+[[mit]]
+path = "crates/plugin-web/src/tools/fetch.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/plugin-web/src/tools/local_permission.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/plugin-web/src/tools/local_permission.rs"
+
+[[mit]]
+path = "crates/plugin-web/src/tools/local_permission.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/plugin-web/src/tools/mod.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/plugin-web/src/tools/mod.rs"
+
+[[mit]]
+path = "crates/plugin-web/src/tools/mod.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/plugin-web/src/tools/search.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/plugin-web/src/tools/search.rs"
+
+[[mit]]
+path = "crates/plugin-web/src/tools/search.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/plugin-web/tests/plugin.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/plugin-web/tests/plugin.rs"
+
+[[mit]]
+path = "crates/plugin-web/tests/plugin.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/engines/backoff.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/engines/backoff.rs"
+
+[[mit]]
+path = "crates/web-search/src/engines/backoff.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/engines/catalog.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/engines/catalog.rs"
+
+[[mit]]
+path = "crates/web-search/src/engines/catalog.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/engines/config.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/engines/config.rs"
+
+[[mit]]
+path = "crates/web-search/src/engines/config.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/engines/language.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/engines/language.rs"
+
+[[mit]]
+path = "crates/web-search/src/engines/language.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/engines/mod.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/engines/mod.rs"
+
+[[mit]]
+path = "crates/web-search/src/engines/mod.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/engines/plan.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/engines/plan.rs"
+
+[[mit]]
+path = "crates/web-search/src/engines/plan.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/engines/runtime.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/engines/runtime.rs"
+
+[[mit]]
+path = "crates/web-search/src/engines/runtime.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/engines/store.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/engines/store.rs"
+
+[[mit]]
+path = "crates/web-search/src/engines/store.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/fetch/browser.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/fetch/browser.rs"
+
+[[mit]]
+path = "crates/web-search/src/fetch/browser.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/fetch/charset.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/fetch/charset.rs"
+
+[[mit]]
+path = "crates/web-search/src/fetch/charset.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/fetch/direct.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/fetch/direct.rs"
+
+[[mit]]
+path = "crates/web-search/src/fetch/direct.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/fetch/document.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/fetch/document.rs"
+
+[[mit]]
+path = "crates/web-search/src/fetch/document.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/fetch/fake_ip.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/fetch/fake_ip.rs"
+
+[[mit]]
+path = "crates/web-search/src/fetch/fake_ip.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/fetch/fake_ip/tests.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/fetch/fake_ip/tests.rs"
+
+[[mit]]
+path = "crates/web-search/src/fetch/fake_ip/tests.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/fetch/http.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/fetch/http.rs"
+
+[[mit]]
+path = "crates/web-search/src/fetch/http.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/fetch/mod.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/fetch/mod.rs"
+
+[[mit]]
+path = "crates/web-search/src/fetch/mod.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/fetch/options.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/fetch/options.rs"
+
+[[mit]]
+path = "crates/web-search/src/fetch/options.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/fetch/upstream.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/fetch/upstream.rs"
+
+[[mit]]
+path = "crates/web-search/src/fetch/upstream.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/lib.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/lib.rs"
+
+[[mit]]
+path = "crates/web-search/src/lib.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/local.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/local.rs"
+
+[[mit]]
+path = "crates/web-search/src/local.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/model.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/model.rs"
+
+[[mit]]
+path = "crates/web-search/src/model.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/auxiliary/domain/academic.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/auxiliary/domain/academic.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/auxiliary/domain/academic.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/auxiliary/domain/academic/tests.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/auxiliary/domain/academic/tests.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/auxiliary/domain/academic/tests.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/auxiliary/domain/facts.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/auxiliary/domain/facts.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/auxiliary/domain/facts.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/auxiliary/domain/finance.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/auxiliary/domain/finance.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/auxiliary/domain/finance.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/auxiliary/domain/imf.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/auxiliary/domain/imf.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/auxiliary/domain/imf.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/auxiliary/domain/mod.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/auxiliary/domain/mod.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/auxiliary/domain/mod.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/auxiliary/domain/news_legal.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/auxiliary/domain/news_legal.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/auxiliary/domain/news_legal.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/auxiliary/domain/packages.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/auxiliary/domain/packages.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/auxiliary/domain/packages.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/auxiliary/domain/registries.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/auxiliary/domain/registries.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/auxiliary/domain/registries.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/auxiliary/domain/security.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/auxiliary/domain/security.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/auxiliary/domain/security.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/auxiliary/mod.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/auxiliary/mod.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/auxiliary/mod.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/auxiliary/platform.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/auxiliary/platform.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/auxiliary/platform.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/auxiliary/platform/tests.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/auxiliary/platform/tests.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/auxiliary/platform/tests.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/auxiliary/video.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/auxiliary/video.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/auxiliary/video.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/auxiliary/video/tests.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/auxiliary/video/tests.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/auxiliary/video/tests.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/auxiliary/wire.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/auxiliary/wire.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/auxiliary/wire.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/auxiliary/youtube.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/auxiliary/youtube.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/auxiliary/youtube.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/cache.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/cache.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/cache.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/diagnostics.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/diagnostics.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/diagnostics.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/http.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/http.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/http.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/mod.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/mod.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/mod.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/normalize.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/normalize.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/normalize.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/providers/api_request.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/providers/api_request.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/providers/api_request.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/providers/duckduckgo.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/providers/duckduckgo.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/providers/duckduckgo.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/providers/html.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/providers/html.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/providers/html.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/providers/instances.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/providers/instances.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/providers/instances.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/providers/local.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/providers/local.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/providers/local.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/providers/mcp.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/providers/mcp.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/providers/mcp.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/providers/mod.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/providers/mod.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/providers/mod.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/providers/models.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/providers/models.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/providers/models.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/providers/regional.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/providers/regional.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/providers/regional.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/providers/rest.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/providers/rest.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/providers/rest.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/providers/searxng.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/providers/searxng.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/providers/searxng.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/providers/wire.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/providers/wire.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/providers/wire.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/providers/yandex.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/providers/yandex.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/providers/yandex.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/quality.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/quality.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/quality.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/ranking.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/ranking.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/ranking.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/research/budget.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/research/budget.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/research/budget.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/research/cache.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/research/cache.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/research/cache.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/research/clusters.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/research/clusters.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/research/clusters.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/research/config.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/research/config.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/research/config.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/research/enrichment.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/research/enrichment.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/research/enrichment.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/research/intent.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/research/intent.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/research/intent.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/research/mod.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/research/mod.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/research/mod.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/research/model.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/research/model.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/research/model.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/research/run/documents.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/research/run/documents.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/research/run/documents.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/research/run/fetch.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/research/run/fetch.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/research/run/fetch.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/research/run/followup.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/research/run/followup.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/research/run/followup.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/research/run/mod.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/research/run/mod.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/research/run/mod.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/research/tests/fixtures.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/research/tests/fixtures.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/research/tests/fixtures.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/research/tests/mod.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/research/tests/mod.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/research/tests/mod.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/research/tests/pipeline.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/research/tests/pipeline.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/research/tests/pipeline.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/research/tests/text.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/research/tests/text.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/research/tests/text.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/research/windows.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/research/windows.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/research/windows.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/routing.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/routing.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/routing.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/snippet.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/snippet.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/snippet.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/weather/codes.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/weather/codes.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/weather/codes.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/weather/mod.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/weather/mod.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/weather/mod.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/time_range.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/time_range.rs"
+
+[[mit]]
+path = "crates/web-search/src/time_range.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/tests/engines/main.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/tests/engines/main.rs"
+
+[[mit]]
+path = "crates/web-search/tests/engines/main.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/tests/http_contract.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/tests/http_contract.rs"
+
+[[mit]]
+path = "crates/web-search/tests/http_contract.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/plugin-web/src/local/tests.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/plugin-web/src/local/tests.rs"
+
+[[mit]]
+path = "crates/plugin-web/src/local/tests.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/plugin-web/src/options/tests/mod.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/plugin-web/src/options/tests/mod.rs"
+
+[[mit]]
+path = "crates/plugin-web/src/options/tests/mod.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/plugin-web/src/tools/description.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/plugin-web/src/tools/description.rs"
+
+[[mit]]
+path = "crates/plugin-web/src/tools/description.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/plugin-web/src/tools/local_permission/tests.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/plugin-web/src/tools/local_permission/tests.rs"
+
+[[mit]]
+path = "crates/plugin-web/src/tools/local_permission/tests.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/engines/runtime/tests.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/engines/runtime/tests.rs"
+
+[[mit]]
+path = "crates/web-search/src/engines/runtime/tests.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/fetch/browser/tests.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/fetch/browser/tests.rs"
+
+[[mit]]
+path = "crates/web-search/src/fetch/browser/tests.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/fetch/charset/tests.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/fetch/charset/tests.rs"
+
+[[mit]]
+path = "crates/web-search/src/fetch/charset/tests.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/fetch/metadata.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/fetch/metadata.rs"
+
+[[mit]]
+path = "crates/web-search/src/fetch/metadata.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/providers/local/tests.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/providers/local/tests.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/providers/local/tests.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/providers/redirects.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/providers/redirects.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/providers/redirects.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/src/service/providers/redirects/tests.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/src/service/providers/redirects/tests.rs"
+
+[[mit]]
+path = "crates/web-search/src/service/providers/redirects/tests.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"
+
+[[derived]]
+path = "crates/web-search/tests/fetch_contract/extraction.rs"
+markers = ["Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent."]
+notice = "crates/web-search/tests/fetch_contract/extraction.rs"
+
+[[mit]]
+path = "crates/web-search/tests/fetch_contract/extraction.rs"
+holder = "Copyright (c) 2026 dsh-free-search contributors"

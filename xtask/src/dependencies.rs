@@ -96,6 +96,7 @@ const LAYERS: &[(&str, &[&str])] = &[
     (
         "hanafubuki-agent-plugin-web",
         &[
+            PROCESS,
             APPROVAL,
             CONTRACTS,
             FOUNDATION,

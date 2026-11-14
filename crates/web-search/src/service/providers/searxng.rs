@@ -1,18 +1,37 @@
+// Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent.
+//
+// The MIT License (MIT)
+//
+// Copyright (c) 2026 dsh-free-search contributors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 use super::super::*;
 
 impl WebSearchService {
     pub(in crate::service) async fn search_searxng(
         &self,
+        base: &Url,
         request: &WebSearchRequest,
+        key: &str,
         cancellation: &CancellationToken,
     ) -> Result<WebSearchResponse, WebSearchError> {
-        let base = self
-            .inner
-            .searxng_url
-            .as_ref()
-            .ok_or(WebSearchError::InvalidConfiguration(
-                "SearXNG endpoint is not configured",
-            ))?;
         let mut url = base.clone();
         let base_path = base.path().trim_end_matches('/');
         url.set_path(&format!("{base_path}/search"));
@@ -27,7 +46,11 @@ impl WebSearchService {
                 pairs.append_pair("time_range", time_range.as_searxng());
             }
         }
-        let body = self.get_bounded(url, cancellation).await?;
+        let mut builder = self.inner.client.get(url);
+        if !key.is_empty() {
+            builder = builder.bearer_auth(key);
+        }
+        let body = self.send_bounded(builder, cancellation).await?;
         let decoded: SearxResponse =
             serde_json::from_slice(&body).map_err(|_| WebSearchError::InvalidResponse)?;
         let results = normalize_results(
@@ -65,6 +88,7 @@ impl WebSearchService {
             ),
             partial_failures: Vec::new(),
             cache_hit: false,
+            uncertainty: None,
         })
     }
 }

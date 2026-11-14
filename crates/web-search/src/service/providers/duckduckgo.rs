@@ -1,3 +1,27 @@
+// Ported from dsh-free-search 6ab5168 (MIT); adapted to hanafubuki-agent.
+//
+// The MIT License (MIT)
+//
+// Copyright (c) 2026 dsh-free-search contributors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 use super::super::*;
 
 impl WebSearchService {
@@ -6,7 +30,12 @@ impl WebSearchService {
         request: &WebSearchRequest,
         cancellation: &CancellationToken,
     ) -> Result<WebSearchResponse, WebSearchError> {
-        let mut form = vec![("q", request.query.as_str()), ("b", "")];
+        let safe = match self.inner.config.search.safe_search {
+            crate::SafeSearch::Off => "-1",
+            crate::SafeSearch::Moderate => "0",
+            crate::SafeSearch::Strict => "1",
+        };
+        let mut form = vec![("q", request.query.as_str()), ("b", ""), ("adlt", safe)];
         if let Some(time_range) = request.time_range {
             form.push(("df", time_range.as_duckduckgo()));
         }
@@ -31,6 +60,7 @@ impl WebSearchService {
             {
                 let mut pairs = url.query_pairs_mut();
                 pairs.append_pair("q", &request.query);
+                pairs.append_pair("adlt", safe);
                 if let Some(time_range) = request.time_range {
                     pairs.append_pair("df", time_range.as_duckduckgo());
                 }
@@ -49,6 +79,7 @@ impl WebSearchService {
             suggestions: Vec::new(),
             partial_failures: Vec::new(),
             cache_hit: false,
+            uncertainty: None,
         })
     }
 }
