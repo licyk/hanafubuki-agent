@@ -162,6 +162,11 @@ next pin, and any module-size exception.
         `@mdx-js/mdx` 3.1.1 with remark-gfm; `VITE_BASE_PATH=/hanafubuki-agent/
         bun run site:build` not run locally (port 3000 held by another
         project's server); CI's Site run covers it.
+      - CI on f9bee3d:
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43559723099,
+        Linux, Windows and macOS passed at the first attempt. Site on
+        f9bee3d: .../runs/43559723111, passed, its build and deploy
+        included.
       - For L2/L3: `entry_badges` still words the badges `vision` /
         `reasoning`; L2's `fact_cells` replaces them with
         `supports_reasoning`/`supports_image_input`. The bridge's `/model`
