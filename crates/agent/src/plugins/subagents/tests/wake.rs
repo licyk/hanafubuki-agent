@@ -476,6 +476,7 @@ async fn two_agents_ending_together_make_one_woken_turn() {
     ended(&service, first).await;
     children.hold.notify_one();
     queued(&service, root, 2).await;
+    wait_until("the parent is woken", || woken.woken(root) >= 1).await;
     let wake = service
         .submit_wake_turn_with_sink(root, Arc::new(Discard))
         .await
@@ -548,7 +549,7 @@ async fn an_agents_messages_wake_its_parent_at_most_16_unread() {
     ended(&service, first).await;
     children.hold.notify_one();
     queued(&service, root, 17).await;
-    assert!(woken.woken(root) >= 1);
+    wait_until("the parent is woken", || woken.woken(root) >= 1).await;
 
     let told = text(&children, 3);
     assert_eq!(told.matches("queued for its next turn").count(), 16);
