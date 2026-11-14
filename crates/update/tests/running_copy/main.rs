@@ -191,7 +191,13 @@ impl Copy {
         );
         assert_eq!(identity(&self.running), before);
         assert_eq!(std::fs::read(&self.running).unwrap(), self.bytes);
-        assert_eq!(self.backups(), backups);
+        // No new backup: the file was never moved aside. An earlier one
+        // whose processes ended may go, at the sweep under the lock.
+        let after = self.backups();
+        assert!(
+            after.iter().all(|backup| backups.contains(backup)),
+            "{backups:?} -> {after:?}"
+        );
         // Windows may hold the image of the new executable a moment after
         // its process ends, and then the staging directory stays until the
         // next update removes it (as the next scenario checks).
