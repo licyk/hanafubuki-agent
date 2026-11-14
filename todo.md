@@ -4579,7 +4579,14 @@ exception.
         install --frozen-lockfile`, `bun run format:site`, `bun run
         format:check:site`, `bun run site:check`, `bun run site:test` (28
         passed); `site:build` not run locally (port 3000 is another
-        project's); CI's Site run covers it.
+        project's); CI's Site run covers it. After the rebase onto R1:
+        check, clippy, `cargo xtask check`, fmt and the agent crate's
+        tests (480 passed) again.
+      - CI on e86825b:
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43584434465,
+        Linux, Windows and macOS passed at the first attempt. Site on
+        e86825b: .../runs/43584434426, passed, its build and deploy
+        included.
       - For O3: nothing of O2 is in `list_agents`; a child's pair is read
         from its summary. For R2/R4: the Models part is its own paragraph
         after the roles (`{models}` in `guidance`), built from
