@@ -3903,6 +3903,15 @@ and any module-size exception.
         `@mdx-js/mdx` 3.1.1 with remark-gfm; `VITE_BASE_PATH=/hanafubuki-agent/
         bun run site:build` not run locally (port 3000 held by another
         project's server); CI's Site run covers it.
+      - CI on 80333cb:
+        https://github.com/licyk/hanafubuki-agent/actions/runs/43570982851,
+        Linux and macOS passed at the first attempt; Windows failed once on
+        `tests::user_shell::a_session_of_commands_reopens_and_continues`
+        (`crates\agent\src\tests\user_shell.rs:481`, the known `!command`
+        shutdown flake; M8's tests, `patch_lines` and the TUI's
+        `app::tests::diffs` among them, passed in that attempt) and passed at
+        its re-run. Site on 80333cb: .../runs/43570982832, passed, its build
+        and deploy included.
       - Hanafubuki at its next pin: `AgentToolDisplay::Content` and
         `AgentOutputBlock` (exhaustive matches; the fallback of an
         unpresented tool is `Content` unless its content carries structured
