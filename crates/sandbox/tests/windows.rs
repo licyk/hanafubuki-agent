@@ -343,6 +343,24 @@ mod windows {
             )));
             assert!(result.status.success(), "{shell}: {result:?}");
             assert_eq!(result.stdout, b"msys-ok");
+            let result = run_confined(
+                sandbox,
+                &workspace_write(outside.path(), false),
+                bash(&format!("echo changed > '{root}/file'")),
+            );
+            assert!(
+                !result.status.success(),
+                "{shell} retained an old workspace write: {result:?}"
+            );
+            let result = run_confined(
+                sandbox,
+                &SandboxPolicy::ReadOnly,
+                bash(&format!("echo changed > '{root}/file'")),
+            );
+            assert!(
+                !result.status.success(),
+                "{shell} read-only write: {result:?}"
+            );
             let forbidden = outside
                 .path()
                 .join("escape")

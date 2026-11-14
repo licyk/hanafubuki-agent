@@ -3,8 +3,8 @@
 // restricting SIDs, default DACL and privileges) at commit `57a808a392`.
 // Copyright 2025 OpenAI. Licensed under the Apache License, Version 2.0
 // (http://www.apache.org/licenses/LICENSE-2.0).
-// Modified for hanafubuki-agent: only the unelevated token, made from this
-// process's own; a token with no capability SID (read-only) is allowed;
+// Modified for hanafubuki-agent: restrict this process's token; include the
+// user SID only for dedicated elevated accounts. Read-only allows no root SID;
 // handles are owned.
 
 use std::ffi::c_void;
