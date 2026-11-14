@@ -661,7 +661,7 @@ async fn an_agent_on_another_provider_forks_the_history_there_and_keeps_its_pair
             )]),
             Duration::ZERO,
         ),
-        (assistant_events("Sent."), Duration::ZERO),
+        (assistant_events("Sent."), Duration::from_millis(100)),
     ])
     .await;
     let second = FakeServer::with_listings(
@@ -675,7 +675,17 @@ async fn an_agent_on_another_provider_forks_the_history_there_and_keeps_its_pair
     )
     .await;
     let (service, paths, config) =
-        with_two_providers("subagents-model-elsewhere", &first, &second, |_| {}).await;
+        with_two_providers("subagents-model-elsewhere", &first, &second, |config| {
+            // This fixture checks provider/history inheritance. A fast child's
+            // completion must not add an unscripted parent wake request.
+            config
+                .write_settings(crate::AgentSettingsPatch {
+                    wake_on_background_tasks: Some(false),
+                    ..crate::AgentSettingsPatch::default()
+                })
+                .unwrap();
+        })
+        .await;
     let subagents_now = subagents(&service).await;
     let parent = service
         .create_session(AgentSessionMode::Default, None)
