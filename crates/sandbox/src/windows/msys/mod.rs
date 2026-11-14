@@ -31,6 +31,10 @@ struct Process {
     pending: Option<(Image, u8)>,
 }
 
+// The Windows ABI requires 16-byte alignment; windows-sys's CONTEXT is only 8.
+#[repr(C, align(16))]
+struct AlignedContext(CONTEXT);
+
 pub(super) fn wait(root: u32) -> Result<u32, String> {
     let account = current_user_sid()?;
     let logon = current_logon_sid()?;
@@ -120,13 +124,13 @@ fn rewind_thread(id: u32, address: usize) -> Result<(), String> {
         return Err(last_error("open MSYS initialization thread"));
     }
     let thread = unsafe { OwnedHandle::from_raw_handle(thread as _) };
-    let mut context: CONTEXT = unsafe { std::mem::zeroed() };
-    context.ContextFlags = CONTEXT_CONTROL_AMD64;
-    if unsafe { GetThreadContext(thread.as_raw_handle() as _, &mut context) } == 0 {
+    let mut context = AlignedContext(unsafe { std::mem::zeroed() });
+    context.0.ContextFlags = CONTEXT_CONTROL_AMD64;
+    if unsafe { GetThreadContext(thread.as_raw_handle() as _, &mut context.0) } == 0 {
         return Err(last_error("read MSYS initialization context"));
     }
-    context.Rip = address as u64;
-    if unsafe { SetThreadContext(thread.as_raw_handle() as _, &context) } == 0 {
+    context.0.Rip = address as u64;
+    if unsafe { SetThreadContext(thread.as_raw_handle() as _, &context.0) } == 0 {
         return Err(last_error("restore MSYS initialization context"));
     }
     Ok(())
