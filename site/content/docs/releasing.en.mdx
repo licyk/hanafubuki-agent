@@ -1,6 +1,6 @@
 ---
 title: Releasing
-description: How a release is made — the version bump, waiting for CI, the tag, the release workflow's jobs, the first release and crates.io's rate limit, resuming a stopped release, rehearsing on a branch, and the secrets.
+description: How a release is made — the version bump, waiting for CI, the tag, the release workflow's jobs, the asset names' contract, the first release and crates.io's rate limit, resuming a stopped release, rehearsing on a branch, and the secrets.
 icon: Rocket
 ---
 
@@ -57,9 +57,22 @@ A release is a `v<version>` tag on `main`. The tag starts `.github/workflows/rel
 
 `publish` and `github-release` run only on a tag.
 
+## The asset names are a contract [#asset-contract]
+
+From the version that ships `hanafubuki-agent update` on, a released binary updates itself from the latest release's archives, so what `binaries` and `github-release` make is read by every version already installed, not only by the one being released:
+
+| What                 | Read as                                                                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| The targets          | `x86_64-unknown-linux-gnu`, `x86_64-apple-darwin`, `aarch64-apple-darwin`, `x86_64-pc-windows-msvc`; any other build has no release  |
+| The archive          | `hanafubuki-agent-<version>-<target>.tar.gz`, `.zip` for Windows                                                                     |
+| The executable in it | `hanafubuki-agent-<version>-<target>/hanafubuki-agent`, `.exe` for Windows                                                           |
+| The release          | the tag `v<version>`, neither a draft nor a pre-release (GitHub's latest release), each archive with the SHA-256 digest GitHub gives |
+
+Renaming an archive, moving the executable inside it, adding or dropping a target, or marking a release as a pre-release strands the self-update of every version before the change: those installations are updated by hand once. `crates/update/tests/release_contract.rs` reads `release.yml` and `about.toml` and fails when their targets or packaging lines drift from the updater's table (`RELEASE_TARGETS`, `asset_name` and `entry_path` in `crates/update/src/target.rs`): change both together, and only on purpose. A resumed release ([below](#resuming-a-release-that-stopped)) replaces archives while lookups may be reading them; an update that meets a missing archive or a digest that no longer matches stops and changes nothing.
+
 ## The first release and crates.io's rate limit [#the-first-release-and-cratesios-rate-limit]
 
-crates.io lets an account create a few new crates at once and then one every ten minutes. The first release creates all 24 crates, so `publish` publishes the first few, then one crate every ten minutes or so: about three and a half hours in all. The job retries up to 30 times and is allowed 330 minutes; `github-release` waits for it. Later releases only add versions of existing crates, which crates.io limits far less, and take minutes.
+crates.io lets an account create a few new crates at once and then one every ten minutes. The first release creates all 24 crates, so `publish` publishes the first few, then one crate every ten minutes or so: about three and a half hours in all. The job retries up to 30 times and is allowed 330 minutes; `github-release` waits for it. Later releases only add versions of existing crates, which crates.io limits far less, and take minutes. A release that adds a crate (as the self-update added `hanafubuki-agent-update`) creates it within the few crates.io allows at once: still minutes.
 
 ## Resuming a release that stopped [#resuming-a-release-that-stopped]
 

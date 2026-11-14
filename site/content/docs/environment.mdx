@@ -14,6 +14,7 @@ icon: Variable
 | `--api-key-env` 指定的变量                           | `providers add` 从中读取 API 令牌，只在添加时读取一次                                                                                                        |
 | `PATH`（Windows 上还有 `PATHEXT`）                   | 查找 stdio MCP 服务器的程序                                                                                                                                  |
 | `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY` | 访问模型 Provider 时使用的代理，见[网络与日志](/docs/network-logging#provider-proxy)                                                                         |
+| `HANAFUBUKI_AGENT_TEST_RELEASE_URL`                  | 只用于调试构建：代替 GitHub 的发布查询地址（`http` 只能指向回环地址）；没有它，调试构建不查询任何发布                                                        |
 
 Agent 本身不读取 `RUST_LOG` 或 `NO_COLOR`：日志级别由 `logLevel` 和 `--log-level` 决定，见[网络与日志](/docs/network-logging#logging)。
 

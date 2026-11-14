@@ -1917,6 +1917,7 @@ dependencies = [
  "clap",
  "hanafubuki-agent",
  "hanafubuki-agent-tui",
+ "hanafubuki-agent-update",
  "notify",
  "serde",
  "serde_json",
@@ -2379,6 +2380,23 @@ dependencies = [
  "vt100",
  "which",
  "winsplit",
+]
+
+[[package]]
+name = "hanafubuki-agent-update"
+version = "0.2.0"
+dependencies = [
+ "hanafubuki-agent-foundation",
+ "hex",
+ "log",
+ "parking_lot",
+ "reqwest",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]

@@ -170,9 +170,14 @@ const LAYERS: &[(&str, &[&str])] = &[
             WORKTREE,
         ],
     ),
-    // The terminal interface over the facade, and the command line over both.
+    // The terminal interface over the facade, the binary's self-update over
+    // the foundation, and the command line over all three.
     ("hanafubuki-agent-tui", &[FACADE]),
-    ("hanafubuki-agent-cli", &[FACADE, "hanafubuki-agent-tui"]),
+    ("hanafubuki-agent-update", &[FOUNDATION]),
+    (
+        "hanafubuki-agent-cli",
+        &[FACADE, "hanafubuki-agent-tui", "hanafubuki-agent-update"],
+    ),
     ("xtask", &[]),
 ];
 

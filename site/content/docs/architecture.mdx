@@ -27,9 +27,9 @@ Agent 是一个**内核**（`hanafubuki-agent-kernel`），拥有会话、轮次
 | 插件       | `plugin-web`、`plugin-workspace-fs`、`plugin-execution`、`plugin-mcp`、`plugin-worktree`、`plugin-hooks`、`plugin-packages`                              | 每个把一个领域 crate 绑定到扩展点，或作为服务提供给门面的调用；`plugin-packages` 是访客宿主，在进程外或以 WebAssembly 运行已安装插件的代码 |
 | 配置       | `config`                                                                                                                                                 | Agent 自己的配置（`AgentConfig`）：三个 TOML 文件，独立模式下分层                                                                          |
 | 门面       | `hanafubuki-agent`（`crates/agent`）                                                                                                                     | 组合：插件宿主与清单、Agent 自己的插件、槽位、服务 API、宿主接口、独立运行时、数据目录锁、日志                                             |
-| 界面       | `tui`、`cli`                                                                                                                                             | 终端界面（只依赖门面）和 `hanafubuki-agent` 二进制（依赖门面与终端界面）                                                                   |
+| 界面       | `tui`、`update`、`cli`                                                                                                                                   | 终端界面（只依赖门面）；二进制的自更新（只依赖 foundation，只有 CLI 使用它）；`hanafubuki-agent` 二进制（依赖门面、终端界面与自更新）      |
 
-（表中省略了 `hanafubuki-agent-` 前缀。）除了层表，检查还执行与表无关的规则：不依赖任何 Hanafubuki crate（任何来源）；内核不依赖任何插件；插件依赖插件 API，不依赖内核、门面或其他插件；每个插件 crate 都是门面的依赖（门面挂载它）；只有门面依赖配置 crate；`host` 只依赖 `foundation`；kardia 只出现在 `host`、插件 API、内核、插件和门面中，它的加载器和访客桥（`kardia-loader`、`kardia-hmr`）只出现在访客宿主（`plugin-packages`）中，而且从不使用 `kardia` 门面 crate（它带有 WASM/dylib 热重载）。
+（表中省略了 `hanafubuki-agent-` 前缀。）门面和终端界面的行都不含 `update`，所以嵌入 Agent 的宿主永远不会链接自更新。除了层表，检查还执行与表无关的规则：不依赖任何 Hanafubuki crate（任何来源）；内核不依赖任何插件；插件依赖插件 API，不依赖内核、门面或其他插件；每个插件 crate 都是门面的依赖（门面挂载它）；只有门面依赖配置 crate；`host` 只依赖 `foundation`；kardia 只出现在 `host`、插件 API、内核、插件和门面中，它的加载器和访客桥（`kardia-loader`、`kardia-hmr`）只出现在访客宿主（`plugin-packages`）中，而且从不使用 `kardia` 门面 crate（它带有 WASM/dylib 热重载）。
 
 三条边界承载了大部分设计：
 

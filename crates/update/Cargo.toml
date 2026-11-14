@@ -1,0 +1,46 @@
+[package]
+name = "hanafubuki-agent-update"
+description = "The hanafubuki-agent binary's self-update: the release lookup, the version rules, the installation's kind, and the download, verification and replacement of the executable"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+# A fake release server on loopback, for this crate's and the CLI's tests.
+test-support = [
+  "dep:parking_lot",
+  "tokio/io-util",
+  "tokio/macros",
+  "tokio/net",
+  "tokio/sync",
+]
+
+[dependencies]
+hanafubuki-agent-foundation.workspace = true
+hex.workspace = true
+log.workspace = true
+parking_lot = { workspace = true, optional = true }
+reqwest = { workspace = true, features = ["rustls", "socks", "stream", "system-proxy"] }
+semver.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt", "time"] }
+
+[dev-dependencies]
+# What `test-support` enables, for the unit tests that use it without the feature.
+parking_lot.workspace = true
+tokio = { workspace = true, features = [
+  "io-util",
+  "macros",
+  "net",
+  "rt-multi-thread",
+  "sync",
+] }
+
+[[test]]
+name = "lookup"
+required-features = ["test-support"]

@@ -56,7 +56,7 @@ changed (none expected), what Hanafubuki must change at its next pin
       optional, not started without a further decision), the notice also
       for a dismissed version, no GitHub from debug builds, `cargo install
       --locked`, a crate rather than a CLI module.
-- [ ] U0 (lane A, now): `hanafubuki-agent-update` (`crates/update`, over
+- [x] U0 (lane A, now): `hanafubuki-agent-update` (`crates/update`, over
       the foundation; the CLI's layer row gains it, the TUI's does not):
       the release lookup (tolerant, `GITHUB_TOKEN` only when given, the
       `hanafubuki-agent/<version>` User-Agent, `network.proxy` through
@@ -67,6 +67,140 @@ changed (none expected), what Hanafubuki must change at its next pin
       (replace, cargo, or the manual step the notice names), the debug-only
       `HANAFUBUKI_AGENT_TEST_RELEASE_URL`, and the fake release server.
       `semver` moves to the workspace dependencies.
+      Done (2026-11-14):
+      - Wiring: the workspace member and its `[workspace.dependencies]`
+        entry (`path`, `version`); `semver = "1"` moved there
+        (`crates/packages` takes it with `.workspace`); `LAYERS` gains
+        `("hanafubuki-agent-update", &[FOUNDATION])` and the CLI's row
+        `[FACADE, tui, update]`; `crates/cli/Cargo.toml` depends on it (no
+        CLI code yet) and on its `test-support` in dev-dependencies. The
+        facade and the TUI cannot depend on it: adding it to either's
+        `[dependencies]` fails `check-dependencies` (tried, reverted). No new
+        third-party crate: `Cargo.lock` only gains the member (reqwest,
+        semver, sha2, hex, tempfile, tokio, log, serde, serde_json,
+        parking_lot were all there).
+      - The crate (`src/`): `version.rs` (`current_version`, `is_newer`:
+        stable and `cmp_precedence`, so build metadata never makes a release
+        newer; the tag rule `v<semver>` without a pre-release part,
+        trimmed); `target.rs` (`RELEASE_TARGETS`, `this_target` from a cfg
+        table, `asset_name`, `entry_path`); `release.rs` (`Release`,
+        `ReleaseAsset { name, url, size, sha256: Option<[u8; 32]> }`,
+        `RELEASES_PAGE`, `release_notes_url`; decoded tolerantly: unknown
+        fields ignored, an asset that does not read (no URL or size, a URL
+        not `https`, `http` other than to loopback through the test URL)
+        left out, a digest other than `sha256:<64 hex>` read as `None`; a
+        draft, a pre-release, a missing or non-`v<semver>` tag refused, the
+        tag quoted escaped and cut at 40 characters); `client.rs`
+        (`UpdateProxy::{System, Disabled, Explicit}` with `from_setting` and
+        a redacted `Debug`; `ReleaseClient::for_this_build(proxy, token)`,
+        `latest`, `latest_blocking`: `Accept: application/vnd.github+json`,
+        `User-Agent: hanafubuki-agent/<version>`, `Authorization: Bearer`
+        (sensitive) only for a non-empty token, connect 10 s, the lookup 30
+        s, the body 1 MiB, no connection pool so a client outlives each
+        `latest_blocking` runtime); `install.rs` (`Installation::{current,
+        at, executable, kind, writable}`, `InstallKind::{Release, Cargo {
+        root, default_root }, Checkout}` per §3.6, `.crates2.json` read
+        tolerantly, roots compared by `PathKey`); `action.rs`
+        (`UpdateAction::{Replace, Cargo { command }, Manual(ManualReason)}`,
+        `ManualReason::{Checkout, Unwritable, NoReleaseForPlatform,
+        CargoOnWindows}`, `Installation::action`); `error.rs` (`UpdateError`,
+        §4's sentence for each lookup and installation case, `kind()` a log
+        label); `test_support.rs` (`FakeRelease` on its own thread and
+        runtime).
+      - D16: the GitHub URL exists only under `cfg(not(debug_assertions))`
+        and the variable only under `cfg(debug_assertions)`, so a release
+        build reads no endpoint from its environment and a debug build has
+        no GitHub URL; `https` anywhere or `http` to a loopback address
+        only. `client::tests::a_release_build_cannot_be_redirected` (runs
+        under `cargo test --release`, run here once: passed) sets the
+        variable and still gets GitHub's URL.
+      - Tests: `version/tests.rs` (§3.4's table, build metadata, tags and
+        whitespace), `release/tests.rs` (tolerant decoding, digests, every
+        refusal, a hostile tag escaped), `client/tests.rs` (the proxy's
+        string form and redaction, tokens, statuses, the test URL's rule),
+        `install/tests.rs` (profile directories, registry and sparse
+        sources with and without the default root, path and git sources,
+        seven records that are not cargo's, a record beside a directory not
+        named `bin`, `… (deleted)` cannot be found, a symlink resolves, a
+        probe that leaves nothing; an unreadable record and a read-only
+        directory assert only when not root: here the test binary was run
+        as `nobody` too, where both passed and both failed against a
+        mutant), `action/tests.rs` (every kind and reason, `--root` only
+        off the default, on every OS); `tests/lookup/main.rs` over the fake
+        (headers with and without a token, every status's error and
+        sentence, a draft, a pre-release, bad tags, a proxy's HTML page,
+        unknown fields and bad assets, over 1 MiB, a delayed and a stalled
+        answer timing out, a cut answer and a stopped server, one client
+        across four runtimes, the async lookup, the debug build without the
+        variable, the fake's assets, 404, truncation and redirect);
+        `tests/release_contract.rs` (the matrix and `about.toml` against
+        `RELEASE_TARGETS`, the packaging lines, no `--draft` or
+        `--prerelease`, `.zip`/`.exe` exactly for the Windows runner; the
+        plan's names; `this_target` on the CI systems). Each passed at once;
+        by mutation each failed as it should: a `.7z` archive line, a fifth
+        `about.toml` target, a renamed matrix target (the contract);
+        `latest > current` for `cmp_precedence` (build metadata); 401
+        unmapped; no body bound; any test URL scheme; plain `http` assets;
+        a profile directory from `deps/` alone; `sparse+` not a registry; a
+        lookup bound of 25 s.
+      - Deviations: the lookup suite is `tests/lookup/main.rs` with
+        `fixtures/v0.2.0-synthetic.json` (a fixture directory beside
+        `tests/lookup.rs` fails `check-source-layout`). The fixture is
+        synthetic: GitHub's REST shape for v0.2.0 (eight assets, every
+        field GitHub adds, sizes in the live range) built without
+        contacting GitHub, so its digests are not the real archives'; the
+        live answer can replace it unchanged. `UpdateError` has the lookup's
+        and the installation's variants; U1 adds the engine's. Additions
+        beyond §3.2: `UpdateProxy: Default` (`System`), `kind()` labels,
+        `test_support::{FakeRelease, FakeResponse, FakeAsset, FakeRequest,
+        LATEST_PATH, sha256_digest}`.
+      - For U1 and U2: `ReleaseClient::for_this_build(&UpdateProxy, token)`
+        (`UpdateProxy::from_setting(&String::from(network.proxy))`; `Err(
+        UpdateError::DebugBuild)` in a debug build without the test URL, so
+        U2's "allowed" can be that call), `latest()` / `latest_blocking()`
+        (the latter from a thread outside any Tokio runtime),
+        `Release::asset(&asset_name(&release.version, target))`,
+        `is_newer(&latest, &current_version())`, `Installation::current()`
+        once, then `.kind()` / `.action()` (the notice's wording from
+        `action()` alone: `Replace`, `Cargo { command }`, `Manual(_)`).
+        A test binary runs from `target/*/deps`, which has no `deps/`
+        inside it, so `Installation::current()` in a test is a Release, not
+        a Checkout, while the CLI binary `crates/cli/tests` start runs from
+        `target/debug`, a Checkout (no check; `update --check` says to
+        rebuild) unless copied out of `target/` first: build installations
+        with `Installation::at` over a temp tree. `default_root` compares
+        with `$CARGO_HOME` (else `~/.cargo`) as §3.6 says; cargo also reads
+        `CARGO_INSTALL_ROOT` and `install.root` before them, so a bare
+        `cargo install` can land elsewhere when either is set (U1 to
+        decide whether to always pass `--root`). The fake: `FakeRelease::start()` (sync), `publish(tag,
+        &[FakeAsset::new(name, bytes)])` (`without_digest`, `with_digest`,
+        `listed_size`), `answer_latest` / `route(path, FakeResponse)`
+        (`ok`, `json`, `status`, `redirect`, `delayed`, `paused_after`,
+        `truncated_at`), `release_json` to alter, `requests()` with
+        headers, `api_url()` for `HANAFUBUKI_AGENT_TEST_RELEASE_URL` in a
+        child process, `client(token)` / `client_with_timeout`.
+      - Docs (both languages): `architecture#crates-and-layers` (`update` in
+        the Interfaces row; neither the facade's row nor the TUI's lists
+        it), `plugin-rules#crates-and-dependencies` (its row; the CLI's),
+        `releasing#asset-contract` (new: the names, the layout, the stable
+        flag, the contract test, a resumed release) and a crate a later
+        release adds, `environment#read` (the test URL's row). Each changed
+        page compiled with `@mdx-js/mdx` and remark-gfm.
+      - Validation (Linux): `cargo fmt --all --check`; `RUSTFLAGS="-D
+        warnings" cargo check --workspace --all-targets --all-features`;
+        `cargo clippy --workspace --all-targets --all-features -- -D
+        warnings`; `cargo clippy -p hanafubuki-agent-update --target
+        x86_64-pc-windows-gnu --all-targets --all-features -- -D warnings`
+        (compiles only); `cargo xtask check`; `cargo test --workspace
+        --all-features --no-fail-fast`; `cargo check -p
+        hanafubuki-agent-update --release`; `cargo test -p
+        hanafubuki-agent-update --release --lib` (the redirection test,
+        which CI's debug runs do not compile); `bun install
+        --frozen-lockfile`, `bun run format:check:site`, `bun run
+        site:check`, `bun run site:test`. Skipped: `site:build` (left to the
+        Site workflow). Windows and macOS: CI only.
+      - Goldens: none. Module size: no exception. Hanafubuki: nothing (a
+        crate it does not use; the facade is unchanged).
 - [ ] U1 (lane A, after U0): the engine (lock beside the executable, the
       installed file's version asked first, staging beside it, streamed
       download with digest and size, one entry from the `.tar.gz`/`.zip`,

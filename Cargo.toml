@@ -41,6 +41,7 @@ hanafubuki-agent-sandbox = { path = "crates/sandbox", version = "0.2.0" }
 hanafubuki-agent-skills = { path = "crates/skills", version = "0.2.0" }
 hanafubuki-agent-tui = { path = "crates/tui", version = "0.2.0" }
 hanafubuki-agent-tool-contracts = { path = "crates/tool-contracts", version = "0.2.0" }
+hanafubuki-agent-update = { path = "crates/update", version = "0.2.0" }
 hanafubuki-agent-web-search = { path = "crates/web-search", version = "0.2.0" }
 hanafubuki-agent-workspace-fs = { path = "crates/workspace-fs", version = "0.2.0" }
 hanafubuki-agent-worktree = { path = "crates/worktree", version = "0.2.0" }
@@ -61,6 +62,7 @@ regex = "1"
 reqwest = { version = "0.13", default-features = false }
 rmcp = { version = "3.5.0", default-features = false }
 rusqlite = "0.41"
+semver = "1"
 serde = "1"
 serde_json = "1"
 serde_yaml = "0.9"

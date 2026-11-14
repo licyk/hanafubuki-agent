@@ -1,6 +1,6 @@
 ---
 title: 发布
-description: 如何发布一个版本：升级版本号、等待 CI、打标签、发布工作流的各个任务、首次发布与 crates.io 的速率限制、恢复中断的发布、在分支上演练，以及密钥。
+description: 如何发布一个版本：升级版本号、等待 CI、打标签、发布工作流的各个任务、资产名称的契约、首次发布与 crates.io 的速率限制、恢复中断的发布、在分支上演练，以及密钥。
 icon: Rocket
 ---
 
@@ -57,9 +57,22 @@ icon: Rocket
 
 `publish` 和 `github-release` 只在标签上运行。
 
+## 资产名称是契约 [#asset-contract]
+
+从带有 `hanafubuki-agent update` 的版本起，发布的二进制会从最新 release 的归档更新自己，所以 `binaries` 和 `github-release` 产出的东西不只由正在发布的版本读取，也由每个已经安装的版本读取：
+
+| 内容             | 读取方式                                                                                                                    |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| 目标             | `x86_64-unknown-linux-gnu`、`x86_64-apple-darwin`、`aarch64-apple-darwin`、`x86_64-pc-windows-msvc`；其他构建没有可用的发布 |
+| 归档             | `hanafubuki-agent-<version>-<target>.tar.gz`，Windows 为 `.zip`                                                             |
+| 其中的可执行文件 | `hanafubuki-agent-<version>-<target>/hanafubuki-agent`，Windows 为 `.exe`                                                   |
+| release          | 标签 `v<version>`，既不是草稿也不是预发布（GitHub 的最新 release），每个归档带有 GitHub 给出的 SHA-256 摘要                 |
+
+改名归档、移动其中的可执行文件、增减目标，或把 release 标为预发布，都会让变化之前的每个版本无法自更新：这些安装需要手动更新一次。`crates/update/tests/release_contract.rs` 读取 `release.yml` 和 `about.toml`，当它们的目标或打包行偏离更新器的表（`crates/update/src/target.rs` 中的 `RELEASE_TARGETS`、`asset_name` 和 `entry_path`）时失败：两边要一起改，而且只能有意地改。恢复的发布（[见下文](#resuming-a-release-that-stopped)）会在查询可能正在读取时替换归档；遇到归档缺失或摘要不再匹配的更新会停止，不做任何改动。
+
 ## 首次发布与 crates.io 的速率限制 [#the-first-release-and-cratesios-rate-limit]
 
-crates.io 允许一个账号一次创建几个新 crate，之后每十分钟一个。首次发布会创建全部 24 个 crate，所以 `publish` 先发布前几个，之后大约每十分钟一个 crate：总共约三个半小时。这个任务最多重试 30 次，允许运行 330 分钟；`github-release` 等待它。之后的发布只是给已有的 crate 添加版本，crates.io 对此限制宽松得多，几分钟就能完成。
+crates.io 允许一个账号一次创建几个新 crate，之后每十分钟一个。首次发布会创建全部 24 个 crate，所以 `publish` 先发布前几个，之后大约每十分钟一个 crate：总共约三个半小时。这个任务最多重试 30 次，允许运行 330 分钟；`github-release` 等待它。之后的发布只是给已有的 crate 添加版本，crates.io 对此限制宽松得多，几分钟就能完成。新增 crate 的发布（例如自更新新增的 `hanafubuki-agent-update`）在 crates.io 一次允许创建的数量之内创建它：仍然只要几分钟。
 
 ## 恢复中断的发布 [#resuming-a-release-that-stopped]
 
