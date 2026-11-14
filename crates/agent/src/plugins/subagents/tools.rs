@@ -6,9 +6,13 @@
 // Copyright 2025 OpenAI. Licensed under the Apache License, Version 2.0
 // (http://www.apache.org/licenses/LICENSE-2.0).
 // Modified for hanafubuki-agent: plain tool names rather than a namespace;
-// `agent_type` names one of the Agent's spawnable roles, which sets the
-// agent's model and reasoning effort, so there is no `model` or
-// `reasoning_effort`; `list_agents` reports each agent's role; no task
+// `agent_type` names one of the Agent's spawnable roles; `provider` names
+// one of the Agent's enabled Providers, and `model` and `reasoning_effort`
+// are checked against what is known of them before the agent exists; what
+// is not passed is the role's, else the parent's (the argument wins over
+// the role, and a passed model keeps the role's or the parent's effort);
+// the spawn returns the Provider, model and effort the agent runs with;
+// `list_agents` reports each agent's role; no task
 // paths (an agent is named by its task name or its id among its parent's
 // agents) and no `path_prefix`; `wait_agent` returns
 // the final answers instead of a mailbox summary, and returns at once when
@@ -23,14 +27,15 @@ use std::time::Duration;
 
 use hanafubuki_agent_approval::{ApprovalAction, AuthorizedAction, PermissionRequirement};
 use hanafubuki_agent_contracts::tools::arguments::{
-    clamped_u64, nullable_bounded_string, required_text, ArgumentNotes,
+    clamped_u64, nullable_bounded_string, required_text, valid_bounded_text, ArgumentNotes,
 };
 use hanafubuki_agent_contracts::{
     object_arguments, AgentActivityAction, AgentMemoryContextEffect, AgentToolError,
     AgentToolHandler, ToolCallValidationError, ToolDescriptor, ToolEffect, ToolFuture,
     ToolInvocation, ToolResult,
 };
-use hanafubuki_agent_kernel::AgentError;
+use hanafubuki_agent_foundation::agent_settings::MAX_MODEL_REASONING_EFFORT_BYTES;
+use hanafubuki_agent_kernel::{AgentError, ModelReasoningEffort};
 use hanafubuki_agent_tool_contracts::{
     ToolContractError, ToolExecutionClass, ToolExposure, ToolName,
 };
@@ -47,6 +52,9 @@ const MAXIMUM_MESSAGE_BYTES: usize = 64 * 1024;
 const MAXIMUM_TASK_NAME_CHARS: usize = 64;
 const MAXIMUM_TARGET_CHARS: usize = 256;
 const MAXIMUM_AGENT_TYPE_CHARS: usize = 256;
+/// The kernel's bound on a model id.
+const MAXIMUM_MODEL_BYTES: usize = 256;
+const MAXIMUM_PROVIDER_BYTES: usize = 128;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum SubagentToolKind {
@@ -168,8 +176,15 @@ impl AgentToolHandler for SubagentTool {
                 SubagentToolKind::SpawnAgent => {
                     let request = spawn_arguments(arguments, &service.roles)?;
                     let task_name = request.task_name.clone();
-                    let id = service.spawn(parent, request).await.map_err(tool_error)?;
-                    Ok(json!({ "task_name": task_name, "agent_id": id.to_string() }).into())
+                    let child = service.spawn(parent, request).await.map_err(tool_error)?;
+                    Ok(json!({
+                        "task_name": task_name,
+                        "agent_id": child.id.to_string(),
+                        "provider": child.provider_id,
+                        "model": child.model,
+                        "reasoning_effort": child.reasoning_effort,
+                    })
+                    .into())
                 }
                 SubagentToolKind::SendMessage => {
                     let (target, message) = message_arguments(arguments)?;
@@ -267,12 +282,49 @@ fn spawn_arguments(
             ),
         }
     })?;
+    let reasoning_effort = optional_text(
+        arguments,
+        "reasoning_effort",
+        MAX_MODEL_REASONING_EFFORT_BYTES,
+    )?
+    .map(|effort| {
+        ModelReasoningEffort::parse(effort).map_err(|reason| {
+            ToolCallValidationError::InvalidArgumentAt {
+                path: "reasoning_effort".to_string(),
+                reason,
+            }
+        })
+    })
+    .transpose()?;
     Ok(SpawnRequest {
         task_name,
         message: message_argument(arguments)?,
         fork,
         role,
+        provider: optional_text(arguments, "provider", MAXIMUM_PROVIDER_BYTES)?,
+        model: optional_text(arguments, "model", MAXIMUM_MODEL_BYTES)?,
+        reasoning_effort,
     })
+}
+
+/// A trimmed one-line string of at most `maximum_bytes`; missing, `null`
+/// or blank is absent.
+fn optional_text(
+    arguments: &Map<String, Value>,
+    name: &'static str,
+    maximum_bytes: usize,
+) -> Result<Option<String>, ToolCallValidationError> {
+    match arguments.get(name) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(text)) if text.trim().is_empty() => Ok(None),
+        Some(Value::String(text)) if valid_bounded_text(text.trim(), maximum_bytes, false) => {
+            Ok(Some(text.trim().to_string()))
+        }
+        Some(_) => Err(ToolCallValidationError::InvalidArgumentAt {
+            path: name.to_string(),
+            reason: format!("must be a string of one line, at most {maximum_bytes} bytes"),
+        }),
+    }
 }
 
 /// Whether `fork_turns` asks for the parent's history: Codex also accepts a
@@ -377,7 +429,7 @@ fn list_status(status: &AgentRunStatus) -> &'static str {
     }
 }
 
-const SPAWN_AGENT_DESCRIPTION: &str = r#"Spawns an agent to work on the specified task. The agent is a separate conversation that runs in the background with your permission mode, and with your model and your tools unless its `agent_type` says otherwise; it cannot spawn agents of its own. Refer to it by its task name, or by the agent id this returns, in the other agent tools.
+const SPAWN_AGENT_DESCRIPTION: &str = r#"Spawns an agent to work on the specified task. The agent is a separate conversation that runs in the background with your permission mode, and with your model and your tools unless `model`, `provider`, `reasoning_effort` or its `agent_type` say otherwise; it cannot spawn agents of its own. Refer to it by its task name, or by the agent id this returns, in the other agent tools.
 Its final answer is provided to you by wait_agent when it finishes. You can send it messages and follow-up tasks meanwhile.
 
 Note that passing `fork_turns="none"` will not pass any surrounding context to the spawned agent, which may cause the agent to lack the context it needs to complete its task, whereas `fork_turns="all"` will provide the agent with this conversation up to your current turn. Either way the message is the only part of the current turn the agent reads, so make it self-contained."#;
@@ -408,7 +460,19 @@ fn spec(kind: SubagentToolKind, waits: WaitBounds) -> (String, Value) {
                 },
                 "agent_type": {
                     "type": "string",
-                    "description": "Role of the new agent: one of the roles listed in the sub-agent guidance. Defaults to `default`, which keeps your tools and instructions. A role can only take tools away, and may run another model."
+                    "description": "Role of the new agent: one of the roles listed in the sub-agent guidance. Defaults to `default`, which keeps your tools and instructions. A role can only take tools away, and may set a model."
+                },
+                "model": {
+                    "type": "string",
+                    "description": "Model id for the new agent: one the sub-agent guidance lists, or another its Provider serves. Defaults to the role's model, else yours."
+                },
+                "reasoning_effort": {
+                    "type": "string",
+                    "description": "Reasoning effort for the new agent, one its model takes (the guidance lists them where known). Defaults to the role's, else yours."
+                },
+                "provider": {
+                    "type": "string",
+                    "description": "Provider of `model`: the id (or name) of an enabled Provider, as the sub-agent guidance lists them. Defaults to yours."
                 }
             }),
             &["task_name", "message"],

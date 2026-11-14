@@ -27,22 +27,6 @@ fn stop(service: &AgentApplicationService) {
         .is_empty());
 }
 
-/// A Provider `provider_id` named `name` at `base_url`, beside the test
-/// Provider.
-fn add_provider(config: &AgentConfig, provider_id: &str, name: &str, base_url: &str) {
-    let revision = config.providers().unwrap().revision;
-    config
-        .mutate_providers(revision, |registry| {
-            let mut provider = registry.providers[0].clone();
-            provider.id = provider_id.into();
-            provider.display_name = name.into();
-            provider.base_url = base_url.into();
-            registry.providers.push(provider);
-            Ok(())
-        })
-        .unwrap();
-}
-
 /// `metadata` with no fact's observation time: two reads of the clock
 /// stamp the same reported fact apart.
 fn unstamped(metadata: &ModelMetadata) -> ModelMetadata {
@@ -225,7 +209,7 @@ async fn one_providers_listing_answers_while_anothers_is_pending() {
     .await;
     let (service, paths) = service_with("model-list-independent", |_, config| {
         configure_test_provider(config, &slow.base_url, None);
-        add_provider(config, "provider-2", "Fast", &fast.base_url);
+        add_test_provider(config, "provider-2", "Fast", &fast.base_url);
     });
     let only = |provider_id: &str| AgentProviderModelCatalogRequest {
         provider_ids: Some(vec![provider_id.to_string()]),

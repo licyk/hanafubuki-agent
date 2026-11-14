@@ -5,13 +5,16 @@
 //! session of origin `Subagent`, named by its task name, running its turns
 //! in the background on the Agent runtime with its parent's permission
 //! mode, as the role `spawn_agent`'s `agent_type` names: its parent's scope
-//! narrowed by the role's, and the role's instructions and model (else its
-//! parent's). The plugin provides [`SubagentService`] under its name,
+//! narrowed by the role's, and the role's instructions. Its Provider, model
+//! and reasoning effort are those `spawn_agent` passes, else the role's,
+//! else its parent's; what is passed is checked before the agent exists
+//! (`models.rs` words the refusals). The plugin provides [`SubagentService`] under its name,
 //! which the facade's `subagents` and `interrupt_subagent` resolve per call;
 //! with the plugin off, the tools are gone and those calls are unavailable.
 //! Its options ([`SubagentsOptions`]) set how many agents run at once and
 //! how long a wait lasts.
 
+mod models;
 mod options;
 mod prompt;
 mod service;

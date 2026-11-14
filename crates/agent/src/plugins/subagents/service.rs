@@ -17,7 +17,10 @@
 // spawns (Codex's `agents.max_depth` default), and a wait lasts at most 5
 // minutes (the turn's own tool timeout and deadline bound it); the limits
 // and the wait bounds are the plugin's options; an agent's role
-// (`agent_type`) is one of the Agent's roles, which only narrow it.
+// (`agent_type`) is one of the Agent's roles, which only narrow it; its
+// Provider, model and reasoning effort are those `spawn_agent` passes, else
+// its role's, else its parent's, checked before the agent exists and set
+// in one commit.
 
 //! What the subagent tools and the facade's subagent calls do, over the
 //! session driver. The runs live in [`SubagentRuns`], which outlives the
@@ -33,15 +36,16 @@ use hanafubuki_agent_foundation::panic::catch_panic_async;
 use hanafubuki_agent_kernel::{
     AgentChildSessionBase, AgentChildSessionRequest, AgentError, AgentSessionId,
     AgentSessionOrigin, AgentSessionPersistence, AgentSessionRuntimeSnapshot, AgentSessionSummary,
-    AgentTurnOutcome, AgentTurnPhase,
+    AgentTurnOutcome, AgentTurnPhase, ModelReasoningEffort,
 };
 use parking_lot::Mutex;
 use tokio::sync::Notify;
 
+use super::models::refusal;
 use super::options::SubagentLimits;
 use super::{AgentSubagentState, AgentSubagentStatus};
 use crate::roles::{AgentRoleCatalogReader, AgentSessionRole, DEFAULT_ROLE};
-use crate::session_driver::AgentSessionDriver;
+use crate::session_driver::{AgentSessionDriver, ChildModelRequest};
 
 /// The longest last answer the facade's status carries.
 const ANSWER_EXCERPT_CHARS: usize = 400;
@@ -129,6 +133,11 @@ pub(super) struct SpawnRequest {
     pub(super) fork: bool,
     /// What the agent takes of the role it is spawned as.
     pub(super) role: AgentSessionRole,
+    /// The Provider (an id or a display name), model and reasoning effort
+    /// passed for it, over the role's and the parent's.
+    pub(super) provider: Option<String>,
+    pub(super) model: Option<String>,
+    pub(super) reasoning_effort: Option<ModelReasoningEffort>,
 }
 
 /// The agents this Agent instance runs, kept across the plugin's restarts.
@@ -221,14 +230,17 @@ impl SubagentService {
 
     /// Creates `request.task_name` under `parent` as `request.role` (its
     /// scope the parent's narrowed by the role's, the role's instructions
-    /// after the base ones, the role's model and reasoning effort over the
-    /// parent's) and runs its first turn, the message, in the background.
+    /// after the base ones) on the Provider, model and reasoning effort
+    /// the request passes, else the role's, else the parent's, and runs its
+    /// first turn, the message, in the background. Every refusal comes
+    /// before the agent exists. Returns the agent as it starts.
     pub(super) async fn spawn(
         &self,
         parent: AgentSessionId,
         request: SpawnRequest,
-    ) -> Result<AgentSessionId, AgentError> {
-        if self.session(parent).await?.parent_session_id.is_some() {
+    ) -> Result<AgentSessionRuntimeSnapshot, AgentError> {
+        let parent_session = self.session(parent).await?;
+        if parent_session.parent_session_id.is_some() {
             return Err(refused(
                 "a sub-agent cannot spawn agents of its own; only the main conversation spawns agents",
             ));
@@ -245,13 +257,27 @@ impl SubagentService {
             )));
         }
         self.ensure_capacity(parent)?;
+        let role = request.role;
+        let model = self
+            .driver
+            .resolve_child_model(
+                &parent_session,
+                ChildModelRequest {
+                    provider: request.provider,
+                    model: request.model,
+                    reasoning_effort: request.reasoning_effort,
+                    role_model: role.model,
+                    role_reasoning_effort: role.reasoning_effort,
+                },
+            )
+            .await
+            .map_err(refusal)?;
         let base = if request.fork {
             AgentChildSessionBase::ParentHead
         } else {
             AgentChildSessionBase::Empty
         };
         let name = request.task_name.clone();
-        let role = request.role;
         let (child, child_role) = self
             .blocking(move |driver| {
                 let child = driver.create_child(AgentChildSessionRequest {
@@ -267,12 +293,11 @@ impl SubagentService {
                 Ok((child.id, role_name(child.role)))
             })
             .await?;
-        if role.model.is_some() || role.reasoning_effort.is_some() {
-            self.driver
-                .select_role_model(child, role.model, role.reasoning_effort)
-                .await
-                .map_err(AgentError::InvalidInput)?;
-        }
+        let snapshot = self
+            .driver
+            .apply_child_model(child, model)
+            .await
+            .map_err(AgentError::InvalidInput)?;
         let agent = ListedAgent {
             name: request.task_name,
             id: child,
@@ -280,7 +305,7 @@ impl SubagentService {
             status: AgentRunStatus::PendingInit,
         };
         self.start(parent, agent, request.message).await?;
-        Ok(child)
+        Ok(snapshot)
     }
 
     /// Delivers `message` to `target` without starting a turn: it steers

@@ -7,9 +7,12 @@
 //! prepares every turn the facade admits
 //! (the session's Provider, its permission mode, the world state and the
 //! turn's extensions), so a turn a plugin runs is prepared like a user's.
-//! A session's model selection is its own (`model.rs`).
+//! A session's model selection, and the model of an agent a session
+//! spawns, are their own (`model.rs`).
 
 mod model;
+
+pub(crate) use self::model::{ChildModelError, ChildModelRequest};
 
 use std::ops::ControlFlow;
 use std::sync::Arc;
@@ -179,10 +182,10 @@ impl AgentSessionDriver {
     }
 
     /// Adds `text` to the turn `session_id` runs, which its model reads at
-    /// the turn's next message boundary. Fails when no turn runs. Blocks.
+    /// the turn's next message boundary. Fails when no turn runs. Loads the
+    /// session first: an agent of an earlier run is not loaded. Blocks.
     pub(crate) fn steer(&self, session_id: AgentSessionId, text: String) -> Result<(), AgentError> {
         let turn = self
-            .core
             .snapshot(session_id)?
             .turn
             .filter(|turn| !turn.phase.is_terminal())

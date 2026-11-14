@@ -136,9 +136,19 @@ pub fn service_with_host(
     let paths = test_paths(name);
     let config = AgentConfig::new(&paths.config_dir);
     configure(&paths, &config);
-    let host = host(&paths);
-    let service = AgentApplicationService::new_with_host(
-        config.clone(),
+    let service = reopen_service(config.clone(), host(&paths), &paths);
+    (service, paths, config)
+}
+
+/// An Agent over `paths`' storage with `config` and the ports `host`, as
+/// [`service_with_host`] builds it, or as a restart finds it.
+pub fn reopen_service(
+    config: AgentConfig,
+    host: AgentHostPorts,
+    paths: &TestPaths,
+) -> AgentApplicationService {
+    AgentApplicationService::new_with_host(
+        config,
         host,
         AgentStoragePaths::under(paths.data_dir.join("agent-test")),
         SkillRoots {
@@ -149,8 +159,7 @@ pub fn service_with_host(
         },
         ExecutorManager::default(),
     )
-    .unwrap();
-    (service, paths, config)
+    .unwrap()
 }
 
 /// One enabled Responses provider at `base_url`, the default, with the model
@@ -189,6 +198,22 @@ pub fn configure_test_provider(
                 request_headers: Vec::new(),
                 models: Default::default(),
             });
+            Ok(())
+        })
+        .unwrap();
+}
+
+/// A Provider `provider_id` named `name` at `base_url`, beside the test
+/// Provider and like it.
+pub fn add_test_provider(config: &AgentConfig, provider_id: &str, name: &str, base_url: &str) {
+    let revision = config.providers().unwrap().revision;
+    config
+        .mutate_providers(revision, |registry| {
+            let mut provider = registry.providers[0].clone();
+            provider.id = provider_id.into();
+            provider.display_name = name.into();
+            provider.base_url = base_url.into();
+            registry.providers.push(provider);
             Ok(())
         })
         .unwrap();

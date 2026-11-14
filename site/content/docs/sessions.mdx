@@ -110,7 +110,7 @@ hanafubuki-agent sessions delete 2
 
 ## 子会话 [#children]
 
-一个会话可以是另一个会话的子会话：它是为那个会话创建的，而不是由你直接开始的。有[旁路对话](#side)、[子代理](#subagents)和[评审](#reviews)。子会话记录它的父会话（摘要中的 `parentSessionId`）和创建它的原因（`origin`：`side`、`subagent` 或 `review`），并沿用父会话的目录、模型和设置。它保留父会话的[角色](/docs/roles#sessions)，只能进一步收窄：子会话得到的永远不会比父会话多。子代理可以被赋予它自己的、更窄的角色（[见下文](#subagents)）。分叉保留源会话的角色。
+一个会话可以是另一个会话的子会话：它是为那个会话创建的，而不是由你直接开始的。有[旁路对话](#side)、[子代理](#subagents)和[评审](#reviews)。子会话记录它的父会话（摘要中的 `parentSessionId`）和创建它的原因（`origin`：`side`、`subagent` 或 `review`），并沿用父会话的目录、模型和设置（子代理可以被指定另一个模型，[见下文](#subagents)）。它保留父会话的[角色](/docs/roles#sessions)，只能进一步收窄：子会话得到的永远不会比父会话多。子代理可以被赋予它自己的、更窄的角色（[见下文](#subagents)）。分叉保留源会话的角色。
 
 每个会话在创建时都会记录工作区的主目录（`cwd`）和该目录中检出的 Git 分支（`branch`，从仓库的 `HEAD` 读取；`HEAD` 处于分离状态或不在仓库中时没有分支）。子会话和分叉沿用来源会话的记录。在这些字段出现之前创建的会话没有这两项。
 
@@ -131,6 +131,7 @@ hanafubuki-agent sessions delete 2
 - 它是**持久的**：和任何会话一样写入历史，`origin` 为 `subagent`，标题是任务名。会话列表和其他子会话一样不列出它；列出父会话的子会话时才会列出它。
 - 它从空白开始，或者带着父会话在创建它的那个回合之前的对话开始；使用父会话下一个回合会使用的权限模式；它的回合由父会话的模型发起，而不是由你。
 - 它具有 `spawn_agent` 的 `agent_type` 指定的[角色](/docs/roles#subagents)，必须是可派生的角色：它的工具是父会话的工具再按角色收窄，指令是角色的，模型和推理强度是角色的，否则是父会话的。不带 `agent_type` 时，它保留父会话的角色、模型和推理强度。`list_agents` 给出每个子代理的角色。
+- `spawn_agent` 的 `model`、`reasoning_effort` 和 `provider` 选择它的模型、推理强度和 Provider，优先于角色和父会话的，每一项都在子代理创建之前检查（[工具](/docs/tools#subagents)）。使用另一个模型或 Provider 的子代理具有该模型的上下文窗口和图片输入能力，并在它的各个任务之间以及重启之后保留它的模型。
 - 归档或删除父会话时，它的子代理随之归档或删除。
 - 只有没有父会话的会话能创建子代理，默认同时最多运行 3 个（[`[pluginOptions.subagents]`](/docs/config-reference#plugin-options) 的 `maximumRunningAgents`）。
 - **在终端界面中**，`/subagents` 列出子代理及其状态，并用其中一个代替它的父会话显示，运行时实时更新；在 Manual 模式下，子代理等待的审批显示在它的父会话中，标有子代理的标题，回答发给子代理（[终端界面](/docs/terminal-interface#subagents)）。`/agents`（或在空输入框上按 Left）列出所有没有父会话的会话，每个会话的状态汇总了它的子会话的状态（等待审批的子代理会让父会话显示为 Needs input），可以打开、分叉、重命名、停止、归档或删除它们（[终端界面](/docs/terminal-interface#agents)）。

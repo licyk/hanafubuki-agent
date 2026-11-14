@@ -3,8 +3,10 @@
 //! returns its answer; messages steer a running agent or wait for an idle
 //! one; an interrupt; the depth and running limits; the inherited
 //! permission mode; and the plugin turned off. Agents spawned as roles
-//! are `roles.rs`'s.
+//! are `roles.rs`'s; an agent's Provider, model and reasoning effort
+//! `models.rs`'s.
 
+mod models;
 mod roles;
 
 use std::sync::Arc;
@@ -69,6 +71,23 @@ fn turn_running(service: &AgentApplicationService, session_id: AgentSessionId) -
         .is_some_and(|turn| !turn.phase.is_terminal())
 }
 
+/// The request whose input carries `text`, once one does.
+async fn request_with(server: &FakeServer, text: &str) -> Value {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let found = server
+            .requests()
+            .iter()
+            .find(|request| String::from_utf8_lossy(&request.body).contains(text))
+            .map(|request| serde_json::from_slice(&request.body).unwrap());
+        if let Some(found) = found {
+            return found;
+        }
+        assert!(Instant::now() < deadline, "no request carries {text}");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+}
+
 fn body(server: &FakeServer, index: usize) -> String {
     String::from_utf8(server.requests()[index].body.clone()).unwrap()
 }
@@ -79,6 +98,9 @@ fn spawn(task_name: &str, message: &str) -> SpawnRequest {
         message: message.to_string(),
         fork: false,
         role: Default::default(),
+        provider: None,
+        model: None,
+        reasoning_effort: None,
     }
 }
 
@@ -277,7 +299,8 @@ async fn messages_steer_a_running_agent_and_wait_for_an_idle_ones_next_turn() {
     let child = subagents
         .spawn(parent, spawn("worker", "Start."))
         .await
-        .unwrap();
+        .unwrap()
+        .id;
     wait_until("the agent runs", || turn_running(&service, child)).await;
     assert_eq!(
         subagents

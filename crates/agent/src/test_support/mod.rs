@@ -19,9 +19,9 @@ pub use model_server::{
 };
 pub use plugins::{mount, mount_tool_plugin, test_tool_context, MountedPlugin, MountedToolPlugin};
 pub use service::{
-    configure_test_provider, enable_memory, enable_two_skills, service_with_host, test_host,
-    test_paths, FixedProxy, FixedWorkspaceRoots, NoHostContext, TestBlockingOperationPort,
-    TestPaths, TEST_SHUTDOWN_DEADLINE, TEST_WAIT,
+    add_test_provider, configure_test_provider, enable_memory, enable_two_skills, reopen_service,
+    service_with_host, test_host, test_paths, FixedProxy, FixedWorkspaceRoots, NoHostContext,
+    TestBlockingOperationPort, TestPaths, TEST_SHUTDOWN_DEADLINE, TEST_WAIT,
 };
 
 /// A secure store in memory.

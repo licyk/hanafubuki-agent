@@ -8,6 +8,7 @@
 //! fact in that order (`resolve`). The facts outlive the run through the
 //! [`ModelMetadataStore`] the kernel's owner injects.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use hanafubuki_agent_model_api::{
@@ -339,6 +340,17 @@ impl ModelMetadataRegistry {
             .listings
             .get(endpoint)
             .map(|listing| listing.listed_at_ms)
+    }
+
+    /// The model ids of `endpoint`'s latest listing as it is recorded (a
+    /// listing the shrink guard holds leaves the one before); none when no
+    /// listing is.
+    pub(crate) fn listed_models(&self, endpoint: &ModelEndpointKey) -> Option<BTreeSet<String>> {
+        self.state
+            .lock()
+            .listings
+            .get(endpoint)
+            .map(|listing| listing.models.clone())
     }
 
     /// What a session observes of `route`'s image input: its resolved fact

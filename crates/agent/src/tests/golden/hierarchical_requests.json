@@ -1009,13 +1009,13 @@
         "type": "function"
       },
       {
-        "description": "Spawns an agent to work on the specified task. The agent is a separate conversation that runs in the background with your permission mode, and with your model and your tools unless its `agent_type` says otherwise; it cannot spawn agents of its own. Refer to it by its task name, or by the agent id this returns, in the other agent tools.\nIts final answer is provided to you by wait_agent when it finishes. You can send it messages and follow-up tasks meanwhile.\n\nNote that passing `fork_turns=\"none\"` will not pass any surrounding context to the spawned agent, which may cause the agent to lack the context it needs to complete its task, whereas `fork_turns=\"all\"` will provide the agent with this conversation up to your current turn. Either way the message is the only part of the current turn the agent reads, so make it self-contained.",
+        "description": "Spawns an agent to work on the specified task. The agent is a separate conversation that runs in the background with your permission mode, and with your model and your tools unless `model`, `provider`, `reasoning_effort` or its `agent_type` say otherwise; it cannot spawn agents of its own. Refer to it by its task name, or by the agent id this returns, in the other agent tools.\nIts final answer is provided to you by wait_agent when it finishes. You can send it messages and follow-up tasks meanwhile.\n\nNote that passing `fork_turns=\"none\"` will not pass any surrounding context to the spawned agent, which may cause the agent to lack the context it needs to complete its task, whereas `fork_turns=\"all\"` will provide the agent with this conversation up to your current turn. Either way the message is the only part of the current turn the agent reads, so make it self-contained.",
         "name": "spawn_agent",
         "parameters": {
           "additionalProperties": false,
           "properties": {
             "agent_type": {
-              "description": "Role of the new agent: one of the roles listed in the sub-agent guidance. Defaults to `default`, which keeps your tools and instructions. A role can only take tools away, and may run another model.",
+              "description": "Role of the new agent: one of the roles listed in the sub-agent guidance. Defaults to `default`, which keeps your tools and instructions. A role can only take tools away, and may set a model.",
               "type": "string"
             },
             "fork_turns": {
@@ -1024,6 +1024,18 @@
             },
             "message": {
               "description": "Initial plain-text task for the new agent.",
+              "type": "string"
+            },
+            "model": {
+              "description": "Model id for the new agent: one the sub-agent guidance lists, or another its Provider serves. Defaults to the role's model, else yours.",
+              "type": "string"
+            },
+            "provider": {
+              "description": "Provider of `model`: the id (or name) of an enabled Provider, as the sub-agent guidance lists them. Defaults to yours.",
+              "type": "string"
+            },
+            "reasoning_effort": {
+              "description": "Reasoning effort for the new agent, one its model takes (the guidance lists them where known). Defaults to the role's, else yours.",
               "type": "string"
             },
             "task_name": {
@@ -2238,13 +2250,13 @@
         "type": "function"
       },
       {
-        "description": "Spawns an agent to work on the specified task. The agent is a separate conversation that runs in the background with your permission mode, and with your model and your tools unless its `agent_type` says otherwise; it cannot spawn agents of its own. Refer to it by its task name, or by the agent id this returns, in the other agent tools.\nIts final answer is provided to you by wait_agent when it finishes. You can send it messages and follow-up tasks meanwhile.\n\nNote that passing `fork_turns=\"none\"` will not pass any surrounding context to the spawned agent, which may cause the agent to lack the context it needs to complete its task, whereas `fork_turns=\"all\"` will provide the agent with this conversation up to your current turn. Either way the message is the only part of the current turn the agent reads, so make it self-contained.",
+        "description": "Spawns an agent to work on the specified task. The agent is a separate conversation that runs in the background with your permission mode, and with your model and your tools unless `model`, `provider`, `reasoning_effort` or its `agent_type` say otherwise; it cannot spawn agents of its own. Refer to it by its task name, or by the agent id this returns, in the other agent tools.\nIts final answer is provided to you by wait_agent when it finishes. You can send it messages and follow-up tasks meanwhile.\n\nNote that passing `fork_turns=\"none\"` will not pass any surrounding context to the spawned agent, which may cause the agent to lack the context it needs to complete its task, whereas `fork_turns=\"all\"` will provide the agent with this conversation up to your current turn. Either way the message is the only part of the current turn the agent reads, so make it self-contained.",
         "name": "spawn_agent",
         "parameters": {
           "additionalProperties": false,
           "properties": {
             "agent_type": {
-              "description": "Role of the new agent: one of the roles listed in the sub-agent guidance. Defaults to `default`, which keeps your tools and instructions. A role can only take tools away, and may run another model.",
+              "description": "Role of the new agent: one of the roles listed in the sub-agent guidance. Defaults to `default`, which keeps your tools and instructions. A role can only take tools away, and may set a model.",
               "type": "string"
             },
             "fork_turns": {
@@ -2253,6 +2265,18 @@
             },
             "message": {
               "description": "Initial plain-text task for the new agent.",
+              "type": "string"
+            },
+            "model": {
+              "description": "Model id for the new agent: one the sub-agent guidance lists, or another its Provider serves. Defaults to the role's model, else yours.",
+              "type": "string"
+            },
+            "provider": {
+              "description": "Provider of `model`: the id (or name) of an enabled Provider, as the sub-agent guidance lists them. Defaults to yours.",
+              "type": "string"
+            },
+            "reasoning_effort": {
+              "description": "Reasoning effort for the new agent, one its model takes (the guidance lists them where known). Defaults to the role's, else yours.",
               "type": "string"
             },
             "task_name": {

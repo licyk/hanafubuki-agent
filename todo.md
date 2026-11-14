@@ -4111,9 +4111,12 @@ run's URL (no Windows or macOS claim from a Linux run), whether goldens
 changed, what Hanafubuki must change at its next pin, and any module-size
 exception.
 
-- [ ] Decisions: D2 (flagged), D7–D19 of the plan's §4 answered, and the
-      open questions Q1–Q6 of §5 (D1, D3–D6 came with the request).
-- [ ] O1: `spawn_agent`'s `model`, `reasoning_effort` and `provider`, with
+- [x] Decisions: D2 (flagged), D7–D19 of the plan's §4 answered, and the
+      open questions Q1–Q6 of §5 (D1, D3–D6 came with the request):
+      O1 proceeds on each recommendation, as the coordinator relayed
+      (2026-11-14); Q2 (a cross-Provider fork) as (a), allowed without
+      an approval, is a working decision the user may still revisit.
+- [x] O1: `spawn_agent`'s `model`, `reasoning_effort` and `provider`, with
       or without `agent_type`. Precedence explicit > role > parent per
       field, the pair compared. Field-named checks before the child
       exists: an enabled Provider (id or name); a model against the
@@ -4121,6 +4124,148 @@ exception.
       an effort against the known levels (`ModelMetadata::known_reasoning`,
       E1's rule, shared). One commit for pair and effort. Spawn's result
       names them. The 13 goldens with the spec regenerated on purpose.
+      Done (2026-11-14):
+      - Kernel: `ModelMetadataRegistry::listed_models(endpoint) ->
+        Option<BTreeSet<String>>` (`model_metadata/mod.rs`, beside
+        `listed_at_ms`), the recorded listing's ids (a listing the shrink
+        guard holds leaves the ids before it); `AgentService::listed_models
+        (protocol, base_url)` (`service/model_facts.rs`, beside L1's
+        `resolve_listing`), none for a base URL that is not an endpoint.
+      - Driver (`session_driver/model.rs`): `select_model` = the
+        Provider's resolution + `apply_model_selection(session,
+        generation, revision, resolved, model, reasoning_effort)` (the
+        facade passes the policy's effort, unchanged); `select_role_model`
+        is gone for `resolve_child_model(parent, ChildModelRequest) ->
+        Result<ChildModel, ChildModelError>` and `apply_child_model(child,
+        ChildModel)`. Resolution per field: argument, else role, else
+        parent (a Provider is never the role's). Nothing passed and the
+        role keeping the parent's model: no settings read (as before).
+        Otherwise the Provider (passed, else the parent's) must be enabled
+        (id, else the one enabled Provider with that display name, case
+        aside) and resolve (`resolve_settings_provider`); with `provider`
+        or `model` passed, discovery is asked for its listing and the
+        model checked against the known models (recorded listing ∪
+        `models."<id>"` ∪ the policy's model on the default Provider ∪ the
+        parent's on its Provider; no listing: passed); a passed effort
+        against `known_reasoning` (`Levels`: exact; `Unsupported`:
+        refused; `Unknown`: passed). `ChildModelError` carries data
+        (requested value, enabled Providers, known ids, levels), never
+        text. `apply_child_model`: a different pair is one
+        `set_session_model_configuration` with the effort (D13: one
+        commit, was two); an equal pair sets a different effort only.
+      - Plugin: `models.rs` (new) words the refusals as
+        `InvalidArgumentAt` (`provider`, `model`, `reasoning_effort`):
+        the enabled Providers as `` `provider-2` (Second) ``; up to 20
+        known ids, the longest shared start first, then by id, `(and N
+        more)` (D19); the levels with `(default)`; "takes no reasoning
+        effort; omit `reasoning_effort`". `service.rs`' `spawn` resolves
+        before `create_child` (a refusal creates nothing, the task name
+        stays free), applies after `rename`, and returns the child's
+        snapshot; `SpawnRequest` gains `provider`, `model`,
+        `reasoning_effort`. `tools.rs`: the three properties (256, 64 and
+        128 bytes; missing, `null` or blank is absent; another type or an
+        over-long value is `must be a string of one line, at most N
+        bytes`); `reasoning_effort` parsed by `ModelReasoningEffort::parse`
+        (`none` refused with its own text); the descriptions as §2.1; the
+        result `{task_name, agent_id, provider, model, reasoning_effort}`
+        (`null`: the Provider's default), read from the child after the
+        model is applied. Codex notices of `tools.rs`, `service.rs` and
+        `mod.rs`' docs rewritten.
+      - Fix found by the restart test: `AgentSessionDriver::steer` read an
+        unloaded session's snapshot (`SessionNotFound`), so
+        `send_message`/`followup_task` to an agent of an earlier run
+        failed; it now loads it first (it already ran on the blocking
+        service). Known defect left for R: `interrupt` still reads
+        `core.snapshot` on the async side, so `interrupt_agent` on an
+        agent of an earlier run, not loaded, answers `SessionNotFound`.
+      - Tests: `plugins/subagents/tests/models.rs` (new, over the fake
+        server, a second Provider from `add_test_provider`, moved from
+        `tests/model_list.rs` to `test_support`): a passed model on the
+        parent's Provider with the parent's effort and the result's JSON;
+        the precedence per field (role only, model over role, effort over
+        role, `provider` with a role, `provider` alone by display name:
+        the parent's model id moves Provider), each from the child's
+        snapshot and its request on the right server; `provider` alone
+        listed / refused (`pass a model`, closest ids) / a configured
+        `models."<id>"` accepted; eleven refusals (unknown, disabled and
+        disabled-by-name Provider, an unlisted model with 27 known ids, an
+        effort off the levels, a reported and a configured "no
+        reasoning", `none`, a number, 258 bytes, an array), each leaving no
+        agent and no request, then the same task name spawns with a level
+        and with an effort for a model of unknown levels (`turbo`, sent
+        as given), and a role's effort (D11) on a model that takes none
+        spawns unchecked and its request carries none; an equal pair,
+        blank and `null` arguments: same
+        revision and same request as no arguments, an effort alone +1, a
+        new pair with its effort +1; an unknown model without a listing
+        spawns and `wait_agent` reports the 404; a cross-Provider fork
+        (`fork_turns` `all`) of a history holding an image onto a
+        text-only model with a 32768 window: the child's request reaches
+        the second server with the parent's history and no
+        `input_image`, its window `32768` reported, images off, the
+        parent unchanged; after a restart, the parent's `followup_task`
+        runs on the second server. Kernel: `listed_models` none, sorted
+        ids, held listing, confirmed listing. `reopen_service` in
+        `test_support` (used by the restart). `request_with` moved from
+        `roles.rs` to the suite's `mod.rs`. Fail-first by mutation, each
+        seen failing then restored: the pair compared by model id only
+        (2 tests), role and argument swapped (precedence), the checks moved
+        after `create_child` (2 tests: an agent left, the name taken), a
+        new pair and its effort in two commits (revision 13 ≠ 12),
+        `steer` without loading (the restart test), a role's effort
+        checked too (D11). Byte-identical
+        without overrides: the child requests of a plain spawn, a role
+        with model and effort, `explorer`, and a forked role were dumped
+        before and after the change by a throw-away test and compared
+        (the `spawn_agent` spec and the workspace-roots digest aside):
+        identical. Existing role tests unchanged and passing.
+      - Goldens: 14 regenerated on purpose (the plan counted 13;
+        `tool_search_round_trip.json` and the others with two requests
+        carry the spec twice: 18 specs); the diff is the spec's
+        description, `agent_type`'s description and the three
+        properties, nothing else.
+      - Docs (both languages): `tools#subagents` (the arguments, the
+        result, a "Model, effort and Provider" bullet), `roles` (`model`
+        row; `#subagents`), `sessions` (`#children`, `#subagents`),
+        `architecture` (Subagents: resolution, checks, the pair, one
+        commit), `plugin-rules` (the update-hook bullet's stale sentence
+        on `agent_type`'s roles; the `subagents` row). Each changed page
+        compiled with `@mdx-js/mdx` 3.1.1 and remark-gfm.
+      - Reconciliations: `known_reasoning` already existed (E1) and the
+        TUI's `effort_options` already used it: model-api and `tui/`
+        untouched. `listed_models` sits beside L1's `resolve_listing`. The
+        driver imports nothing from `plugins` (its error carries data;
+        `models.rs` makes the texts), so the known-models union is in the
+        driver, not `models.rs`. Spawn's errors on a role's model whose
+        Provider is disabled now come before the child exists (D16), as a
+        `provider` field error.
+      - Hanafubuki at its next pin: its integration goldens (the spec).
+        No facade type changed.
+      - Module size: no exception added or raised; `subagents/service.rs`
+        477 code lines, `session_driver/mod.rs` 518, `model.rs` new
+        code in the driver's own file.
+      - Deviations: (1) `none` is refused by `ModelReasoningEffort::parse`'s
+        own text at argument time, as the plan says (no model is known
+        there, so no levels are listed). (2) A non-string or over-long
+        argument names its bound (`InvalidArgumentAt`) rather than the
+        bare `invalid tool argument model`. (3) The descriptions point at
+        the guidance for models and Providers, which O2 fills.
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo
+        clippy --workspace --all-targets --all-features -- -D warnings`;
+        `cargo xtask check`; `cargo test --workspace --all-features
+        --no-fail-fast` (4901 passed, none failed, no flake seen); `bun
+        install --frozen-lockfile`, `bun run format:site`, `bun run
+        format:check:site`, `bun run site:check`, `bun run site:test` (28
+        passed); `site:build` not run locally (port 3000 is another
+        project's); CI's Site run covers it.
+      - For O2: `spawn_agent`'s descriptions already point at the guidance
+        for models, efforts and Providers; `listed_models`,
+        `known_reasoning` and `enabled_provider`'s rule are what the list
+        must agree with (the driver's `known_models` is the union to
+        reuse). For O3: the child's pair is the session's; `list_agents`
+        can read it from the summary. For R: no new code in `service.rs`
+        beyond the call order in `spawn`; `steer` now loads the session.
 - [ ] O2: the guidance lists the enabled Providers with their known models
       and levels, bounded (8 × 8), stable for the prompt cache, built in
       `prepare`. The 11 goldens with the guidance regenerated on purpose.

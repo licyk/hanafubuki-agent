@@ -155,6 +155,37 @@ fn a_listing_that_loses_half_its_models_is_trusted() {
     );
 }
 
+/// The ids of the recorded listing: none before one, then the listing's;
+/// a listing the shrink guard holds leaves the ids before it, and the one
+/// that confirms it replaces them.
+#[test]
+fn the_listed_models_are_the_recorded_listings_ids() {
+    let registry = registry();
+    let provider = endpoint(PROVIDER);
+    assert_eq!(registry.listed_models(&provider), None);
+    let ids = |ids: &[&str]| Some(ids.iter().map(|id| id.to_string()).collect());
+
+    registry.record_listing(
+        &provider,
+        &[entry("b", None), entry("a", None), entry("c", None)],
+        NOW,
+    );
+    assert_eq!(registry.listed_models(&provider), ids(&["a", "b", "c"]));
+    assert_eq!(
+        registry.listed_models(&endpoint("https://other.test/v1")),
+        None
+    );
+
+    registry.record_listing(&provider, &[entry("a", None)], NOW + 1);
+    assert_eq!(
+        registry.listed_models(&provider),
+        ids(&["a", "b", "c"]),
+        "a held listing leaves the ids before it"
+    );
+    registry.record_listing(&provider, &[entry("a", None)], NOW + 2);
+    assert_eq!(registry.listed_models(&provider), ids(&["a"]));
+}
+
 #[test]
 fn the_same_endpoint_spelled_with_a_trailing_slash_is_one_route() {
     let registry = registry();

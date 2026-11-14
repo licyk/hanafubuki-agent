@@ -38,23 +38,6 @@ async fn started_with_roles(
     (service, paths)
 }
 
-/// The request whose input carries `text`, once one does.
-async fn request_with(server: &FakeServer, text: &str) -> Value {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    loop {
-        let found = server
-            .requests()
-            .iter()
-            .find(|request| String::from_utf8_lossy(&request.body).contains(text))
-            .map(|request| serde_json::from_slice(&request.body).unwrap());
-        if let Some(found) = found {
-            return found;
-        }
-        assert!(Instant::now() < deadline, "no request carries {text}");
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-}
-
 fn tools(request: &Value) -> Vec<String> {
     let mut tools = request["tools"]
         .as_array()

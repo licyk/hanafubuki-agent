@@ -5,6 +5,8 @@
 //! structured request samples, which answers and learns its routes'
 //! structured-output rung from the model metadata.
 
+use std::collections::BTreeSet;
+
 use hanafubuki_agent_model_api::{
     ModelCompactionResult, ModelEndpoint, ModelEndpointKey, ModelFuture, ModelImageInputPolicy,
     ModelMetadata, ModelProviderNames, ModelResult, ModelRouteKey, ModelStream,
@@ -62,6 +64,20 @@ impl AgentService {
             |model| ConfiguredModelFacts::from_configured(&configured(model)),
             now_millis_u64(),
         )
+    }
+
+    /// The model ids the latest recorded listing of the Provider at
+    /// `base_url` names, read without a request: none when no listing is
+    /// recorded, or when `base_url` is not an endpoint.
+    pub fn listed_models(
+        &self,
+        protocol: ModelApiProtocol,
+        base_url: &str,
+    ) -> Option<BTreeSet<String>> {
+        let endpoint = ModelEndpoint::parse(base_url).ok()?;
+        self.inner
+            .model_metadata
+            .listed_models(&ModelEndpointKey::new(protocol, &endpoint))
     }
 
     /// What the session `session_id` knows of its model: its route's facts
