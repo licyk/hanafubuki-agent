@@ -34,6 +34,7 @@ hanafubuki-agent config set network.proxy system
 | Plugin package and marketplace downloads (`git`)      | The same variables (a `http.proxy` in your git configuration wins over them)                                                                         |
 | Requests to model Providers and their model lists     | `network.proxy`; a change reaches each session's next turn (below)                                                                                   |
 | The models.dev download (`modelMetadata.modelsDev`)   | `network.proxy`                                                                                                                                      |
+| The update check at the terminal interface's launch   | `network.proxy`; what it sends is in [Terminal interface](/docs/terminal-interface#updates)                                                          |
 
 ### The commands' proxy variables [#child-processes]
 

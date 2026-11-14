@@ -901,4 +901,5 @@ mod streaming;
 mod subagents;
 mod thinking;
 mod tools;
+mod update_notice;
 mod workspace_commands;

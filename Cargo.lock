@@ -1918,6 +1918,7 @@ dependencies = [
  "hanafubuki-agent",
  "hanafubuki-agent-tui",
  "hanafubuki-agent-update",
+ "log",
  "notify",
  "serde",
  "serde_json",

@@ -16,7 +16,9 @@
 //! the shortcuts hint while the composer is empty, and while a draft is
 //! written with no turn running; a draft written during a turn shows the key
 //! that queues it instead. `?` shows the shortcuts in its place
-//! ([`shortcut_overlay`]). Codex's footer also shows the context window left, the collaboration
+//! ([`shortcut_overlay`]). A newer release's notice takes the right of the
+//! one-row modes' row, in full, shortened or not at all, so it never cuts
+//! the row's own content and adds no row. Codex's footer also shows the context window left, the collaboration
 //! mode and its width-based collapse rules; those are not ported.
 
 mod shortcut_overlay;
@@ -26,6 +28,7 @@ use crate::key_hint::KeyBinding;
 use crate::keymap::{self, Action};
 use crate::render::line_utils::prefix_lines;
 use crate::ui_consts::FOOTER_INDENT_COLS;
+use crate::update_notice::{notice_line, TuiUpdateNotice};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::KeyCode;
 use ratatui::layout::Rect;
@@ -45,6 +48,8 @@ pub(crate) struct FooterProps<'a> {
     pub(crate) quit_shortcut_key: KeyBinding,
     /// The status line, when this mode shows it.
     pub(crate) status_line: Option<&'a Line<'static>>,
+    /// A newer release, shown on the right where the row has room.
+    pub(crate) update_notice: Option<&'a TuiUpdateNotice>,
     /// A turn runs: a draft shows the key that queues it, and the
     /// shortcuts say that key queues.
     pub(crate) task_running: bool,
@@ -131,12 +136,35 @@ pub(crate) fn render_footer(area: Rect, buf: &mut Buffer, props: FooterProps<'_>
         };
         return shortcut_overlay::render(&props, area, buf);
     }
+    let lines = footer_lines(props);
+    let content = FOOTER_INDENT_COLS + lines.first().map_or(0, Line::width);
     Paragraph::new(prefix_lines(
-        footer_lines(props),
+        lines,
         " ".repeat(FOOTER_INDENT_COLS).into(),
         " ".repeat(FOOTER_INDENT_COLS).into(),
     ))
     .render(area, buf);
+    if let Some(notice) = props.update_notice {
+        render_update_notice(area, buf, notice, content);
+    }
+}
+
+/// The columns between the row's content and the update notice.
+const NOTICE_GAP: usize = 3;
+/// The columns left free after the update notice.
+const NOTICE_RIGHT_MARGIN: usize = 2;
+
+/// The notice at the right of the row whose own content takes `content`
+/// columns, in the room that leaves.
+fn render_update_notice(area: Rect, buf: &mut Buffer, notice: &TuiUpdateNotice, content: usize) {
+    let room = usize::from(area.width).saturating_sub(content + NOTICE_GAP + NOTICE_RIGHT_MARGIN);
+    let Some(line) = notice_line(notice, room).filter(|_| area.height > 0) else {
+        return;
+    };
+    // It fits in `room`, which is less than the area's width.
+    let width = line.width() as u16;
+    let x = area.right() - NOTICE_RIGHT_MARGIN as u16 - width;
+    buf.set_line(x, area.y, &line, width);
 }
 
 /// Renders one line chosen by the composer (the history search's) in

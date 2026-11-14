@@ -47,6 +47,7 @@ fn missing_preferences_are_the_defaults() {
             },
             keymap: BTreeMap::new(),
             presets: BTreeMap::new(),
+            check_for_updates: true,
         }
     );
 }
@@ -57,7 +58,7 @@ fn each_key_decodes_on_its_own_and_unknown_keys_are_ignored() {
         "[tui]\nfullscreenTranscript = false\nalternateScreen = \"sometimes\"\n\
          scrollbackMouse = \"off\"\nagentsGrouping = \"model\"\nrawOutput = true\nkeymap = \"later\"\ntheme = \"nord\"\n\
          statusLine = [\"model\", 3]\nstatusLineColors = false\n\
-         terminalTitle = [\"app-name\", \"unknown-item\"]\n\
+         terminalTitle = [\"app-name\", \"unknown-item\"]\ncheckForUpdates = false\n\
          [tui.rendering]\ntables = false\nlists = \"no\"\nmath = false\nmermaid = false\nunknown = false\n",
     );
     assert_eq!(
@@ -84,6 +85,7 @@ fn each_key_decodes_on_its_own_and_unknown_keys_are_ignored() {
             // Not a table: none.
             keymap: BTreeMap::new(),
             presets: BTreeMap::new(),
+            check_for_updates: false,
         }
     );
     // The standalone keys are read, never repaired in the user's file.

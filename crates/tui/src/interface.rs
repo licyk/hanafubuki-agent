@@ -16,13 +16,14 @@ use hanafubuki_agent::{
 use crate::agent_bridge::{with_model, AgentBridge, AgentReply, StatusSink};
 use crate::app::App;
 use crate::app_event::{AppEvent, AppEventSender};
-use crate::appearance::Appearance;
+use crate::appearance::{Appearance, AppearanceEvent};
 use crate::chatwidget::{ChatWidget, ChatWidgetInit};
 use crate::history_cell::HistoryRenderMode;
 use crate::render::highlight::configure_theme;
 use crate::transcript_mode::{is_ssh_session, TranscriptMode};
 use crate::tui::{self, FrameRequester, InputReader, Tui};
 use crate::tui_state::TuiState;
+use crate::update_notice::{TuiUpdateNotice, TuiUpdateNotifier};
 use crate::user_message::UserMessage;
 
 /// The channel the interface is told on, made before the Agent is: the
@@ -47,6 +48,12 @@ impl TuiEvents {
     pub fn status_sink(&self) -> Arc<dyn AgentStatusEventSink> {
         Arc::new(StatusSink(self.sender.clone()))
     }
+
+    /// For the command line's update check, which may end before the
+    /// interface runs, while it runs, or after it ends.
+    pub fn update_notifier(&self) -> TuiUpdateNotifier {
+        TuiUpdateNotifier::new(self.sender.clone())
+    }
 }
 
 /// How the interface starts.
@@ -66,6 +73,8 @@ pub struct TuiOptions {
     /// Keeps the transcript in the terminal's scrollback, whatever
     /// `[tui]` prefers (`--no-alt-screen`).
     pub no_alt_screen: bool,
+    /// A newer release an earlier check found, shown from the first frame.
+    pub update_notice: Option<TuiUpdateNotice>,
 }
 
 /// Which session `hanafubuki-agent resume` reopens.
@@ -158,6 +167,9 @@ pub fn run(
         app.show_update(update);
     }
     warnings.extend(app.apply_preferences(preferences));
+    if let Some(notice) = options.update_notice {
+        app.apply_appearance(AppearanceEvent::UpdateNotice(notice));
+    }
     let config_warnings = app.bridge.config_warnings();
     app.chat_widget
         .add_startup_warnings(warnings, config_warnings);

@@ -61,6 +61,10 @@ pub struct AgentTuiPreferences {
     /// `presets."0"` to `presets."9"`: an input the interface runs as if it
     /// were typed, a message or a slash command.
     pub presets: BTreeMap<String, AgentTuiPreset>,
+    /// Whether the interface's launch asks GitHub, at most once every 20
+    /// hours, whether a newer release exists, and the footer says so. Read
+    /// at launch by the standalone command line.
+    pub check_for_updates: bool,
 }
 
 /// One preset's slot: what it runs, and the name the menu shows.
@@ -113,6 +117,7 @@ impl Default for AgentTuiPreferences {
             rendering: AgentTuiRendering::default(),
             keymap: BTreeMap::new(),
             presets: BTreeMap::new(),
+            check_for_updates: true,
         }
     }
 }
@@ -340,6 +345,14 @@ pub(crate) fn section() -> SettingsSection {
                 ),
                 "```mermaid fences drawn as text diagrams; off, shown as code",
             ),
+            at_launch(described(
+                SettingSpec::new(
+                    "tui.checkForUpdates",
+                    "Check for updates",
+                    SettingKind::Boolean,
+                ),
+                "At launch, asks GitHub at most once a day whether a newer release exists",
+            )),
         ],
     )
 }

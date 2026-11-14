@@ -62,6 +62,7 @@ use crate::render::renderable::Renderable;
 use crate::render::renderable::RenderableItem;
 use crate::status_indicator_widget::StatusIndicatorWidget;
 use crate::tui::FrameRequester;
+use crate::update_notice::TuiUpdateNotice;
 use crate::user_message::{MessageImage, UserMessage};
 use approval_overlay::ApprovalOverlay;
 pub(crate) use bottom_pane_view::BottomPaneView;
@@ -496,6 +497,11 @@ impl BottomPane {
     /// The status line under the composer; `None` for the shortcuts hint.
     pub(crate) fn set_status_line(&mut self, line: Option<Line<'static>>) {
         self.composer.set_status_line(line);
+        self.request_redraw();
+    }
+
+    pub(crate) fn set_update_notice(&mut self, notice: Option<TuiUpdateNotice>) {
+        self.composer.set_update_notice(notice);
         self.request_redraw();
     }
 

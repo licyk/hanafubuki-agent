@@ -55,7 +55,9 @@ mod transcript_view;
 mod tui;
 mod tui_state;
 mod ui_consts;
+mod update_notice;
 mod user_message;
 mod wrapping;
 
 pub use interface::{run, TuiEvents, TuiOptions, TuiResume};
+pub use update_notice::{TuiUpdateNotice, TuiUpdateNotifier};

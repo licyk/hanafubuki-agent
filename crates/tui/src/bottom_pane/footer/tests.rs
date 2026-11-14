@@ -59,6 +59,7 @@ fn props(mode: FooterMode) -> FooterProps<'static> {
         use_shift_enter_hint: false,
         quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
         status_line: None,
+        update_notice: None,
         task_running: false,
         agents_hint: false,
         second_conversation: false,
@@ -272,4 +273,166 @@ fn shortcut_overlay_toggles_back_to_the_base_mode() {
         reset_mode_after_activity(FooterMode::QuitShortcutReminder),
         FooterMode::ComposerEmpty
     );
+}
+
+fn notice() -> TuiUpdateNotice {
+    TuiUpdateNotice {
+        version: "0.3.0".to_string(),
+        action: "hanafubuki-agent update".to_string(),
+    }
+}
+
+/// The default status line's three items, as a session shows them.
+fn status() -> Line<'static> {
+    Line::from("gpt-5.1 high · ~/src/hanafubuki · Footer notice")
+}
+
+const FULL: &str = "Update available: 0.3.0 · hanafubuki-agent update";
+const SHORT: &str = "Update available: 0.3.0";
+
+/// In full at 120 columns, short at 80, not at all at 50, two columns
+/// from the right edge; the status line is never cut.
+#[test]
+fn the_update_notice_takes_the_room_the_row_leaves() {
+    let notice = notice();
+    let status = status();
+    let props = FooterProps {
+        status_line: Some(&status),
+        update_notice: Some(&notice),
+        ..props(FooterMode::ComposerEmpty)
+    };
+    for width in [120, 80, 50] {
+        snapshot_footer_at(&format!("footer_update_notice_{width}"), props, width);
+    }
+    let shown = |width| rows(props, width, 1).remove(0);
+    let wide = shown(120);
+    assert!(wide.starts_with("  gpt-5.1 high · ~/src/hanafubuki · Footer notice   "));
+    assert!(wide.ends_with(FULL), "{wide}");
+    assert_eq!(wide.chars().count(), 118, "{wide}");
+    let medium = shown(80);
+    assert!(medium.ends_with(SHORT), "{medium}");
+    assert!(!medium.contains("hanafubuki-agent update"), "{medium}");
+    assert_eq!(
+        shown(50),
+        "  gpt-5.1 high · ~/src/hanafubuki · Footer notice"
+    );
+    // The notice adds no row.
+    let without = FooterProps {
+        update_notice: None,
+        ..props
+    };
+    for width in [120, 80, 50, 10] {
+        assert_eq!(footer_height(props, width), footer_height(without, width));
+    }
+}
+
+/// Each one-row mode keeps its own text whole and shows the notice after
+/// it; the shortcuts and a row too full for it do not.
+#[test]
+fn the_update_notice_sits_beside_every_one_row_mode() {
+    let notice = notice();
+    let status = status();
+    let with_notice = |mode| FooterProps {
+        update_notice: Some(&notice),
+        ..props(mode)
+    };
+    let cases = [
+        (with_notice(FooterMode::ComposerEmpty), "? for shortcuts"),
+        (
+            FooterProps {
+                agents_hint: true,
+                status_line: Some(&status),
+                ..with_notice(FooterMode::ComposerEmpty)
+            },
+            "Footer notice · ← for agents",
+        ),
+        (
+            FooterProps {
+                status_line: Some(&status),
+                ..with_notice(FooterMode::ComposerHasDraft)
+            },
+            "Footer notice",
+        ),
+        (
+            FooterProps {
+                task_running: true,
+                ..with_notice(FooterMode::ComposerHasDraft)
+            },
+            "to queue message",
+        ),
+        (
+            FooterProps {
+                shell_command: true,
+                ..with_notice(FooterMode::ComposerHasDraft)
+            },
+            "runs in the session's sandbox",
+        ),
+        (
+            with_notice(FooterMode::QuitShortcutReminder),
+            "again to quit",
+        ),
+        (
+            with_notice(FooterMode::EscHint),
+            "again to edit a previous message",
+        ),
+        (
+            FooterProps {
+                second_conversation: true,
+                status_line: Some(&status),
+                ..with_notice(FooterMode::ComposerEmpty)
+            },
+            "Footer notice",
+        ),
+    ];
+    for (props, own) in cases {
+        let row = rows(props, 120, 1).remove(0);
+        let (left, right) = row.split_once("   Update available").expect(&row);
+        assert!(left.trim_end().ends_with(own), "{row}");
+        assert_eq!(format!("Update available{right}"), FULL, "{row}");
+    }
+    let overlay = overlay_text(
+        FooterProps {
+            update_notice: Some(&notice),
+            ..overlay()
+        },
+        140,
+    );
+    assert!(!overlay.contains("Update available"), "{overlay}");
+    // A status line that leaves less than the short form's room.
+    let long = Line::from("x".repeat(60));
+    let full_row = rows(
+        FooterProps {
+            status_line: Some(&long),
+            ..with_notice(FooterMode::ComposerEmpty)
+        },
+        80,
+        1,
+    );
+    assert_eq!(full_row, [format!("  {}", "x".repeat(60))]);
+}
+
+/// The room is counted in columns: a wide character takes two.
+#[test]
+fn the_update_notice_counts_wide_characters_as_two_columns() {
+    let notice = notice();
+    // 14 characters, 28 columns: the full form would fit by characters.
+    let status = Line::from("会话标题是一个很长的中文标题");
+    let props = FooterProps {
+        status_line: Some(&status),
+        update_notice: Some(&notice),
+        ..props(FooterMode::ComposerEmpty)
+    };
+    snapshot_footer_at("footer_update_notice_wide_characters", props, 80);
+    let terminal = draw(props, 80, 1);
+    let buffer = terminal.backend().buffer();
+    let text: String = (0..80).map(|x| buffer[(x, 0)].symbol()).collect();
+    // The cell after a wide character holds a space.
+    assert!(
+        text.replace(' ', "")
+            .starts_with("会话标题是一个很长的中文标题Update"),
+        "{text}"
+    );
+    assert!(text.trim_end().ends_with(SHORT), "{text}");
+    assert_eq!(buffer[(77, 0)].symbol(), "0");
+    assert_eq!(buffer[(78, 0)].symbol(), " ");
 }

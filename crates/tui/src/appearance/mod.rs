@@ -23,6 +23,7 @@ use ratatui::text::{Line, Span};
 use crate::agent_bridge::{SessionStatus, UsageSummary};
 use crate::history_cell::{format_tokens_compact, permission_mode_name};
 use crate::render::highlight::foreground_for_scopes;
+use crate::update_notice::TuiUpdateNotice;
 use items::{parse_items, StatusLineItem, SurfaceItem, TerminalTitleItem};
 
 const STATUS_LINE_SEPARATOR: &str = " · ";
@@ -51,6 +52,8 @@ pub(crate) enum AppearanceEvent {
     /// The title setup shows `Some` items in the title while it is open;
     /// `None` puts the title's own items back.
     PreviewTerminalTitle(Option<Vec<TerminalTitleItem>>),
+    /// A newer release, which the footer shows for the rest of the run.
+    UpdateNotice(TuiUpdateNotice),
 }
 
 /// The settings and what they show.
@@ -63,6 +66,7 @@ pub(crate) struct Appearance {
     terminal_title: Vec<TerminalTitleItem>,
     title_preview: Option<Vec<TerminalTitleItem>>,
     values: SurfaceValues,
+    update_notice: Option<TuiUpdateNotice>,
 }
 
 /// What the items show: the session's status, and what the chat knows.
@@ -98,16 +102,19 @@ impl Appearance {
                 directory,
                 ..SurfaceValues::default()
             },
+            update_notice: None,
         };
         (appearance, warnings)
     }
 
     /// The settings `preferences` hold in place of these; what the items
-    /// show is kept, and the unknown items were warned of at start.
+    /// show and the update notice are kept, and the unknown items were
+    /// warned of at start.
     pub(crate) fn adopt(&mut self, preferences: &AgentTuiPreferences) {
         let (adopted, _) = Self::new(preferences, String::new());
         *self = Self {
             values: std::mem::take(&mut self.values),
+            update_notice: self.update_notice.take(),
             ..adopted
         };
     }
@@ -126,6 +133,10 @@ impl Appearance {
 
     pub(crate) fn terminal_title_items(&self) -> &[TerminalTitleItem] {
         &self.terminal_title
+    }
+
+    pub(crate) fn update_notice(&self) -> Option<&TuiUpdateNotice> {
+        self.update_notice.as_ref()
     }
 
     pub(crate) fn values(&self) -> &SurfaceValues {
@@ -152,6 +163,7 @@ impl Appearance {
                 self.title_preview = None;
             }
             AppearanceEvent::PreviewTerminalTitle(items) => self.title_preview = items,
+            AppearanceEvent::UpdateNotice(notice) => self.update_notice = Some(notice),
         }
     }
 

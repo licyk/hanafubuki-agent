@@ -30,10 +30,13 @@ impl ChatWidget {
         self.sync_status_line();
     }
 
-    /// The status line as the settings and the session have it now.
+    /// The status line as the settings and the session have it now, and
+    /// the update notice beside it.
     pub(super) fn sync_status_line(&mut self) {
         self.bottom_pane
             .set_status_line(self.appearance.status_line());
+        self.bottom_pane
+            .set_update_notice(self.appearance.update_notice().cloned());
     }
 
     /// The terminal's title at `now`, and whether it changes with time.

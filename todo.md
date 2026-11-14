@@ -214,13 +214,156 @@ changed (none expected), what Hanafubuki must change at its next pin
       and `hanafubuki-agent update [--check] [--force]`; a running copy
       replaces itself on all three systems (a small test executable: the
       debug CLI is about 1.1 GB).
-- [ ] U2 (lane B, now; its CLI part after U0): `tui.checkForUpdates`
+- [x] U2 (lane B, now; its CLI part after U0): `tui.checkForUpdates`
       (default on) and `HANAFUBUKI_AGENT_NO_UPDATE_CHECK`; `update-check.json`
       in the data directory; the check on a thread at the interface's
       launch, at most every 20 hours, silent; the notice on the footer
       row's right side (`Update available: 0.3.0 · hanafubuki-agent
       update`, shortened, then omitted, by width), from the cache at once
       and from this launch's check when it lands.
+      Done (2026-11-14):
+      - Config: `AgentTuiPreferences::check_for_updates` (default `true`),
+        the spec `tui.checkForUpdates` ("Check for updates", Boolean,
+        `NextLaunch`), the last row of the Interface tab.
+      - TUI (`update_notice.rs`, new): `TuiUpdateNotice { version, action }`
+        (plain text the CLI words), `TuiUpdateNotifier` (`Clone + Send`,
+        `notify`, from `TuiEvents::update_notifier()`), `notice_line(notice,
+        room)` (full, short, none, by display width);
+        `TuiOptions::update_notice` (the cache's, applied before the first
+        frame). It travels as `AppearanceEvent::UpdateNotice`: `Appearance`
+        keeps it (and `adopt` keeps it through a settings write),
+        `sync_status_line` hands it to the composer beside the status line,
+        and `App::apply_appearance` (now `pub(crate)`) applies it to the
+        parked conversation too, so a side conversation or subagent shown,
+        focused or parked, has it, and one opened later clones it.
+        `FooterProps::update_notice`; `render_footer` draws it right-aligned
+        two columns from the edge, three after the row's own content, in
+        every one-row mode (empty composer, a draft, the queue and shell
+        hints, the quit reminder, the Esc hint, a second conversation's
+        row), never in the shortcut overlay, the history search's or the
+        external editor's line, or under a popup; it never cuts the row and
+        adds no row.
+      - CLI (`update_check/`, new; `mod update_check;` in `main.rs`, one
+        call in `interactive::run` after its terminal check and
+        `Standalone::open`, before `start`): `mod.rs` (`at_launch`: the
+        setting, the variable (non-empty), `Installation::current()` not a
+        Checkout, then `ReleaseClient::for_this_build(proxy, None)` as the
+        debug-build gate; off, nothing is read, sent or shown, the cache's
+        notice included; the cached notice when its `latestVersion` is
+        newer; the thread when due; the decision over typed inputs is
+        `Launch::start(allowed, client, notifier)`), `cache.rs`
+        (`UpdateCache`), `check.rs`
+        (`Check::start`: the thread `update-check`, never joined, its body
+        in `catch_panic`; `check`: `latest_blocking`, then the cache
+        written for any stable answer, the version returned only when
+        newer; failures at `debug` as `update check: <kind>`). The action
+        text: Replace → `hanafubuki-agent update`, Cargo and
+        Manual(CargoOnWindows) → `cargo install --locked
+        hanafubuki-agent-cli`, the other manual cases → `hanafubuki-agent
+        update --check`. `crates/cli/Cargo.toml` gains `log` (U0 did not
+        add it). Building the client at launch (the debug-build gate) took
+        about 18 ms in a debug build here, on the main thread before the
+        Agent's start; the request itself is on the thread.
+      - The cache as landed: `{"latestVersion": "0.3.0", "checkedAtMs":
+        1763107200000, "dismissedVersion": "0.3.0"}`; `latestVersion` a
+        stable semver, `checkedAtMs` a u64, `dismissedVersion` a semver,
+        each else absent and the file then moved to `.recovery/` before
+        the next write; unknown keys kept; not an object (or over 64 KiB)
+        moved aside at load; existing but unreadable: never written, never
+        due. Due when `checkedAtMs` is absent, 20 h old or more, or after
+        now. `UpdateCache::update(data_dir, |cache| …)` re-reads the file,
+        changes the fields, quarantines a lossy file, `write_atomic(…,
+        Private)`.
+      - Deviation: the plan's U2 test list says "an older release: cache
+        unchanged"; §3.9 and D10 say a successful check writes the cache.
+        Followed §3.9/D10: any stable answer (newer, equal, older) is
+        written, so an up-to-date or newer build asks once per 20 h, not
+        at every launch; only a newer one notifies; a pre-release, a
+        refusal or a failure leave the cache as it was.
+      - For U3: `UpdateCache::dismissed_version` is decoded and kept
+        (written back unchanged by each check); write it
+        with `UpdateCache::update(&data_dir, |cache| cache.dismissed_version
+        = Some(v))`. The prompt hooks into `update_check::at_launch`, which
+        already has the cache, the installation (resolved once) and the
+        client before `start`; the notice is shown for a dismissed version
+        too (Q9). The TUI gets only plain data (`TuiUpdateNotice`); its
+        layer row is unchanged.
+      - Tests: `crates/config/src/tui/tests.rs` (default, decoding);
+        `settings_center` `interface_140` (the new row; its height 24 →
+        25, the one existing snapshot changed); `footer/tests.rs` (snapshots
+        at 120/80/50 with a status line: full, short, none; CJK at 80:
+        short, counted in columns; every one-row mode keeps its text whole
+        with the notice after it; the overlay without it; a full row
+        without it; the same height with and without); `app/tests/
+        update_notice.rs` (new: the notifier mid-session in Scrollback and
+        Fullscreen, on the footer's row, the composer unmoved; the cache's
+        notice in the first frame; kept through `adopt_tui_preferences`; a
+        side conversation shows it, and one sent while it is focused
+        reaches the parked main one); `update_check/tests.rs` (allowed:
+        setting, variable, empty variable, checkout; each action's text;
+        `Launch::start` over the fake: off or without a client (the debug
+        gate), a due cache with a newer release: no request, no notice,
+        cache unchanged; a fresh cache: its newer release shown, an equal
+        or older one not, no request; stale, missing and future-dated: one
+        request, its answer kept; an unreadable cache: no request);
+        `update_check/cache/tests.rs` (each field alone, interval and
+        future date, a bad field then quarantine on write with unknown keys
+        kept, a newer version's file, not an object, too large, unreadable
+        never written, a dismissal written meanwhile kept, atomic and
+        0600); `update_check/check/tests.rs` over U0's `FakeRelease`
+        (newer: cached, returned, one request with the User-Agent and no
+        `Authorization`; equal, `+local`, older: cached, nothing; a
+        pre-release, `nightly`, 403, 404, 502, malformed: cache untouched;
+        a stopped server and a 300 ms lookup bound against a held answer:
+        no cache; an unwritable cache still shows; a child process (this
+        test binary, `GITHUB_TOKEN` set) starts the check, the parent
+        waits for the request to arrive, then the child returns and exits
+        within 10 s while the answer is held for 20 s, no `Authorization`);
+        `crates/cli/tests/update_check.rs` (new: the built binary
+        hard-linked under `CARGO_TARGET_TMPDIR`, so a Release
+        installation, with the test URL at a fake 99.0.0 and the setting
+        on: `exec`, a launch and `resume --last` without a terminal make no
+        request and leave no cache; skipped where the link fails). By
+        mutation, each seen failing then restored: the thread joined (the
+        child test), the future date not due, unknown keys dropped (2), the
+        parked conversation not told, the notice not kept by `adopt`,
+        character count for the room (the CJK test), the check started
+        from `exec` (the binary test), and in `Launch::start` the
+        `allowed` return removed, the due test always true (2), the newer
+        filter inverted (2). Not caught: starting the check
+        before the terminal check (the process exits before the thread's
+        request), so the non-terminal half of that test only guards the
+        order as written. Existing tests: by D16 and the checkout rule no
+        existing test makes or waits for a request (the CLI suites run
+        `target/debug`'s binary, a Checkout, without the test URL).
+      - Docs (both languages): `terminal-interface` (`#layout`'s footer
+        item; `#updates`, new: the check, the notice, its forms and
+        actions, what is sent, how to turn it off), `config-reference#tui`
+        (`tui.checkForUpdates`), `data-directory#contents`
+        (`update-check.json`), `environment#read`
+        (`HANAFUBUKI_AGENT_NO_UPDATE_CHECK`), `network-logging#proxy-scope`
+        (the check's row). Each changed page compiled with `@mdx-js/mdx`
+        3.1.1 and remark-gfm.
+      - Goldens: none. Dependencies: `log` (workspace) in the CLI.
+        Module size: no exception added or raised.
+      - Hanafubuki at its next pin: `AgentTuiPreferences` (config crate)
+        gains `check_for_updates: bool`, `#[serde(default)]` through the
+        struct's `default` (true); a struct literal without `..Default`
+        would need the field (it builds none, searched for the plan); the
+        facade is otherwise unchanged and has none of the check.
+      - Validation (Linux, on U0's b4d6147): `cargo fmt --all --check`;
+        `RUSTFLAGS="-D warnings" cargo check --workspace --all-targets
+        --all-features`; `cargo clippy --workspace --all-targets
+        --all-features -- -D warnings`; `cargo xtask check`;
+        `INSTA_UPDATE=no cargo test --workspace --all-features
+        --no-fail-fast` (4917 passed; the two `plugin_examples` builds
+        failed only because a stray `/tmp/Cargo.toml` of this work's own
+        made cargo read `/tmp` as a workspace; removed, they passed);
+        `cargo check -p hanafubuki-agent-cli --release` (the test URL path
+        compiles out); `bun install --frozen-lockfile`, `bun run
+        format:check:site`, `bun run site:check`, `bun run site:test` (28
+        passed). Skipped: `site:build` (the Site workflow builds it).
+        Windows and macOS: CI only.
 - [ ] U3 (after U1 and U2): the prompt before the Agent starts (Codex's
       screen and keys: Update now, Skip, Skip until next version), skipped
       with a prompt argument; "Update now" runs `update`'s flow in the

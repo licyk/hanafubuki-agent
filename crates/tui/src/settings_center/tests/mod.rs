@@ -243,7 +243,7 @@ fn the_memory_tab_at_140_and_50_columns() {
 #[test]
 fn the_interface_tab_lists_its_pages_at_140_columns() {
     let mut center = center_with(catalog(), Some("interface"));
-    assert_snapshot!("interface_140", screen(&mut center, 140, 24));
+    assert_snapshot!("interface_140", screen(&mut center, 140, 25));
 }
 
 #[test]

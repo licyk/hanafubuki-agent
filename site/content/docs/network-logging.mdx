@@ -34,6 +34,7 @@ hanafubuki-agent config set network.proxy system
 | 插件包和市场的下载（`git`）                      | 同样的变量（你的 git 配置中的 `http.proxy` 优先于它们）                                                                  |
 | 模型 Provider 的请求及其模型列表                 | `network.proxy`；修改后各会话从下一轮起使用，见下文                                                                      |
 | models.dev 的下载（`modelMetadata.modelsDev`）   | `network.proxy`                                                                                                          |
+| 终端界面启动时的更新检查                         | `network.proxy`；发送的内容见[终端界面](/docs/terminal-interface#updates)                                                |
 
 ### 命令的代理变量 [#child-processes]
 

@@ -12,6 +12,7 @@ icon: Variable
 | `XDG_CONFIG_HOME`、`XDG_DATA_HOME`                   | Linux 上配置目录和数据目录的基准位置，默认分别是 `~/.config` 和 `~/.local/share`                                                                             |
 | `VISUAL`、`EDITOR`                                   | `config edit` 打开的编辑器，以及 Ctrl-G 编辑草稿所用的编辑器（[终端界面](/docs/terminal-interface#composer)），先看 `VISUAL`。可以带参数，例如 `code --wait` |
 | `--api-key-env` 指定的变量                           | `providers add` 从中读取 API 令牌，只在添加时读取一次                                                                                                        |
+| `HANAFUBUKI_AGENT_NO_UPDATE_CHECK`                   | 任意非空值都会关闭终端界面的[更新检查](/docs/terminal-interface#updates)及其提示，无论 `tui.checkForUpdates` 如何设置                                        |
 | `PATH`（Windows 上还有 `PATHEXT`）                   | 查找 stdio MCP 服务器的程序                                                                                                                                  |
 | `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`NO_PROXY` | 访问模型 Provider 时使用的代理，见[网络与日志](/docs/network-logging#provider-proxy)                                                                         |
 | `HANAFUBUKI_AGENT_TEST_RELEASE_URL`                  | 只用于调试构建：代替 GitHub 的发布查询地址（`http` 只能指向回环地址）；没有它，调试构建不查询任何发布                                                        |

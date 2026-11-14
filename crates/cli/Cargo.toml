@@ -17,6 +17,8 @@ hanafubuki-agent.workspace = true
 hanafubuki-agent-tui.workspace = true
 # `update`, the check at launch and the prompt.
 hanafubuki-agent-update.workspace = true
+# The update check logs its failures' kinds at `debug`.
+log.workspace = true
 # Session times in `sessions list`; the version the facade uses.
 chrono = "0.4"
 clap = { version = "4.5", features = ["derive"] }

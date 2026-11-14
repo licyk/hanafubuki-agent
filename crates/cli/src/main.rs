@@ -15,6 +15,7 @@ mod providers;
 mod roles;
 mod sessions;
 mod skills;
+mod update_check;
 
 use std::process::ExitCode;
 

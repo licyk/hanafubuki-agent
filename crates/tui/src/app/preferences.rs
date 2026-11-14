@@ -56,8 +56,9 @@ impl App {
     }
 
     /// The theme, status line and title pages, and `/statusline` or
-    /// `/title` with items: applied, and saved when asked.
-    pub(super) fn apply_appearance(&mut self, event: AppearanceEvent) {
+    /// `/title` with items: applied, and saved when asked. An update notice
+    /// reaches both conversations, a parked one too.
+    pub(crate) fn apply_appearance(&mut self, event: AppearanceEvent) {
         let save = match &event {
             AppearanceEvent::ThemeSaved(name) => Some((
                 vec![("tui.theme", json!(name))],
@@ -83,8 +84,14 @@ impl App {
             )),
             AppearanceEvent::StatusLine { save: false, .. }
             | AppearanceEvent::TerminalTitle { save: false, .. }
-            | AppearanceEvent::PreviewTerminalTitle(_) => None,
+            | AppearanceEvent::PreviewTerminalTitle(_)
+            | AppearanceEvent::UpdateNotice(_) => None,
         };
+        if let (AppearanceEvent::UpdateNotice(_), Some(parked)) =
+            (&event, self.workspace.parked_mut())
+        {
+            parked.chat_widget.apply_appearance(event.clone());
+        }
         let session_only = matches!(
             event,
             AppearanceEvent::StatusLine { save: false, .. }

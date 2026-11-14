@@ -60,6 +60,7 @@ impl ChatComposer {
             use_shift_enter_hint: self.use_shift_enter_hint,
             quit_shortcut_key: self.quit_shortcut_key,
             status_line: self.status_line.as_ref().filter(|_| shows_status_line),
+            update_notice: self.update_notice.as_ref(),
             task_running: self.is_task_running,
             agents_hint: self.agents_navigation_available(),
             second_conversation: self.command_scope.is_some(),

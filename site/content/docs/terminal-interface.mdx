@@ -41,7 +41,7 @@ Fullscreen 下，对话占满底部区域上方的屏幕。Scrollback 下，界�
 1. **状态行**：回合进行中显示 `• Working 25s • esc to interrupt`，包括已用时间；回合思考过之后显示 `• Working 25s (Thinking 20.7s) • esc to interrupt`，括号中是整个回合到目前为止的思考时间，只在模型思考时增长（[思考过程](#thinking)）。模型请求重试时改为 `Reconnecting 1/3: 原因`。等待审批或回答问题时，工作计时暂停。状态行在整个回合中保持显示，模型输出回答时也是。
 2. **等待中的消息**：有消息在等待回合时显示（[见下文](#composer)）。回合进行中，回合读取了这些消息之后，它们占用的行留作空行，直到回合结束，所以上方的对话不会每次都移动。
 3. **输入框**：以 `›` 开头。
-4. **底栏**：输入框为空，或有草稿但没有回合在运行时，显示[状态栏](#status-line)，默认是模型及其推理强度、工作目录和会话标题；状态栏没有可显示的项目时显示 `? for shortcuts`。输入框为空且 Left 可以打开[指挥中心](#agents)时，后面接着显示 `← for agents`。回合进行中写的草稿改为显示 `tab to queue message`。
+4. **底栏**：输入框为空，或有草稿但没有回合在运行时，显示[状态栏](#status-line)，默认是模型及其推理强度、工作目录和会话标题；状态栏没有可显示的项目时显示 `? for shortcuts`。输入框为空且 Left 可以打开[指挥中心](#agents)时，后面接着显示 `← for agents`。回合进行中写的草稿改为显示 `tab to queue message`。有更新的版本发布时，同一行的右侧会显示 `Update available: 0.3.0 · hanafubuki-agent update`（[更新](#updates)）。
 
 审批、提问以及 `/model` 和 `/mode` 的选择列表打开时，会暂时替换状态行和输入框。回合结束时，选择列表保持打开；`/model` 的列表在任何 Provider 回答之前就打开，随每个 Provider 的回答填入（[模型列表](#model-list)）。各项设置（包括 `/providers` 和 `/mcp`）都在全屏的[设置中心](#config)中。
 
@@ -930,6 +930,24 @@ yank = []
 - **interface**：因内部错误而关闭的命令、`[tui]` 中不认识的主题或项目、无法使用的按键映射设置。
 
 启动时如果有警告，会有一行说明数量（`2 warnings: /warnings`）。在列表中，`c` 复制选中的警告，`d` 在本次运行的剩余时间内忽略它。没有警告时，`/warnings` 显示 `No warnings.`。
+
+## 更新 [#updates]
+
+界面启动时（`hanafubuki-agent` 和 `hanafubuki-agent resume`；`exec` 和其他命令从不这样做，没有终端时也不会），命令行在后台向 GitHub 询问是否有更新的版本发布，最多每 20 小时一次；界面不等待回答。发现更新的版本时，[底栏](#layout)那一行的右侧会在本次运行中一直显示它：
+
+```text
+  gpt-5.1 high · ~/src/project · Fix the footer          Update available: 0.3.0 · hanafubuki-agent update
+```
+
+- 行较窄时缩短为 `Update available: 0.3.0`；连这也放不下时就不显示：状态栏和提示永远不会为它被截断，它也不会增加一行。快捷键说明（`?`）、历史搜索、外部编辑器的提示行以及命令和文件列表占用这一行时不显示它。
+- 之前某次启动发现的版本从第一帧起就显示；本次启动的检查发现的版本在回答到达时显示，输入框不会移动。旁支对话中也会显示。
+- 后面的命令取决于这个副本的安装方式：发布的二进制文件是 `hanafubuki-agent update`，用 `cargo install` 安装的是 `cargo install --locked hanafubuki-agent-cli`，其他情况是 `hanafubuki-agent update --check`，它会说明该怎么做。
+- 只有稳定版本、且比当前版本新的才算。检查失败（没有网络、GitHub 的速率限制、读不懂的回答）时什么也不显示，下次启动时再检查。从源码检出构建的副本（`target/debug`、`target/release` 或 `cargo install --path`）从不检查。
+- 回答保存在 [`update-check.json`](/docs/data-directory#contents) 中。
+
+检查发送的内容：一个 HTTPS 请求，`GET https://api.github.com/repos/licyk/hanafubuki-agent/releases/latest`，带有 `Accept: application/vnd.github+json` 和 `User-Agent: hanafubuki-agent/VERSION`（这个副本的版本），经过 [`network.proxy`](/docs/network-logging#proxy-scope)。不发送任何令牌、Cookie 或标识（`GITHUB_TOKEN` 也不发送），也不发送你的配置、会话或项目的任何内容；GitHub 看到的是请求的地址和版本，和下载时一样。失败只以其类别记录在 `debug` 级别的日志中。
+
+关闭它：设置 `tui.checkForUpdates = false`（[配置参考](/docs/config-reference#tui)），或把 `HANAFUBUKI_AGENT_NO_UPDATE_CHECK` 设为任意非空值（[环境变量](/docs/environment#read)）：这样不发送任何请求，也不显示提示，之前的检查发现的版本也不显示。两者都在下次启动时生效。
 
 ## 终端要求 [#terminal]
 
