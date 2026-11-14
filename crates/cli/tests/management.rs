@@ -103,7 +103,7 @@ fn config_get_and_set_check_a_plugin_option_against_its_plugin() {
     let home = Home::new();
     let get = |arguments: &[&str]| home.run(arguments).expect(0).stdout().trim().to_string();
     let key = "pluginOptions.subagents.maximumRunningAgents";
-    assert_eq!(get(&["config", "get", key]), "3", "its default");
+    assert_eq!(get(&["config", "get", key]), "8", "its default");
     home.run(&["config", "set", key, "6"]).expect(0);
     assert_eq!(get(&["config", "get", key]), "6");
     assert!(home
