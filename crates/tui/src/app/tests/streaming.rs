@@ -18,27 +18,27 @@ const ANSWER: &str = "Here is the plan for 第二步 and the rest of the run.\n\
 const PRESENTATIONS: [TranscriptMode; 2] = [TranscriptMode::Terminal, TranscriptMode::Owned];
 
 impl Harness {
-    fn streaming(mode: TranscriptMode) -> Self {
+    pub(super) fn streaming(mode: TranscriptMode) -> Self {
         let mut harness = Harness::start_with(Vec::new(), true, mode);
         harness.pump_until_screen_shows("fixture-model");
         harness
     }
 
     /// Handles what the app was sent, then draws.
-    fn settle_events(&mut self) {
+    pub(super) fn settle_events(&mut self) {
         while let Ok(event) = self.events.try_recv() {
             assert!(self.app.handle_event(&mut self.tui, event));
         }
         self.app.draw(&mut self.tui).unwrap();
     }
 
-    fn turn_update(&mut self, update: TurnUpdate) {
+    pub(super) fn turn_update(&mut self, update: TurnUpdate) {
         self.app.chat_widget.handle_turn_update(update);
         self.settle_events();
     }
 
     /// The lines written into the scrollback, as text.
-    fn written(&self) -> Vec<String> {
+    pub(super) fn written(&self) -> Vec<String> {
         plain(&crate::terminal_hyperlinks::visible_lines(
             self.tui.written_history_lines.clone(),
         ))
@@ -52,12 +52,12 @@ impl Harness {
             .find(|cell| cell.as_any().is::<LiveCell<StreamTailCell>>())
     }
 
-    fn has_stream_tail(&self) -> bool {
+    pub(super) fn has_stream_tail(&self) -> bool {
         self.stream_tail().is_some()
     }
 }
 
-fn plain(lines: &[Line<'static>]) -> Vec<String> {
+pub(super) fn plain(lines: &[Line<'static>]) -> Vec<String> {
     lines
         .iter()
         .map(|line| {
@@ -72,7 +72,7 @@ fn plain(lines: &[Line<'static>]) -> Vec<String> {
 }
 
 /// The source in chunks of a few bytes, cut at character boundaries.
-fn chunks(source: &str) -> Vec<&str> {
+pub(super) fn chunks(source: &str) -> Vec<&str> {
     let mut chunks = Vec::new();
     let mut start = 0;
     let mut step = 3;

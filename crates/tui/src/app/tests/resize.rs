@@ -346,3 +346,30 @@ fn a_selection_holds_through_a_resize_and_a_consolidation() {
     fresh.turn("Question 2?", ANSWER);
     assert_same_screen(&harness, &fresh, "after the selection");
 }
+
+/// A formula is laid out again for the new width too: a display that no
+/// longer fits with its margin turns to its source, and back.
+#[test]
+fn after_a_resize_math_is_laid_out_for_the_new_width() {
+    const MATH: &str = "Intro $\\alpha^2$ text.\n\n$$\nx=\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}+\\frac{1}{1234567890}\n$$\n\nAfter.\n";
+    for mode in PRESENTATIONS {
+        for (from, to) in [(100, 24), (24, 100)] {
+            let mut resized = Harness::at_width(mode, from);
+            let mut fresh = Harness::at_width(mode, to);
+            for n in 1..=5 {
+                resized.turn(&format!("Question {n}?"), MATH);
+                fresh.turn(&format!("Question {n}?"), MATH);
+            }
+            resized.resize(to);
+            resized.settle();
+            assert_same_screen(&resized, &fresh, &format!("{mode:?} {from} -> {to}"));
+            let screen = resized.screen();
+            assert!(screen.contains("Intro α² text."), "{mode:?}:\n{screen}");
+            assert_eq!(
+                screen.contains("\\frac"),
+                to == 24,
+                "{mode:?} {from} -> {to}:\n{screen}"
+            );
+        }
+    }
+}

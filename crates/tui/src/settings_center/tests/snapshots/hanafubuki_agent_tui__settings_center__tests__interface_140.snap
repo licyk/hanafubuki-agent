@@ -1,7 +1,6 @@
 ---
 source: crates/tui/src/settings_center/tests/mod.rs
-assertion_line: 246
-expression: "screen(&mut center, 140, 22)"
+expression: "screen(&mut center, 140, 23)"
 ---
 
   Settings
@@ -21,6 +20,7 @@ expression: "screen(&mut center, 140, 22)"
     Terminal title           activity, session-title, ...  The terminal title's items, in order; none leaves the title alone
     Tables                   [x] On                        Pipe tables laid out in columns; off, shown as written
     List markers             [x] On                        • bullets and ☐/☑ task boxes; off, - and [ ]/[x] as written
+    Math                     [x] On                        TeX formulas in Unicode notation; off, shown as written
     Keymap                   Open ›                        The keys of the interface's actions
     Presets                  Open ›                        Inputs kept in slots 0 to 9
 

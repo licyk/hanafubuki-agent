@@ -2551,7 +2551,173 @@ and any module-size exception.
         and answer the twins to link URLs there). Over-wide rows are cut by
         `TextLayout`; the scrollback writer never writes a row wider than
         the screen.
-- [ ] M5: math (D20).
+- [x] M5: math (D20).
+      Done (2026-11-14):
+      - Renderer (`markdown_render/math/`, Codex 57a808a392's `math.rs` and
+        `math/render{,/structured}.rs`, no crate): `mod.rs` the masker —
+        before the parser reads the source it finds `$…$`, `\(…\)`, `$$…$$`
+        and `\[…\]` outside what a first parse marks as code, HTML, links,
+        images and link definitions, masks each formula as a run of `$` in
+        the parser's copy (ENABLE_MATH stays off) and gives its rendering,
+        or its source, back among the events; `render/` Codex's
+        hand-written TeX-subset converter (Greek, operators, relations,
+        arrows, sets, logic, `\mathbb`, `\mathcal`, accents, `\text`,
+        `\left`/`\right`, Unicode super/subscripts else `x_{gpt}`; inline
+        `((a)/(b))` and `√(x)`; displays over rows: fractions, limits,
+        `\underset`/`\overset`, `aligned`, `pmatrix`, `\boxed`), bounded at
+        32 levels, 16 rows, 256 columns, 4 KiB a formula. A layout of
+        several rows (or a matrix) only as a display of its own, when it
+        fits the width less four columns; nested in a list or a quote, or
+        too wide, or unsupported, the formula is its source, wrapped as
+        text. `MathMarkdown::new` split by responsibility (protected
+        ranges, the closer search, the `$` verdict, the rendering) to stay
+        under 200 lines; let chains rewritten (edition 2021), `Either`
+        replaced by a two-variant iterator.
+      - Recognition (Codex's rules, unchanged): a `$` opens unless escaped
+        or followed by a space, `(` or `{`; its closer is on the same line
+        within 4 KiB, not after a space, not followed by a letter or digit
+        (CJK counts as a letter); a number without an operator and an
+        upper-case word are skipped; `$$`/`\[` open a display only with
+        nothing before them on their line, a list marker or `>` included
+        (else a rejected opener, paired only within the 4 KiB lookahead); a
+        multi-line display whose closer has text after it is rejected; an
+        unclosed standalone display is the rest's source. `\(…\)` and
+        `\[…\]` have no guard. Limits pinned by tests and documented:
+        `s/^a$/b$/` → `s/^a/b/`, `^foo$|^bar$` → `^foo|ᵇar`, `$0 ~ /x$/` →
+        `0 ~ /x/`; `公式$x^2$很` stays text; a formula between two `echo $$`
+        stays text; `- $$x^2$$` and `> $$x^2$$` stay source; Markdown's
+        escaped parentheses and brackets are math (`f\(x\)` → `fx`,
+        `s/\(a\)\(b\)/\2\1/` → `s/ab/\2\1/`, `grep -E '\(foo\|bar\)'` →
+        `grep -E 'foo‖bar'`, a line `\[note\]` → `note`, `foo\(\)` keeps its
+        backslashes; before M5 they showed `(…)`/`[…]`, and math off shows
+        their backslashes); a table's `\|` inside a formula is TeX's (`‖`); a
+        line opening `$$` or `\[` never closed shows the rest of the answer
+        as written.
+      - Writer: a formula reaches it as `Event::InlineMath` and is pushed
+        through `push_span` (`text_run(…, prose: false)`; in a table cell
+        `push_text_to_table_cell(…, false)`), never URL-scanned or linked.
+        Every Markdown render goes through the masker: answers (stream and
+        `AgentMarkdownCell`), plans (stream and `ProposedPlanCell`) and
+        thinking (`append_markdown`); no tool output or notice renders
+        Markdown.
+      - Streaming: `StreamingMarkdownRender.pending_math_start` (the line of
+        an open display) and Codex's two filters on
+        `last_top_level_block_start` (the pending start, the display
+        ranges); mapped back through unwrapped ```` ```md ```` fences
+        (`markdown.rs`); carried by `StreamingRender`; a start of the
+        mutable tail (`active_tail_source_start`); `prose_preview.rs`'s
+        `PreviewMode::Math` (the line's source wrapped by textwrap, nothing
+        withheld) when a display is open or the line starts with `$$`/`\[`,
+        also where a table holds the prose preview back, as Codex.
+      - Setting: `tui.rendering.math` (`AgentTuiRendering.math`, default
+        `true`, Boolean spec "Math" in the Interface tab, live like
+        `tables`/`lists`); off, the masker still runs and each formula
+        keeps its source (Codex).
+      - What the user sees: `$\lambda_1 \leq \lambda_2$ on $\mathbb{R}^n$`
+        → `λ₁ ≤ λ₂ on ℝⁿ`; `$\frac{a}{b}$` → `((a)/(b))`; `$$x=\frac{-b\pm
+        \sqrt{b^2-4ac}}{2a}$$` → three rows `  -b±√(b²-4ac)` /
+        `x=────────────` / `       2a`; a `pmatrix` → `A=⎛ 1  2 ⎞` /
+        `  ⎝ 3  4 ⎠`; `$\unknown{x}$` stays `$\unknown{x}$`. While it
+        streams, an open display shows as its source from its opening line
+        on, held after the committed rows; on its closer it is laid out;
+        a line opening a display previews as its source until its newline;
+        an answer ending or interrupted inside one keeps the source.
+      - Deviations: (1) math off shows each formula's source as written,
+        TeX included (Codex), not the pre-M5 rendering where Markdown read
+        `\(` as an escaped `(` and `*`/`_` inside as emphasis — the brief
+        asked for "as before M5", the plan (D20, Codex's tests) wins; pinned
+        by `disabled_math_shows_each_formula_as_written`. Ordinary text is
+        unchanged either way. (2) A formula is an `InlineMath` event shown
+        unscanned; Codex gives it as text that its bare-URL scan reads.
+        (3) Not ported: Codex's raw-mode stream halves (no raw stream here),
+        math copy sources, the config-persistence and local-settings tests
+        (our settings center test covers the key), the interruption test's
+        `plan_policy` case (no policy error here); its three snapshots are
+        checked on the cells' rows (`an_open_display_at_twenty_columns_is_
+        codexs`: the answer and the plan, whose `plan_error` rows are the
+        plan's), equal to Codex's. (4) A rejected `$$`
+        opener after text pairs with the next `$$` not at a line's start
+        within 4 KiB (Codex), so in `echo $$` … `$\alpha$` … `echo $$` the
+        formula between is text once the second arrives; streamed, the
+        formula was committed as math and the stream asks for Scrollback's
+        repair at its end, as Codex's `needs_scrollback_reflow` (pinned by
+        `a_late_closer_for_a_rejected_opener_asks_for_a_repair`).
+      - Tests: Codex's math tests and snapshots ported, the 14 `.snap`
+        oracles and the streaming one byte for byte the same as Codex's
+        (`markdown_render/math/tests/{mod,display}.rs`,
+        `streaming/controller/tests/math.rs`, `streaming/render/tests.rs`:
+        display exclusion boundaries, rejected displays keeping their
+        closer, bounded rejected openers, preferences on/off); Codex's
+        `disabled_renderers` sample (its math block equals Codex's oracle).
+        New: the ordinary-text corpus (prices, shell, Makefiles, regexes,
+        PHP/Perl/jQuery, escapes, unbalanced delimiters, code, CJK, in
+        prose, a table, lists and a quote: nothing masked) and the limits
+        test; a formula never linked (prose, cell, list, quote, display,
+        unsupported; a bare URL beside it still is); 12 math samples (CJK,
+        a table, a list and quote, prices, a matrix, a rejected closer, a
+        code block inside a display, an unclosed `$$` line) streamed by
+        line, by character, in two arbitrary chunkings and whole at
+        None/80/40/12 with math on and off, equal to the full render with
+        no repair; a late rejected closer asking for the repair; an
+        unterminated display at the end (with and without a newline); math
+        in a table cell, list items and a quote with CJK; every width 0–120
+        without a panic and within the width from 12 columns; the
+        preview's source mode; an open display after an
+        unwrapped fence holding only itself; the answer and plan cells at
+        every width 8–60 (whole at ≥ the threshold, source below, rows
+        within the width); app end to end in both presentations
+        (`app/tests/math.rs`: rendered and replayed by `/resume`, streamed
+        a few bytes a tick with no source committed and no repair, an
+        interrupt inside a display at 80/20/80, the setting turned off in
+        the settings center) and a resize 100↔24 (`app/tests/resize.rs`).
+        Fail-first: the ported snapshots failed with no stored file and
+        matched Codex's oracles before being kept; by mutation, each seen
+        failing then restored: no tail hold for an open display (7
+        controller tests), no math preview mode (2), math scanned for URLs
+        (the never-linked test), no block-start filters (2 render tests),
+        no fence mapping of the pending start (the fence test, after its
+        first version passed the mutation); the corpus against each of
+        Codex's seven rejection rules removed in turn (the opener's space,
+        `(` or `{`; a formula ending in a space; a letter or digit after the
+        closer; a number without an operator; an upper-case word; an
+        escaped opener; text before `$$`) — the upper-case word and the
+        escaped opener survived the first corpus, which then gained `$USD$`
+        and an escaped opener with a bare closer; the app streaming test against the tail hold (its first
+        version, reading the scrollback, survived; it now reads every
+        committed cell). Not mutated: the other app tests.
+      - Snapshots changed: the settings center's Interface tab at 140
+        columns (the Math row; height 22 → 23 so Presets still shows) and
+        the `disabled_renderers` snapshot (its math block). No other.
+      - Goldens: none changed. Dependencies: none added.
+      - Docs (both languages): `terminal-interface#rendering` (Math and
+        Dollar signs bullets with the rules and limits, the streaming
+        bullet, resize, the setting), `config-reference#tui` (the key),
+        `architecture` (a Math bullet; the Markdown and Streaming
+        bullets), `internals#tui-details` (the tail start and the preview).
+      - Hanafubuki at its next pin: `AgentTuiRendering` gains `math: bool`
+        (a struct literal needs it or `..Default::default()`); the
+        settings catalog has one more Boolean spec, `tui.rendering.math`.
+      - Module size: no exception added or raised.
+      - Validation: `cargo fmt --all --check`; `RUSTFLAGS="-D warnings"
+        cargo check --workspace --all-targets --all-features`; `cargo
+        clippy --workspace --all-targets --all-features -- -D warnings`;
+        `cargo xtask check` (the config-reference check first failed on
+        the new key; the two new original test files listed in the
+        notices policy); `cargo test --workspace --all-features
+        --no-fail-fast` on the final tree (4588 passed, none failed, no
+        flake seen);
+        `bun install --frozen-lockfile`, `bun run format:site`, `bun run
+        format:check:site`, `bun run site:check`, `bun run site:test` (28
+        passed), and the eight changed pages compiled with the store's
+        `@mdx-js/mdx` 3.1.1 (with remark-gfm); `VITE_BASE_PATH=/hanafubuki-agent/
+        bun run site:build` not run locally (port 3000 held by another
+        project's server); CI's Site run covers it.
+      - For M6–M8: a mermaid fence must stay out of the masker's way —
+        it is a code block, so already protected; M6 adds mermaid to the
+        tracker's mutable fences, `preferences::current().mermaid` and its
+        `AgentTuiRendering` field beside `math`. A renderer whose output
+        must not be URL-scanned can emit `InlineMath`-like events or go
+        through `push_span`.
 - [ ] M6: mermaid, as `crates/tui/src/mermaid/` (D22).
 - [ ] M7: SGR colour in command output, live and on replay (D21).
 - [ ] M8: JSON pretty-printing, MCP content summaries, the diff

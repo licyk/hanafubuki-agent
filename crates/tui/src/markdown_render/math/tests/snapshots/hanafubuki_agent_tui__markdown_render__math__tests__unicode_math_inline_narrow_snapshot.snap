@@ -1,0 +1,8 @@
+---
+source: crates/tui/src/markdown_render/math/tests/mod.rs
+assertion_line: 36
+expression: "plain(r\"Words $\\alpha^2 + \\beta_1$ more words and $\\sqrt{x}$.\", 16)"
+---
+Words α² + β₁
+more words and
+√(x).

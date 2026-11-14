@@ -273,14 +273,14 @@ impl Writer<'_> {
         }
     }
 
-    pub(super) fn push_text_to_table_cell(&mut self, text: &str) {
+    pub(super) fn push_text_to_table_cell(&mut self, text: &str, prose: bool) {
         let style = self.current_inline_style();
         for (i, line) in text.lines().enumerate() {
             if i > 0 {
                 self.push_table_cell_hard_break();
             }
             let span = Span::styled(line.to_string(), style);
-            if self.link.is_some() {
+            if self.link.is_some() || !prose {
                 self.push_span_to_table_cell(span);
             } else {
                 let annotated = self.style_bare_web_urls(span);

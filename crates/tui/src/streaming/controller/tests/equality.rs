@@ -53,7 +53,7 @@ const SAMPLES: &[&str] = &[
 
 /// The source in chunks of a few bytes, cut at character boundaries, the
 /// cuts spread by a fixed sequence.
-fn arbitrary_chunks(source: &str, seed: usize) -> Vec<&str> {
+pub(super) fn arbitrary_chunks(source: &str, seed: usize) -> Vec<&str> {
     let mut chunks = Vec::new();
     let mut start = 0;
     let mut step = seed;
@@ -69,7 +69,7 @@ fn arbitrary_chunks(source: &str, seed: usize) -> Vec<&str> {
     chunks
 }
 
-fn by_char(source: &str) -> Vec<&str> {
+pub(super) fn by_char(source: &str) -> Vec<&str> {
     source
         .char_indices()
         .map(|(index, ch)| &source[index..index + ch.len_utf8()])
@@ -78,7 +78,11 @@ fn by_char(source: &str) -> Vec<&str> {
 
 /// The rows committed after each chunk and at the end, and whether the
 /// end asked for a repair.
-fn stream(chunks: &[&str], width: Option<usize>, spacing: ListSpacing) -> (Vec<String>, bool) {
+pub(super) fn stream(
+    chunks: &[&str],
+    width: Option<usize>,
+    spacing: ListSpacing,
+) -> (Vec<String>, bool) {
     let mut stream = TestStream::with_spacing(width, "/repo", spacing);
     let mut rows = Vec::new();
     for chunk in chunks {
@@ -165,6 +169,7 @@ fn every_sample_streams_to_its_full_render_with_tables_or_lists_off() {
         crate::markdown_render::preferences::set(hanafubuki_agent::AgentTuiRendering {
             tables,
             lists,
+            ..Default::default()
         });
         for source in SAMPLES
             .iter()

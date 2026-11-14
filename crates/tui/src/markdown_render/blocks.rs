@@ -83,6 +83,17 @@ impl Writer<'_> {
     }
 
     pub(super) fn text(&mut self, text: CowStr<'_>) {
+        self.text_run(text, true);
+    }
+
+    /// A formula as the math masker gave it (its Unicode layout, or its
+    /// source): text, never scanned for web addresses.
+    pub(super) fn math(&mut self, math: CowStr<'_>) {
+        self.text_run(math, false);
+    }
+
+    /// Text, its bare web addresses linked when it is `prose`.
+    fn text_run(&mut self, text: CowStr<'_>, prose: bool) {
         if self.collecting_local_link_label() {
             let style = self.current_inline_style();
             for (index, line) in text.lines().enumerate() {
@@ -95,7 +106,7 @@ impl Writer<'_> {
         }
         self.line_ends_with_local_link_target = false;
         if self.in_table_cell() {
-            self.push_text_to_table_cell(&text);
+            self.push_text_to_table_cell(&text, prose);
             return;
         }
         if self.pending_marker_line {
@@ -127,7 +138,11 @@ impl Writer<'_> {
                 self.push_line(Line::default());
             }
             let span = Span::styled(line.to_string(), self.current_inline_style());
-            self.push_text_span(span);
+            if prose {
+                self.push_text_span(span);
+            } else {
+                self.push_span(span);
+            }
         }
         self.needs_newline = false;
     }

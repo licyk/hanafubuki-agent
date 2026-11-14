@@ -665,6 +665,14 @@ path = "crates/tui/src/app/tests/hyperlinks.rs"
 reason = "The bytes an answer's links reach an emulated terminal as, in both presentations, after a resize and in the overlay, written for the hyperlink port."
 
 [[original]]
+path = "crates/tui/src/app/tests/math.rs"
+reason = "An answer's math end to end on an emulated terminal in both presentations: rendered, replayed by /resume, streamed, interrupted inside a display, and the setting turned off; written for the math port."
+
+[[original]]
+path = "crates/tui/src/markdown_render/math/tests/ordinary_text.rs"
+reason = "Dollar signs in prices, shell, Makefiles, regular expressions, PHP, Perl and jQuery that must stay text, and the limits of Codex's rules pinned; written for the math port."
+
+[[original]]
 path = "crates/tui/src/app/tests/thinking.rs"
 reason = "Thinking entries on an emulated terminal in both presentations, written for the Agent's timeline."
 

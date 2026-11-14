@@ -161,3 +161,75 @@ fn a_stream_span_takes_in_what_was_inserted_among_its_cells() {
     assert_eq!(cells[0].stream_id(), Some(other));
     assert_eq!(stream_span(&cells, stream), None);
 }
+
+/// A display formula of several rows is laid out again for each width:
+/// whole, its rows never split, where it fits with four columns to spare;
+/// as its source, wrapped like text, below that. An answer renders two
+/// columns narrower than the cell and a plan four.
+#[test]
+fn a_display_formula_is_whole_or_its_source_at_every_width() {
+    let source = "Roots:\n\n$$\nx=\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}\n$$\n\nDone.\n";
+    let layout = ["  -b±√(b²-4ac)", "x=────────────", "       2a"];
+    let answer =
+        |width: u16| text(&AgentMarkdownCell::new(source.into(), "/".into()).display_lines(width));
+    let plan = |width: u16| {
+        text(
+            &crate::history_cell::ProposedPlanCell::new(source.into(), "/".into())
+                .display_lines(width),
+        )
+    };
+    for (cell, indent, threshold) in [
+        (&answer as &dyn Fn(u16) -> Vec<String>, 2, 20),
+        (&plan, 2, 22),
+    ] {
+        for width in 8..=60u16 {
+            let rows = cell(width);
+            let laid_out = layout.iter().all(|row| {
+                rows.iter()
+                    .any(|shown| shown.get(indent..) == Some(row.trim_end()))
+            });
+            assert_eq!(laid_out, width >= threshold, "{width}: {rows:?}");
+            assert_eq!(
+                rows.iter().any(|row| row.trim() == "$$"),
+                width < threshold,
+                "{width}: {rows:?}"
+            );
+            // A plan's header row is not wrapped.
+            assert!(
+                rows.iter()
+                    .filter(|row| *row != "• Proposed Plan")
+                    .all(|row| crate::wrapping::display_width(row) <= usize::from(width)),
+                "{width}: {rows:?}"
+            );
+        }
+    }
+}
+
+/// Codex's interruption snapshots at 20 columns (`answer_math_narrow`,
+/// `plan_math_narrow`), the cells' part: an answer and a plan cut inside
+/// an open display show its source, wrapped as Codex wraps it.
+#[test]
+fn an_open_display_at_twenty_columns_is_codexs() {
+    let source = "Intro.\n\n$$\n\\frac{a+b+c+d+e+f}{g+h}\n";
+    assert_eq!(
+        text(&AgentMarkdownCell::new(source.into(), "/".into()).display_lines(20)),
+        ["• Intro.", "", "  $$", "  \\frac{a+b+c+d+e+f}", "  {g+h}"]
+    );
+    assert_eq!(
+        text(
+            &crate::history_cell::ProposedPlanCell::new(source.into(), "/".into())
+                .display_lines(20)
+        ),
+        [
+            "• Proposed Plan",
+            "",
+            "",
+            "  Intro.",
+            "",
+            "  $$",
+            "  \\frac{a+b+c+d+e+",
+            "  f}{g+h}",
+            ""
+        ]
+    );
+}

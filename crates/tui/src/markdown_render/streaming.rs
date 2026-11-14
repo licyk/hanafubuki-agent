@@ -3,7 +3,8 @@
 //! What a stream needs besides the rows, collected in the writer's one pass
 //! over the events: where the last top-level block starts, which a stream
 //! renders again as lines arrive while it keeps the blocks before it; and
-//! the starts of what may still change the rows already rendered. Offsets
+//! the starts of what may still change the rows already rendered (an open
+//! display formula among them). Offsets
 //! index the very `input` rendered: a caller that changed its source first
 //! maps them back.
 
@@ -11,6 +12,7 @@ use std::ops::Range;
 
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag};
 
+use super::math::MathMarkdown;
 use super::{preferences, source_tables, ListSpacing, WebLinkDisplay, Writer};
 use crate::table_detect::is_markdown_fence_info;
 use crate::terminal_hyperlinks::HyperlinkLine;
@@ -18,7 +20,11 @@ use crate::terminal_hyperlinks::HyperlinkLine;
 /// The rows, and where the source may still change them.
 pub(crate) struct StreamingMarkdownRender {
     pub(crate) lines: Vec<HyperlinkLine>,
-    /// The last top-level block's start, when one came before it.
+    /// The start of the line of a display formula still open, shown as its
+    /// source until its closer arrives: never committed meanwhile.
+    pub(crate) pending_math_start: Option<usize>,
+    /// The last top-level block's start, when one came before it and is
+    /// not inside a display formula (open, or closed past it).
     pub(crate) last_top_level_block_start: Option<usize>,
     /// A reference definition can change any block, before or after it.
     pub(crate) has_reference_link_definition: bool,
@@ -63,10 +69,11 @@ pub(super) fn render_with_display(
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TABLES);
     options.set(Options::ENABLE_TASKLISTS, preferences::current().lists);
-    let parser = Parser::new_ext(input, options);
+    let math = MathMarkdown::new(input, options, width);
+    let parser = Parser::new_ext(&math.markdown, options);
     let has_reference_link_definition = parser.reference_definitions().iter().next().is_some();
     let mut events = TopLevelBlockTracker {
-        iter: source_tables::preserve(input, parser.into_offset_iter()),
+        iter: source_tables::preserve(input, math.events(parser.into_offset_iter())),
         depth: 0,
         block_count: 0,
         last_start: 0,
@@ -78,7 +85,16 @@ pub(super) fn render_with_display(
     writer.run(&mut events);
     StreamingMarkdownRender {
         lines: writer.lines,
-        last_top_level_block_start: (events.block_count > 1).then_some(events.last_start),
+        pending_math_start: math.pending_start,
+        last_top_level_block_start: (events.block_count > 1)
+            .then_some(events.last_start)
+            .filter(|start| math.pending_start.is_none_or(|pending| *start <= pending))
+            .filter(|start| {
+                !math
+                    .display_ranges
+                    .iter()
+                    .any(|range| range.start < *start && *start < range.end)
+            }),
         has_reference_link_definition,
         first_top_level_block_is_html: events.first_is_html,
         mutable_fence_start: events.mutable_fence_start,

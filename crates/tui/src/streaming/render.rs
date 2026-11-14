@@ -22,6 +22,8 @@ pub(super) struct StreamingRender {
     pub(super) renderer: StreamRenderer,
     pub(super) list_spacing: ListSpacing,
     pub(super) lines: Vec<HyperlinkLine>,
+    /// The line where a display formula still open starts.
+    pub(super) pending_math_start: Option<usize>,
     pub(super) mutable_fence_start: Option<usize>,
     /// The last row ends with a local file link's target.
     pub(super) trailing_local_link: bool,
@@ -45,6 +47,7 @@ impl StreamingRender {
             renderer,
             list_spacing,
             lines: Vec::new(),
+            pending_math_start: None,
             mutable_fence_start: None,
             trailing_local_link: false,
             completed_source_len: 0,
@@ -72,6 +75,7 @@ impl StreamingRender {
         self.open_code_fence = None;
         self.has_reference_link_definition = rendered.has_reference_link_definition;
         self.completed_source_len = rendered.last_top_level_block_start.unwrap_or(0);
+        self.pending_math_start = rendered.pending_math_start;
         self.mutable_fence_start = rendered.mutable_fence_start;
         self.trailing_local_link = rendered.trailing_local_link;
         self.lines = rendered.lines;
@@ -108,6 +112,9 @@ impl StreamingRender {
             self.recompute(raw_source, width, cwd);
             return;
         }
+        self.pending_math_start = pending
+            .pending_math_start
+            .map(|start| self.stable_source_len + start);
         self.mutable_fence_start = pending
             .mutable_fence_start
             .map(|start| self.stable_source_len + start);

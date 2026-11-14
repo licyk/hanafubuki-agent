@@ -19,6 +19,7 @@ static RENDERING: parking_lot::RwLock<AgentTuiRendering> =
     parking_lot::RwLock::new(AgentTuiRendering {
         tables: true,
         lists: true,
+        math: true,
     });
 
 #[cfg(test)]

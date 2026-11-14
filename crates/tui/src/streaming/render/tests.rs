@@ -231,7 +231,7 @@ fn an_open_markdown_fence_stays_mutable_whatever_the_tables_preference() {
     for tables in [true, false] {
         crate::markdown_render::preferences::set(AgentTuiRendering {
             tables,
-            lists: true,
+            ..Default::default()
         });
         let (source, render) = assert_stream_matches_full_render(
             &["Intro.\n\n", "```md\n", "# Title\n", "Prose inside.\n"],
@@ -336,4 +336,123 @@ fn recomputing_after_resize_drops_fence_state() {
     assert!(render.open_code_fence.is_none());
     append_and_assert_matches_full(&mut render, &mut source, "fn second() {}\n", Some(20));
     assert!(render.open_code_fence.is_some());
+}
+
+#[test]
+fn unicode_math_inline_stream_preserves_display_exclusion_boundaries() {
+    for (open, close) in [("$$", "$$"), ("\\[", "\\]")] {
+        let mut render = new_render();
+        let mut source = String::new();
+        for chunk in [open, "\n\nx^2\n\n", close, "\n\n", "After $\\alpha$.\n"] {
+            append_and_assert_matches_full(&mut render, &mut source, chunk, Some(40));
+            for width in [16, 40] {
+                let mut resized = new_render();
+                resized.recompute(&source, Some(width), CWD);
+                assert_eq!(
+                    resized.lines,
+                    resized.render_source(&source, Some(width), CWD).lines
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn unicode_math_rejected_display_keeps_its_closer_and_following_text() {
+    for (open, close) in [("$$", "$$"), ("\\[", "\\]")] {
+        for (prefix, body) in [
+            ("", "x".repeat(5000)),
+            ("", "`x`".to_owned()),
+            ("", format!("`{close}\nx`")),
+            ("", "[x](https://example.com)".to_owned()),
+            ("Equation: ", "x^2".to_owned()),
+        ] {
+            let mut render = new_render();
+            let mut source = String::new();
+            for chunk in [
+                format!("{prefix}{open}\n\n"),
+                format!("{body}\n\n"),
+                format!("{close}\n\n"),
+                "After $\\alpha$.\n\n".to_owned(),
+                "$$\\beta$$\n".to_owned(),
+            ] {
+                append(&mut render, &mut source, &chunk, Some(40));
+                let expected = render.render_source(&source, Some(40), CWD);
+                assert_eq!(
+                    (&render.lines, render.pending_math_start),
+                    (&expected.lines, expected.pending_math_start)
+                );
+                if source.len() > 4096 || !prefix.is_empty() {
+                    assert_eq!(render.pending_math_start, None);
+                }
+            }
+            let text = lines_to_plain_strings(&crate::terminal_hyperlinks::visible_lines(
+                render.lines.clone(),
+            ));
+            assert!(
+                text.iter().any(|line| line.contains("After α.")),
+                "{text:?}"
+            );
+            assert!(text.iter().any(|line| line.contains('β')), "{text:?}");
+            assert_eq!(render.pending_math_start, None);
+        }
+    }
+}
+
+/// A rejected opener (a shell's PID, a display after text) keeps only a
+/// bounded part of the stream mutable while it looks for its closer.
+#[test]
+fn rejected_math_openers_allow_bounded_incremental_rendering() {
+    for (open, close) in [
+        ("echo $$", "$$"),
+        ("Equation: \\[", "\\]"),
+        (r"\[label\]\*", "\\]"),
+    ] {
+        let (mut source, mut render) =
+            assert_stream_matches_full_render(&[&format!("{open}\n\n")], Some(80));
+        let distant_closer = format!("{close}\n\nAfter $\\alpha$.\n\n");
+        for chunk in std::iter::repeat_n(
+            "An ordinary paragraph that must not retain the entire response.\n\n",
+            160,
+        )
+        .chain(std::iter::once(distant_closer.as_str()))
+        {
+            append_and_assert_matches_full(&mut render, &mut source, chunk, Some(80));
+            assert!(source.len() - render.stable_source_len < 4200);
+        }
+    }
+}
+
+/// With each of `tui.rendering.math` and `.tables` on and off, the
+/// incremental render equals the full one at every line. With math off an
+/// open display is still held: the masker still finds it, and a code block
+/// later inside it can still reject it.
+#[test]
+fn rendering_preferences_match_incremental_and_full_renders() {
+    let source = concat!(
+        "Before.\n\n",
+        "```markdown\n| A | B |\n|---|---|\n| `a` | \\(x_1\\) |\n```\n\n",
+        "Inline \\(\\alpha_1\\) and $x^2$.\n\n\\[\n\\frac{a}{b}\n\\]\n\n",
+        "| Name | Value |\n|---|---|\n| **a** | $x^2$ |\n\n",
+        "Prose after the table.\n\nOne.\n\nTwo.\n\nThree.\n\nFour.\n\n",
+        "| **Name** | Value |\n|---|---|\n| `a` | b |\n\nAfter.\n"
+    );
+    for math in [true, false] {
+        for tables in [true, false] {
+            crate::markdown_render::preferences::set(AgentTuiRendering {
+                math,
+                tables,
+                ..Default::default()
+            });
+            let mut source = source.to_owned();
+            if !math {
+                source.insert_str(
+                    0,
+                    "$$\n# heading\none\ntwo\nthree\nfour\nfive\n```rust\nx\n```\n$$\n\n",
+                );
+            }
+            let chunks: Vec<&str> = source.split_inclusive('\n').collect();
+            assert_stream_matches_full_render(&chunks, Some(80));
+        }
+    }
 }

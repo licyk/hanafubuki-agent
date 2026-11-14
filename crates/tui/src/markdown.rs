@@ -105,6 +105,9 @@ pub(crate) fn render_streaming_markdown_agent(
                 .strip_suffix(&normalized[boundary..])
                 .map(str::len)
         };
+        rendered.pending_math_start = rendered
+            .pending_math_start
+            .map(|boundary| in_source(boundary).unwrap_or(0));
         rendered.last_top_level_block_start =
             rendered.last_top_level_block_start.and_then(in_source);
         rendered.mutable_fence_start = rendered

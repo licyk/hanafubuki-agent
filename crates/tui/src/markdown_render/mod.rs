@@ -17,14 +17,18 @@
 //!   shows its target, relative to the session's directory (`links`,
 //!   `local_links`). Each row carries its links beside its text
 //!   ([`HyperlinkLine`]).
-//! - `tui.rendering` turns tables or list markers off (`preferences`); what
-//!   is off is shown as written.
+//! - TeX math between `$…$`, `\(…\)`, `$$…$$` and `\[…\]` is found before
+//!   the parser reads the source and shown in Unicode notation, or as its
+//!   source when it cannot be (`math`).
+//! - `tui.rendering` turns tables, list markers or math off (`preferences`);
+//!   what is off is shown as written.
 
 mod blocks;
 mod links;
 mod list_spacing;
 mod lists;
 mod local_links;
+mod math;
 mod output;
 pub(crate) mod preferences;
 mod source_tables;
@@ -297,7 +301,9 @@ impl<'a> Writer<'a> {
                     }
                 }
             }
-            Event::FootnoteReference(_) | Event::InlineMath(_) | Event::DisplayMath(_) => {}
+            // Pulldown-cmark's own math is off: these are the masker's.
+            Event::InlineMath(math) | Event::DisplayMath(math) => self.math(math),
+            Event::FootnoteReference(_) => {}
         }
     }
 

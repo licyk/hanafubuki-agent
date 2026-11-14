@@ -3,9 +3,10 @@
 //! Which rows are stable: every row but the mutable tail is queued, and
 //! each tick commits rows from the queue's front. The tail starts at the
 //! earliest of a table's header (`table_holdback`), a ```` ```md ````
-//! fence in the last block, a last line that is a list marker alone (its
-//! item's text may come on the marker's row), and a last line ending with
-//! a local file link (a `:` line joins it).
+//! fence in the last block, the line of a display formula still open (shown
+//! as its source until it closes), a last line that is a list marker alone
+//! (its item's text may come on the marker's row), and a last line ending
+//! with a local file link (a `:` line joins it).
 
 use std::time::{Duration, Instant};
 
@@ -64,6 +65,7 @@ impl StreamCore {
         [
             table_start,
             self.render.mutable_fence_start,
+            self.render.pending_math_start,
             held_last_line.then_some(last_line_start),
         ]
         .into_iter()

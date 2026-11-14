@@ -127,6 +127,9 @@ pub struct AgentTuiRendering {
     pub tables: bool,
     /// `•` bullets and `☐`/`☑` task-list boxes, for `-` and `[ ]`/`[x]`.
     pub lists: bool,
+    /// TeX math between `$…$`, `\(…\)`, `$$…$$` and `\[…\]` in Unicode
+    /// notation; off, each formula's source as written.
+    pub math: bool,
 }
 
 impl Default for AgentTuiRendering {
@@ -134,6 +137,7 @@ impl Default for AgentTuiRendering {
         Self {
             tables: true,
             lists: true,
+            math: true,
         }
     }
 }
@@ -319,6 +323,10 @@ pub(crate) fn section() -> SettingsSection {
             described(
                 SettingSpec::new("tui.rendering.lists", "List markers", SettingKind::Boolean),
                 "• bullets and ☐/☑ task boxes; off, - and [ ]/[x] as written",
+            ),
+            described(
+                SettingSpec::new("tui.rendering.math", "Math", SettingKind::Boolean),
+                "TeX formulas in Unicode notation; off, shown as written",
             ),
         ],
     )

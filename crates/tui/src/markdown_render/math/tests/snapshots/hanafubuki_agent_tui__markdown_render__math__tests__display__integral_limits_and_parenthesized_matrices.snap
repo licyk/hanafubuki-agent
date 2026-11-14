@@ -1,0 +1,22 @@
+---
+source: crates/tui/src/markdown_render/math/tests/display.rs
+assertion_line: 215
+expression: "plain(&formulas.join(\"\\n\\n\"), 80)"
+---
+∞
+∫ e⁻ˣ dx = 1
+0
+
+A=⎛ 1  2 ⎞
+  ⎝ 3  4 ⎠
+
+v=( 10  20  30 )
+
+⎛  1     ⎞
+⎜  ─   0 ⎟v
+⎜  2     ⎟
+⎝ 100  x ⎠
+
+⎛   a    b ⎞
+⎜  *x    y ⎟
+⎝ [2pt]  z ⎠

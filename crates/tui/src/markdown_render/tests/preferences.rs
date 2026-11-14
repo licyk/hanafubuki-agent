@@ -21,12 +21,17 @@ fn agent_text(source: &str) -> String {
 #[test]
 fn disabled_renderers_preserve_source_independently() {
     let samples = [
+        "Inline $\\alpha_1$ and \\(x^{2}\\).\n\n\\[\n\\frac{a}{b}\n\\]\n",
         "| **Name** | Value |\n|---|---|\n| `a` | path\\_1 &amp; \\* |\n",
         "- [ ] Pending\n- [x] Done\n- Ordinary\n",
     ];
     let defaults = samples.map(render_markdown_text);
     let mut snapshot = Vec::new();
     for rendering in [
+        AgentTuiRendering {
+            math: false,
+            ..Default::default()
+        },
         AgentTuiRendering {
             tables: false,
             ..Default::default()
@@ -39,7 +44,7 @@ fn disabled_renderers_preserve_source_independently() {
         preferences::set(rendering);
         for (index, source) in samples.iter().enumerate() {
             let rendered = render_markdown_text(source);
-            if [rendering.tables, rendering.lists][index] {
+            if [rendering.math, rendering.tables, rendering.lists][index] {
                 assert_eq!(rendered, defaults[index]);
             } else {
                 snapshot.push(format!("{rendering:?}\n{rendered}"));
@@ -96,5 +101,30 @@ fn disabled_lists_keep_dashes_and_brackets() {
     assert_eq!(
         render_markdown_text("- one\n  - [x] two\n1. [ ] three\n").to_string(),
         "- one\n    - [x] two\n\n1. [ ] three"
+    );
+}
+
+/// Math off shows each formula as its source, its TeX as written: the
+/// masker still finds it, so neither its escapes nor its `*`/`_` are read
+/// as Markdown (Codex's behaviour, which differs there from the renderer
+/// before math: `\(` was an escaped `(`).
+#[test]
+fn disabled_math_shows_each_formula_as_written() {
+    preferences::set(AgentTuiRendering {
+        math: false,
+        ..Default::default()
+    });
+    for source in [
+        r"Inline \(x^{2}\) and \(y_1\) in prose.",
+        r"Products $a*b*c$ and $x_1 + y_1$.",
+        "$$\n\\frac{a}{b}\n$$",
+        "Open\n\n$$\n**not bold**\n",
+    ] {
+        assert_eq!(render_markdown_text(source).to_string(), source.trim_end());
+    }
+    // Ordinary text is unchanged either way.
+    assert_eq!(
+        render_markdown_text("It costs $5 and *$10*.").to_string(),
+        "It costs $5 and $10."
     );
 }

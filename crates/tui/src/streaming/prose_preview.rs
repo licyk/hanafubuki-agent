@@ -6,7 +6,9 @@
 //! bounded to the line's last 8 KiB; a link's destination waits until its
 //! `)` arrives, its label shown meanwhile. A line whose start suggests a
 //! block (indented, quoted, a fence, a table's pipe) is not previewed past
-//! that point: its block is only known with its newline.
+//! that point: its block is only known with its newline. Inside a display
+//! formula still open the line is its source, wrapped, its TeX never read
+//! as Markdown.
 
 use ratatui::text::Line;
 
@@ -17,6 +19,13 @@ use crate::markdown_render::ListSpacing;
 
 const MAX_PREVIEW_BYTES: usize = 8192;
 
+/// How the line is previewed: rendered as Markdown, or as a formula's
+/// source.
+pub(super) enum PreviewMode {
+    Prose(StreamRenderer),
+    Math,
+}
+
 /// The preview of one unterminated line, which only grows; reset when a
 /// newline commits it.
 #[derive(Default)]
@@ -24,6 +33,8 @@ pub(super) struct ProsePreview {
     pub(super) lines: Vec<HyperlinkLine>,
     scanned_len: usize,
     safe_len: usize,
+    /// `safe_len`, before a link's destination still open.
+    prose_safe_len: usize,
     has_pipe: bool,
     link: LinkPreview,
 }
@@ -36,30 +47,44 @@ impl ProsePreview {
         source: &str,
         width: Option<usize>,
         cwd: &str,
-        renderer: StreamRenderer,
+        mode: PreviewMode,
     ) -> bool {
         // Only the bytes that arrived since are scanned, however long the
         // line grows.
         self.has_pipe |= source[self.scanned_len..].contains('|');
-        let advances = !(self.has_pipe
-            || source.starts_with([' ', '\t', '>'])
-            || source.starts_with("```")
-            || source.starts_with("~~~")
-            || matches!(source, "`" | "``" | "~" | "~~"));
+        let advances = matches!(mode, PreviewMode::Math)
+            || !(self.has_pipe
+                || source.starts_with([' ', '\t', '>'])
+                || source.starts_with("```")
+                || source.starts_with("~~~")
+                || matches!(source, "`" | "``" | "~" | "~~"));
         // A fence's first backticks may still turn out to be a code span.
         if advances || source.len() <= 2 {
             self.link.scan(source, self.scanned_len);
         }
         if advances {
             self.safe_len = source.len();
+            self.prose_safe_len = source.len();
         }
         self.scanned_len = source.len();
         if let Some((start, _)) = self.link.destination {
-            self.safe_len = self.safe_len.min(start);
+            self.prose_safe_len = self.prose_safe_len.min(start);
         }
-        let source = &source[..self.safe_len];
+        let safe_len = match mode {
+            PreviewMode::Prose(_) => self.prose_safe_len,
+            PreviewMode::Math => self.safe_len,
+        };
+        let source = &source[..safe_len];
         let start = source.ceil_char_boundary(source.len().saturating_sub(MAX_PREVIEW_BYTES));
-        let mut lines = renderer(&source[start..], width, Some(cwd), ListSpacing::default()).lines;
+        let mut lines = match mode {
+            PreviewMode::Prose(renderer) => {
+                renderer(&source[start..], width, Some(cwd), ListSpacing::default()).lines
+            }
+            PreviewMode::Math => textwrap::wrap(&source[start..], width.unwrap_or(usize::MAX))
+                .into_iter()
+                .map(|line| Line::from(line.into_owned()).into())
+                .collect(),
+        };
         if start > 0 {
             lines.insert(0, Line::from("…").into());
         }

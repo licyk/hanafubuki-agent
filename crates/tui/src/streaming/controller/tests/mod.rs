@@ -3,6 +3,7 @@
 
 mod equality;
 mod links;
+mod math;
 mod preview;
 mod resize;
 mod visible;

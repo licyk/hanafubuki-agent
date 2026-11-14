@@ -1,0 +1,8 @@
+---
+source: crates/tui/src/streaming/controller/tests/math.rs
+assertion_line: 130
+expression: "lines.iter().map(ToString::to_string).collect::<Vec<_>>().join(\"\\n\")"
+---
+$$
+ \frac{|
+a+b+c+d+e+f|}{g+h}

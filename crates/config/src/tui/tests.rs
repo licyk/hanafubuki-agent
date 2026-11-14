@@ -42,6 +42,7 @@ fn missing_preferences_are_the_defaults() {
             rendering: AgentTuiRendering {
                 tables: true,
                 lists: true,
+                math: true,
             },
             keymap: BTreeMap::new(),
             presets: BTreeMap::new(),
@@ -56,7 +57,7 @@ fn each_key_decodes_on_its_own_and_unknown_keys_are_ignored() {
          scrollbackMouse = \"off\"\nagentsGrouping = \"model\"\nrawOutput = true\nkeymap = \"later\"\ntheme = \"nord\"\n\
          statusLine = [\"model\", 3]\nstatusLineColors = false\n\
          terminalTitle = [\"app-name\", \"unknown-item\"]\n\
-         [tui.rendering]\ntables = false\nlists = \"no\"\nmath = false\n",
+         [tui.rendering]\ntables = false\nlists = \"no\"\nmath = false\nunknown = false\n",
     );
     assert_eq!(
         config.tui_preferences().unwrap(),
@@ -72,10 +73,11 @@ fn each_key_decodes_on_its_own_and_unknown_keys_are_ignored() {
             status_line_colors: false,
             // The interface leaves out the ids it does not know.
             terminal_title: vec!["app-name".to_string(), "unknown-item".to_string()],
-            // Not a boolean: the default; `math` is not a setting here.
+            // Not a boolean: the default; `unknown` is not a setting.
             rendering: AgentTuiRendering {
                 tables: false,
                 lists: true,
+                math: false,
             },
             // Not a table: none.
             keymap: BTreeMap::new(),

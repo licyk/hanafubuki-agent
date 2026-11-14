@@ -1,16 +1,25 @@
 ---
 source: crates/tui/src/markdown_render/tests/preferences.rs
-assertion_line: 49
+assertion_line: 54
 expression: "snapshot.join(\"\\n\\n---\\n\\n\")"
 ---
-AgentTuiRendering { tables: false, lists: true }
+AgentTuiRendering { tables: true, lists: true, math: false }
+Inline $\alpha_1$ and \(x^{2}\).
+
+\[
+\frac{a}{b}
+\]
+
+---
+
+AgentTuiRendering { tables: false, lists: true, math: true }
 | **Name** | Value |
 |---|---|
 | `a` | path\_1 &amp; \* |
 
 ---
 
-AgentTuiRendering { tables: true, lists: false }
+AgentTuiRendering { tables: true, lists: false, math: true }
 - [ ] Pending
 - [x] Done
 - Ordinary
