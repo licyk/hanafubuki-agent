@@ -157,9 +157,10 @@ async fn a_session_takes_its_role_and_an_unknown_role_is_refused() {
         .unwrap()
         .ends_with("\n\nOnly read; never edit.\n"));
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -215,9 +216,10 @@ async fn a_role_switches_between_turns_and_default_clears_it() {
         .unwrap();
     assert!(tools(&body(&server, 1)).contains(&"exec_command".to_string()));
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -232,9 +234,10 @@ async fn recovery_keeps_the_scope_after_the_role_file_is_deleted() {
         .create_session(AgentSessionMode::Default, Some("reader".to_string()))
         .await
         .unwrap();
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     drop(service);
     std::fs::remove_file(paths.config_dir.join("agents").join("reader.toml")).unwrap();
 
@@ -266,9 +269,10 @@ async fn recovery_keeps_the_scope_after_the_role_file_is_deleted() {
         .ends_with("\n\nOnly read; never edit.\n"));
     assert!(!tools(&request).contains(&"exec_command".to_string()));
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -324,9 +328,10 @@ async fn a_role_with_skills_off_has_no_skill_catalog() {
         .to_string()
         .contains("Follow the diagnostics workflow."));
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -380,8 +385,9 @@ async fn a_role_with_memory_off_reads_no_memory_but_still_contributes() {
         mode
     );
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

@@ -44,9 +44,10 @@ fn a_session_the_list_refuses_joins_the_agent_status_at_once() {
             .id
     });
     drop(setup);
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     drop(service);
     let storage = AgentStoragePaths::under(paths.data_dir.join("agent-test"));
     let events = Arc::new(CountingStatusSink::default());
@@ -108,9 +109,10 @@ fn a_parent_a_quarantined_fork_needs_is_not_deleted_and_keeps_its_memory() {
         .unwrap()
         .session
         .id;
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     drop(service);
     let history = history_paths(&paths);
     let child_rollout = rollout_of(&history.active_sessions, child);

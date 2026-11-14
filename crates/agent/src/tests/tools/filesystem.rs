@@ -49,9 +49,10 @@ async fn direct_file_read_is_unreviewed_and_returns_bounded_content() {
     assert!(output.contains("truncated"));
     assert!(!output.contains("bounded content"));
     assert_presented(&service, session.id, &file.to_string_lossy());
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 

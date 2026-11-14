@@ -101,9 +101,10 @@ async fn an_applied_patch_numbers_its_diff_without_telling_the_model() {
     for hidden in ["hunkStarts", "patchHunkStarts", "oldLine", "newLine"] {
         assert!(!export.contains(hidden), "{export}");
     }
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
 
     // Read back from the history after a restart, as `/resume` does.
     let reopened = reopen(config, &paths).await;
@@ -112,9 +113,10 @@ async fn an_applied_patch_numbers_its_diff_without_telling_the_model() {
         .unwrap()
         .unwrap();
     assert_eq!(hunk_starts(shown.display.as_ref().unwrap()), numbered);
-    assert!(reopened
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        reopened.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
     let _ = std::fs::remove_dir_all(directory);
 }

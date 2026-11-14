@@ -478,9 +478,10 @@ async fn named_skill_is_injected_as_full_user_context_on_the_first_model_request
         .unwrap()
         .iter()
         .any(|tool| tool["name"] == "request_user_input"));
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -524,9 +525,10 @@ async fn description_only_match_exposes_the_codex_trigger_rule_without_preselect
     assert!(!input.iter().any(|item| item["content"][0]["text"]
         .as_str()
         .is_some_and(|text| text.contains("<skill>\n<name>"))));
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -562,9 +564,10 @@ async fn disabled_skill_is_absent_from_a_fresh_turn_catalog() {
     assert!(!input.iter().any(|item| item["content"][0]["text"]
         .as_str()
         .is_some_and(|text| text.contains("Disabled workflow marker"))));
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -619,9 +622,10 @@ async fn reading_a_skill_in_a_turn_adopts_it_after_the_tool_output() {
         .is_some_and(|text| text.contains("<skill>\n<name>")
             && text.contains("Use list_instances before explaining state.")));
     assert_eq!(body_deliveries(input, "Use list_instances before"), 1);
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -664,9 +668,10 @@ async fn reading_a_mentioned_skill_does_not_deliver_its_instructions_twice() {
         .iter()
         .any(|item| item["type"] == "function_call_output"));
     assert_eq!(body_deliveries(input, "Use list_instances before"), 1);
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -783,8 +788,9 @@ async fn skill_catalog_and_selected_skill_fragments_are_pinned() {
             "d857292449b948da2fe9aa2ac8629bf4ce50a6c4fe656f2354b5c4f68c8d3390"
         )
     );
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

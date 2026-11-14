@@ -22,9 +22,10 @@ const LISTING: &str = r#"{"data":[
 ]}"#;
 
 fn stop(service: &AgentApplicationService) {
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
 }
 
 /// `metadata` with no fact's observation time: two reads of the clock

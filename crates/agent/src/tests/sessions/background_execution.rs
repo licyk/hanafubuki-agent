@@ -69,9 +69,10 @@ async fn background_terminal_use_cases_are_session_scoped() {
         .unwrap()
         .retained
         .is_empty());
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -106,9 +107,10 @@ async fn cleanup_failure_blocks_archive_and_retries_the_same_execution() {
         .unwrap();
     assert_eq!(archived.lifecycle, AgentSessionLifecycle::Archived);
     assert_eq!(process.session_count(), 0);
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -144,9 +146,10 @@ async fn cleanup_failure_cancels_prepared_delete_and_retry_confirms_removal() {
         service.snapshot(session.id),
         Err(AgentError::SessionNotFound)
     );
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -203,9 +206,10 @@ async fn startup_terminalizes_execution_activity_without_rebuilding_process_auth
             .len(),
         1
     );
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     drop(service);
 
     let restarted = AgentApplicationService::new(
@@ -236,8 +240,9 @@ async fn startup_terminalizes_execution_activity_without_rebuilding_process_auth
         .list_background_terminals(session.id)
         .unwrap()
         .is_empty());
-    assert!(restarted
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        restarted.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

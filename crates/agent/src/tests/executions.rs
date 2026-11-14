@@ -118,9 +118,10 @@ async fn unified_exec_completes_only_after_manual_exact_approval() {
     );
     assert!(!encoded_output.contains("executorId"));
     assert!(!encoded_output.contains("receipt"));
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 

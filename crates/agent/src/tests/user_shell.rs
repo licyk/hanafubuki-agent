@@ -168,9 +168,10 @@ async fn a_command_runs_without_the_model_and_the_next_request_carries_it() {
         "{input}"
     );
     assert!(input.contains("user-shell-marker\\n"), "{input}");
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -199,9 +200,10 @@ async fn a_failing_command_records_its_exit_code() {
         ),
         "{items:#?}"
     );
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -312,9 +314,10 @@ async fn it_runs_alone_and_an_interrupt_stops_its_process() {
         .await
         .unwrap_err();
     assert!(refused.contains("Plan mode"), "{refused}");
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -420,9 +423,10 @@ async fn an_approval_rule_requiring_a_person_still_asks() {
         ),
         "{items:#?}"
     );
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -478,9 +482,10 @@ async fn a_session_of_commands_reopens_and_continues() {
         .await
         .unwrap();
     turn_end(&sink).await;
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
 
     let reopened = reopen(config, &paths);
     reopened
@@ -511,9 +516,10 @@ async fn a_session_of_commands_reopens_and_continues() {
         "{input}"
     );
     assert!(input.contains("The command did not finish."), "{input}");
-    assert!(reopened
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        reopened.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -552,9 +558,10 @@ async fn editing_a_message_after_a_command_keeps_the_command() {
         ),
         "{forked:#?}"
     );
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -593,8 +600,9 @@ async fn the_persons_recent_messages_include_commands_newest_first() {
         service.recent_user_messages(1, None).unwrap(),
         ["First message."]
     );
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

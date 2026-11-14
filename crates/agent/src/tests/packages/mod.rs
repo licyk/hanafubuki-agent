@@ -109,8 +109,9 @@ pub(super) async fn package(
 }
 
 pub(super) async fn finish(service: AgentApplicationService, paths: TestPaths) {
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

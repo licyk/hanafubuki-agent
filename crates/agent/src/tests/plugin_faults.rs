@@ -485,10 +485,11 @@ impl Fixture {
         assert_eq!(retried.state, AgentPluginState::Active);
         assert_eq!(retried.error, None);
         assert_eq!(retried.contributions.tools, ["faulty_tool"]);
-        assert!(self
-            .service
-            .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-            .is_empty());
+        assert_eq!(
+            self.service
+                .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+            []
+        );
         let _ = std::fs::remove_dir_all(&self.paths.app_data_dir);
     }
 }
@@ -790,10 +791,12 @@ async fn turning_a_faulted_plugin_off_and_on_starts_it_again() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     assert_eq!(fixture.status("faulty").error, None);
-    assert!(fixture
-        .service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        fixture
+            .service
+            .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(&fixture.paths.app_data_dir);
 }
 
@@ -891,8 +894,9 @@ async fn a_plugin_registering_a_taken_tool_name_fails_alone() {
         .any(|name| ["searcher_tool", "planner_tool", "copycat_tool"].contains(&name.as_str())));
     assert!(tool_output(&server, 1).contains("healthy_tool"));
     assert_eq!(healthy.0.load(Ordering::SeqCst), 1);
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(&paths.app_data_dir);
 }

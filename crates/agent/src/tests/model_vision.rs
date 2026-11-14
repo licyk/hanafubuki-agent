@@ -107,9 +107,10 @@ fn reopen(config: AgentConfig, paths: &TestPaths) -> AgentApplicationService {
 }
 
 fn stop(service: &AgentApplicationService) {
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
 }
 
 /// A session sends an image while nothing is known of its model; then the

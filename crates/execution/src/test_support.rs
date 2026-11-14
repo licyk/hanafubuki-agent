@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
 use hanafubuki_agent_process::executor::{
@@ -28,6 +29,29 @@ struct FakeState {
     interrupts: usize,
     write_delay_ms: u64,
     finish_on_start: Option<(Vec<u8>, i32)>,
+    /// The next disposal says it has entered, then waits to be released.
+    held_disposal: Option<(Sender<()>, Receiver<()>)>,
+}
+
+/// A disposal [`FakeAgentExecutionProcessPort::hold_next_disposal`] holds
+/// in the port, its claim on the execution taken.
+pub struct HeldDisposal {
+    entered: Receiver<()>,
+    release: Sender<()>,
+}
+
+impl HeldDisposal {
+    /// Waits until the disposal is held in the port.
+    pub fn wait_entered(&self) {
+        self.entered
+            .recv()
+            .expect("the held disposal entered the port");
+    }
+
+    /// Lets the disposal go on.
+    pub fn release(self) {
+        let _ = self.release.send(());
+    }
 }
 
 struct FakeSession {
@@ -45,6 +69,15 @@ impl FakeAgentExecutionProcessPort {
 
     pub fn fail_next_disposals(&self, count: usize) {
         self.state.lock().unwrap().dispose_failures = count;
+    }
+
+    /// Holds the next disposal in the port until the returned handle lets
+    /// it go; an injected failure applies once it is let go.
+    pub fn hold_next_disposal(&self) -> HeldDisposal {
+        let (entered_sender, entered) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        self.state.lock().unwrap().held_disposal = Some((entered_sender, released));
+        HeldDisposal { entered, release }
     }
 
     pub fn fail_next_terminations(&self, count: usize) {
@@ -240,6 +273,11 @@ impl AgentExecutionProcessPort for FakeAgentExecutionProcessPort {
     }
 
     fn dispose_confirmed(&self, receipt: &ProcessReceipt) -> Result<(), String> {
+        let held = self.state.lock().unwrap().held_disposal.take();
+        if let Some((entered, released)) = held {
+            let _ = entered.send(());
+            let _ = released.recv();
+        }
         let mut state = self.state.lock().unwrap();
         if state.dispose_failures > 0 {
             state.dispose_failures -= 1;

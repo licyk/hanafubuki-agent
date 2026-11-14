@@ -161,7 +161,7 @@ fn the_standalone_runtime_runs_a_turn_in_its_working_directory() {
         )),
         "{refused}"
     );
-    assert!(second.shutdown(AGENT_SHUTDOWN_BUDGET).is_empty());
+    assert_eq!(second.shutdown(AGENT_SHUTDOWN_BUDGET), []);
 
     drop(agent);
     let diagnostics = runtime.shutdown(AGENT_SHUTDOWN_BUDGET);

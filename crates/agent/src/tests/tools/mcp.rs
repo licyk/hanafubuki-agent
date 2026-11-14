@@ -311,9 +311,10 @@ for line in sys.stdin:
     });
     let lifecycle_log = std::fs::read_to_string(&log).unwrap();
     assert!(lifecycle_log.contains("uninstall\n"));
-    assert!(workers
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        workers.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     std::fs::remove_dir_all(root).unwrap();
 }
 
@@ -501,9 +502,10 @@ for line in sys.stdin:
     assert!(serde_json::to_string(&transcript)
         .unwrap()
         .contains("image/png"));
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -560,9 +562,10 @@ async fn optional_mcp_start_failure_warns_while_required_failure_blocks_startup(
         .await
         .unwrap();
     assert!(service.start_mcp_servers().await.is_err());
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -611,9 +614,10 @@ async fn an_unrecognised_allowed_tool_neither_hides_a_skill_nor_expands_the_tool
     assert!(!tools
         .iter()
         .any(|tool| tool["name"] == "not_a_fixed_tool" || tool["name"] == "Bash"));
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 

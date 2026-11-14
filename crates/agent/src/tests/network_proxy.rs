@@ -78,8 +78,9 @@ async fn a_turn_goes_through_the_hosts_proxy_and_a_change_reaches_the_next_turn(
             request.path
         );
     }
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

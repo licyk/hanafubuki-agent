@@ -256,9 +256,10 @@ async fn an_approved_denial_is_a_note_the_next_turn_sends_after_a_restart() {
         .approve_denied_action(session.id, &review_id)
         .unwrap();
     assert_eq!(server.requests().len(), 3, "the approval starts no turn");
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     drop(service);
 
     let restarted = AgentApplicationService::new(
@@ -285,9 +286,10 @@ async fn an_approved_denial_is_a_note_the_next_turn_sends_after_a_restart() {
     assert!(request.contains(
         "The user has manually approved a specific action that automatic permission review previously denied."
     ));
-    assert!(restarted
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        restarted.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 

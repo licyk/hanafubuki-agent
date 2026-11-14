@@ -56,8 +56,9 @@ async fn workspace_instruction_changes_refresh_on_the_next_turn_without_a_new_se
         })
         .count();
     assert_eq!(workspace_updates, 2);
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

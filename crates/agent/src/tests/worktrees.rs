@@ -114,8 +114,9 @@ async fn worktrees_are_made_listed_bound_and_removed_through_their_plugin() {
             reason: "the worktree Agent plugin is unavailable: it is turned off".to_string(),
         }
     );
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

@@ -95,9 +95,10 @@ async fn a_remounted_context_plugin_leaves_the_request_unchanged() {
         "default_mode_request",
         &normalize(&body, &paths.app_data_dir),
     );
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -180,9 +181,10 @@ async fn user_shell_command_request_matches_golden() {
         .unwrap();
     let requests = server.requests();
     let body: Value = serde_json::from_slice(&requests[0].body).unwrap();
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let normalized = normalize(&body, &paths.app_data_dir).to_string();
     let duration = normalized.find("Duration: ").expect("a duration") + "Duration: ".len();
     let seconds = normalized[duration..].find(" seconds").unwrap();
@@ -242,9 +244,10 @@ async fn run_tool_round_trip(
         .map(|event| serde_json::to_value(&event.kind).unwrap()["type"].clone())
         .collect::<Vec<_>>();
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     after_shutdown(&paths);
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
     (second, Value::Array(kinds))
@@ -342,9 +345,10 @@ async fn reopen_and_continue(corpus: &str, transcript: &str, recorded_prompt: &s
     assert!(rendered.contains("Continued."));
     let request = String::from_utf8(server.requests()[0].body.clone()).unwrap();
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
     request
 }
@@ -403,9 +407,10 @@ async fn recorded_lineage_history_reopens_and_continues() {
     let request = String::from_utf8(server.requests()[0].body.clone()).unwrap();
     assert!(request.contains("Parent question.") && request.contains("Child question."));
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -446,9 +451,10 @@ async fn record_lineage_history() {
         .run_turn(child.id, "Child question.".into())
         .await
         .unwrap();
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     record_history_fixture(&paths, "history-lineage");
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
@@ -496,9 +502,10 @@ async fn recorded_goal_history_reopens_and_continues() {
     assert!(request.contains(r#"Goal status: complete."#));
     assert!(request.contains(r#"set the goal: \"Write the changelog\""#));
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -533,9 +540,10 @@ async fn record_goal_history() {
         .await
         .unwrap();
     assert_eq!(server.requests().len(), 4);
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     record_history_fixture(&paths, "history-goal");
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
@@ -565,9 +573,10 @@ async fn side_conversation_request_matches_golden() {
         "side_conversation_request",
         &normalize(&body, &paths.app_data_dir),
     );
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -598,9 +607,10 @@ async fn review_request_matches_golden() {
 
     let body: Value = serde_json::from_slice(&server.requests()[1].body).unwrap();
     assert_golden("review_request", &normalize(&body, &paths.app_data_dir));
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -698,9 +708,10 @@ async fn mcp_tools_request_matches_golden() {
         .await
         .unwrap();
     let body: Value = serde_json::from_slice(&server.requests()[0].body).unwrap();
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let normalized = normalize(&body, &paths.app_data_dir);
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
     assert_golden("mcp_tools_request", &normalized);
@@ -738,9 +749,10 @@ async fn tool_search_round_trip_matches_golden() {
         "after_search": body(1),
         "after_call": body(2),
     });
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let normalized = normalize(&pinned, &paths.app_data_dir);
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
     assert_golden("tool_search_round_trip", &normalized);
@@ -825,9 +837,10 @@ async fn first_request_as(
     let requests = server.requests();
     assert_eq!(requests.len(), 1);
     let body: Value = serde_json::from_slice(&requests[0].body).unwrap();
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let normalized = normalize(&body, &paths.app_data_dir);
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
     normalized

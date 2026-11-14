@@ -406,10 +406,10 @@ async fn a_faulted_plugin_starts_again_by_itself_under_the_restart_policy() {
         Some(1)
     );
     assert_eq!(starts.load(Ordering::SeqCst), 2);
-    assert!(host
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .await
-        .is_empty());
+    assert_eq!(
+        host.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE).await,
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 

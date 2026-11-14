@@ -24,7 +24,7 @@ async fn shutdown_cancels_the_active_model_and_joins_the_tool_worker() {
     .await
     .unwrap();
 
-    assert!(diagnostics.is_empty());
+    assert_eq!(diagnostics, []);
     assert_eq!(turn.await.unwrap(), Err(AgentError::Cancelled));
     assert!(service
         .create_session(AgentSessionMode::Default, None)

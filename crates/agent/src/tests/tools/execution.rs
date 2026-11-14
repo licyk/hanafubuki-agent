@@ -97,8 +97,9 @@ async fn responses_reasoning_reaches_typed_events_and_history_but_not_the_next_r
         "thinking is never model input"
     );
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

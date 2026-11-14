@@ -189,9 +189,10 @@ async fn an_idle_session_is_woken_and_reads_its_events_once() {
         .sections
         .iter()
         .any(|section| section.kind == "background_events"));
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -244,9 +245,10 @@ async fn an_event_queued_during_a_turn_reaches_its_next_step() {
     assert_eq!(fragments(&requests[1].body), 1);
     assert!(request_text(&requests[1].body).contains("late answer"));
     assert_eq!(service.snapshot(session_id).unwrap().pending_wake_events, 0);
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -272,9 +274,10 @@ async fn the_queue_and_the_item_survive_a_cold_reopen() {
     )
     .await
     .unwrap();
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     drop(service);
 
     let service = reopen_service(config, test_host(&paths), &paths);
@@ -305,9 +308,10 @@ async fn the_queue_and_the_item_survive_a_cold_reopen() {
         .filter(|item| matches!(item, ConversationItem::WakeEvents { .. }))
         .count();
     assert_eq!(delivered, 2);
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -340,9 +344,10 @@ async fn a_shell_commands_turn_leaves_the_events_queued() {
     assert_eq!(requests.len(), 1);
     assert_eq!(fragments(&requests[0].body), 1);
     assert!(request_text(&requests[0].body).contains("done meanwhile"));
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -377,8 +382,9 @@ async fn a_compaction_summarizes_the_item() {
     assert_eq!(fragments(&requests[1].body), 1);
     assert_eq!(fragments(&requests[2].body), 0);
     assert!(request_text(&requests[2].body).contains("A sub-agent reported its answer."));
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

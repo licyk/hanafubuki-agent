@@ -54,9 +54,10 @@ async fn compacted_request_matches_golden() {
         "compaction_request": body(1),
         "next_request": body(2),
     });
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let normalized = normalize(&pinned, &paths.app_data_dir);
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
     assert_golden("compacted_request", &normalized);
@@ -144,9 +145,10 @@ async fn background_compacted_request_matches_golden() {
         "compaction_request": body(2),
         "next_request": body(3),
     });
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let normalized = normalize(&pinned, &paths.app_data_dir);
 
     let (reopened, reopened_paths) = service_with("golden-background-reopened", |copy, config| {
@@ -162,9 +164,10 @@ async fn background_compacted_request_matches_golden() {
     assert!(continued.contains("Go on."));
     assert!(continued.contains("Still here."));
     assert!(!continued.contains("The first answer is long."));
-    assert!(reopened
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        reopened.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
     let _ = std::fs::remove_dir_all(reopened_paths.app_data_dir);
     assert_golden("background_compacted_request", &normalized);
@@ -210,8 +213,9 @@ async fn a_window_compacted_mid_turn_keeps_the_skill_catalog() {
     assert!(has_text(&after, "<skills_instructions>"));
     assert!(has_text(&after, "Mode: default"));
     assert!(has_text(&after, "The user asked for a fresh context."));
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

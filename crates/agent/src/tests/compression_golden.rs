@@ -142,9 +142,10 @@ async fn hierarchical_requests_match_golden() {
         "after_distillation": body(5)["input"],
         "after_switch_away": after_switch,
     });
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let normalized = normalize(&pinned, &paths.app_data_dir);
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
     // The long answers stand for themselves once: the golden pins where

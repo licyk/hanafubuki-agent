@@ -97,9 +97,10 @@ async fn the_workspace_moves_once_no_background_terminal_runs_and_the_tools_foll
         service.test_executions().working_directory(),
         Some(new_root)
     );
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -143,8 +144,9 @@ async fn the_workspace_does_not_move_while_a_turn_runs() {
     );
     turn.await.unwrap().unwrap();
     service.move_workspace(&roots).unwrap();
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

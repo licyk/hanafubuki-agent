@@ -65,9 +65,10 @@ async fn create_session_without_a_global_model_waits_for_conversation_selection(
         .await
         .unwrap();
     assert_eq!(selected.model, "conversation-model");
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -92,9 +93,10 @@ async fn session_model_selection_rejects_an_empty_model() {
         error.contains("Agent model must contain"),
         "unexpected error: {error}"
     );
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -140,9 +142,10 @@ async fn a_turn_with_too_many_images_is_refused_before_staging() {
         .transcript
         .items
         .is_empty());
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -160,9 +163,10 @@ async fn lifecycle_mutation_lazily_opens_a_completed_session_after_restart() {
         .into_iter()
         .find(|session| session.session_id == created.id)
         .unwrap();
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     drop(service);
 
     let restarted = AgentApplicationService::new(
@@ -182,9 +186,10 @@ async fn lifecycle_mutation_lazily_opens_a_completed_session_after_restart() {
         .archive_session(summary.session_id, summary.generation, summary.revision)
         .unwrap();
     assert_eq!(archived.lifecycle, AgentSessionLifecycle::Archived);
-    assert!(restarted
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        restarted.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -198,9 +203,10 @@ async fn model_selection_lazily_activates_an_opened_session_after_restart() {
         .create_session(AgentSessionMode::Default, None)
         .await
         .unwrap();
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     drop(service);
 
     let restarted = AgentApplicationService::new(
@@ -229,9 +235,10 @@ async fn model_selection_lazily_activates_an_opened_session_after_restart() {
         .unwrap();
     assert_eq!(switched.model, "replacement-model");
     assert_eq!(switched.revision.value(), opened.revision.value() + 1);
-    assert!(restarted
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        restarted.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -282,8 +289,9 @@ async fn existing_sessions_keep_frozen_reasoning_when_global_settings_change() {
         second_body["reasoning"],
         json!({"effort": "low", "summary": "auto"})
     );
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

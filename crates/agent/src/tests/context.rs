@@ -126,8 +126,9 @@ async fn the_context_is_the_next_request_then_the_one_sent_with_what_the_provide
     assert_eq!(usage.cache_reporting_responses, 1);
 
     let service = Arc::into_inner(service).unwrap();
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

@@ -1,6 +1,10 @@
 use super::AgentExecutionService;
+use crate::model::{AgentExecutionError, AgentExecutionId, AgentExecutionScope};
 use hanafubuki_agent_foundation::background_worker::WorkerShutdownDiagnostic;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+/// How often the sweep looks again at an execution another caller holds.
+const HELD_POLL: Duration = Duration::from_millis(10);
 
 impl AgentExecutionService {
     pub fn shutdown(&self, deadline: Instant) -> Vec<WorkerShutdownDiagnostic> {
@@ -21,20 +25,40 @@ impl AgentExecutionService {
                 });
                 break;
             }
-            let cleanup = (|| {
-                let snapshot = self.snapshot(&scope, execution_id)?;
-                if !snapshot.status.is_terminal() {
-                    self.terminate(&scope, execution_id)?;
-                }
-                self.dispose(&scope, execution_id)
-            })();
-            if let Err(error) = cleanup {
+            if let Err(message) = self.stop_for_shutdown(&scope, execution_id, deadline) {
                 diagnostics.push(WorkerShutdownDiagnostic {
                     worker: format!("agent-execution-{execution_id}"),
-                    message: error.to_string(),
+                    message,
                 });
             }
         }
         diagnostics
+    }
+
+    /// Stops the execution and confirms its end. One another caller holds
+    /// (its disposal under way, as a stopped `!command`'s can still be once
+    /// its turn has ended, or its process still starting) is waited for
+    /// until `deadline`: gone, it was disposed of; let go of, the sweep
+    /// stops it itself.
+    fn stop_for_shutdown(
+        &self,
+        scope: &AgentExecutionScope,
+        execution_id: AgentExecutionId,
+        deadline: Instant,
+    ) -> Result<(), String> {
+        loop {
+            match self.stop_confirmed(scope, execution_id) {
+                Ok(_) => return Ok(()),
+                Err(AgentExecutionError::NotFound) => {}
+                Err(error) => return Err(error.to_string()),
+            }
+            let Some(held) = self.held_elsewhere(execution_id) else {
+                return Ok(());
+            };
+            if Instant::now() >= deadline {
+                return Err(format!("at the shutdown deadline, {held}"));
+            }
+            std::thread::sleep(HELD_POLL);
+        }
     }
 }

@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use hanafubuki_agent_approval::test_support::ManualApprovalClock;
 use hanafubuki_agent_approval::{
     ApprovalContext, ApprovalDecisionSource, ApprovalOrigin, ApprovalService,
 };
-use hanafubuki_agent_execution::test_support::FakeAgentExecutionProcessPort;
+use hanafubuki_agent_execution::test_support::{FakeAgentExecutionProcessPort, HeldDisposal};
 use hanafubuki_agent_execution::{
     prepare_command, AgentExecutionError, AgentExecutionScope, AgentExecutionService,
     AgentExecutionStatus, StartCommandRequest, UnifiedExecResult,

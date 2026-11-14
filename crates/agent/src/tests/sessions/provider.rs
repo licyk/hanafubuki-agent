@@ -64,9 +64,10 @@ async fn provider_write_commits_the_complete_provider_in_one_call() {
         .unwrap();
     assert_eq!(disabled.default_provider_id, None);
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -451,9 +452,10 @@ async fn a_listing_is_known_to_the_next_run() {
         .list_provider_models(AgentProviderModelCatalogRequest::default())
         .await
         .unwrap();
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let storage = AgentStoragePaths::under(paths.data_dir.join("agent-test"));
     assert!(storage.model_metadata_file.exists());
 
@@ -486,9 +488,10 @@ async fn a_listing_is_known_to_the_next_run() {
         2,
         "the next run did not list again"
     );
-    assert!(reopened
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        reopened.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -604,9 +607,10 @@ async fn model_errors_and_snapshots_redact_the_configured_api_token() {
         requests[0].headers.get("x-provider-scope").unwrap(),
         header_secret
     );
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     assert_history_tree_excludes(
         &paths.data_dir.join("agent-test/history"),
         &[secret.as_bytes(), header_secret.as_bytes()],

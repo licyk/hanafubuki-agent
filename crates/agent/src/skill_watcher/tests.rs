@@ -62,9 +62,10 @@ fn a_change_under_a_root_invalidates_it_after_the_debounce() {
     assert!(wait_until(
         || catalog.invalidations.load(Ordering::SeqCst) > 0
     ));
-    assert!(watcher
-        .shutdown(Instant::now() + Duration::from_secs(5))
-        .is_empty());
+    assert_eq!(
+        watcher.shutdown(Instant::now() + Duration::from_secs(5)),
+        []
+    );
 }
 
 #[test]
@@ -92,9 +93,10 @@ fn reading_a_skill_is_not_a_change() {
     std::thread::sleep(DEBOUNCE * 6);
 
     assert_eq!(catalog.invalidations.load(Ordering::SeqCst), changes);
-    assert!(watcher
-        .shutdown(Instant::now() + Duration::from_secs(5))
-        .is_empty());
+    assert_eq!(
+        watcher.shutdown(Instant::now() + Duration::from_secs(5)),
+        []
+    );
 }
 
 #[test]
@@ -116,7 +118,8 @@ fn a_restarted_watch_stops_the_previous_one() {
         || current.invalidations.load(Ordering::SeqCst) > 0
     ));
     assert_eq!(previous.invalidations.load(Ordering::SeqCst), 0);
-    assert!(watcher
-        .shutdown(Instant::now() + Duration::from_secs(5))
-        .is_empty());
+    assert_eq!(
+        watcher.shutdown(Instant::now() + Duration::from_secs(5)),
+        []
+    );
 }

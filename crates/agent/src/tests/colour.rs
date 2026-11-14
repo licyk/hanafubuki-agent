@@ -198,9 +198,10 @@ async fn a_models_coloured_command_is_plain_for_the_model_and_styled_for_the_dis
     );
     let call_id = call_id.clone();
     assert_plain(&service.export_session_markdown(session.id).unwrap());
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
 
     // Read back from the history after a restart, as `/resume` does.
     let reopened = reopen(config, &paths).await;
@@ -212,9 +213,10 @@ async fn a_models_coloured_command_is_plain_for_the_model_and_styled_for_the_dis
         styled_runs(shown.display.as_ref().unwrap()),
         [("red".to_string(), red)]
     );
-    assert!(reopened
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        reopened.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -258,9 +260,10 @@ async fn a_typed_coloured_command_is_plain_for_the_model_and_styled_for_the_disp
     assert!(input.contains("red plain"), "{input}");
     assert_plain(&input);
     assert_plain(&service.export_session_markdown(session.id).unwrap());
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
 
     let reopened = reopen(config, &paths).await;
     let items = transcript(&reopened, session.id);
@@ -280,8 +283,9 @@ async fn a_typed_coloured_command_is_plain_for_the_model_and_styled_for_the_disp
         styled_runs(shown.display.as_ref().unwrap()),
         [("red".to_string(), red)]
     );
-    assert!(reopened
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        reopened.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

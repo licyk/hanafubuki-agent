@@ -136,9 +136,10 @@ async fn the_memory_note_tool_is_bound_to_the_turn_that_planned_it() {
     );
     assert!(handler.invoke(invocation(turn_id), None).await.is_err());
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -205,9 +206,10 @@ async fn published_memory_reaches_the_model_with_the_tools_that_read_it() {
     // No generation handshake survives in the tool contract.
     assert!(!body.contains("\"generation\""));
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -268,9 +270,10 @@ async fn the_memory_context_item_is_pinned_right_after_the_capability_fragments(
         hex::encode(Sha256::digest(memory_item.to_string().as_bytes())),
         "2fa46ae001946652e89ef8da6c7da386bf0ae0352fff546842669cae5769110f"
     );
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -376,9 +379,10 @@ async fn a_cited_memory_answer_is_stripped_and_its_usage_recorded() {
     }
     assert_eq!(citation_usage(&repository, "9"), 1);
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -472,9 +476,10 @@ async fn turning_the_memory_plugin_off_removes_memory_from_the_next_request() {
         .unwrap();
     assert!(carries_memory(&request_body(2)));
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -522,9 +527,10 @@ async fn disabling_retrieval_withholds_memory_and_its_read_tools() {
     assert!(!body.contains("list_agent_memories"));
     assert!(!body.contains("append_agent_memory_note"));
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -582,9 +588,10 @@ async fn the_memory_plugin_registers_its_prompt_tool_source_and_observer_until_i
     assert!(mounted.renderers.registry().snapshot().is_empty());
     assert!(mounted.observers.registry().snapshot().is_empty());
     mounted.root.fiber().dispose().await.unwrap();
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -622,9 +629,10 @@ async fn a_committed_memory_contribution_reaches_the_memory_store() {
         hanafubuki_agent_memory::AgentMemoryContributionMode::Disabled
     );
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -681,9 +689,10 @@ async fn scans_signalled_by_session_actions(name: &str, memory_plugin: bool) -> 
         .unwrap();
     let disable = memory.test_scan_signals() - before;
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
     [archive, restore, enable, disable]
 }
@@ -735,9 +744,10 @@ async fn creating_or_forking_a_contributing_session_signals_no_memory_scan() {
     assert!(contributes(session.id));
     assert!(contributes(fork.session.id));
     assert_eq!(memory.test_scan_signals(), before);
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -777,8 +787,9 @@ async fn saving_the_settings_signals_a_memory_scan_and_persists_them() {
             .memory
             .enabled
     );
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }

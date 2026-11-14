@@ -130,9 +130,7 @@ pub(super) fn start_with(slot: &AgentSlot, launcher: AgentLauncher) -> Option<Ag
 }
 
 pub(super) fn stop(agent: AgentHandle) {
-    assert!(agent
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(agent.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE), []);
 }
 
 /// Stops the Agent instance's runtime, as shutdown does last.
@@ -342,9 +340,10 @@ fn a_broken_session_is_quarantined_and_listed_while_the_others_load() {
             .id
     });
     drop(setup);
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     drop(service);
     let storage = AgentStoragePaths::under(paths.data_dir.join("agent-test"));
     let index = hanafubuki_agent_history::AgentHistoryPaths::under(storage.history_root.clone())
@@ -406,9 +405,10 @@ fn an_unreadable_history_item_quarantines_its_session_and_the_agent_runs() {
             .id
     });
     drop(setup);
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     drop(service);
     let storage = AgentStoragePaths::under(paths.data_dir.join("agent-test"));
     let index = hanafubuki_agent_history::AgentHistoryPaths::under(storage.history_root.clone())
@@ -832,7 +832,7 @@ fn saved_settings_reach_the_agent_without_waiting_for_a_reconnect_and_in_order()
     std::thread::sleep(Duration::from_millis(200));
     assert_eq!(agent.test_mcp_proxy_policy(), latest);
     drop(agent);
-    assert!(shutdown_agent(&slot, &marker, AGENT_SHUTDOWN_BUDGET).is_empty());
+    assert_eq!(shutdown_agent(&slot, &marker, AGENT_SHUTDOWN_BUDGET), []);
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 

@@ -86,9 +86,10 @@ fn recorded(service: &AgentApplicationService, server: &FakeServer) -> bool {
 }
 
 fn stop(service: &AgentApplicationService) {
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
 }
 
 /// The start lists the default Provider in the background: a session is

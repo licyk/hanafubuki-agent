@@ -282,10 +282,11 @@ impl Agent {
 
     pub async fn finish(self) {
         step("shut down");
-        assert!(self
-            .service
-            .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-            .is_empty());
+        assert_eq!(
+            self.service
+                .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+            []
+        );
         let _ = std::fs::remove_dir_all(&self.paths.app_data_dir);
     }
 }

@@ -1251,7 +1251,9 @@ From CI's failed jobs over the last 60 runs; each passed on a re-run.
   of a run took 15-21 s with `TEMP` on C:, 1.4-3.2 s on D:, later ones under 0.7 s. **Open**: the D: occurrence is not
   explained; four runs replicating CI (with a 2 s process sampler, and cold launches timed at 300-430 ms) showed none,
   every PowerShell finishing within 634 ms. The exec test's assertions now print the tool's result, so the next one
-  says what it returned.
+  says what it returned. (2026-11-14) Nothing in the `!command` stop and shutdown race below explains it: its call
+  yields and is not cancelled, and its failing attempt ran at the usual speed (the agent's unit tests 66.6 s, 71.9 s
+  on attempt 1), unlike that race's slow runners.
 - **`app::tests::queue::esc_interrupts_and_sends_the_waiting_steers_as_one_turn_which_can_be_edited`** (TUI, Windows 1×):
   a product race. A steer in flight when Esc interrupted could reach the Agent after the cancellation, which refuses it;
   when the refusal arrived before the turn's end, the input queue held it for a later turn, and the turn the interrupt
@@ -1264,6 +1266,24 @@ From CI's failed jobs over the last 60 runs; each passed on a re-run.
 - **`plugin_crashes`, `a_plugins_failing_hooks_have_no_effect`** (macOS, on the verification PR): every hook had a 1 s
   timeout, meant for its `sleep 30`; the hooks touching a marker had the same second for the login shell (`$SHELL -lc`,
   which reads the runner's profile) and missed it. Fix: those have 30 s, the hanging one keeps 1 s.
+- **`tests::user_shell::a_session_of_commands_reopens_and_continues`** (Windows 3×, 2026-11-14: 43547639725,
+  43561142905, 43570982851, each on a slow runner: the agent's unit tests took 110.5-121.8 s, against 43.5 and 45.4 s
+  on two of the re-runs; CI printed no diagnostic, the assertion discarded them): a product race, proven from the code
+  and on Linux, inferred to be what Windows hit. A `!command` whose stop (`stop_confirmed`: the kill, then the wait for
+  its end inside its disposal) outlasts the cancellation's 500 ms cooperative grace is still being disposed of when the
+  abort ends its turn; a shutdown right after (Esc, then quit) found the execution claimed by that disposal and
+  reported `agent-execution-N: Agent execution not found`. Holding the disposal 2 s on Linux fails the test with that
+  diagnostic, and its binary then ends only once the held stop has, as on CI, where the failing test ended ~6.6 s
+  after the rest. Fix (`execution/src/service/shutdown.rs`): the sweep waits, until its deadline, for a disposal
+  another caller holds, disposes of the execution itself if that disposal fails, and otherwise names what still held
+  it; contract tests hold a disposal in the fake port (each fails without the fix). Every agent test's shutdown
+  assertion now prints the diagnostics. **Open**: the ~6.6 s suggests the Windows stop ran up to its 5 s confirmation
+  timeout, not just past the grace; if so the sweep's own retry can time out too, and the diagnostic will now name a
+  kill not confirmed in 5 s, a second defect. Left as is: such a turn ends before its stop is confirmed (its
+  `ExecutionDisposed` progress comes after the turn). Locally: 30 of 30 runs with the 2 s hold (the only runs that
+  exercise the race on Linux), 240 of 240 without it under CPU load, the contract tests 500 of 500.
+- Other first-attempt CI failures of 2026-11-14 were real test faults, fixed with their work: K4's pointer-mode tests,
+  I1's Ctrl+Alt+V test, U1's running-copy test.
 - Already fixed, not recurring: `bottom_pane::tests::tabs_within_a_paste_burst_are_the_pastes_and_send_nothing` (6e36de1),
   `crates/plugin-packages/tests/guests/linked.rs:124` (6d61cc8), and the macOS
   `output::a_poll_behind_the_retained_output_says_exactly_what_it_missed` (BSD `seq` printing `1e+06`, replaced by `awk`

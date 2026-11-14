@@ -304,6 +304,24 @@ impl AgentExecutionService {
         }
     }
 
+    /// Why the execution, which this caller found held by another, is not
+    /// gone yet, as a diagnostic says it; `None` once it is gone.
+    pub(super) fn held_elsewhere(&self, execution_id: AgentExecutionId) -> Option<String> {
+        let registry = self.inner.registry.lock();
+        let record = registry.records.get(&execution_id)?;
+        let held = if record.disposing {
+            "another caller was still confirming its end"
+        } else if record.receipt.is_none() {
+            "its process was still starting"
+        } else {
+            "it was still registered"
+        };
+        Some(match &record.last_error {
+            Some(error) => format!("{held} (last error: {error})"),
+            None => held.to_string(),
+        })
+    }
+
     pub(super) fn is_live(&self, execution_id: AgentExecutionId) -> bool {
         self.inner
             .registry

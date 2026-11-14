@@ -397,9 +397,10 @@ async fn a_code_plugin_contributes_to_a_turn_and_its_crash_stays_its_own() {
         "{after_update}"
     );
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -448,9 +449,10 @@ async fn a_linked_code_plugin_starts_anew_once_its_directory_changes() {
     assert_eq!(guest.status.restarts, 0);
     assert!(guest.status.issues.is_empty(), "{:?}", guest.status.issues);
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
