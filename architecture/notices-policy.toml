@@ -80,9 +80,18 @@ markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/agent/src/plugins/subagents"
 
 [[derived]]
-path = "crates/agent/src/plugins/subagents/service.rs"
+path = "crates/agent/src/plugins/subagents/service/mod.rs"
 markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/agent/src/plugins/subagents"
+
+[[derived]]
+path = "crates/agent/src/plugins/subagents/service/runs.rs"
+markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
+notice = "crates/agent/src/plugins/subagents"
+
+[[original]]
+path = "crates/agent/src/plugins/subagents/service/statuses.rs"
+reason = "The subagents' statuses as the facade lists them, and the facade's interrupt of one; moved out of the service's module."
 
 [[derived]]
 path = "crates/agent/src/plugins/subagents/prompt.rs"
@@ -455,6 +464,10 @@ reason = "The crate's own entry: its docs and module declarations."
 [[original]]
 path = "crates/tui/src/agent_bridge/mod.rs"
 reason = "The adapter between the facade and the interface, written for the Agent; it stands where Codex has its ConversationManager."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/events.rs"
+reason = "The Agent's events onto what the chat shows, and the sinks into the app loop; moved out of the bridge's module."
 
 [[original]]
 path = "crates/tui/src/agent_bridge/start.rs"

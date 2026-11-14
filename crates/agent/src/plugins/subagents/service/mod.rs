@@ -22,12 +22,14 @@
 // its role's, else its parent's, checked before the agent exists and set
 // in one commit.
 
-//! What the subagent tools and the facade's subagent calls do, over the
-//! session driver. The runs live in [`SubagentRuns`], which outlives the
-//! plugin's restarts within one Agent instance; what is not in it (an agent
-//! of an earlier run of the Agent) is read from the kernel.
+//! What the subagent tools do, over the session driver. The runs live in
+//! [`SubagentRuns`] (`runs.rs`), which outlives the plugin's restarts within
+//! one Agent instance; what is not in it (an agent of an earlier run of the
+//! Agent) is read from the kernel. What the facade asks is `statuses.rs`'s.
 
-use std::collections::HashMap;
+mod runs;
+mod statuses;
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -36,63 +38,19 @@ use hanafubuki_agent_foundation::panic::catch_panic_async;
 use hanafubuki_agent_kernel::{
     AgentChildSessionBase, AgentChildSessionRequest, AgentError, AgentSessionId,
     AgentSessionOrigin, AgentSessionPersistence, AgentSessionRuntimeSnapshot, AgentSessionSummary,
-    AgentTurnOutcome, AgentTurnPhase, ModelReasoningEffort,
+    ModelReasoningEffort,
 };
 use parking_lot::Mutex;
-use tokio::sync::Notify;
 
+use self::runs::AgentRun;
+pub(super) use self::runs::AgentRunStatus;
+pub(crate) use self::runs::SubagentRuns;
 use super::models::refusal;
 use super::options::SubagentLimits;
-use super::{AgentSubagentState, AgentSubagentStatus};
 use crate::roles::{AgentRoleCatalogReader, AgentSessionRole, DEFAULT_ROLE};
 use crate::session_driver::{AgentSessionDriver, ChildModelRequest, SpawnModelCatalog};
 
-/// The longest last answer the facade's status carries.
-const ANSWER_EXCERPT_CHARS: usize = 400;
 const CANCELLATION_POLL_INTERVAL: Duration = Duration::from_millis(50);
-
-/// An agent's status, as the model reads it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) enum AgentRunStatus {
-    /// Spawned, but no turn of it is known.
-    PendingInit,
-    Running,
-    /// Its turn was interrupted; it takes messages and follow-up tasks.
-    Interrupted,
-    /// Its turn ended with this final answer, when it is known.
-    Completed(Option<String>),
-    Errored(String),
-}
-
-impl AgentRunStatus {
-    /// What the latest turn of an agent this instance did not run says.
-    fn of_phase(phase: Option<AgentTurnPhase>) -> Self {
-        match phase {
-            None => Self::PendingInit,
-            Some(phase) if !phase.is_terminal() => Self::Running,
-            Some(AgentTurnPhase::Completed) => Self::Completed(None),
-            Some(AgentTurnPhase::Failed) => Self::Errored("its last turn failed".to_string()),
-            Some(_) => Self::Interrupted,
-        }
-    }
-
-    fn of_turn(outcome: Result<Result<AgentTurnOutcome, AgentError>, String>) -> Self {
-        match outcome {
-            Ok(Ok(outcome)) => Self::Completed(Some(outcome.final_answer)),
-            Ok(Err(AgentError::Cancelled)) => Self::Interrupted,
-            Ok(Err(error)) => Self::Errored(error.to_string()),
-            Err(panic) => {
-                log::error!("a subagent's turn panicked: {panic}");
-                Self::Errored("the turn failed with an internal error".to_string())
-            }
-        }
-    }
-
-    /// Whether the parent's next wait reports it: Codex's final statuses.
-    fn is_final(&self) -> bool {
-        matches!(self, Self::Completed(_) | Self::Errored(_))
-    }
-}
 
 /// An agent of a parent, as `list_agents` and `wait_agent` report it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -149,77 +107,6 @@ pub(super) struct SpawnRequest {
     pub(super) provider: Option<String>,
     pub(super) model: Option<String>,
     pub(super) reasoning_effort: Option<ModelReasoningEffort>,
-}
-
-/// The agents this Agent instance runs, kept across the plugin's restarts.
-#[derive(Clone, Default)]
-pub(crate) struct SubagentRuns {
-    runs: Arc<Mutex<HashMap<AgentSessionId, AgentRun>>>,
-    changed: Arc<Notify>,
-}
-
-struct AgentRun {
-    parent: AgentSessionId,
-    name: String,
-    role: String,
-    status: AgentRunStatus,
-    /// Messages for its next turn.
-    queued: Vec<String>,
-    /// A final status the parent's waits have not reported yet.
-    unreported: bool,
-    /// How many turns this instance started on it.
-    turn: u64,
-}
-
-impl SubagentRuns {
-    fn running(&self, parent: AgentSessionId) -> usize {
-        self.runs
-            .lock()
-            .values()
-            .filter(|run| run.parent == parent && run.status == AgentRunStatus::Running)
-            .count()
-    }
-
-    fn status(&self, child: AgentSessionId) -> Option<AgentRunStatus> {
-        self.runs.lock().get(&child).map(|run| run.status.clone())
-    }
-
-    /// Records how `child`'s `turn`-th run ended, unless a later run
-    /// started since.
-    fn finish(&self, child: AgentSessionId, turn: u64, status: AgentRunStatus) {
-        if let Some(run) = self
-            .runs
-            .lock()
-            .get_mut(&child)
-            .filter(|run| run.turn == turn)
-        {
-            run.unreported = status.is_final();
-            run.status = status;
-        }
-        self.changed.notify_waiters();
-    }
-
-    /// The final statuses of `parent`'s agents not reported yet, which are
-    /// now reported, and how many of its agents still run.
-    fn take_updates(&self, parent: AgentSessionId) -> (Vec<ListedAgent>, usize) {
-        let mut runs = self.runs.lock();
-        let mut updates = Vec::new();
-        let mut running = 0;
-        for (id, run) in runs.iter_mut().filter(|(_, run)| run.parent == parent) {
-            running += usize::from(run.status == AgentRunStatus::Running);
-            if run.unreported {
-                run.unreported = false;
-                updates.push(ListedAgent {
-                    name: run.name.clone(),
-                    id: *id,
-                    role: run.role.clone(),
-                    status: run.status.clone(),
-                });
-            }
-        }
-        updates.sort_by_key(|update| update.id);
-        (updates, running)
-    }
 }
 
 /// What the `subagents` row provides under its name, and what its tools
@@ -440,51 +327,6 @@ impl SubagentService {
         }
     }
 
-    /// The facade's view of `parent`'s agents, each with the model it runs
-    /// on and its last answer cut to an excerpt.
-    pub(crate) async fn statuses(
-        &self,
-        parent: AgentSessionId,
-    ) -> Result<Vec<AgentSubagentStatus>, AgentError> {
-        let mut statuses = Vec::new();
-        for (agent, model) in self.agents_on_models(parent).await? {
-            let last_answer = match &agent.status {
-                AgentRunStatus::Completed(Some(answer)) => Some(answer.clone()),
-                _ => {
-                    let id = agent.id;
-                    self.blocking(move |driver| driver.last_answer(id)).await?
-                }
-            };
-            statuses.push(AgentSubagentStatus {
-                session_id: agent.id,
-                title: agent.name,
-                status: match agent.status {
-                    AgentRunStatus::Running => AgentSubagentState::Running,
-                    AgentRunStatus::Errored(_) => AgentSubagentState::Failed,
-                    _ => AgentSubagentState::Idle,
-                },
-                provider_id: model.provider_id,
-                model: model.model,
-                reasoning_effort: model.reasoning_effort,
-                last_answer: last_answer.map(|answer| excerpt(&answer)),
-            });
-        }
-        Ok(statuses)
-    }
-
-    /// Interrupts the turn the subagent `session_id` runs, if any.
-    pub(crate) async fn interrupt_subagent(
-        &self,
-        session_id: AgentSessionId,
-    ) -> Result<(), AgentError> {
-        if self.session(session_id).await?.origin != Some(AgentSessionOrigin::Subagent) {
-            return Err(AgentError::InvalidInput(format!(
-                "Agent session {session_id} is not a subagent"
-            )));
-        }
-        self.stop_turn(session_id).await
-    }
-
     /// The session's current state.
     pub(super) async fn session(
         &self,
@@ -619,20 +461,6 @@ impl SubagentService {
     }
 }
 
-impl AgentRun {
-    fn new(parent: AgentSessionId, agent: ListedAgent) -> Self {
-        Self {
-            parent,
-            name: agent.name,
-            role: agent.role,
-            status: agent.status,
-            queued: Vec::new(),
-            unreported: false,
-            turn: 0,
-        }
-    }
-}
-
 /// A session's role as an agent's listing names it.
 fn role_name(role: Option<String>) -> String {
     role.unwrap_or_else(|| DEFAULT_ROLE.to_string())
@@ -647,13 +475,6 @@ fn capacity_refusal(maximum: usize) -> AgentError {
 /// A refusal the model reads as the tool's error.
 fn refused(message: impl Into<String>) -> AgentError {
     AgentError::InvalidInput(message.into())
-}
-
-fn excerpt(answer: &str) -> String {
-    match answer.char_indices().nth(ANSWER_EXCERPT_CHARS) {
-        Some((end, _)) => format!("{}…", &answer[..end]),
-        None => answer.to_string(),
-    }
 }
 
 async fn wait_cancelled(cancellation: &CancellationToken) {

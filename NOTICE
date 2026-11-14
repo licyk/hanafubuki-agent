@@ -114,8 +114,8 @@ Third-party notices
     says so in its first lines;
   - the `subagents` plugin's tools, their behaviour and the orchestrator
     guidance (`crates/agent/src/plugins/subagents`: `tools.rs`,
-    `service.rs` and `prompt.rs`) are derived from Codex's
-    `codex-rs/core/src/tools/handlers/multi_agents_spec.rs`,
+    `service/mod.rs`, `service/runs.rs` and `prompt.rs`) are derived from
+    Codex's `codex-rs/core/src/tools/handlers/multi_agents_spec.rs`,
     `codex-rs/core/src/tools/handlers/multi_agents_v2/`,
     `codex-rs/core/src/agent/status.rs`, `codex-rs/core/src/config/mod.rs`
     and `codex-rs/core/templates/agents/orchestrator.md` (commit
