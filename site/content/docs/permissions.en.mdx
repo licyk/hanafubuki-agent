@@ -110,9 +110,17 @@ In automatic review the escalation text says the reviewer decides, and asks the 
 - Without network access, on Linux every socket but a Unix one is refused, and so is connecting any socket, Unix ones included (an SSH agent, Docker's socket); with it, only VM sockets stay refused; either way `io_uring`, which could open a socket past the filter, is refused. On macOS, without network access no socket connects, Unix ones included; with it, every one does.
 - On Windows the restricted token limits writes, not reads; locations writable to the logon session or Everyone remain writable. Only the elevated backend enforces network isolation. A command’s background descendants end with its job.
 - The elevated Windows runner currently bridges pipe IO. Inner ConPTY behavior, terminal resizing and interactive MSYS programs still need native acceptance; do not assume parity with Codex’s terminal runner.
-- On Windows a [POSIX shell](/docs/tools#commands), the bash of Git for Windows or MSYS2, does not start in the sandbox: under the restricted token the MSYS runtime stops at once with `couldn't create signal pipe, Win32 error 5`. Run such a command in full-access, or outside the sandbox, or use PowerShell.
+- Git for Windows Bash and MSYS2 Bash can start through the elevated backend, with the [known filesystem isolation regression](#msys-sandbox-limits) below. Unelevated mode can still fail with `couldn't create signal pipe, Win32 error 5`.
 - In a terminal (PTY) command on Linux, `/dev/stdout` and `/dev/stderr` name the terminal's `/dev/pts` device, which is not writable: write to the output itself, or to `/dev/tty`, which is (the command's own terminal).
 - With legacy Landlock on Linux older than 6.2, truncating files outside writable roots is not restricted (ABI before version 3).
+
+### MSYS2 compatibility: known isolation limitation [#msys-sandbox-limits]
+
+**The Windows elevated backend supports MSYS2 startup, but has a known filesystem isolation regression.** After its sandbox account creates a file in workspace A, a later command restricted to workspace B can still overwrite that file in A. Do not rely on workspace switching or read-only mode to revoke all access to account-owned files. This comes from the elevated backend's account SID, so cmd and PowerShell commands using that backend can also be affected; changing shells does not fix it.
+
+Native tests passed startup, pipes/fork and network on/off, but the prior-workspace write-denial tests fail. These regression tests remain enabled: this is not a fully passing sandbox implementation. Use an independent VM or OS environment when strict filesystem isolation is required. Inner ConPTY and terminal resizing remain unverified.
+
+After updating from the original elevated backend, rerun `/setup-default-sandbox` and approve UAC. Setup creates a new sandbox group and accounts in `secrets/group-accounts.json`; old `accounts.json`, accounts and rules are preserved but no longer used. The ordinary-user WFP read-permission fix remains in place.
 
 ### One session's sandbox [#session-sandbox]
 

@@ -3,8 +3,8 @@
 // restricting SIDs, default DACL and privileges) at commit `57a808a392`.
 // Copyright 2025 OpenAI. Licensed under the Apache License, Version 2.0
 // (http://www.apache.org/licenses/LICENSE-2.0).
-// Modified for hanafubuki-agent: only the unelevated token, made from this
-// process's own; a token with no capability SID (read-only) is allowed;
+// Modified for hanafubuki-agent: restrict this process's token; include the
+// user SID only for dedicated elevated accounts. Read-only allows no root SID;
 // handles are owned.
 
 use std::ffi::c_void;
@@ -65,7 +65,10 @@ impl Drop for LocalSid {
 /// (`WRITE_RESTRICTED`), with no privilege but traversal and, for an
 /// administrator, the filtered (UAC) groups (`LUA_TOKEN`). Its default
 /// DACL keeps the objects its processes create to its logon session.
-pub(crate) fn restricted_token(capabilities: &[LocalSid]) -> Result<OwnedHandle, String> {
+pub(crate) fn restricted_token(
+    capabilities: &[LocalSid],
+    sandbox_account: bool,
+) -> Result<OwnedHandle, String> {
     let base = current_token()?;
     let mut logon = logon_sid(&base)?;
     let mut everyone = world_sid()?;
@@ -79,6 +82,20 @@ pub(crate) fn restricted_token(capabilities: &[LocalSid]) -> Result<OwnedHandle,
     for sid in [&mut logon, &mut everyone] {
         restricting.push(SID_AND_ATTRIBUTES {
             Sid: sid.as_mut_ptr().cast(),
+            Attributes: 0,
+        });
+    }
+    // MSYS names kernel objects with an account-only DACL. Only the dedicated
+    // account may join the restricting SIDs; the signed-in user's SID would
+    // grant writes throughout their workspace and profile.
+    let account = if sandbox_account {
+        Some(LocalSid::from_string(&super::elevated::current_user_sid()?)?)
+    } else {
+        None
+    };
+    if let Some(account) = &account {
+        restricting.push(SID_AND_ATTRIBUTES {
+            Sid: account.as_ptr(),
             Attributes: 0,
         });
     }

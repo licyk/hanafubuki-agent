@@ -110,9 +110,17 @@ Run Posix command outside the sandbox in /home/me/project: npm install (reason: 
 - 没有网络访问时，在 Linux 上除 Unix 套接字外的所有套接字都会被拒绝，连接任何套接字也会被拒绝，包括 Unix 套接字（SSH agent、Docker 的套接字）；有网络访问时，只有虚拟机套接字仍被拒绝；两种情况下，可以绕过过滤器打开套接字的 `io_uring` 都会被拒绝。在 macOS 上，没有网络访问时任何套接字都无法连接，包括 Unix 套接字；有网络访问时都可以。
 - Windows 受限令牌限制写入而非读取；登录会话或 Everyone 可写的位置仍可写。只有提升后端强制隔离网络。命令的后台子进程随其作业结束。
 - Windows 提升运行器目前桥接管道输入输出。内部 ConPTY、终端尺寸调整和交互式 MSYS 程序仍需原生验收，不能视为与 Codex 终端运行器等价。
-- 在 Windows 上，[POSIX Shell](/docs/tools#commands)（Git for Windows 或 MSYS2 的 bash）无法在沙箱中启动：在受限令牌下，MSYS 运行时会立即以 `couldn't create signal pipe, Win32 error 5` 退出。这类命令请在完全访问模式下或沙箱外运行，或改用 PowerShell。
+- Git for Windows Bash 和 MSYS2 Bash 可通过提升后端启动，但存在下述[已知文件系统隔离回归](#msys-sandbox-limits)。非提升模式仍可能报 `couldn't create signal pipe, Win32 error 5`。
 - 在 Linux 的终端（PTY）命令中，`/dev/stdout` 和 `/dev/stderr` 指向终端的 `/dev/pts` 设备，它不可写：请直接写到输出，或写到可写的 `/dev/tty`（命令自己的终端）。
 - 使用旧 Landlock 且 Linux 早于 6.2 时，可写根目录外的文件截断不受限制（ABI 版本低于 3）。
+
+### MSYS2 兼容：已知隔离问题 [#msys-sandbox-limits]
+
+**Windows 提升后端支持 MSYS2 启动，但文件系统隔离存在已知回归。** 沙箱账户在工作区 A 创建文件后，后续限定在工作区 B 的命令仍可能覆盖 A 中的该文件。不要依赖切换工作区或只读模式来撤销对该账户拥有的文件的全部访问权。问题来自提升后端的账户 SID，同一后端下的 cmd 和 PowerShell 命令也可能受影响，换用其他 Shell 不能解决。
+
+原生测试已验证启动、管道/子进程和网络开关，但禁止写入旧工作区的回归测试仍失败。这些测试保留并继续执行，不能将此实现视为沙箱验收全部通过。需要严格文件系统边界时，请使用独立虚拟机或操作系统环境。内部 ConPTY 和终端尺寸调整尚未验收。
+
+从最初的提升后端更新后，请重新运行 `/setup-default-sandbox` 并批准 UAC。初始化会创建新的沙箱组和账户，使用 `secrets/group-accounts.json`；旧的 `accounts.json`、账户及规则保留但不再使用。普通用户读取 WFP 规则的权限修复仍然保留。
 
 ### 单个会话的沙箱 [#session-sandbox]
 

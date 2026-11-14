@@ -32,6 +32,10 @@ pub(super) struct Account {
 }
 
 impl Credentials {
+    pub fn group(&self) -> String {
+        format!("{}-group", self.online.name.trim_end_matches("-on"))
+    }
+
     pub fn create() -> Result<Self, String> {
         let id = random()?;
         let prefix = format!(

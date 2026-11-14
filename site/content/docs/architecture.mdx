@@ -349,7 +349,7 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 - **插件宿主关闭 `module_faults`、开启自动重启。** 那个标志是关于应用的模块故障 sink 的，插件故障从不使用它，而是通过 `PluginFaults` 到达 Agent 的宿主。
 - **渲染器是数据**，**注册拒绝、规划改名**（见上文）。
 - **轮次限制对模型不可见。** 历史中没有失败轮次原因的条目；用户读轮次的错误消息，没有什么需要模型看到它。
-- **沙箱改写 argv；`ExecutorManager` 保留进程所有权。** 回合冻结 `SandboxSettings`，执行层在启动受管理辅助进程前包装已批准的命令。Linux 使用内置 bubblewrap 命名空间和内部 seccomp 辅助进程，并提供显式旧 Landlock 选项。macOS 使用 `/usr/bin/sandbox-exec`，所有可写根授权之后统一拒绝元数据写入，嵌套 Seatbelt 会报告不可用。Windows 重新执行辅助进程：非提升模式限制当前令牌；提升模式登录已初始化的标准账户，连接私有标准输入输出管道，再以受限令牌和独立桌面启动命令。关闭即终止的作业保留子进程所有权。UAC 仅用于初始化账户和持久 WFP 网络规则，命令不会提升权限。无法隔离时拒绝执行（[权限](/docs/permissions#sandbox-platforms)）。
+- **沙箱改写 argv；`ExecutorManager` 保留进程所有权。** 回合冻结 `SandboxSettings`，执行层在启动受管理辅助进程前包装已批准的命令。Linux 使用内置 bubblewrap 命名空间和内部 seccomp 辅助进程，并提供显式旧 Landlock 选项。macOS 使用 `/usr/bin/sandbox-exec`，所有可写根授权之后统一拒绝元数据写入，嵌套 Seatbelt 会报告不可用。Windows 重新执行辅助进程：非提升模式限制当前令牌；提升模式登录已初始化的标准账户，连接私有标准输入输出管道，再以受限令牌和独立桌面启动命令。关闭即终止的作业保留子进程所有权。UAC 仅用于初始化账户和持久 WFP 网络规则，命令不会提升权限。无法隔离时拒绝执行（[权限](/docs/permissions#sandbox-platforms)）。 MSYS 兼容会把专用账户 SID 加入提升令牌，普通文件系统访问权授予沙箱组；账户拥有的文件存在[已知写入隔离回归](/docs/permissions#msys-sandbox-limits)。
 - **`hierarchical` 是内置策略，不是插件。** 做成插件需要一个内核每次请求都调用的新注册表，于是每个请求都依赖插件可以替换的代码（[组合规则 1](/docs/plugin-rules#composition-rules)），而且契约无法引用模型 API 的类型。所以算法是一个纯 crate（没有 I/O、没有异步，生产代码不 panic，与插件一样受检查），内核在 `catch_panic` 下调用它：那里的失败只损失一个请求的投影或一次工具调用，不会损失会话，这正是插件的隔离本来能给的。
 - **没有做的：** 代码模式（用 JS 调用所有工具）、跨会话的 MCP 连接池、无论目录大小都延迟所有 MCP 工具、MCP 的 prompts/subscriptions/sampling/roots、Skill 注册的工具或 `allowed-tools` 的执行、从 Agent 单独安装一个 Skill（Skill 随携带它的[插件](/docs/plugins)一起安装，或者手动复制到某个 Skill 根目录），以及进程外的 Agent。
 

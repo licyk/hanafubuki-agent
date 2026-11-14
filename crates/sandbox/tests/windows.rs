@@ -93,6 +93,8 @@ mod windows {
             }
             stdio_round_trip(&elevated);
             elevated_network_is_enforced(&elevated);
+            msys_commands(&elevated);
+            prior_roots_are_not_writable(&elevated);
         }
     }
 
@@ -326,7 +328,7 @@ mod windows {
             filter_keys: [[u8; 16]; 4],
         }
         let accounts = std::path::PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap())
-            .join("hanafubuki-agent/sandbox/secrets/accounts.json");
+            .join("hanafubuki-agent/sandbox/secrets/group-accounts.json");
         let keys: FilterKeys = serde_json::from_slice(&std::fs::read(accounts).unwrap()).unwrap();
         let mut administrators = [0u8; 68];
         let mut size = administrators.len() as u32;
@@ -441,6 +443,99 @@ mod windows {
         eprintln!(
             "ok: ordinary user verifies filters but cannot delete or change their permissions"
         );
+    }
+
+    fn prior_roots_are_not_writable(sandbox: &Sandbox) {
+        let first = directory();
+        let second = directory();
+        let old = first.path().join("file");
+        assert!(write(sandbox, &workspace_write(first.path(), false), &old)
+            .status
+            .success());
+        let result = write(sandbox, &workspace_write(second.path(), false), &old);
+        assert!(
+            !result.status.success(),
+            "previous workspace remained writable: {result:?}"
+        );
+        assert!(!write(sandbox, &SandboxPolicy::ReadOnly, &old)
+            .status
+            .success());
+        eprintln!("ok: elevated prior_roots_are_not_writable");
+    }
+
+    fn msys_commands(sandbox: &Sandbox) {
+        let shells = [
+            r"C:\Program Files\Git\usr\bin\bash.exe",
+            r"C:\msys64\usr\bin\bash.exe",
+        ];
+        for shell in shells {
+            assert!(
+                Path::new(shell).is_file(),
+                "native MSYS fixture missing: {shell}"
+            );
+            let workspace = directory();
+            let outside = directory();
+            let root = workspace.path().to_string_lossy().replace('\\', "/");
+            let policy = workspace_write(workspace.path(), false);
+            let bash = |script: &str| vec![shell.into(), "-c".into(), script.into()];
+            let result = run_confined(sandbox, &policy, bash(&format!(
+                "printf hello | cat > '{root}/file'; test \"$(cat '{root}/file')\" = hello && printf msys-ok"
+            )));
+            assert!(result.status.success(), "{shell}: {result:?}");
+            assert_eq!(result.stdout, b"msys-ok");
+            let result = run_confined(
+                sandbox,
+                &workspace_write(outside.path(), false),
+                bash(&format!("echo changed > '{root}/file'")),
+            );
+            assert!(
+                !result.status.success(),
+                "{shell} retained an old workspace write: {result:?}"
+            );
+            let result = run_confined(
+                sandbox,
+                &SandboxPolicy::ReadOnly,
+                bash(&format!("echo changed > '{root}/file'")),
+            );
+            assert!(
+                !result.status.success(),
+                "{shell} read-only write: {result:?}"
+            );
+            let forbidden = outside
+                .path()
+                .join("escape")
+                .to_string_lossy()
+                .replace('\\', "/");
+            let result = run_confined(
+                sandbox,
+                &policy,
+                bash(&format!("echo escape > '{forbidden}'")),
+            );
+            assert!(!result.status.success(), "{shell}: {result:?}");
+            assert!(!outside.path().join("escape").exists());
+            std::fs::create_dir(workspace.path().join(".git")).unwrap();
+            let result = run_confined(
+                sandbox,
+                &policy,
+                bash(&format!("echo hook > '{root}/.git/hook'")),
+            );
+            assert!(!result.status.success(), "{shell}: {result:?}");
+            assert!(!workspace.path().join(".git/hook").exists());
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let script = format!(
+                "exec 3<>/dev/tcp/127.0.0.1/{}",
+                listener.local_addr().unwrap().port()
+            );
+            let result = run_confined(sandbox, &policy, bash(&script));
+            assert!(!result.status.success(), "{shell} offline: {result:?}");
+            let result = run_confined(
+                sandbox,
+                &workspace_write(workspace.path(), true),
+                bash(&script),
+            );
+            assert!(result.status.success(), "{shell} online: {result:?}");
+            eprintln!("ok: elevated MSYS pipes, fork, filesystem and network: {shell}");
+        }
     }
 
     fn elevated_network_is_enforced(sandbox: &Sandbox) {
