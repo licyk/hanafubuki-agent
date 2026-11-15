@@ -109,6 +109,15 @@ impl KeyStroke {
         if pressed == *self {
             return true;
         }
+        // Legacy terminals encode Ctrl+/ as the same control byte as Ctrl+_
+        // or Ctrl+7; enhanced keyboard protocols report the slash itself.
+        if self.code == KeyCodeOrd::Char('/')
+            && self.modifiers() == KeyModifiers::CONTROL
+            && pressed.modifiers() == KeyModifiers::CONTROL
+            && matches!(pressed.code, KeyCodeOrd::Char('_' | '7'))
+        {
+            return true;
+        }
         let chorded = self
             .modifiers()
             .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);

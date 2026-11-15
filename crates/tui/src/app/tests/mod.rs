@@ -903,6 +903,7 @@ mod settings_center;
 mod shell;
 mod shortcuts;
 mod side;
+mod side_agents;
 mod stability;
 mod streaming;
 mod subagents;

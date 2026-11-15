@@ -28,7 +28,7 @@ const ANSWER_PREVIEW_CHARS: usize = 160;
 
 pub(crate) static SUBAGENTS: CommandSpec = CommandSpec {
     name: "subagents",
-    aliases: &["subagent"],
+    aliases: &[],
     description: "show all agents, including main, and switch to one",
     inline_args: false,
     during_task: true,

@@ -22,6 +22,35 @@ fn ctrl(c: char) -> KeyEvent {
 }
 
 #[test]
+fn ctrl_slash_switches_panes_in_enhanced_and_legacy_terminals_and_can_be_rebound() {
+    let keymap = Keymap::default();
+    for event in [
+        ctrl('/'),
+        ctrl('_'),
+        ctrl('7'),
+        KeyEvent::new(KeyCode::Char('\u{1f}'), KeyModifiers::NONE),
+    ] {
+        assert!(
+            keymap.matches(Action::ToggleSideConversation, &event),
+            "{event:?}"
+        );
+    }
+    assert!(!keymap.matches(
+        Action::ToggleSideConversation,
+        &KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE)
+    ));
+    let (rebound, warnings) = Keymap::resolve(&config(&[(
+        "global",
+        "toggle_side_conversation",
+        &["ctrl-q"],
+    )]));
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert!(rebound.matches(Action::ToggleSideConversation, &ctrl('q')));
+    assert!(!rebound.matches(Action::ToggleSideConversation, &ctrl('/')));
+    assert!(!rebound.matches(Action::ToggleSideConversation, &ctrl('_')));
+}
+
+#[test]
 fn the_catalogue_is_in_action_order_and_its_defaults_parse_without_conflict() {
     for (index, spec) in ACTIONS.iter().enumerate() {
         assert_eq!(spec.action as usize, index, "{}", spec.name);

@@ -69,6 +69,7 @@ Fullscreen 下，对话占满底部区域上方的屏幕。Scrollback 下，界�
 | Shift+Tab                             | 在默认模式和计划模式之间切换会话，和 `/mode` 一样；回合进行中不可用                                                                  |
 | Alt+, 和 Alt+.                        | 把[推理强度](#effort)降低或提高一档                                                                                                  |
 | Alt+Left 和 Alt+Right（输入框为空时） | 显示会话及其[子代理](#subagents)中的上一个或下一个；输入框有内容时按词移动                                                           |
+| Ctrl+/                                | 在当前选中的 agent 与已打开的[旁路对话](#side)之间切换焦点                                                                           |
 | Ctrl-X P                              | 打开[预设](#presets)                                                                                                                 |
 | Ctrl-X Left、Right、Tab、X            | 打开了旁路对话或子代理时：主对话、旁路对话、另一个对话；关闭它（[见下文](#side)）                                                    |
 
@@ -348,7 +349,7 @@ Esc 返回上一页，在标签页上回到设置中心。用 `--safe-mode` 启�
 
 ## 旁路对话 [#side]
 
-在旁路界面中，**Ctrl-C** 关闭该界面并中断它的回合，不会退出主 Agent；有弹窗时先关闭弹窗。**`/close`** 同样可关闭旁路界面，运行中也可使用。主界面仍支持 `/side close`。旁路界面命令列表包含 `/close` 和 `/subagents`（别名 `/subagent`），隐藏 `/side` 和 `/btw`；主界面的 Ctrl-C 保持原有中断／退出行为。
+在旁路界面中，**Ctrl-C** 关闭该界面并中断它的回合，不会退出主 Agent；有弹窗时先关闭弹窗。**`/close`** 同样可关闭旁路界面，运行中也可使用。主界面仍支持 `/side close`。旁路界面命令列表包含 `/close` 和 `/subagents`，隐藏 `/side` 和 `/btw`；主界面的 Ctrl-C 保持原有中断／退出行为。
 
 `/side`（或 `/btw`）打开会话的[旁路对话](/docs/sessions#side)：在会话旁边临时开的一段对话，用来快速问一个问题，而不打扰会话正在做的事。`/side 问题` 打开它并把问题发到那里。会话必须已经有过回合：在你发送第一条消息之前，`/side` 会提示 `'/side' is unavailable until the current conversation has started.`。[评审](#review)运行期间，或会话的上下文正在压缩时，也会拒绝打开。
 
@@ -358,6 +359,8 @@ Esc 返回上一页，在标签页上回到设置中心。用 `--safe-mode` 启�
 - 旁路对话支持以下查看**命令**：`/copy`、`/agents`、`/tasks`、`/export`、`/raw`、`/diff`、`/mention`、`/status`、`/warnings`、`/pwd`、`/close` 和 `/subagents`。弹出列表只列出这些；其他命令会提示 `'/x' is unavailable here; Esc returns to the main conversation.`。旁路对话中之前的消息不能编辑。
 
 窗格的按键是[按键映射](#keymap)中的动作，默认是前导键（Ctrl-X）再按一个键：
+
+**Ctrl+/** 在当前选中的 agent 与旁路对话之间切换焦点，保留两边的草稿。兼容旧终端上报的 Ctrl+\_ 或 Ctrl+7，可通过 `global.toggle_side_conversation` 重新绑定；原有的 `leader tab` 也保留。未打开旁路对话时，此键不执行操作。旁路对话开启或获得焦点时，空输入框下的 Alt+Left、Alt+Right 仍可切换 agent：仅改变 agent 面板，旁路的记录、草稿和运行中的回合都保留。Fullscreen 下，选中的子 agent 与旁路面板并排显示。从旁路返回时先聚焦选中的 agent；在子 agent 上再按 Esc 返回主 agent。
 
 | 按键     | 动作                                                    | 作用                                               |
 | -------- | ------------------------------------------------------- | -------------------------------------------------- |
@@ -375,7 +378,7 @@ Esc 返回上一页，在标签页上回到设置中心。用 `--safe-mode` 启�
 
 子代理界面中也可打开列表，选择 **Main agent** 返回主界面，或直接切换其他 agent。模型、路径和标题所在状态行开头显示当前 agent。协作调用显示 **Starting agent**、**Interacting with**、**Interacted with**、**Waiting for agents** 和 **Finished waiting**；结果逐个标出 **Completed**、**Failed** 等状态。无法读取的状态单独显示警告，不影响其他条目。
 
-`/subagents`（别名 `/subagent`）把主 agent 和整个会话树的[子代理](/docs/sessions#subagents)写入对话，每个都带有状态（`running`、`waiting`、`idle`、`failed` 或 `closed`）、它运行的模型和推理强度（使用其 Provider 的默认值时为 `default`），例如 `counter  idle · gpt-5.4-mini · low`，以及它最近一次回答的开头，然后打开它们的列表，每一项的说明也是这样（`idle · gpt-5.4-mini · low`，然后是回答的开头）；有子代理在运行时，列表会跟着它们的状态更新。Enter 用选中的子代理代替会话显示，上方是 `Subagent NAME · from PARENT · Esc or ctrl-x left returns`：它的记录和 `/resume` 显示的一样；它在运行时，它的回合会继续显示（回答逐步输出，工具调用逐个出现，它等待的批准在那里询问，包括显示它之前就已提出的批准，Esc 中断它）。在那里发送的消息发给这个子代理。
+`/subagents`把主 agent 和整个会话树的[子代理](/docs/sessions#subagents)写入对话，每个都带有状态（`running`、`waiting`、`idle`、`failed` 或 `closed`）、它运行的模型和推理强度（使用其 Provider 的默认值时为 `default`），例如 `counter  idle · gpt-5.4-mini · low`，以及它最近一次回答的开头，然后打开它们的列表，每一项的说明也是这样（`idle · gpt-5.4-mini · low`，然后是回答的开头）；有子代理在运行时，列表会跟着它们的状态更新。Enter 用选中的子代理代替会话显示，上方是 `Subagent NAME · from PARENT · Esc or ctrl-x left returns`：它的记录和 `/resume` 显示的一样；它在运行时，它的回合会继续显示（回答逐步输出，工具调用逐个出现，它等待的批准在那里询问，包括显示它之前就已提出的批准，Esc 中断它）。在那里发送的消息发给这个子代理。
 
 - 在空输入框上、没有任务运行时按 Esc，或 `leader left`、`leader x`，回到会话；会话自己的回合在这期间一直在继续。
 - **唤醒**：模型在子代理工作时结束了回合的会话，会不运行任何东西地等待它们；在工作行的位置显示 `Waiting for 1 agent — resumes by itself · /tasks`（或 `2 agents`）。子代理结束或给它发消息时，会话自行恢复：一个回合开始，以列出所报告内容的 `• Background updates` 单元开头，模型像在任何回合中一样回应它（`wakeOnBackgroundTasks` 打开时，默认如此；[工具](/docs/tools#subagents)）。显示子代理或旁路对话时也是如此：主对话的回合在那里运行，你回来时就能看到。这期间你输入的消息是你自己的回合，它会先读到在它之前报告的内容。在会话的回合上按 Esc 会暂停它的唤醒，直到你的下一条消息，这一行显示 `Paused: 1 agent still running — send a message to resume`；没有你的消息时连续 100 个被唤醒的回合也会暂停。其他会话的子代理不会在这里唤醒任何东西：它们报告的内容随那个会话的下一个回合读到。

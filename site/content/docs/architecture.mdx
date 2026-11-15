@@ -320,6 +320,8 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 - **`hanafubuki-agent-cli`** 是 `hanafubuki-agent` 二进制，位于门面之上，不依赖工作区的其他东西。每个命令从全局标志组合运行时，安装 panic hook 和日志文件；读写配置的命令（`config`、`providers list`、`mcp list`、`roles`、离线的 `doctor`）从不启动 Agent，所以它们可以在 Agent 运行时使用；`roles` 和 `doctor` 用包存储的只读列举（`PackageStore::read_installed`：不清理暂存区、不隔离、不写入、不取锁）读取已安装插件的角色。`exec` 自带 sink：轮次的 `AgentEventSink` 和槽位的状态 sink 送入命令线程读取的同一个通道，所以它打印的事件就是门面自己的（`--json` 原样序列化 `AgentEvent`）。见[命令行参考](/docs/cli-reference)。
 - **`hanafubuki-agent-tui`** 是移植到门面之上的 Codex 终端界面（`rust-v0.93.0`），使用上游的 ratatui 0.30 与 crossterm 0.29（Codex 用 git 分支给它们打补丁，crates.io 不接受）。终端底部是内联视口，转录写入终端自己的回滚区。一个适配器（`agent_bridge`）把轮次的 `AgentEvent` 映射为聊天组件显示的内容，把界面的请求映射到门面；一个循环、一个通道：读终端的线程和 Agent 的 sink 都送到同一个通道，会等待的门面调用作为 Agent 运行时的任务运行并在通道上回报，所以循环从不阻塞在 Agent 上。见[终端界面](/docs/terminal-interface)。
 
+TUI 工作区分别保存选中的 agent 和旁路对话（`app/workspace/child.rs`、`routing.rs`）。获得焦点的对话由 App 持有，另一个面板及被选中子 agent 的主会话各自保留聊天组件、桥接层、草稿与输出流。事件按所属对话路由，所有活动对话都会收到提交时钟和 Agent 状态更新。切换 agent 不关闭旁路面板；Ctrl+/ 只切换焦点，不改变所选 agent。
+
 ### 终端界面的移植改动 [#what-the-port-of-the-terminal-interface-changed]
 
 `crates/tui` 中派生自 Codex 的文件都带有说明这一点的标记行（[许可证](/docs/contributing#licence)）。移植对 Codex 的终端界面做了这些改动：

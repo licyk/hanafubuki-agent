@@ -209,6 +209,7 @@ impl App {
         let keep_running = match self.route_event(event) {
             workspace::Route::Here(event) => self.handle_here(tui, event),
             workspace::Route::Parked(event) => self.handle_parked(tui, event),
+            workspace::Route::Parent(event) => self.handle_parent(tui, event),
             workspace::Route::Workspace(event) => {
                 self.workspace_event(tui, event);
                 true

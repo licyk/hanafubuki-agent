@@ -18,7 +18,7 @@ use ratatui::backend::Backend;
 use ratatui::crossterm::event::{KeyEvent, MouseEvent};
 use serde_json::json;
 
-use super::{Focus, SecondKind};
+use super::Focus;
 use crate::agent_bridge::{CenterRead, SessionCall};
 use crate::agents_center::{AgentsCenter, CenterAction};
 use crate::app::App;
@@ -299,20 +299,25 @@ impl App {
         tui: &mut Tui<B>,
         target: Option<AgentSessionId>,
     ) -> Result<(), String> {
-        let main_busy = match self.workspace.second.as_ref() {
-            Some(second) if second.focus == Focus::Second => {
-                second.parked.chat_widget.is_task_running()
+        let main_busy = if let Some(child) = &self.workspace.child {
+            child.parked.chat_widget.is_task_running()
+        } else {
+            match self.workspace.second.as_ref() {
+                Some(second) if second.focus == Focus::Second => {
+                    second.parked.chat_widget.is_task_running()
+                }
+                _ => self.chat_widget.is_task_running(),
             }
-            _ => self.chat_widget.is_task_running(),
         };
         let leaving = target != self.main_session_id();
         if main_busy && leaving {
             return Err(MAIN_BUSY.to_string());
         }
-        match self.workspace.second.as_ref().map(|second| &second.kind) {
-            Some(SecondKind::Side { .. }) if leaving => self.close_second(tui),
-            Some(SecondKind::Child { .. }) => self.leave_second(tui),
-            _ => self.set_focus(tui, Focus::Main),
+        self.leave_child(tui);
+        if self.workspace.second.is_some() && leaving {
+            self.close_second(tui);
+        } else {
+            self.set_focus(tui, Focus::Main);
         }
         Ok(())
     }

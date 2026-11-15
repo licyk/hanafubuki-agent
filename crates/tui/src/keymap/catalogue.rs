@@ -81,7 +81,7 @@ pub(crate) static ACTIONS: [ActionSpec; 76] = [
         Global,
         "toggle_side_conversation",
         "Switch between the main and the side conversation",
-        ["leader tab"]
+        ["ctrl-/", "leader tab"]
     ),
     action!(
         MoveDividerLeft,

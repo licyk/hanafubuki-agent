@@ -17,9 +17,8 @@ use hanafubuki_agent::AgentSessionId;
 use ratatui::backend::Backend;
 use ratatui::crossterm::event::KeyEvent;
 
-use super::{Focus, SecondKind};
 use crate::app::App;
-use crate::keymap::{self, Action};
+use crate::keymap::{self, Action, Binding};
 use crate::tui::Tui;
 
 const NO_SUBAGENTS: &str = "This session has no subagents.";
@@ -31,12 +30,7 @@ impl App {
         let Some(parent) = self.main_session_id() else {
             return self.chat_widget.add_info_message(NO_SUBAGENTS.to_string());
         };
-        // The main conversation's bridge, parked while a second one is shown.
-        let bridge = match self.workspace.second.as_ref() {
-            Some(second) if second.focus == Focus::Second => &second.parked.bridge,
-            _ => &self.bridge,
-        };
-        bridge.list_subagents_to_step(parent, forward);
+        self.main_bridge().list_subagents_to_step(parent, forward);
     }
 
     /// Shows the agent after (or before) the one shown, among `parent` and
@@ -59,16 +53,13 @@ impl App {
                     .add_error_message(format!("The subagents were not listed: {error}"))
             }
         };
-        let shown = match self.workspace.second.as_ref() {
-            Some(second) if second.focus == Focus::Second => match second.kind {
-                SecondKind::Child { session, .. } => session,
-                SecondKind::Side { .. } => parent,
-            },
-            _ => parent,
-        };
+        let shown = self
+            .workspace
+            .child
+            .as_ref()
+            .map_or(parent, |child| child.session);
         match step_target(parent, &children, shown, forward) {
             None => self.chat_widget.add_info_message(NO_SUBAGENTS.to_string()),
-            Some(target) if target == parent => self.return_to_main(tui),
             Some(target) => self.open_child(tui, target),
         }
     }
@@ -170,7 +161,19 @@ pub(super) fn hud_entries() -> Vec<(String, &'static str)> {
     PaneAction::ALL
         .into_iter()
         .map(|(_, action, label)| {
-            let keys = keymap.label(action).replace("leader ", "");
+            let leader_keys: Vec<_> = keymap
+                .bindings(action)
+                .iter()
+                .filter_map(|binding| match binding {
+                    Binding::Leader(key) => Some(key.spec()),
+                    _ => None,
+                })
+                .collect();
+            let keys = if leader_keys.is_empty() {
+                keymap.label(action)
+            } else {
+                leader_keys.join(", ")
+            };
             (keys, label)
         })
         .collect()

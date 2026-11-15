@@ -83,7 +83,7 @@ fn subagents_lists_them_and_shows_one_beside_its_parent() {
     );
 
     assert!(harness.screen().contains("Agent counter"));
-    harness.type_and_submit("/subagent");
+    harness.type_and_submit("/subagents");
     harness.pump_until("agent picker on child", |harness| {
         harness.app.chat_widget.has_command_view("subagents")
     });

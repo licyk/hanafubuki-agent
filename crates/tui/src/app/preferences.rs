@@ -92,6 +92,11 @@ impl App {
         {
             parked.chat_widget.apply_appearance(event.clone());
         }
+        if let (AppearanceEvent::UpdateNotice(_), Some(parent)) =
+            (&event, self.workspace.parent_mut())
+        {
+            parent.chat_widget.apply_appearance(event.clone());
+        }
         let session_only = matches!(
             event,
             AppearanceEvent::StatusLine { save: false, .. }

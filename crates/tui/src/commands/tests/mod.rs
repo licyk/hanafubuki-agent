@@ -12,6 +12,8 @@ fn every_command_is_found_by_its_name_and_its_aliases() {
     assert_eq!(find("cwd"), Some(&pwd::PWD));
     assert_eq!(find("cd"), Some(&cd::CD));
     assert_eq!(find("mod"), None);
+    assert_eq!(find("subagents"), Some(&subagents::SUBAGENTS));
+    assert_eq!(find("subagent"), None);
 }
 
 #[test]

@@ -1,11 +1,11 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 //! The panes in fullscreen (Codex's `app/side_pane.rs`, `app/pane_motion.rs`
-//! and `app/workspace_hud.rs`): the main conversation on the left and the
+//! and `app/workspace_hud.rs`): the selected agent on the left and the
 //! side conversation docked on the right, a title row atop each and a
 //! divider between them, which the pointer drags and the panes' keys
 //! move; while the leader waits for its second key, a box lists them.
-//! Narrower than [`SPLIT_MIN_WIDTH`], zoomed, or for a subagent shown, the
+//! Narrower than [`SPLIT_MIN_WIDTH`], zoomed, or without a side pane, the
 //! focused conversation fills the screen under one title row.
 
 use std::time::Instant;
@@ -18,7 +18,7 @@ use ratatui::text::Line;
 use ratatui::widgets::{Block, Clear, Paragraph, Widget};
 
 use super::keys::{hint, hud_entries};
-use super::{Focus, SecondKind, Workspace, WorkspaceEvent};
+use super::{Focus, Workspace, WorkspaceEvent};
 use crate::app::App;
 use crate::app_event::AppEvent;
 use crate::keymap::{self, Action};
@@ -60,10 +60,14 @@ impl Workspace {
             hud: None,
         };
         let Some(second) = self.second.as_ref() else {
+            if self.child.is_some() && screen.height > 1 {
+                let (title, body) = split_title(screen);
+                layout.titles = vec![(title, self.title(Focus::Main, true, false))];
+                layout.focused = body;
+            }
             return layout;
         };
-        let side = matches!(second.kind, SecondKind::Side { .. });
-        if side && !self.zoomed && screen.width >= SPLIT_MIN_WIDTH && screen.height > 2 {
+        if !self.zoomed && screen.width >= SPLIT_MIN_WIDTH && screen.height > 2 {
             let side_width = self
                 .side_width
                 .unwrap_or(screen.width / 3)
@@ -108,32 +112,24 @@ impl Workspace {
     /// A pane's title; `split` when the panes share the screen, where the
     /// side pane is narrow.
     fn title(&self, which: Focus, focused: bool, split: bool) -> Line<'static> {
-        let text = match (which, self.second.as_ref().map(|second| &second.kind)) {
-            (Focus::Main, Some(SecondKind::Side { .. })) if focused => {
+        let text = match which {
+            Focus::Main if self.child.is_some() => {
+                let child = self.child.as_ref().unwrap();
+                let back = hint(Action::FocusPaneLeft);
+                format!(
+                    "Subagent {} · from {} · Esc or {back} returns",
+                    child.title, child.parent_title
+                )
+            }
+            Focus::Main if focused && self.second.is_some() => {
                 format!("Main conversation · {} side", hint(Action::FocusPaneRight))
             }
-            (Focus::Main, _) => "Main conversation".to_string(),
-            (Focus::Second, Some(SecondKind::Side { .. })) if focused && split => {
-                "Side · Ctrl-C or /close closes".to_string()
-            }
-            (Focus::Second, Some(SecondKind::Side { .. })) if focused => {
+            Focus::Main => "Main conversation".to_string(),
+            Focus::Second if focused && split => "Side · Ctrl-C or /close closes".to_string(),
+            Focus::Second if focused => {
                 "Side conversation · Ctrl-C or /close closes · Esc returns".to_string()
             }
-            (Focus::Second, Some(SecondKind::Side { .. })) => {
-                format!("Side conversation · {}", hint(Action::FocusPaneRight))
-            }
-            (
-                Focus::Second,
-                Some(SecondKind::Child {
-                    title,
-                    parent_title,
-                    ..
-                }),
-            ) => {
-                let back = hint(Action::FocusPaneLeft);
-                format!("Subagent {title} · from {parent_title} · Esc or {back} returns")
-            }
-            (Focus::Second, None) => String::new(),
+            Focus::Second => format!("Side conversation · {}", hint(Action::FocusPaneRight)),
         };
         if focused {
             Line::from(format!(" {text} ").bold().cyan())

@@ -958,6 +958,10 @@ path = "crates/tui/src/app/tests/side.rs"
 reason = "/side end to end over the standalone Agent: refusals, the switch in scrollback mode, the panes in fullscreen."
 
 [[original]]
+path = "crates/tui/src/app/tests/side_agents.rs"
+reason = "Agent navigation with an independent side conversation: focus, drafts and event routing over the standalone Agent in both presentations."
+
+[[original]]
 path = "crates/tui/src/app/tests/subagents.rs"
 reason = "/subagents and a subagent's approval end to end over the standalone Agent."
 
