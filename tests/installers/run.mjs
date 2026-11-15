@@ -68,52 +68,82 @@ try {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${server.address().port}`;
   const environmentKey = `Software\\HanafubukiAgentInstallerTests\\${process.pid}`;
-  const run = async ({ version: requested = 'latest', noPath = true, shell = windows ? 'powershell.exe' : 'bash' } = {}) => {
-    if (windows) {
-      const command = `$ErrorActionPreference = 'Stop'; . ${quote(path.join(repo, 'install.ps1'))}; Install-HanafubukiAgent -Version ${quote(requested)} -InstallDir ${quote(dest)} -ReleaseApi ${quote(`${base}/api`)} -EnvironmentKey ${quote(environmentKey)} ${noPath ? '-NoPathUpdate' : ''}`;
-      return exec(shell, ['-NoProfile', '-NonInteractive', '-Command', command], { env: { ...process.env, GITHUB_TOKEN: '' } });
+  const psProfile = path.join(home, 'powershell', 'profile.ps1');
+  const shells = windows ? ['powershell.exe', 'pwsh.exe', ...(arg('--bash') ? [arg('--bash')] : [])] : ['bash', 'pwsh'];
+  for (const installerShell of shells) {
+    await rm(dest, { recursive: true, force: true });
+    const bashOnWindows = windows && installerShell === arg('--bash');
+    const run = async ({ version: requested = 'latest', noPath = true } = {}) => {
+      if (bashOnWindows) {
+        const command = 'export PATH=/usr/bin:/bin; export HOME=$(/usr/bin/cygpath -au -- "$1"); script=$(/usr/bin/cygpath -au -- "$2"); shift 2; bash "$script" "$@"';
+        return exec(installerShell, ['-c', command, 'test', home, path.join(repo, 'install.sh'), '--version', requested, '--install-dir', dest, ...(noPath ? ['--no-path-update'] : [])], {
+          env: { ...process.env, GITHUB_TOKEN: '', HANAFUBUKI_AGENT_RELEASE_API_URL: base + '/api' },
+        });
+      }
+      if (installerShell !== 'bash') {
+        const command = `$ErrorActionPreference = 'Stop'; $PROFILE = [pscustomobject]@{ CurrentUserAllHosts = ${quote(psProfile)} }; . ${quote(path.join(repo, 'install.ps1'))}; Install-HanafubukiAgent -Version ${quote(requested)} -InstallDir ${quote(dest)} -ReleaseApi ${quote(`${base}/api`)} -EnvironmentKey ${quote(environmentKey)} ${noPath ? '-NoPathUpdate' : ''}`;
+        return exec(installerShell, ['-NoProfile', '-NonInteractive', '-Command', command], { env: { ...process.env, GITHUB_TOKEN: '', HOME: home } });
+      }
+      return exec('bash', [path.join(repo, 'install.sh'), '--version', requested, '--install-dir', dest, ...(noPath ? ['--no-path-update'] : [])], {
+        env: { ...process.env, HOME: home, SHELL: '/bin/bash', HANAFUBUKI_AGENT_INSTALL_DIR: path.join(root, 'wrong'), HANAFUBUKI_AGENT_RELEASE_BASE_URL: `${base}/releases` },
+      });
+    };
+    await run();
+    const installed = path.join(dest, executable);
+    assert.equal((await exec(installed, ['--version'])).stdout.trim(), stdout.trim());
+    assert.deepEqual(await readFile(installed), await readFile(binary));
+    assert.equal((await readFile(path.join(dest, 'hanafubuki-agent-notices', 'NOTICE'), 'utf8')).trim(), 'fixture NOTICE');
+    console.log('ok: latest selects the native archive, installs and preserves notices (spaces, brackets, Unicode)');
+    await run({ version: `v${version}` });
+    assert.deepEqual(await readFile(installed), await readFile(binary));
+    console.log('ok: pinned version replaces an existing installation');
+    if (installerShell !== 'bash' && !bashOnWindows) {
+      await exec(installerShell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(repo, 'install.ps1'), '-Version', version, '-NoPathUpdate'], {
+        env: { ...process.env, GITHUB_TOKEN: '', HANAFUBUKI_AGENT_INSTALL_DIR: dest, HANAFUBUKI_AGENT_RELEASE_API_URL: `${base}/api` },
+      });
+      assert.deepEqual(await readFile(installed), await readFile(binary));
+      console.log('ok: PowerShell file entry point accepts the installation directory from the environment');
     }
-    return exec('bash', [path.join(repo, 'install.sh'), '--version', requested, '--install-dir', dest, ...(noPath ? ['--no-path-update'] : [])], {
-      env: { ...process.env, HOME: home, SHELL: '/bin/bash', HANAFUBUKI_AGENT_INSTALL_DIR: path.join(root, 'wrong'), HANAFUBUKI_AGENT_RELEASE_BASE_URL: `${base}/releases` },
-    });
-  };
-  await run();
-  const installed = path.join(dest, executable);
-  assert.equal((await exec(installed, ['--version'])).stdout.trim(), stdout.trim());
-  assert.deepEqual(await readFile(installed), await readFile(binary));
-  assert.equal((await readFile(path.join(dest, 'hanafubuki-agent-notices', 'NOTICE'), 'utf8')).trim(), 'fixture NOTICE');
-  console.log('ok: latest selects the native archive, installs and preserves notices (spaces, brackets, Unicode)');
-  await run({ version: `v${version}` });
-  assert.deepEqual(await readFile(installed), await readFile(binary));
-  console.log('ok: pinned version replaces an existing installation');
-  corrupt = true;
-  await assert.rejects(run(), /SHA-256/);
-  assert.deepEqual(await readFile(installed), await readFile(binary));
-  corrupt = false;
-  console.log('ok: checksum failure leaves the previous executable intact');
-  await assert.rejects(run({ version: 'not-a-version' }), /version/);
-  console.log('ok: invalid version is refused');
-  if (windows) {
-    try {
+    corrupt = true;
+    await assert.rejects(run(), /SHA-256/);
+    assert.deepEqual(await readFile(installed), await readFile(binary));
+    corrupt = false;
+    console.log('ok: checksum failure leaves the previous executable intact');
+    await assert.rejects(run({ version: 'not-a-version' }), /version/);
+    console.log('ok: invalid version is refused');
+    if (bashOnWindows) {
+      console.log('ok: MSYS2 restricted PATH finds Windows PowerShell and installs the Windows archive');
+    } else if (windows) {
+      try {
+        await run({ noPath: false });
+        await run({ noPath: false });
+        const command = `$key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey(${quote(environmentKey)}); try { $value = $key.GetValue('Path'); if (@($value -split ';').Count -ne 1 -or $value -cne ${quote(dest)}) { throw 'PATH not idempotent' } } finally { $key.Dispose() }`;
+        await exec('powershell.exe', ['-NoProfile', '-Command', command]);
+      } finally {
+        await exec('powershell.exe', ['-NoProfile', '-Command', `[Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree(${quote(environmentKey)}, $false)`]);
+      }
+    } else if (installerShell === 'pwsh') {
+      await assert.rejects(readFile(psProfile), { code: 'ENOENT' });
       await run({ noPath: false });
-      await run({ noPath: false, shell: 'pwsh.exe' });
-      const command = `$key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey(${quote(environmentKey)}); try { $value = $key.GetValue('Path'); if (@($value -split ';').Count -ne 1 -or $value -cne ${quote(dest)}) { throw 'PATH not idempotent' } } finally { $key.Dispose() }`;
-      await exec('powershell.exe', ['-NoProfile', '-Command', command]);
-    } finally {
-      await exec('powershell.exe', ['-NoProfile', '-Command', `[Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree(${quote(environmentKey)}, $false)`]);
+      await run({ noPath: false });
+      const profileText = await readFile(psProfile, 'utf8');
+      assert.equal(profileText.split('# hanafubuki-agent').length - 1, 1, profileText);
+      const command = `. ${quote(psProfile)}; . ${quote(psProfile)}; (Get-Command hanafubuki-agent).Source; @($env:PATH -split ':' | Where-Object { $_ -ceq ${quote(dest)} }).Count`;
+      const { stdout: resolved } = await exec('pwsh', ['-NoProfile', '-Command', command]);
+      assert.deepEqual(resolved.trim().split(/\r?\n/), [installed, '1']);
+    } else {
+      const profile = path.join(home, process.platform === 'darwin' ? '.bash_profile' : '.bashrc');
+      await assert.rejects(readFile(profile), { code: 'ENOENT' });
+      await run({ noPath: false });
+      await run({ noPath: false });
+      const profileText = await readFile(profile, 'utf8');
+      assert.equal(profileText.split('# hanafubuki-agent').length - 1, 1, profileText);
+      const { stdout: resolved } = await exec('bash', ['-c', 'source "$1"; command -v hanafubuki-agent', 'test', profile]);
+      assert.equal(resolved.trim(), installed);
     }
-  } else {
-    const profile = path.join(home, process.platform === 'darwin' ? '.bash_profile' : '.bashrc');
-    await assert.rejects(readFile(profile), { code: 'ENOENT' });
-    await run({ noPath: false });
-    await run({ noPath: false });
-    const profileText = await readFile(profile, 'utf8');
-    assert.equal(profileText.split('# hanafubuki-agent').length - 1, 1, profileText);
-    const { stdout: resolved } = await exec('bash', ['-c', 'source "$1"; command -v hanafubuki-agent', 'test', profile]);
-    assert.equal(resolved.trim(), installed);
+    assert.ok(downloads.length >= 5);
+    console.log(`ok: ${installerShell} installer checks passed`);
   }
-  assert.ok(downloads.length >= 5);
-  console.log('ok: opt-out preserves PATH; PATH setup is idempotent and resolves the installation');
 } finally {
   if (server) await new Promise(resolve => server.close(resolve));
   await rm(root, { recursive: true, force: true });

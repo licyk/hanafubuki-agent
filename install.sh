@@ -104,10 +104,18 @@ add_path() {
 }
 
 install_windows() {
-    local version=$1 architecture=$2 install_dir=$3 no_path=$4 backend staging='' powershell
-    command -v cygpath >/dev/null || fail 'cygpath is required; use Git Bash or MSYS2.'
-    if command -v powershell.exe >/dev/null; then powershell=powershell.exe; else powershell=pwsh.exe; fi
-    command -v "$powershell" >/dev/null || fail 'Windows PowerShell or PowerShell 7 is required.'
+    local version=$1 architecture=$2 install_dir=$3 no_path=$4 backend staging='' powershell windows_directory
+    # Use the converter belonging to this Bash runtime, even with another MSYS on PATH.
+    local cygpath=/usr/bin/cygpath
+    [[ -x $cygpath ]] || fail 'cygpath is required; use Git Bash or MSYS2.'
+    powershell=$(command -v powershell.exe || command -v pwsh.exe || true)
+    if [[ -z $powershell ]]; then
+        windows_directory=${SYSTEMROOT:-${SystemRoot:-C:\\Windows}}
+        powershell="$($cygpath -u -- "$windows_directory")/System32/WindowsPowerShell/v1.0/powershell.exe"
+    fi
+    [[ -f $powershell ]] || fail 'Windows PowerShell or PowerShell 7 is required.'
+    install_dir=${install_dir:-${LOCALAPPDATA:?LOCALAPPDATA is required}/hanafubuki-agent/bin}
+    install_dir=$($cygpath -au -- "$install_dir")
     backend=''
     if [[ -f ${BASH_SOURCE[0]:-} ]]; then backend="$(dirname -- "${BASH_SOURCE[0]}")/install.ps1"; fi
     if [[ -z $backend || ! -f $backend ]]; then
@@ -116,10 +124,11 @@ install_windows() {
         backend="$staging/install.ps1"
         download https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.ps1 "$backend"
     fi
-    local -a args=(-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$(cygpath -aw -- "$backend")" -Version "$version" -Architecture "$architecture")
-    [[ -z $install_dir ]] || args+=(-InstallDir "$(cygpath -aw -- "$install_dir")")
+    local -a args=(-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$($cygpath -aw -- "$backend")" -Version "$version" -Architecture "$architecture")
+    args+=(-InstallDir "$($cygpath -aw -- "$install_dir")")
     if $no_path; then args+=(-NoPathUpdate); fi
     MSYS2_ARG_CONV_EXCL='*' MSYS_NO_PATHCONV=1 "$powershell" "${args[@]}"
+    if ! $no_path; then add_path "$install_dir"; fi
 }
 
 usage() {

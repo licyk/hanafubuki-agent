@@ -6,41 +6,41 @@ icon: Download
 
 `hanafubuki-agent` 是一个独立的可执行文件，没有额外的运行时依赖。可以用以下四种方式之一安装：
 
-| 方式            | 适合                           | 需要                               |
-| --------------- | ------------------------------ | ---------------------------------- |
-| 一键安装脚本    | 为当前用户安装或更新           | Bash + curl，或 Windows PowerShell |
-| `cargo install` | 已经安装了 Rust 工具链         | Rust 1.99 或更新版本               |
-| 发布的二进制    | 不想安装 Rust，直接下载使用    | 支持的平台（见下表）               |
-| 从源码构建      | 想使用 `main` 分支上的最新代码 | Git 和 rustup                      |
+| 方式            | 适合                           | 需要                       |
+| --------------- | ------------------------------ | -------------------------- |
+| 一键安装脚本    | 为当前用户安装或更新           | Bash + curl，或 PowerShell |
+| `cargo install` | 已经安装了 Rust 工具链         | Rust 1.99 或更新版本       |
+| 发布的二进制    | 不想安装 Rust，直接下载使用    | 支持的平台（见下表）       |
+| 从源码构建      | 想使用 `main` 分支上的最新代码 | Git 和 rustup              |
 
 ## 一键安装 [#install-script]
 
-Linux 和 macOS（需要 Bash 和 curl）：
+Linux/macOS，或 Windows 上的 MSYS2/Git Bash（需要 Bash 和 curl）：
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.sh | bash
 ```
 
-Windows（PowerShell 5.1 或 PowerShell 7）：
+Windows PowerShell 5.1，或 Windows/Linux/macOS 上的 PowerShell 7（`pwsh`）：
 
 ```powershell
 irm https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.ps1 | iex
 ```
 
-脚本自动选择本机 x64 或 ARM64 归档，在替换已有程序前校验 SHA-256 和可执行文件的版本，并把许可证保留在旁边的 `hanafubuki-agent-notices` 目录。不需要管理员权限。Git Bash 和 MSYS2 可以使用 `install.sh`，它在 Windows 上转交 PowerShell 安装。这里的 ARM 指 ARM64；不提供 32 位 ARM 或 musl Linux 归档。
+脚本自动选择本机 x64 或 ARM64 归档，在替换已有程序前校验 SHA-256 和可执行文件的版本，并把许可证保留在旁边的 `hanafubuki-agent-notices` 目录。不需要管理员权限。Git Bash 和 MSYS2 可以使用 `install.sh`，即使 PATH 中没有 PowerShell，也会查找 Windows PowerShell 并安装原生 Windows 归档；安装目录同时接受 Windows 路径和 MSYS 路径。Linux/macOS 上的 `install.ps1` 使用 `tar` 和 `chmod` 安装对应的 Unix 归档。这里的 ARM 指 ARM64；不提供 32 位 ARM 或 musl Linux 归档。
 
-Linux/macOS 默认安装到 `~/.local/bin`，Windows 默认安装到 `%LOCALAPPDATA%\hanafubuki-agent\bin`。可通过 `HANAFUBUKI_AGENT_INSTALL_DIR` 或目录参数覆盖，参数优先。安装后打开新终端：Shell 脚本向 `.zshrc`（设置了 `ZDOTDIR` 时使用该目录）、`.bashrc`（macOS 上为 `.bash_profile`）或其他 Shell 的 `.profile` 添加 PATH；PowerShell 更新 Windows 用户 Path。不读取这些文件的 Shell 请跳过自动设置并自行配置 PATH。
+Linux/macOS 默认安装到 `~/.local/bin`，Windows 默认安装到 `%LOCALAPPDATA%\hanafubuki-agent\bin`。可通过 `HANAFUBUKI_AGENT_INSTALL_DIR` 或目录参数覆盖，参数优先。安装后打开新终端：Shell 脚本向 `.zshrc`（设置了 `ZDOTDIR` 时使用该目录）、`.bashrc`（macOS 上为 `.bash_profile`）或其他 Shell 的 `.profile` 添加 PATH；PowerShell 在 Windows 上更新用户 Path，在 Linux/macOS 上更新 `$PROFILE.CurrentUserAllHosts`。MSYS2/Git Bash 安装器还会配置自身 Shell 的配置文件，因为这些 Shell 不一定继承 Windows 用户 Path。在 Unix 上，PowerShell 安装器也会更新调用它的 PowerShell 会话的 PATH，不修改 Bash 或 Zsh 配置文件。不读取这些文件的 Shell 请跳过自动设置并自行配置 PATH。
 
 如需检查脚本或指定参数，先下载再运行：
 
 ```sh
 curl -fsSLO https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.sh
-bash install.sh --version 0.4.3 --architecture arm64 --install-dir "$HOME/.local/bin" --no-path-update
+bash install.sh --version 0.5.0 --architecture arm64 --install-dir "$HOME/.local/bin" --no-path-update
 ```
 
 ```powershell
 Invoke-WebRequest https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.ps1 -OutFile install.ps1
-.\install.ps1 -Version 0.4.3 -Architecture arm64 -InstallDir "$env:LOCALAPPDATA\hanafubuki-agent\bin" -NoPathUpdate
+pwsh -File ./install.ps1 -Version 0.5.0 -Architecture arm64 -NoPathUpdate
 ```
 
 | Shell 参数         | PowerShell 参数 | 含义                                  |
@@ -49,6 +49,8 @@ Invoke-WebRequest https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/
 | `--architecture`   | `-Architecture` | 默认 `auto`，也可选 `x64` 或 `arm64`  |
 | `--install-dir`    | `-InstallDir`   | 可执行文件所在目录                    |
 | `--no-path-update` | `-NoPathUpdate` | 不修改 Shell 配置和用户 Path          |
+
+`HANAFUBUKI_AGENT_RELEASE_BASE_URL` 可覆盖 Bash 的发布下载地址；`HANAFUBUKI_AGENT_RELEASE_API_URL` 可覆盖 PowerShell 的发布 API（Windows Bash 包装器也使用它）。
 
 再次运行脚本即可更新。Windows 上请先退出正在运行的 Agent，安装脚本不能替换被占用的可执行文件。已有配置和会话历史会保留。
 

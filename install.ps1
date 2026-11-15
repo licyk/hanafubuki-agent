@@ -11,24 +11,38 @@ function Install-HanafubukiAgent {
         [ValidateSet('auto', 'x64', 'arm64')][string]$Architecture = 'auto',
         [string]$InstallDir = $env:HANAFUBUKI_AGENT_INSTALL_DIR,
         [switch]$NoPathUpdate,
-        [string]$ReleaseApi = 'https://api.github.com/repos/licyk/hanafubuki-agent/releases',
+        [string]$ReleaseApi = $(if ($env:HANAFUBUKI_AGENT_RELEASE_API_URL) { $env:HANAFUBUKI_AGENT_RELEASE_API_URL } else { 'https://api.github.com/repos/licyk/hanafubuki-agent/releases' }),
         [string]$EnvironmentKey = 'Environment'
     )
     $ErrorActionPreference = 'Stop'
     $ProgressPreference = 'SilentlyContinue'
-    if ([Environment]::OSVersion.Platform -ne 'Win32NT') { throw 'Use install.sh on Linux or macOS.' }
+    $windows = [Environment]::OSVersion.Platform -eq 'Win32NT'
+    $platform = if ($windows) { 'pc-windows-msvc' }
+        elseif ($IsLinux) { 'unknown-linux-gnu' }
+        elseif ($IsMacOS) { 'apple-darwin' }
+        else { throw 'Only Windows, Linux and macOS are supported.' }
     if ($Architecture -eq 'auto') {
-        $native = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment').PROCESSOR_ARCHITECTURE
+        $native = if ($windows) {
+            (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment').PROCESSOR_ARCHITECTURE
+        } else { [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() }
         $Architecture = switch ($native) {
             'AMD64' { 'x64' }
+            'X64' { 'x64' }
             'ARM64' { 'arm64' }
-            default { throw "Unsupported Windows architecture: $native" }
+            default { throw "Unsupported architecture: $native" }
         }
     }
-    if (!$InstallDir) { $InstallDir = Join-Path $env:LOCALAPPDATA 'hanafubuki-agent\bin' }
+    if (!$InstallDir) {
+        $InstallDir = if ($windows) { Join-Path $env:LOCALAPPDATA 'hanafubuki-agent\bin' }
+            else { Join-Path $HOME '.local/bin' }
+    }
     $InstallDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($InstallDir)
-    if ($InstallDir.Contains(';')) { throw 'The installation directory cannot contain a semicolon.' }
-    $target = if ($Architecture -eq 'arm64') { 'aarch64-pc-windows-msvc' } else { 'x86_64-pc-windows-msvc' }
+    if ($InstallDir.Contains([IO.Path]::PathSeparator) -or $InstallDir.Contains("`n") -or $InstallDir.Contains("`r")) {
+        throw 'The installation directory cannot contain a PATH separator or newline.'
+    }
+    $target = $(if ($Architecture -eq 'arm64') { 'aarch64' } else { 'x86_64' }) + "-$platform"
+    $extension = if ($windows) { 'zip' } else { 'tar.gz' }
+    $binary = if ($windows) { 'hanafubuki-agent.exe' } else { 'hanafubuki-agent' }
     $suffix = 'latest'
     if ($Version -ne 'latest') {
         $Version = $Version -creplace '^v', ''
@@ -48,7 +62,7 @@ function Install-HanafubukiAgent {
         if ($Version -ne 'latest' -and $tag -cne "v$Version") { throw 'The release differs from the requested version.' }
         $Version = $tag.Substring(1)
         $directory = "hanafubuki-agent-$Version-$target"
-        $name = "$directory.zip"
+        $name = "$directory.$extension"
         $asset = @($release.assets | Where-Object { $_.name -ceq $name })
         $checksum = @($release.assets | Where-Object { $_.name -ceq "$name.sha256" })
         if ($asset.Count -ne 1 -or $checksum.Count -ne 1) { throw "Release $tag has no unique $name and checksum." }
@@ -65,10 +79,19 @@ function Install-HanafubukiAgent {
         try { $actual = [BitConverter]::ToString($sha256.ComputeHash($archiveStream)).Replace('-', '') }
         finally { $archiveStream.Dispose(); $sha256.Dispose() }
         if ($expected -notmatch '^[a-fA-F0-9]{64}$' -or $actual -ine $expected) { throw 'Downloaded archive SHA-256 does not match.' }
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-        [IO.Compression.ZipFile]::ExtractToDirectory($archive, $staging)
+        if ($windows) {
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            [IO.Compression.ZipFile]::ExtractToDirectory($archive, $staging)
+        } else {
+            & tar xzf $archive -C $staging "$directory/$binary" "$directory/LICENSE" "$directory/NOTICE" "$directory/THIRD-PARTY-LICENSES.txt"
+            if ($LASTEXITCODE -ne 0) { throw 'Could not extract the release archive.' }
+        }
         $unpacked = Join-Path $staging $directory
-        $download = Join-Path $unpacked 'hanafubuki-agent.exe'
+        $download = Join-Path $unpacked $binary
+        if (!$windows) {
+            & chmod 755 $download
+            if ($LASTEXITCODE -ne 0) { throw 'Could not make the downloaded binary executable.' }
+        }
         $reported = & $download --version
         if ($LASTEXITCODE -ne 0 -or "$reported".Trim() -cne "hanafubuki-agent $Version") { throw 'Downloaded executable reports an unexpected version.' }
         $notices = Join-Path $InstallDir 'hanafubuki-agent-notices'
@@ -76,11 +99,14 @@ function Install-HanafubukiAgent {
         foreach ($file in @('LICENSE', 'NOTICE', 'THIRD-PARTY-LICENSES.txt')) {
             [IO.File]::Copy((Join-Path $unpacked $file), (Join-Path $notices $file), $true)
         }
-        $executable = Join-Path $InstallDir 'hanafubuki-agent.exe'
+        $executable = Join-Path $InstallDir $binary
         if (Test-Path -LiteralPath $executable) {
             [IO.File]::Replace($download, $executable, [NullString]::Value)
         } else { [IO.File]::Move($download, $executable) }
-        if (!$NoPathUpdate) { Add-AgentPath $InstallDir $EnvironmentKey }
+        if (!$NoPathUpdate) {
+            if ($windows) { Add-AgentPath $InstallDir $EnvironmentKey }
+            else { Add-AgentPowerShellPath $InstallDir }
+        }
         Write-Host "Installed $executable"
         Write-Host 'Open a new terminal, then run hanafubuki-agent. Update with hanafubuki-agent update.'
     } finally {
@@ -127,6 +153,18 @@ namespace HanafubukiAgent {
     }
     $result = [UIntPtr]::Zero
     $null = [HanafubukiAgent.InstallerEnvironment]::SendMessageTimeout([IntPtr]0xffff, 0x1a, [UIntPtr]::Zero, 'Environment', 2, 1000, [ref]$result)
+}
+
+function Add-AgentPowerShellPath {
+    param([string]$Directory)
+    $profilePath = $PROFILE.CurrentUserAllHosts
+    $quoted = $Directory.Replace("'", "''")
+    $line = 'if (($env:PATH -split '':'') -cnotcontains ''' + $quoted + ''') { $env:PATH = ''' + $quoted + ':'' + $env:PATH } # hanafubuki-agent'
+    $null = [IO.Directory]::CreateDirectory((Split-Path -Parent $profilePath))
+    $lines = if (Test-Path -LiteralPath $profilePath) { [IO.File]::ReadAllLines($profilePath) } else { @() }
+    if ($lines -cnotcontains $line) { [IO.File]::AppendAllText($profilePath, "`n$line`n") }
+    if (($env:PATH -split ':') -cnotcontains $Directory) { $env:PATH = "${Directory}:$env:PATH" }
+    Write-Host "PATH configured in $profilePath."
 }
 
 if ($MyInvocation.InvocationName -ne '.') { Install-HanafubukiAgent @PSBoundParameters }

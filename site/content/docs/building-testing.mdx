@@ -141,4 +141,4 @@ Linux 构建内置 bubblewrap 需要 C 编译器、`pkg-config` 和 libcap 开�
 
 ## 安装脚本测试 [#installer-tests]
 
-`node tests/installers/run.mjs` 使用本地 HTTP 发布夹具和 `rustc` 构建的原生可执行文件，运行真实的下载、校验、替换及 PATH 代码。测试覆盖指定/最新版本、空格与 Unicode 路径、重复安装、校验失败时保留旧程序，以及 PATH 修改的幂等性。Windows 同时运行 Windows PowerShell 5.1 和 PowerShell 7，用临时注册表键隔离真实用户 Path。通过 `--binary PATH --target TRIPLE` 可测试已有构建，发布流程使用此模式。`ci.yml` 调用可复用的 `installers.yml`，覆盖三个系统及 Linux、Windows ARM64。测试需要 Node 和 Rust，不安装网站依赖。
+`node tests/installers/run.mjs` 使用本地 HTTP 发布夹具和 `rustc` 构建的原生可执行文件，运行真实的下载、校验、替换及 PATH 代码。测试覆盖指定/最新版本、空格与 Unicode 路径、重复安装、校验失败时保留旧程序，以及 PATH 修改的幂等性。Windows 同时运行 Windows PowerShell 5.1 和 PowerShell 7，用临时注册表键隔离真实用户 Path。Linux/macOS 同时运行 Bash 和 `pwsh`，并隔离 Shell 和 PowerShell 配置文件。Windows 上可传入 `--bash C:\msys64\usr\bin\bash.exe`，在受限 PATH 下测试真实 MSYS2 包装器；Windows x64 安装 CI 已启用此项。通过 `--binary PATH --target TRIPLE` 可测试已有构建，发布流程使用此模式。`ci.yml` 调用可复用的 `installers.yml`，覆盖三个系统及 Linux、Windows ARM64。测试需要 Node、Rust 和 PowerShell 7，不安装网站依赖。

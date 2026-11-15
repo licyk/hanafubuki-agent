@@ -6,41 +6,41 @@ icon: Download
 
 `hanafubuki-agent` is a single executable with no runtime to install alongside it. Install it in one of four ways:
 
-| Way                  | For                                    | Needs                              |
-| -------------------- | -------------------------------------- | ---------------------------------- |
-| Install script       | Install or update for the current user | Bash + curl, or Windows PowerShell |
-| `cargo install`      | You already have a Rust toolchain      | Rust 1.99 or newer                 |
-| A released binary    | Using it without installing Rust       | A supported platform (below)       |
-| Building from source | The latest code on the `main` branch   | Git and rustup                     |
+| Way                  | For                                    | Needs                        |
+| -------------------- | -------------------------------------- | ---------------------------- |
+| Install script       | Install or update for the current user | Bash + curl, or PowerShell   |
+| `cargo install`      | You already have a Rust toolchain      | Rust 1.99 or newer           |
+| A released binary    | Using it without installing Rust       | A supported platform (below) |
+| Building from source | The latest code on the `main` branch   | Git and rustup               |
 
 ## One-command installation [#install-script]
 
-Linux and macOS (Bash and curl):
+Linux, macOS, or Windows with MSYS2/Git Bash (Bash and curl):
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.sh | bash
 ```
 
-Windows (PowerShell 5.1 or PowerShell 7):
+Windows PowerShell 5.1, or PowerShell 7 (`pwsh`) on Windows/Linux/macOS:
 
 ```powershell
 irm https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.ps1 | iex
 ```
 
-The scripts select the native x64 or ARM64 archive, check its SHA-256 and executable version before replacing an existing binary, and retain the licences in `hanafubuki-agent-notices` beside it. No administrator access is needed. Git Bash and MSYS2 use `install.sh`, which delegates to PowerShell on Windows. ARM here means ARM64; 32-bit ARM and musl Linux are not release targets.
+The scripts select the native x64 or ARM64 archive, check its SHA-256 and executable version before replacing an existing binary, and retain the licences in `hanafubuki-agent-notices` beside it. No administrator access is needed. Git Bash and MSYS2 use `install.sh`, which finds Windows PowerShell even when it is absent from PATH and installs the native Windows archive. Both Windows and MSYS-style installation paths are accepted. On Linux/macOS, `install.ps1` uses `tar` and `chmod` to install the native Unix archive. ARM here means ARM64; 32-bit ARM and musl Linux are not release targets.
 
-The default destination is `~/.local/bin` on Linux/macOS, or `%LOCALAPPDATA%\hanafubuki-agent\bin` on Windows. Override it with `HANAFUBUKI_AGENT_INSTALL_DIR` or the directory option (the option wins). Open a new terminal after installation: the shell installer adds PATH to `.zshrc` (under `ZDOTDIR` when set), `.bashrc` (`.bash_profile` on macOS), or `.profile` for other shells; PowerShell updates the user's Windows Path. For shells that do not read these files, use the opt-out and configure PATH yourself.
+The default destination is `~/.local/bin` on Linux/macOS, or `%LOCALAPPDATA%\hanafubuki-agent\bin` on Windows. Override it with `HANAFUBUKI_AGENT_INSTALL_DIR` or the directory option (the option wins). Open a new terminal after installation: the shell installer adds PATH to `.zshrc` (under `ZDOTDIR` when set), `.bashrc` (`.bash_profile` on macOS), or `.profile` for other shells; PowerShell updates the user's Windows Path on Windows, or `$PROFILE.CurrentUserAllHosts` on Linux/macOS. The MSYS2/Git Bash installer also configures its shell profile, since those shells may not inherit the Windows user Path. On Unix, the PowerShell installer updates PATH for the invoking PowerShell session as well; it does not edit Bash or Zsh profiles. For shells that do not read these files, use the opt-out and configure PATH yourself.
 
 Download the script first to inspect it or pass options:
 
 ```sh
 curl -fsSLO https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.sh
-bash install.sh --version 0.4.3 --architecture arm64 --install-dir "$HOME/.local/bin" --no-path-update
+bash install.sh --version 0.5.0 --architecture arm64 --install-dir "$HOME/.local/bin" --no-path-update
 ```
 
 ```powershell
 Invoke-WebRequest https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.ps1 -OutFile install.ps1
-.\install.ps1 -Version 0.4.3 -Architecture arm64 -InstallDir "$env:LOCALAPPDATA\hanafubuki-agent\bin" -NoPathUpdate
+pwsh -File ./install.ps1 -Version 0.5.0 -Architecture arm64 -NoPathUpdate
 ```
 
 | Shell option       | PowerShell option | Meaning                                                       |
@@ -49,6 +49,8 @@ Invoke-WebRequest https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/
 | `--architecture`   | `-Architecture`   | `auto` (default), `x64`, or `arm64`                           |
 | `--install-dir`    | `-InstallDir`     | Directory containing the executable                           |
 | `--no-path-update` | `-NoPathUpdate`   | Keep shell profiles and the user Path unchanged               |
+
+`HANAFUBUKI_AGENT_RELEASE_BASE_URL` overrides the Bash release download base; `HANAFUBUKI_AGENT_RELEASE_API_URL` overrides the PowerShell release API (also used by the Windows Bash wrapper).
 
 Re-running the script updates the installation. Exit running Agents first on Windows, where a running executable cannot be replaced by the installer. Existing configuration and session history are preserved.
 

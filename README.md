@@ -31,13 +31,13 @@ Use it on its own, or embed the same runtime in a host such as
 
 ## Install
 
-Linux and macOS:
+Linux, macOS, or Windows with MSYS2/Git Bash:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.sh | bash
 ```
 
-Windows PowerShell:
+PowerShell (Windows PowerShell 5.1, or `pwsh` on Windows/Linux/macOS):
 
 ```powershell
 irm https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.ps1 | iex
@@ -47,16 +47,17 @@ The installers choose the native **x64 or ARM64** release, verify its SHA-256 an
 then install for the current user. No Rust toolchain or administrator access is needed.
 Open a new terminal and run `hanafubuki-agent --version`.
 Linux releases require glibc 2.35 or newer; macOS supports Intel and Apple silicon.
-Git Bash and MSYS2 can use the shell installer, which delegates to PowerShell on Windows.
+On Windows, the shell installer finds PowerShell even outside PATH and installs the native Windows binary.
+On Linux/macOS, the PowerShell installer requires `tar` and `chmod` and adds PATH to the current user’s PowerShell profile.
 
 To choose a version or directory, download the script and run it with options:
 
 ```sh
-bash install.sh --version 0.4.3 --install-dir "$HOME/.local/bin"
+bash install.sh --version 0.5.0 --install-dir "$HOME/.local/bin"
 ```
 
 ```powershell
-.\install.ps1 -Version 0.4.3 -InstallDir "$env:LOCALAPPDATA\hanafubuki-agent\bin"
+pwsh -File ./install.ps1 -Version 0.5.0 -NoPathUpdate
 ```
 
 You can also [download an archive](https://github.com/licyk/hanafubuki-agent/releases/latest)
