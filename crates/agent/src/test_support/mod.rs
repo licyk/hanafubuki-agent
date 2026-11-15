@@ -2,14 +2,12 @@
 //! scripted model provider and MCP servers, plugins mounted on their own
 //! root, and an Agent built over temporary paths with a host's ports.
 
-#[cfg(unix)]
 mod mcp_server;
 mod model_server;
 mod plugins;
 mod service;
 mod wake;
 
-#[cfg(unix)]
 pub use mcp_server::{annotated_tool, scripted_tool, McpCallHold, ScriptedMcpServers};
 pub use model_server::{
     anthropic_assistant_events, anthropic_thinking_tool_events, anthropic_tool_events,
