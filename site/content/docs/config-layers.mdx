@@ -34,6 +34,8 @@ hanafubuki-agent -p offline exec "整理这个目录下的笔记"
 
 选择文件中不存在的配置档会报错。配置档中的列表（如 `disabledPlugins`）会**替换**下一层的列表，而不是合并。
 
+设置中心的配置档也提供所有内置插件和宿主插件注册的 `pluginOptions.<插件>.<选项>`，复用插件声明的类型、范围和密钥编辑方式，不给新配置档填入默认值。保存时先校验整批值，再一起写入；删除某个选项就恢复使用下一层的值。
+
 终端界面的[设置中心](/docs/terminal-interface#config)编辑配置档（Advanced 标签页中的 Profiles）：`a` 添加一个，每个键改动时即保存，`r` 把它从配置档中删除，Delete 删除整个配置档，但 Agent 当前使用的那个除外。
 
 ## 项目配置 [#projects]

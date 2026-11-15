@@ -17,6 +17,7 @@ mod marketplaces;
 mod mcp;
 mod mcp_secrets;
 mod model_policy;
+mod package_defaults;
 mod package_settings;
 mod packages;
 mod plugin_mcp;
@@ -188,6 +189,7 @@ impl AgentApplicationService {
             plugin_mcp::collection(self).await,
             plugins::collection(&statuses),
             packages::collection(self).await,
+            package_defaults::collection(self).await,
             marketplaces::collection(self).await,
             hooks::collection(self).await,
             roles::collection(self).await,
@@ -245,6 +247,7 @@ impl AgentApplicationService {
             plugin_mcp::ID => plugin_mcp::run(self, request).await,
             plugins::ID => plugins::run(self, request).await,
             packages::ID => packages::run(self, request).await,
+            package_defaults::ID => package_defaults::run(self, request).await,
             marketplaces::ID => marketplaces::run(self, request).await,
             hooks::ID => hooks::run(self, request).await,
             roles::ID => roles::run(self, request).await,

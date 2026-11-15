@@ -2,9 +2,8 @@
 //! fields, the unusable ones with why. A role of the user's `config.toml`
 //! (`[agents.<name>]`) is added, edited and deleted here, key by key, then
 //! the catalog is read again; one of a role file, a profile, a project, a
-//! plugin or the Agent itself is shown with where it is written. The keys
-//! that narrow a role (`extends`, `permissionModeCap`, `tools`, `plugins`)
-//! are written in the file.
+//! plugin or the Agent itself is shown with where it is written. A user's
+//! role includes its inheritance and capability restrictions.
 
 use std::collections::BTreeMap;
 
@@ -36,6 +35,7 @@ fn fields() -> Vec<SettingSpec> {
     };
     vec![
         SettingSpec::new("description", "Description", text.clone()),
+        SettingSpec::new("extends", "Extends role", text.clone()),
         SettingSpec {
             summary: "Given to the agent that takes the role".into(),
             ..SettingSpec::new("instructions", "Instructions", text.clone())
@@ -62,7 +62,31 @@ fn fields() -> Vec<SettingSpec> {
             summary: "Whether an agent may start another with this role".into(),
             ..SettingSpec::new("spawnable", "Spawnable", SettingKind::Boolean)
         },
+        SettingSpec::new(
+            "permissionModeCap",
+            "Permission mode cap",
+            SettingKind::Choice {
+                values: vec![
+                    SettingChoice::new("manual", "Manual"),
+                    SettingChoice::new("auto_review", "Automatic review"),
+                    SettingChoice::new("full_access", "Full access"),
+                ],
+            },
+        ),
+        SettingSpec {
+            summary: "Unset inherits the parent; an empty list permits no tools".into(),
+            ..SettingSpec::new("tools.allow", "Allowed tools", tool_list())
+        },
+        SettingSpec::new("tools.deny", "Denied tools", tool_list()),
+        SettingSpec::new("plugins.off", "Disabled plugins", tool_list()),
     ]
+}
+
+fn tool_list() -> SettingKind {
+    SettingKind::TextList {
+        maximum_items: None,
+        maximum_item_chars: None,
+    }
 }
 
 pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCollection {

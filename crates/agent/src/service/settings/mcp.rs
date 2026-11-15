@@ -110,6 +110,11 @@ fn fields() -> Vec<SettingSpec> {
         },
         SettingSpec {
             visible_if: on(STREAMABLE_HTTP),
+            summary: "Each NAME=VALUE; secret headers belong in MCP secrets".into(),
+            ..SettingSpec::new("transport.publicHeaders", "Public headers", list.clone())
+        },
+        SettingSpec {
+            visible_if: on(STREAMABLE_HTTP),
             ..SettingSpec::new(
                 "transport.oauth",
                 "OAuth",

@@ -1,11 +1,12 @@
 //! The profiles of the user's `config.toml` (`[profiles.<name>]`), the
 //! standalone Agent's: each one's settings, read and written by the specs
-//! of `config.toml` (as `config set profiles.<name>.<key>` writes them). A
+//! of `config.toml` and the plugins' registered option schemas. A
 //! save of `null` removes a key from the profile; a profile is deleted
 //! whole, unless it is the one the Agent runs with.
 
 use hanafubuki_agent_config::{
-    config_sections, ConfigLayerSource, SettingSpec, SettingsGroup, UserEntry,
+    config_sections, ConfigLayerSource, SettingChange, SettingSpec, SettingWriteOp, SettingsGroup,
+    SettingsWrite, UserEntry,
 };
 use serde_json::{Map, Value};
 
@@ -21,10 +22,22 @@ const PROFILES: &str = "profiles";
 
 /// The settings of `config.toml`, without their defaults: a profile sets
 /// only what it names, and the rest comes from below it.
-fn fields() -> Vec<SettingSpec> {
+fn fields(service: &AgentApplicationService) -> Vec<SettingSpec> {
     config_sections()
         .into_iter()
         .flat_map(|section| section.settings)
+        .chain(
+            service
+                .host
+                .option_schemas()
+                .into_iter()
+                .flat_map(|(row, schema)| {
+                    schema.options.into_iter().map(move |spec| SettingSpec {
+                        key: format!("pluginOptions.{row}.{}", spec.key),
+                        ..spec
+                    })
+                }),
+        )
         .map(|spec| SettingSpec {
             default: None,
             ..spec
@@ -33,17 +46,18 @@ fn fields() -> Vec<SettingSpec> {
 }
 
 pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCollection {
-    let collection = SettingsCollection::new(ID, "Profiles", SettingsGroup::Advanced, fields())
-        .with_actions(vec![
-            SettingsAction::collection(ADD, "Add a profile").named("Profile name"),
-            SettingsAction::record(SAVE, "Save"),
-            SettingsAction::record(DELETE, "Delete").confirmed(),
-        ]);
+    let fields = fields(service);
+    let collection =
+        SettingsCollection::new(ID, "Profiles", SettingsGroup::Advanced, fields.clone())
+            .with_actions(vec![
+                SettingsAction::collection(ADD, "Add a profile").named("Profile name"),
+                SettingsAction::record(SAVE, "Save"),
+                SettingsAction::record(DELETE, "Delete").confirmed(),
+            ]);
     let profiles = match user_table(service, PROFILES).await {
         Ok(profiles) => profiles,
         Err(error) => return collection.unavailable(error),
     };
-    let fields = fields();
     let records = profiles
         .iter()
         .map(|(name, profile)| {
@@ -91,31 +105,27 @@ pub(super) async fn run(
     if request.values.is_empty() {
         return Err("a profile's save names the settings it writes".to_string());
     }
+    let fields = fields(service);
     let mut changes = Vec::new();
-    let mut removed = Map::new();
     for (key, value) in &request.values {
-        if !fields().iter().any(|spec| spec.key == *key) {
+        if !fields.iter().any(|spec| spec.key == *key) {
             return Err(format!("`{key}` is not a setting of a profile"));
         }
-        if value.is_null() {
-            removed.insert(key.clone(), Value::Null);
-        } else {
-            changes.push((format!("{PROFILES}.{}.{key}", quoted(&name)), value.clone()));
-        }
+        changes.push(SettingChange {
+            key: key.clone(),
+            op: if value.is_null() {
+                SettingWriteOp::Reset
+            } else {
+                SettingWriteOp::Set(value.clone())
+            },
+        });
     }
     let profile = name.clone();
+    let options = service.host.option_schemas();
     hanafubuki_agent_foundation::blocking::run_blocking_operation(
         service.blocking.as_ref(),
         "agent profile write worker",
-        move || {
-            for (key, value) in changes {
-                config.set_user_json(&key, value)?;
-            }
-            if removed.is_empty() {
-                return Ok(());
-            }
-            config.write_entry_values(UserEntry::Profile(&profile), &removed)
-        },
+        move || config.write_profile_values(&profile, &SettingsWrite { changes }, &options),
     )
     .await??;
     service.apply_settings_to_plugins();

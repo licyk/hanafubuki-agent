@@ -181,6 +181,38 @@ impl AgentConfig {
         self.resolved().map(|resolved| resolved.sources)
     }
 
+    /// Writes a profile's settings and registered plugin options atomically.
+    /// Keys are relative to the profile; reset removes an override.
+    pub fn write_profile_values(
+        &self,
+        name: &str,
+        write: &SettingsWrite,
+        options: &BTreeMap<String, PluginOptionSchema>,
+    ) -> Result<(), String> {
+        let prefix = UserEntry::Profile(name).path()?;
+        let changes = write
+            .changes
+            .iter()
+            .map(|change| checked_change(change, options).map(|(change, _)| change))
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut cached = self.inner.settings.lock();
+        let user = self.load_user_settings()?;
+        let profile = keys::lookup(&user.document, &prefix)
+            .and_then(Value::as_object)
+            .cloned()
+            .unwrap_or_default();
+        keys::check_changes(&profile, &changes, &user.value)?;
+        let mut document = Map::new();
+        for change in changes {
+            let mut path = prefix.clone();
+            path.extend(change.path);
+            keys::insert(&mut document, &path, change.value.unwrap_or(Value::Null));
+        }
+        self.inner.settings_file.write(&document)?;
+        *cached = None;
+        Ok(())
+    }
+
     /// Sets `key` (a dotted TOML key, as [`Self::value`] reads) in the
     /// user's `config.toml` to `raw`, TOML or, when it is not, a string as
     /// for `-c`. The key must be a setting (written by

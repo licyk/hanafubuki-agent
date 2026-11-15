@@ -99,6 +99,7 @@ async fn the_catalog_reads_every_owner_and_returns_no_secret() {
             "pluginMcp",
             "plugins",
             "packages",
+            "packageDefaults",
             "marketplaces",
             "hooks",
             "roles"

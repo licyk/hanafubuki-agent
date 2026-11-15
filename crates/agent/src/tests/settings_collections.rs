@@ -84,6 +84,326 @@ fn layered(
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn registered_plugin_options_are_editable_in_profiles_without_leaking_secrets() {
+    let (service, paths, config) = layered(
+        "settings-profile-options",
+        "[pluginOptions.subagents]\nmaximumRunningAgents = 4\n[profiles.work]\n",
+        Some("work"),
+    );
+    service
+        .run_settings_action(action(
+            "profiles",
+            Some("work"),
+            "save",
+            None,
+            json!({
+                "pluginOptions.subagents.maximumRunningAgents": 2,
+                "pluginOptions.web.exaApiKeys": "profile-secret",
+            }),
+        ))
+        .await
+        .unwrap();
+    let catalog = service.settings_catalog().await.unwrap();
+    let profiles = collection(&catalog, "profiles");
+    let work = profiles.records.iter().find(|r| r.id == "work").unwrap();
+    assert_eq!(
+        work.values["pluginOptions.subagents.maximumRunningAgents"],
+        SettingValue::Integer(2)
+    );
+    assert!(work
+        .secrets_set
+        .contains(&"pluginOptions.web.exaApiKeys".to_string()));
+    assert!(!serde_json::to_string(&profiles)
+        .unwrap()
+        .contains("profile-secret"));
+    let options = service
+        .plugin_status()
+        .into_iter()
+        .find(|p| p.name == "subagents")
+        .unwrap()
+        .options
+        .unwrap();
+    assert!(options
+        .values
+        .iter()
+        .any(|v| v.key == "maximumRunningAgents" && v.value == Some(SettingValue::Integer(2))));
+    let before = std::fs::read_to_string(paths.config_dir.join("config.toml")).unwrap();
+    assert!(service
+        .run_settings_action(action(
+            "profiles",
+            Some("work"),
+            "save",
+            None,
+            json!({
+                "memory.enabled": false,
+                "pluginOptions.subagents.maximumRunningAgents": -1,
+            })
+        ))
+        .await
+        .is_err());
+    assert_eq!(
+        std::fs::read_to_string(paths.config_dir.join("config.toml")).unwrap(),
+        before
+    );
+    service
+        .run_settings_action(action(
+            "profiles",
+            Some("work"),
+            "save",
+            None,
+            json!({
+                "pluginOptions.subagents.maximumRunningAgents": null,
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        config
+            .value("profiles.work.pluginOptions.subagents.maximumRunningAgents")
+            .unwrap(),
+        None
+    );
+    done(service, paths);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn role_inheritance_and_restrictions_round_trip_through_the_catalog() {
+    let (service, paths, config) = service_with_config("settings-role-scope", |_, _| {});
+    let values = json!({
+        "extends": "default", "permissionModeCap": "manual",
+        "tools.allow": ["read_file", "web_search"], "tools.deny": ["web_search"],
+        "plugins.off": ["memory"],
+    });
+    service
+        .run_settings_action(action(
+            "roles",
+            Some("restricted"),
+            "add",
+            None,
+            values.clone(),
+        ))
+        .await
+        .unwrap();
+    let catalog = service.settings_catalog().await.unwrap();
+    let roles = collection(&catalog, "roles");
+    let record = roles.records.iter().find(|r| r.id == "restricted").unwrap();
+    for (key, value) in values.as_object().unwrap() {
+        assert_eq!(record.values[key].to_json(), *value, "{key}");
+    }
+    let roles = service.roles();
+    let role = roles.role("restricted").unwrap();
+    assert_eq!(role.chain[1].name, "default");
+    assert!(role.scope.turns_off("memory"));
+    assert_eq!(
+        role.scope
+            .capped_permission_mode(AgentPermissionMode::FullAccess),
+        AgentPermissionMode::Manual
+    );
+    assert_eq!(role.scope.summary().unwrap().allow_patterns, 2);
+    assert_eq!(role.scope.summary().unwrap().deny_patterns, 1);
+    service
+        .run_settings_action(action(
+            "roles",
+            Some("restricted"),
+            "save",
+            None,
+            json!({"tools.allow": []}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        service
+            .roles()
+            .role("restricted")
+            .unwrap()
+            .scope
+            .summary()
+            .unwrap()
+            .allow_lists,
+        1
+    );
+    service
+        .run_settings_action(action(
+            "roles",
+            Some("restricted"),
+            "save",
+            None,
+            json!({"tools.allow": null}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        service
+            .roles()
+            .role("restricted")
+            .unwrap()
+            .scope
+            .summary()
+            .unwrap()
+            .allow_lists,
+        0
+    );
+    let before = config.user_document().unwrap();
+    assert!(service
+        .run_settings_action(action(
+            "roles",
+            Some("restricted"),
+            "save",
+            None,
+            json!({"permissionModeCap":"invalid"})
+        ))
+        .await
+        .is_err());
+    assert_eq!(config.user_document().unwrap(), before);
+    done(service, paths);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn mcp_public_http_headers_are_registered_written_and_preserved() {
+    let (service, paths, config) = service_with_config("settings-http-headers", |_, _| {});
+    let revision = config.mcp().load().unwrap().revision;
+    service
+        .run_settings_action(action(
+            "mcp",
+            Some("http"),
+            "add",
+            Some(revision),
+            json!({
+                "transport.type": "streamable_http", "transport.url": "http://127.0.0.1:9/mcp",
+                "transport.publicHeaders": ["x-scope=workspace", "x-version=1"],
+            }),
+        ))
+        .await
+        .unwrap();
+    let catalog = service.settings_catalog().await.unwrap();
+    let mcp = collection(&catalog, "mcp");
+    assert_eq!(
+        mcp.records[0].values["transport.publicHeaders"],
+        SettingValue::TextList(vec!["x-scope=workspace".into(), "x-version=1".into()])
+    );
+    service
+        .run_settings_action(action(
+            "mcp",
+            Some("http"),
+            "save",
+            mcp.revision,
+            json!({"required": true}),
+        ))
+        .await
+        .unwrap();
+    let stored = config.mcp().load().unwrap();
+    let hanafubuki_agent_mcp::McpTransportConfig::StreamableHttp(http) =
+        &stored.servers[0].transport
+    else {
+        panic!("HTTP transport")
+    };
+    assert_eq!(http.public_headers["x-scope"], "workspace");
+    assert!(service
+        .run_settings_action(action(
+            "mcp",
+            Some("http"),
+            "save",
+            Some(stored.revision),
+            json!({"transport.publicHeaders":["x=a", "x=b"]})
+        ))
+        .await
+        .is_err());
+    assert_eq!(config.mcp().load().unwrap(), stored);
+    done(service, paths);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn installed_plugin_defaults_and_marketplace_enablement_reach_the_live_packages() {
+    let (service, paths, config) = service_with_config("settings-package-defaults", |_, _| {});
+    let root = paths.app_data_dir.join("market");
+    write(
+        &root.join(".agents/plugins/marketplace.json"),
+        &json!({"name":"test-market", "plugins":[]}).to_string(),
+    );
+    let refused = service
+        .run_settings_action(action(
+            "marketplaces",
+            None,
+            "add",
+            None,
+            json!({"source": root.display().to_string(), "sparsePaths": ["plugins"]}),
+        ))
+        .await
+        .unwrap_err();
+    assert!(refused.contains("only supported for git"), "{refused}");
+    assert!(config.settings().unwrap().marketplaces.is_empty());
+    service
+        .run_settings_action(action(
+            "marketplaces",
+            None,
+            "add",
+            None,
+            json!({
+                "source": root.display().to_string(), "enabled": false,
+            }),
+        ))
+        .await
+        .unwrap();
+    assert!(!service.marketplaces().await.unwrap()[0].enabled);
+    let source = config.settings().unwrap().marketplaces["test-market"]
+        .source
+        .clone();
+    service
+        .run_settings_action(action(
+            "marketplaces",
+            Some("test-market"),
+            "enable",
+            None,
+            json!({}),
+        ))
+        .await
+        .unwrap();
+    assert!(service.marketplaces().await.unwrap()[0].enabled);
+    assert_eq!(
+        config.settings().unwrap().marketplaces["test-market"].source,
+        source
+    );
+    let catalog = service.settings_catalog().await.unwrap();
+    assert!(collection(&catalog, "marketplaces")
+        .record
+        .iter()
+        .any(|s| s.key == "sparsePaths"));
+    for enabled in [false, true] {
+        service
+            .run_settings_action(action(
+                "packageDefaults",
+                Some("default"),
+                "save",
+                None,
+                json!({"enabled": enabled}),
+            ))
+            .await
+            .unwrap();
+        let id = hanafubuki_agent_packages::PluginId::parse("unconfigured@test-market").unwrap();
+        assert_eq!(config.settings().unwrap().package_enabled(&id), enabled);
+        let catalog = service.settings_catalog().await.unwrap();
+        assert_eq!(
+            collection(&catalog, "packageDefaults").records[0].values["enabled"],
+            SettingValue::Boolean(enabled)
+        );
+    }
+    service
+        .run_settings_action(action(
+            "marketplaces",
+            Some("test-market"),
+            "disable",
+            None,
+            json!({}),
+        ))
+        .await
+        .unwrap();
+    assert!(!config.settings().unwrap().package_enabled(
+        &hanafubuki_agent_packages::PluginId::parse("unconfigured@test-market").unwrap()
+    ));
+    done(service, paths);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn an_add_starts_from_the_values_it_writes() {
     let (service, paths, config) = service_with_config("settings-defaults", |_, _| {});
     let catalog = service.settings_catalog().await.unwrap();

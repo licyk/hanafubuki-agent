@@ -206,7 +206,7 @@ icon: ListTree
 | `marketplaces.名字.lastRevision` | git 修订                  | 检出的修订                                           |
 | `marketplaces.名字.enabled`      | `true` 或 `false`；`true` | 为 `false` 时关闭它的所有包，不管 `[plugins]` 怎么写 |
 
-`plugins marketplace add`、`upgrade` 和 `remove` 写入这些条目（[plugins](/docs/cli-reference#plugins)）。git 市场检出在数据目录的 `plugins/marketplaces/名字/` 中；本地市场在原处读取。没有可用的 `sourceType` 和 `source` 的条目保留在文件中，但被忽略。两个表可以写在任何一层，`config get` 和 `config set` 能处理它们的键（`config set plugins."demo@my-mkt".enabled false`）；`-c` 覆盖不能给键加引号，所以只能指定名字中没有点的包（`-c plugins.demo@my-mkt.enabled=false`）。设置中心的 Marketplaces 集合（Plugins 标签页）添加、升级和移除市场。
+`plugins marketplace add`、`upgrade` 和 `remove` 写入这些条目（[plugins](/docs/cli-reference#plugins)）。git 市场检出在数据目录的 `plugins/marketplaces/名字/` 中；本地市场在原处读取。没有可用的 `sourceType` 和 `source` 的条目保留在文件中，但被忽略。两个表可以写在任何一层，`config get` 和 `config set` 能处理它们的键（`config set plugins."demo@my-mkt".enabled false`）；`-c` 覆盖不能给键加引号，所以只能指定名字中没有点的包（`-c plugins.demo@my-mkt.enabled=false`）。设置中心的 Marketplaces 集合（Plugins 标签页）添加、升级、移除、启用和停用市场；添加 Git 市场时也能填写 `sparsePaths`。同一标签页的 Installed plugin defaults 编辑 `plugins._default.enabled`。这两类启用状态的改动都会重新加载已安装插件；市场关闭仍优先于插件自己的开关。
 
 ### 插件选项 [#plugin-options]
 
