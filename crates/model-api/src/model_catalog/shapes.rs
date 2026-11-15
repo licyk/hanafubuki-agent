@@ -9,8 +9,10 @@
 //! Reasoning efforts are the first list of these that names any: Codex's
 //! `supported_reasoning_levels[].effort`, OpenRouter's
 //! `reasoning.supported_efforts`, Anthropic's `capabilities.effort.<level>`
-//! whose `supported` is true. The default is Codex's
-//! `default_reasoning_level`, else OpenRouter's `reasoning.default_effort`.
+//! whose `supported` is true, DeepSeek's `effort.supported_levels`, then
+//! Hoshimi's `efforts[].id`. Defaults follow the same precedence:
+//! `default_reasoning_level`, `reasoning.default_effort`,
+//! `effort.default_level`, then `effort_default`.
 //! An effort that does not parse (`none` among them) is left out.
 //!
 //! A limit is the first of its fields that holds a positive integer. A
@@ -109,6 +111,16 @@ pub(super) fn reasoning_efforts(item: &Value) -> Vec<ModelReasoningEffort> {
         .flatten()
         .filter(|(_, level)| level.get("supported").and_then(Value::as_bool) == Some(true))
         .filter_map(|(name, _)| ModelReasoningEffort::parse(name.as_str()).ok());
+    let deepseek = field(item, &["effort", "supported_levels"])
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten();
+    let hoshimi = item
+        .get("efforts")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|level| level.get("id"));
     let parsed = |values: &mut dyn Iterator<Item = &Value>| {
         values.filter_map(reasoning_effort).collect::<Vec<_>>()
     };
@@ -116,6 +128,8 @@ pub(super) fn reasoning_efforts(item: &Value) -> Vec<ModelReasoningEffort> {
         parsed(&mut codex.into_iter()),
         parsed(&mut openrouter.into_iter()),
         anthropic.collect(),
+        parsed(&mut deepseek.into_iter()),
+        parsed(&mut hoshimi.into_iter()),
     ]
     .into_iter()
     .find(|efforts| !efforts.is_empty())
@@ -127,6 +141,8 @@ pub(super) fn default_reasoning_effort(item: &Value) -> Option<ModelReasoningEff
     item.get("default_reasoning_level")
         .and_then(reasoning_effort)
         .or_else(|| field(item, &["reasoning", "default_effort"]).and_then(reasoning_effort))
+        .or_else(|| field(item, &["effort", "default_level"]).and_then(reasoning_effort))
+        .or_else(|| item.get("effort_default").and_then(reasoning_effort))
 }
 
 fn reasoning_effort(value: &Value) -> Option<ModelReasoningEffort> {

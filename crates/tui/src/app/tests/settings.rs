@@ -215,30 +215,63 @@ fn the_model_policy_saves_reasoning_context_and_a_custom_budget() {
 /// policy says them beside the reasoning effort.
 #[test]
 fn the_model_policy_names_the_listed_reasoning_levels() {
-    let listing = serde_json::json!({"data": [
-        {"id": "fixture-model", "reasoning": {"supported_efforts": ["high", "low"]}}
-    ]});
-    let mut harness = Harness::start(vec![listing.to_string().into_bytes()]);
-    let agent = harness.runtime.slot().agent().unwrap();
-    let call = agent.clone();
-    agent
-        .runtime()
-        .block_on(async move {
-            call.list_provider_models(hanafubuki_agent::AgentProviderModelCatalogRequest::default())
+    for entry in [
+        serde_json::json!({"id": "fixture-model", "reasoning": {
+            "supported_efforts": ["max", "high", "low"], "default_effort": "high"
+        }}),
+        serde_json::json!({"id": "fixture-model", "effort": {
+            "supported_levels": ["low", "high", "max"], "default_level": "high"
+        }}),
+        serde_json::json!({"id": "fixture-model",
+            "efforts": [{"id": "low"}, {"id": "high", "is_default": true}, {"id": "max"}],
+            "effort_default": "high"
+        }),
+    ] {
+        let listing = serde_json::json!({"data": [entry]});
+        let mut harness = Harness::start(vec![listing.to_string().into_bytes()]);
+        let agent = harness.runtime.slot().agent().unwrap();
+        let call = agent.clone();
+        agent
+            .runtime()
+            .block_on(async move {
+                call.list_provider_models(
+                    hanafubuki_agent::AgentProviderModelCatalogRequest::default(),
+                )
                 .await
-        })
-        .unwrap()
-        .unwrap();
-    harness.type_and_submit("/providers policy");
-    harness.pump_until_screen_shows("Settings › Model policy");
-    harness.select_setting("Reasoning effort");
-    let screen = harness.pump_until_screen_shows("The model takes");
-    assert!(screen.contains("low, high"), "{screen}");
-    // And offers them, as `/effort` does.
-    harness.key(KeyCode::Enter);
-    let offered = harness.pump_until_screen_shows("4. Custom…");
-    for row in ["1. low", "2. high", "3. Default (current)"] {
-        assert!(offered.contains(row), "{row}:\n{offered}");
+            })
+            .unwrap()
+            .unwrap();
+        harness.type_and_submit("/providers policy");
+        harness.pump_until_screen_shows("Settings › Model policy");
+        harness.select_setting("Reasoning effort");
+        let screen = harness.pump_until_screen_shows("The model takes");
+        assert!(screen.contains("low, high, max"), "{screen}");
+        harness.key(KeyCode::Enter);
+        let settings = harness.pump_until_screen_shows("5. Custom…");
+        harness.app.close_settings_center(&mut harness.tui);
+
+        harness.type_and_submit("/effort");
+        let picker = harness.pump_until_screen_shows("Select Reasoning Effort");
+        for shown in [&settings, &picker] {
+            for row in [
+                "1. low",
+                "2. high (model default)",
+                "3. max",
+                "4. Default (current)",
+                "5. Custom…",
+            ] {
+                assert!(shown.contains(row), "{row}:\n{shown}");
+            }
+        }
+        harness.key(KeyCode::Char('3'));
+        harness.pump_until_screen_shows("Reasoning effort set to max");
+        assert_eq!(
+            agent
+                .snapshot(harness.app.bridge.session_id().unwrap())
+                .unwrap()
+                .reasoning_effort,
+            Some(hanafubuki_agent::ModelReasoningEffort::parse("max").unwrap())
+        );
     }
 }
 

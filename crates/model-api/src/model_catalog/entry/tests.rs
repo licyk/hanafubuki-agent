@@ -80,6 +80,83 @@ fn an_effort_that_does_not_parse_is_left_out_and_the_rest_kept() {
 }
 
 #[test]
+fn deepseek_and_hoshimi_efforts_are_read_tolerantly() {
+    for fields in [
+        json!({"effort": {
+            "supported_levels": ["max", null, "high", 42, "low", "none", "high", "future-tier"],
+            "default_level": "high",
+            "future_field": true
+        }}),
+        json!({
+            "efforts": [
+                {"id": "max", "name": "Max"}, null, {"id": "high", "is_default": true},
+                {"id": 42}, {"id": "low"}, {"id": "none"}, {"id": "high"},
+                {"id": "future-tier"}, {"name": "Missing id"}, "low"
+            ],
+            "effort_default": "high"
+        }),
+    ] {
+        let mut item = json!({"id": "model-a"});
+        item.as_object_mut()
+            .unwrap()
+            .extend(fields.as_object().unwrap().clone());
+        let entry = decode_entry(&item).unwrap();
+        assert_eq!(
+            entry.default_reasoning_effort,
+            Some(ModelReasoningEffort::High)
+        );
+        assert_eq!(
+            entry
+                .supported_reasoning_efforts
+                .iter()
+                .map(ModelReasoningEffort::as_str)
+                .collect::<Vec<_>>(),
+            ["low", "high", "max", "future-tier"]
+        );
+        assert_eq!(entry.reasoning, Some(true));
+    }
+}
+
+#[test]
+fn effort_shapes_use_the_first_usable_list_and_default() {
+    let mut item = json!({
+        "id": "model-a",
+        "supported_reasoning_levels": [{"effort": "none"}],
+        "reasoning": {"supported_efforts": false, "default_effort": 42},
+        "effort": {"supported_levels": ["high"], "default_level": "high"},
+        "efforts": [{"id": "on"}],
+        "effort_default": "on"
+    });
+    let entry = decode_entry(&item).unwrap();
+    assert_eq!(
+        entry.supported_reasoning_efforts,
+        [ModelReasoningEffort::High]
+    );
+    assert_eq!(
+        entry.default_reasoning_effort,
+        Some(ModelReasoningEffort::High)
+    );
+
+    item["effort"] = json!({"supported_levels": [null, "none"], "default_level": "none"});
+    let entry = decode_entry(&item).unwrap();
+    assert_eq!(
+        entry.supported_reasoning_efforts,
+        [ModelReasoningEffort::parse("on").unwrap()]
+    );
+    assert_eq!(
+        entry.default_reasoning_effort,
+        Some(ModelReasoningEffort::parse("on").unwrap())
+    );
+
+    item["efforts"] = json!("high");
+    item["effort_default"] = json!(false);
+    let entry = decode_entry(&item).unwrap();
+    assert!(entry.supported_reasoning_efforts.is_empty());
+    assert_eq!(entry.default_reasoning_effort, None);
+    assert_eq!(entry.reasoning, None);
+}
+
+#[test]
 fn reported_efforts_stop_at_their_bound() {
     let levels = (0..MAX_REASONING_EFFORTS_PER_MODEL + 8)
         .map(|index| json!({"effort": format!("tier-{index}")}))

@@ -125,7 +125,7 @@ reasoningEffort = "medium"   # minimal、low、medium、high、xhigh
 | 会推理，目录未列出档位 | 设置的推理强度                                                                                                                                                                                                                                  |
 | 不接受推理参数         | 不发送，无论设置了什么                                                                                                                                                                                                                          |
 
-目录用 `supported_reasoning_levels`（Codex）、`reasoning.supported_efforts`（OpenRouter）或 `capabilities.effort`（Anthropic）列出档位；`none` 不会作为档位，因为推理强度不接受 `none`：不设置推理强度，或模型不接受推理参数，才是请求不带推理的方式。模型自己的 `reasoningEfforts`（[按模型的设置](#per-model)）会取代目录列出的档位，或声明它不接受推理参数。
+目录用 `supported_reasoning_levels`（Codex）、`reasoning.supported_efforts`（OpenRouter）、`capabilities.effort`（Anthropic）、`effort.supported_levels`（DeepSeek）或 `efforts[].id`（Hoshimi）列出档位；`none` 不会作为档位，因为推理强度不接受 `none`：不设置推理强度，或模型不接受推理参数，才是请求不带推理的方式。默认档位依次从 `default_reasoning_level`、`reasoning.default_effort`、`effort.default_level` 或 `effort_default` 读取。模型自己的 `reasoningEfforts`（[按模型的设置](#per-model)）会取代目录列出的档位，或声明它不接受推理参数。
 
 [终端界面](/docs/terminal-interface#effort)的 `/effort` 修改当前会话的推理强度，设置中心的推理强度一行（模型策略）修改新会话使用的推理强度。对同一个模型，两者提供相同的选项：
 
