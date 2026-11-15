@@ -276,6 +276,7 @@ async fn manual_compaction_replaces_a_safe_prefix_and_commits_usage_atomically()
         vec![
             AgentCompactionStatus::Reserved,
             AgentCompactionStatus::Running,
+            AgentCompactionStatus::Running,
             AgentCompactionStatus::ReadyToInstall,
             AgentCompactionStatus::Completed,
         ]

@@ -443,3 +443,4 @@ mod local;
 mod recovery_fork;
 mod remote_v1;
 mod remote_v2;
+mod streaming;
