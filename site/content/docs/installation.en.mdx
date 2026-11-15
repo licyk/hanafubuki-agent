@@ -4,13 +4,53 @@ description: Install with cargo, download a released binary, or build from sourc
 icon: Download
 ---
 
-`hanafubuki-agent` is a single executable with no runtime to install alongside it. Install it in one of three ways:
+`hanafubuki-agent` is a single executable with no runtime to install alongside it. Install it in one of four ways:
 
-| Way                  | For                                  | Needs                        |
-| -------------------- | ------------------------------------ | ---------------------------- |
-| `cargo install`      | You already have a Rust toolchain    | Rust 1.99 or newer           |
-| A released binary    | Using it without installing Rust     | A supported platform (below) |
-| Building from source | The latest code on the `main` branch | Git and rustup               |
+| Way                  | For                                    | Needs                              |
+| -------------------- | -------------------------------------- | ---------------------------------- |
+| Install script       | Install or update for the current user | Bash + curl, or Windows PowerShell |
+| `cargo install`      | You already have a Rust toolchain      | Rust 1.99 or newer                 |
+| A released binary    | Using it without installing Rust       | A supported platform (below)       |
+| Building from source | The latest code on the `main` branch   | Git and rustup                     |
+
+## One-command installation [#install-script]
+
+Linux and macOS (Bash and curl):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.sh | bash
+```
+
+Windows (PowerShell 5.1 or PowerShell 7):
+
+```powershell
+irm https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.ps1 | iex
+```
+
+The scripts select the native x64 or ARM64 archive, check its SHA-256 and executable version before replacing an existing binary, and retain the licences in `hanafubuki-agent-notices` beside it. No administrator access is needed. Git Bash and MSYS2 use `install.sh`, which delegates to PowerShell on Windows. ARM here means ARM64; 32-bit ARM and musl Linux are not release targets.
+
+The default destination is `~/.local/bin` on Linux/macOS, or `%LOCALAPPDATA%\hanafubuki-agent\bin` on Windows. Override it with `HANAFUBUKI_AGENT_INSTALL_DIR` or the directory option (the option wins). Open a new terminal after installation: the shell installer adds PATH to `.zshrc` (under `ZDOTDIR` when set), `.bashrc` (`.bash_profile` on macOS), or `.profile` for other shells; PowerShell updates the user's Windows Path. For shells that do not read these files, use the opt-out and configure PATH yourself.
+
+Download the script first to inspect it or pass options:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.sh
+bash install.sh --version 0.4.3 --architecture arm64 --install-dir "$HOME/.local/bin" --no-path-update
+```
+
+```powershell
+Invoke-WebRequest https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.ps1 -OutFile install.ps1
+.\install.ps1 -Version 0.4.3 -Architecture arm64 -InstallDir "$env:LOCALAPPDATA\hanafubuki-agent\bin" -NoPathUpdate
+```
+
+| Shell option       | PowerShell option | Meaning                                                       |
+| ------------------ | ----------------- | ------------------------------------------------------------- |
+| `--version`        | `-Version`        | `latest` (default), or a release version, with or without `v` |
+| `--architecture`   | `-Architecture`   | `auto` (default), `x64`, or `arm64`                           |
+| `--install-dir`    | `-InstallDir`     | Directory containing the executable                           |
+| `--no-path-update` | `-NoPathUpdate`   | Keep shell profiles and the user Path unchanged               |
+
+Re-running the script updates the installation. Exit running Agents first on Windows, where a running executable cannot be replaced by the installer. Existing configuration and session history are preserved.
 
 ## With cargo
 
@@ -28,14 +68,16 @@ Building it needs Rust 1.99 or newer. If yours is older, run `rustup update stab
 
 ## A released binary
 
-Each version's page on [GitHub Releases](https://github.com/licyk/hanafubuki-agent/releases) has an archive for four platforms, each with a `.sha256` file:
+Each version's page on [GitHub Releases](https://github.com/licyk/hanafubuki-agent/releases) has an archive for six platform/architecture combinations, each with a `.sha256` file:
 
-| Platform            | Target                     | File                                                         |
-| ------------------- | -------------------------- | ------------------------------------------------------------ |
-| Linux x86_64        | `x86_64-unknown-linux-gnu` | `hanafubuki-agent-<version>-x86_64-unknown-linux-gnu.tar.gz` |
-| macOS Intel         | `x86_64-apple-darwin`      | `hanafubuki-agent-<version>-x86_64-apple-darwin.tar.gz`      |
-| macOS Apple silicon | `aarch64-apple-darwin`     | `hanafubuki-agent-<version>-aarch64-apple-darwin.tar.gz`     |
-| Windows x86_64      | `x86_64-pc-windows-msvc`   | `hanafubuki-agent-<version>-x86_64-pc-windows-msvc.zip`      |
+| Platform            | Target                      | File                                                          |
+| ------------------- | --------------------------- | ------------------------------------------------------------- |
+| Linux x86_64        | `x86_64-unknown-linux-gnu`  | `hanafubuki-agent-<version>-x86_64-unknown-linux-gnu.tar.gz`  |
+| macOS Intel         | `x86_64-apple-darwin`       | `hanafubuki-agent-<version>-x86_64-apple-darwin.tar.gz`       |
+| macOS Apple silicon | `aarch64-apple-darwin`      | `hanafubuki-agent-<version>-aarch64-apple-darwin.tar.gz`      |
+| Windows x86_64      | `x86_64-pc-windows-msvc`    | `hanafubuki-agent-<version>-x86_64-pc-windows-msvc.zip`       |
+| Linux ARM64         | `aarch64-unknown-linux-gnu` | `hanafubuki-agent-<version>-aarch64-unknown-linux-gnu.tar.gz` |
+| Windows ARM64       | `aarch64-pc-windows-msvc`   | `hanafubuki-agent-<version>-aarch64-pc-windows-msvc.zip`      |
 
 An archive holds one directory of the same name, with the executable, `LICENSE`, `NOTICE` and `THIRD-PARTY-LICENSES.txt`. The Linux build needs glibc 2.35 or newer (Ubuntu 22.04, Debian 12 and later distributions).
 
@@ -150,11 +192,13 @@ Running Agents keep their version until they restart; the next start runs the ne
 
 On Windows `update` renames the running executable to `hanafubuki-agent.exe.NUMBER.outdated` beside the new one, and the next update, or the next start of the terminal interface, removes it once nothing runs it. An update interrupted between its two renames (they are milliseconds apart) leaves no `hanafubuki-agent.exe`: rename the newest `.outdated` file back to `hanafubuki-agent.exe`.
 
-## Uninstalling
+## Uninstalling [#uninstalling]
 
 1. Remove the executable: `cargo uninstall hanafubuki-agent-cli`, or delete the binary you downloaded.
 2. If you no longer want your configuration and history, delete the configuration and data directories. `hanafubuki-agent config path` prints where they are; the defaults are in [Data directory](/docs/data-directory).
 3. The Agent's service in the operating system's keyring is `org.licyk.hanafubuki-agent.secrets`; delete any entries under it too.
+
+If installed by script, also remove `hanafubuki-agent-notices` and the PATH line marked `# hanafubuki-agent` from your shell profile (or the install directory from the Windows user Path).
 
 <Callout type="warn">
   The data directory holds every session's history, the memory and the Skills you installed;

@@ -4,7 +4,7 @@ description: How a release is made — the version bump, waiting for CI, the tag
 icon: Rocket
 ---
 
-A release is a `v<version>` tag on `main`. The tag starts `.github/workflows/release.yml`, which publishes every crate but `xtask` to crates.io, builds the `hanafubuki-agent` binary for four targets and creates the GitHub release with the archives.
+A release is a `v<version>` tag on `main`. The tag starts `.github/workflows/release.yml`, which publishes every crate but `xtask` to crates.io, builds the `hanafubuki-agent` binary for six targets and creates the GitHub release with the archives.
 
 ## Checklist [#checklist]
 
@@ -39,21 +39,21 @@ A release is a `v<version>` tag on `main`. The tag starts `.github/workflows/rel
     **Watch the release:** `gh run watch -R licyk/hanafubuki-agent` (or the Actions tab). The jobs are below.
   </Step>
   <Step>
-    **Check the result:** the crates on crates.io (`cargo install hanafubuki-agent-cli` works), and the release's eight files.
+    **Check the result:** the crates on crates.io (`cargo install hanafubuki-agent-cli` works), and the release's twelve files.
   </Step>
 </Steps>
 
 ## The release workflow's jobs [#the-release-workflows-jobs]
 
-| Job              | What it does                                                                                                                                                                                                                                                                                                                   |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `plan`           | reads the workspace version; on a tag, fails unless the tag names it                                                                                                                                                                                                                                                           |
-| `ci-result`      | finds CI's run of the commit and waits for it; a failed run stops the release                                                                                                                                                                                                                                                  |
-| `checks`         | runs `ci.yml` when `ci-result` found no usable run                                                                                                                                                                                                                                                                             |
-| `publish`        | `cargo publish --workspace`, in dependency order, skipping versions already on crates.io and waiting out crates.io's rate limit                                                                                                                                                                                                |
-| `licenses`       | generates `THIRD-PARTY-LICENSES.txt` with `cargo-about` (`about.toml`, `about.hbs`) and appends `crates/tui/syntax-licenses.txt`                                                                                                                                                                                               |
-| `binaries`       | builds `hanafubuki-agent` with `--release --locked` for `x86_64-unknown-linux-gnu`, `x86_64-apple-darwin`, `aarch64-apple-darwin` and `x86_64-pc-windows-msvc`, and packages `hanafubuki-agent-<version>-<target>.tar.gz` (`.zip` on Windows, with the binary, LICENSE, NOTICE and the third-party licences) and its `.sha256` |
-| `github-release` | creates the release with notes generated from the previous `v*` tag, and uploads the archives and their sums                                                                                                                                                                                                                   |
+| Job              | What it does                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plan`           | reads the workspace version; on a tag, fails unless the tag names it                                                                                                                                                                                                                                                                                                                   |
+| `ci-result`      | finds CI's run of the commit and waits for it; a failed run stops the release                                                                                                                                                                                                                                                                                                          |
+| `checks`         | runs `ci.yml` when `ci-result` found no usable run                                                                                                                                                                                                                                                                                                                                     |
+| `publish`        | `cargo publish --workspace`, in dependency order, skipping versions already on crates.io and waiting out crates.io's rate limit                                                                                                                                                                                                                                                        |
+| `licenses`       | generates `THIRD-PARTY-LICENSES.txt` with `cargo-about` (`about.toml`, `about.hbs`) and appends `crates/tui/syntax-licenses.txt`                                                                                                                                                                                                                                                       |
+| `binaries`       | builds `hanafubuki-agent` with `--release --locked` for `x86_64-unknown-linux-gnu`, `x86_64-apple-darwin`, `aarch64-apple-darwin` and `x86_64-pc-windows-msvc`, `aarch64-unknown-linux-gnu`, `aarch64-pc-windows-msvc`, and packages `hanafubuki-agent-<version>-<target>.tar.gz` (`.zip` on Windows, with the binary, LICENSE, NOTICE and the third-party licences) and its `.sha256` |
+| `github-release` | creates the release with notes generated from the previous `v*` tag, and uploads the archives and their sums                                                                                                                                                                                                                                                                           |
 
 `publish` and `github-release` run only on a tag.
 
@@ -61,14 +61,16 @@ A release is a `v<version>` tag on `main`. The tag starts `.github/workflows/rel
 
 From the version that ships `hanafubuki-agent update` on, a released binary updates itself from the latest release's archives, so what `binaries` and `github-release` make is read by every version already installed, not only by the one being released:
 
-| What                 | Read as                                                                                                                              |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| The targets          | `x86_64-unknown-linux-gnu`, `x86_64-apple-darwin`, `aarch64-apple-darwin`, `x86_64-pc-windows-msvc`; any other build has no release  |
-| The archive          | `hanafubuki-agent-<version>-<target>.tar.gz`, `.zip` for Windows                                                                     |
-| The executable in it | `hanafubuki-agent-<version>-<target>/hanafubuki-agent`, `.exe` for Windows                                                           |
-| The release          | the tag `v<version>`, neither a draft nor a pre-release (GitHub's latest release), each archive with the SHA-256 digest GitHub gives |
+| What                 | Read as                                                                                                                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The targets          | `x86_64-unknown-linux-gnu`, `x86_64-apple-darwin`, `aarch64-apple-darwin`, `x86_64-pc-windows-msvc`, `aarch64-unknown-linux-gnu`, `aarch64-pc-windows-msvc`; any other build has no release |
+| The archive          | `hanafubuki-agent-<version>-<target>.tar.gz`, `.zip` for Windows                                                                                                                            |
+| The executable in it | `hanafubuki-agent-<version>-<target>/hanafubuki-agent`, `.exe` for Windows                                                                                                                  |
+| The release          | the tag `v<version>`, neither a draft nor a pre-release (GitHub's latest release), each archive with the SHA-256 digest GitHub gives                                                        |
 
-Renaming an archive, moving the executable inside it, adding or dropping a target, or marking a release as a pre-release strands the self-update of every version before the change: those installations are updated by hand once. `crates/update/tests/release_contract.rs` reads `release.yml` and `about.toml` and fails when their targets or packaging lines drift from the updater's table (`RELEASE_TARGETS`, `asset_name` and `entry_path` in `crates/update/src/target.rs`): change both together, and only on purpose. A resumed release ([below](#resuming-a-release-that-stopped)) replaces archives while lookups may be reading them; an update that meets a missing archive or a digest that no longer matches stops and changes nothing.
+Renaming an archive, moving the executable inside it, dropping a target, or marking a release as a pre-release strands the self-update of every version before the change: those installations are updated by hand once. `crates/update/tests/release_contract.rs` reads `release.yml` and `about.toml` and fails when their targets or packaging lines drift from the updater's table (`RELEASE_TARGETS`, `asset_name` and `entry_path` in `crates/update/src/target.rs`): change both together, and only on purpose. A resumed release ([below](#resuming-a-release-that-stopped)) replaces archives while lookups may be reading them; an update that meets a missing archive or a digest that no longer matches stops and changes nothing.
+
+New targets are added without changing existing archive names. Linux ARM64 builds natively on `ubuntu-22.04-arm` (glibc 2.35); Windows ARM64 builds on `windows-11-arm`. CI calls `installers.yml` on Linux x64/ARM64, macOS and Windows x64/ARM64. The release also runs those installer tests with each native executable it just built; Intel macOS is cross-compiled and is not executed on the Apple silicon runner.
 
 ## The first release and crates.io's rate limit [#the-first-release-and-cratesios-rate-limit]
 

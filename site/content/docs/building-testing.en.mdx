@@ -134,3 +134,7 @@ On Windows the tests run with `TEMP` and `TMP` in a directory of the job's own u
 CI covers only the platforms and commands it runs; do not claim CI equivalence locally without reproducing the current workflow.
 
 Linux builds need a C compiler, `pkg-config` and the libcap development package (Debian/Ubuntu: `libcap-dev`) for bundled bubblewrap. Sandbox-only native verification is `cargo test -p hanafubuki-agent-sandbox`. Windows elevated-account tests are opt-in with `HANAFUBUKI_TEST_ELEVATED_SANDBOX=1`: they perform UAC setup and create local accounts/firewall rules, so CI uses a disposable runner. Linux namespace tests require a host that permits unprivileged user namespaces; CI enables them as Codex does.
+
+## Installer tests [#installer-tests]
+
+`node tests/installers/run.mjs` runs the actual download, checksum, replacement and PATH code against a local HTTP release fixture and a native executable built by `rustc`. It checks pinned/latest versions, paths with spaces and Unicode, repeated installation, rejection of a bad checksum without replacing the existing binary, and idempotent PATH changes. Windows runs Windows PowerShell 5.1 and PowerShell 7, using a temporary registry key rather than the real user Path. Pass `--binary PATH --target TRIPLE` to test an existing build; releases use this mode. `ci.yml` calls the reusable `installers.yml` on all three systems, including Linux and Windows ARM64. Tests require Node and Rust; they do not install site dependencies.

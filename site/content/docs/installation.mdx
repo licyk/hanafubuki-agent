@@ -4,13 +4,53 @@ description: 用 cargo 安装，下载发布的二进制文件，或从源码构
 icon: Download
 ---
 
-`hanafubuki-agent` 是一个独立的可执行文件，没有额外的运行时依赖。可以用以下三种方式之一安装：
+`hanafubuki-agent` 是一个独立的可执行文件，没有额外的运行时依赖。可以用以下四种方式之一安装：
 
-| 方式            | 适合                           | 需要                 |
-| --------------- | ------------------------------ | -------------------- |
-| `cargo install` | 已经安装了 Rust 工具链         | Rust 1.99 或更新版本 |
-| 发布的二进制    | 不想安装 Rust，直接下载使用    | 支持的平台（见下表） |
-| 从源码构建      | 想使用 `main` 分支上的最新代码 | Git 和 rustup        |
+| 方式            | 适合                           | 需要                               |
+| --------------- | ------------------------------ | ---------------------------------- |
+| 一键安装脚本    | 为当前用户安装或更新           | Bash + curl，或 Windows PowerShell |
+| `cargo install` | 已经安装了 Rust 工具链         | Rust 1.99 或更新版本               |
+| 发布的二进制    | 不想安装 Rust，直接下载使用    | 支持的平台（见下表）               |
+| 从源码构建      | 想使用 `main` 分支上的最新代码 | Git 和 rustup                      |
+
+## 一键安装 [#install-script]
+
+Linux 和 macOS（需要 Bash 和 curl）：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.sh | bash
+```
+
+Windows（PowerShell 5.1 或 PowerShell 7）：
+
+```powershell
+irm https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.ps1 | iex
+```
+
+脚本自动选择本机 x64 或 ARM64 归档，在替换已有程序前校验 SHA-256 和可执行文件的版本，并把许可证保留在旁边的 `hanafubuki-agent-notices` 目录。不需要管理员权限。Git Bash 和 MSYS2 可以使用 `install.sh`，它在 Windows 上转交 PowerShell 安装。这里的 ARM 指 ARM64；不提供 32 位 ARM 或 musl Linux 归档。
+
+Linux/macOS 默认安装到 `~/.local/bin`，Windows 默认安装到 `%LOCALAPPDATA%\hanafubuki-agent\bin`。可通过 `HANAFUBUKI_AGENT_INSTALL_DIR` 或目录参数覆盖，参数优先。安装后打开新终端：Shell 脚本向 `.zshrc`（设置了 `ZDOTDIR` 时使用该目录）、`.bashrc`（macOS 上为 `.bash_profile`）或其他 Shell 的 `.profile` 添加 PATH；PowerShell 更新 Windows 用户 Path。不读取这些文件的 Shell 请跳过自动设置并自行配置 PATH。
+
+如需检查脚本或指定参数，先下载再运行：
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.sh
+bash install.sh --version 0.4.3 --architecture arm64 --install-dir "$HOME/.local/bin" --no-path-update
+```
+
+```powershell
+Invoke-WebRequest https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.ps1 -OutFile install.ps1
+.\install.ps1 -Version 0.4.3 -Architecture arm64 -InstallDir "$env:LOCALAPPDATA\hanafubuki-agent\bin" -NoPathUpdate
+```
+
+| Shell 参数         | PowerShell 参数 | 含义                                  |
+| ------------------ | --------------- | ------------------------------------- |
+| `--version`        | `-Version`      | 默认 `latest`，或带/不带 `v` 的版本号 |
+| `--architecture`   | `-Architecture` | 默认 `auto`，也可选 `x64` 或 `arm64`  |
+| `--install-dir`    | `-InstallDir`   | 可执行文件所在目录                    |
+| `--no-path-update` | `-NoPathUpdate` | 不修改 Shell 配置和用户 Path          |
+
+再次运行脚本即可更新。Windows 上请先退出正在运行的 Agent，安装脚本不能替换被占用的可执行文件。已有配置和会话历史会保留。
 
 ## 用 cargo 安装
 
@@ -28,14 +68,16 @@ hanafubuki-agent --version
 
 ## 下载发布的二进制
 
-每个版本的 [GitHub Releases](https://github.com/licyk/hanafubuki-agent/releases) 页面都提供四个平台的压缩包，以及对应的 `.sha256` 校验文件：
+每个版本的 [GitHub Releases](https://github.com/licyk/hanafubuki-agent/releases) 页面都提供六种平台与架构组合的压缩包，以及对应的 `.sha256` 校验文件：
 
-| 平台             | 目标                       | 文件                                                      |
-| ---------------- | -------------------------- | --------------------------------------------------------- |
-| Linux x86_64     | `x86_64-unknown-linux-gnu` | `hanafubuki-agent-<版本>-x86_64-unknown-linux-gnu.tar.gz` |
-| macOS Intel      | `x86_64-apple-darwin`      | `hanafubuki-agent-<版本>-x86_64-apple-darwin.tar.gz`      |
-| macOS Apple 芯片 | `aarch64-apple-darwin`     | `hanafubuki-agent-<版本>-aarch64-apple-darwin.tar.gz`     |
-| Windows x86_64   | `x86_64-pc-windows-msvc`   | `hanafubuki-agent-<版本>-x86_64-pc-windows-msvc.zip`      |
+| 平台             | 目标                        | 文件                                                       |
+| ---------------- | --------------------------- | ---------------------------------------------------------- |
+| Linux x86_64     | `x86_64-unknown-linux-gnu`  | `hanafubuki-agent-<版本>-x86_64-unknown-linux-gnu.tar.gz`  |
+| macOS Intel      | `x86_64-apple-darwin`       | `hanafubuki-agent-<版本>-x86_64-apple-darwin.tar.gz`       |
+| macOS Apple 芯片 | `aarch64-apple-darwin`      | `hanafubuki-agent-<版本>-aarch64-apple-darwin.tar.gz`      |
+| Windows x86_64   | `x86_64-pc-windows-msvc`    | `hanafubuki-agent-<版本>-x86_64-pc-windows-msvc.zip`       |
+| Linux ARM64      | `aarch64-unknown-linux-gnu` | `hanafubuki-agent-<版本>-aarch64-unknown-linux-gnu.tar.gz` |
+| Windows ARM64    | `aarch64-pc-windows-msvc`   | `hanafubuki-agent-<版本>-aarch64-pc-windows-msvc.zip`      |
 
 压缩包里是一个同名目录，包含可执行文件、`LICENSE`、`NOTICE` 和 `THIRD-PARTY-LICENSES.txt`。Linux 版本需要 glibc 2.35 或更新版本（Ubuntu 22.04、Debian 12 及更新的发行版）。
 
@@ -150,11 +192,13 @@ cargo install --path crates/cli
 
 在 Windows 上，`update` 会把正在运行的可执行文件重命名为新文件旁边的 `hanafubuki-agent.exe.NUMBER.outdated`，没有进程再运行它之后，下一次更新或终端界面的下一次启动会删除它。如果更新恰好在两次重命名之间被中断（两者相隔只有几毫秒），就不会有 `hanafubuki-agent.exe`：把最新的 `.outdated` 文件改回 `hanafubuki-agent.exe` 即可。
 
-## 卸载
+## 卸载 [#uninstalling]
 
 1. 删除可执行文件：`cargo uninstall hanafubuki-agent-cli`，或者直接删除下载的二进制。
 2. 如果不再需要配置和历史，删除配置目录和数据目录。`hanafubuki-agent config path` 会打印它们的位置，默认位置见[数据目录](/docs/data-directory)。
 3. Agent 在系统密钥环中使用的服务名是 `org.licyk.hanafubuki-agent.secrets`，如果其中有条目，可以一并删除。
+
+使用脚本安装时，也可删除 `hanafubuki-agent-notices`，并从 Shell 配置中移除带 `# hanafubuki-agent` 的 PATH 行（Windows 则移除用户 Path 中的安装目录）。
 
 <Callout type="warn">
   数据目录包含所有会话历史、记忆和安装的 Skill，删除后无法恢复。配置目录中的 `providers.toml` 和

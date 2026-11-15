@@ -157,6 +157,20 @@ fn this_build_is_a_release_target_or_none() {
     )) {
         assert_eq!(target, Some("x86_64-pc-windows-msvc"));
     }
+    if cfg!(all(
+        target_os = "linux",
+        target_arch = "aarch64",
+        target_env = "gnu"
+    )) {
+        assert_eq!(target, Some("aarch64-unknown-linux-gnu"));
+    }
+    if cfg!(all(
+        target_os = "windows",
+        target_arch = "aarch64",
+        target_env = "msvc"
+    )) {
+        assert_eq!(target, Some("aarch64-pc-windows-msvc"));
+    }
     if cfg!(any(
         target_env = "musl",
         target_arch = "riscv64",

@@ -4,7 +4,7 @@ description: 如何发布一个版本：升级版本号、等待 CI、打标签�
 icon: Rocket
 ---
 
-一个版本就是 `main` 上的一个 `v<version>` 标签。标签启动 `.github/workflows/release.yml`：把除 `xtask` 外的每个 crate 发布到 crates.io，为四个目标构建 `hanafubuki-agent` 二进制，并创建带归档的 GitHub release。
+一个版本就是 `main` 上的一个 `v<version>` 标签。标签启动 `.github/workflows/release.yml`：把除 `xtask` 外的每个 crate 发布到 crates.io，为六个目标构建 `hanafubuki-agent` 二进制，并创建带归档的 GitHub release。
 
 ## 检查清单 [#checklist]
 
@@ -39,21 +39,21 @@ icon: Rocket
     **观察发布：** `gh run watch -R licyk/hanafubuki-agent`（或在 Actions 页面）。各个任务见下文。
   </Step>
   <Step>
-    **检查结果：** crates.io 上的 crate（`cargo install hanafubuki-agent-cli` 能用），以及 release 的八个文件。
+    **检查结果：** crates.io 上的 crate（`cargo install hanafubuki-agent-cli` 能用），以及 release 的十二个文件。
   </Step>
 </Steps>
 
 ## 发布工作流的任务 [#the-release-workflows-jobs]
 
-| 任务             | 做什么                                                                                                                                                                                                                                                                                       |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `plan`           | 读取工作区版本；在标签上运行时，标签必须指明这个版本，否则失败                                                                                                                                                                                                                               |
-| `ci-result`      | 找到 CI 对这个提交的运行并等待它；失败的运行停止发布                                                                                                                                                                                                                                         |
-| `checks`         | `ci-result` 没有找到可用的运行时，运行 `ci.yml`                                                                                                                                                                                                                                              |
-| `publish`        | `cargo publish --workspace`，按依赖顺序，跳过 crates.io 上已有的版本，并等待 crates.io 的速率限制                                                                                                                                                                                            |
-| `licenses`       | 用 `cargo-about`（`about.toml`、`about.hbs`）生成 `THIRD-PARTY-LICENSES.txt`，并在后面接上 `crates/tui/syntax-licenses.txt`                                                                                                                                                                  |
-| `binaries`       | 用 `--release --locked` 为 `x86_64-unknown-linux-gnu`、`x86_64-apple-darwin`、`aarch64-apple-darwin` 和 `x86_64-pc-windows-msvc` 构建 `hanafubuki-agent`，打包 `hanafubuki-agent-<version>-<target>.tar.gz`（Windows 上是 `.zip`，内含二进制、LICENSE、NOTICE 和第三方许可证）及其 `.sha256` |
-| `github-release` | 用从上一个 `v*` 标签生成的说明创建 release，上传归档和校验和                                                                                                                                                                                                                                 |
+| 任务             | 做什么                                                                                                                                                                                                                                                                                                                                               |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plan`           | 读取工作区版本；在标签上运行时，标签必须指明这个版本，否则失败                                                                                                                                                                                                                                                                                       |
+| `ci-result`      | 找到 CI 对这个提交的运行并等待它；失败的运行停止发布                                                                                                                                                                                                                                                                                                 |
+| `checks`         | `ci-result` 没有找到可用的运行时，运行 `ci.yml`                                                                                                                                                                                                                                                                                                      |
+| `publish`        | `cargo publish --workspace`，按依赖顺序，跳过 crates.io 上已有的版本，并等待 crates.io 的速率限制                                                                                                                                                                                                                                                    |
+| `licenses`       | 用 `cargo-about`（`about.toml`、`about.hbs`）生成 `THIRD-PARTY-LICENSES.txt`，并在后面接上 `crates/tui/syntax-licenses.txt`                                                                                                                                                                                                                          |
+| `binaries`       | 用 `--release --locked` 为 `x86_64-unknown-linux-gnu`、`x86_64-apple-darwin`、`aarch64-apple-darwin` 和 `x86_64-pc-windows-msvc`, `aarch64-unknown-linux-gnu`, `aarch64-pc-windows-msvc` 构建 `hanafubuki-agent`，打包 `hanafubuki-agent-<version>-<target>.tar.gz`（Windows 上是 `.zip`，内含二进制、LICENSE、NOTICE 和第三方许可证）及其 `.sha256` |
+| `github-release` | 用从上一个 `v*` 标签生成的说明创建 release，上传归档和校验和                                                                                                                                                                                                                                                                                         |
 
 `publish` 和 `github-release` 只在标签上运行。
 
@@ -61,14 +61,16 @@ icon: Rocket
 
 从带有 `hanafubuki-agent update` 的版本起，发布的二进制会从最新 release 的归档更新自己，所以 `binaries` 和 `github-release` 产出的东西不只由正在发布的版本读取，也由每个已经安装的版本读取：
 
-| 内容             | 读取方式                                                                                                                    |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| 目标             | `x86_64-unknown-linux-gnu`、`x86_64-apple-darwin`、`aarch64-apple-darwin`、`x86_64-pc-windows-msvc`；其他构建没有可用的发布 |
-| 归档             | `hanafubuki-agent-<version>-<target>.tar.gz`，Windows 为 `.zip`                                                             |
-| 其中的可执行文件 | `hanafubuki-agent-<version>-<target>/hanafubuki-agent`，Windows 为 `.exe`                                                   |
-| release          | 标签 `v<version>`，既不是草稿也不是预发布（GitHub 的最新 release），每个归档带有 GitHub 给出的 SHA-256 摘要                 |
+| 内容             | 读取方式                                                                                                                                                                            |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 目标             | `x86_64-unknown-linux-gnu`、`x86_64-apple-darwin`、`aarch64-apple-darwin`、`x86_64-pc-windows-msvc`, `aarch64-unknown-linux-gnu`, `aarch64-pc-windows-msvc`；其他构建没有可用的发布 |
+| 归档             | `hanafubuki-agent-<version>-<target>.tar.gz`，Windows 为 `.zip`                                                                                                                     |
+| 其中的可执行文件 | `hanafubuki-agent-<version>-<target>/hanafubuki-agent`，Windows 为 `.exe`                                                                                                           |
+| release          | 标签 `v<version>`，既不是草稿也不是预发布（GitHub 的最新 release），每个归档带有 GitHub 给出的 SHA-256 摘要                                                                         |
 
-改名归档、移动其中的可执行文件、增减目标，或把 release 标为预发布，都会让变化之前的每个版本无法自更新：这些安装需要手动更新一次。`crates/update/tests/release_contract.rs` 读取 `release.yml` 和 `about.toml`，当它们的目标或打包行偏离更新器的表（`crates/update/src/target.rs` 中的 `RELEASE_TARGETS`、`asset_name` 和 `entry_path`）时失败：两边要一起改，而且只能有意地改。恢复的发布（[见下文](#resuming-a-release-that-stopped)）会在查询可能正在读取时替换归档；遇到归档缺失或摘要不再匹配的更新会停止，不做任何改动。
+改名归档、移动其中的可执行文件、删除目标，或把 release 标为预发布，都会让变化之前的每个版本无法自更新：这些安装需要手动更新一次。`crates/update/tests/release_contract.rs` 读取 `release.yml` 和 `about.toml`，当它们的目标或打包行偏离更新器的表（`crates/update/src/target.rs` 中的 `RELEASE_TARGETS`、`asset_name` 和 `entry_path`）时失败：两边要一起改，而且只能有意地改。恢复的发布（[见下文](#resuming-a-release-that-stopped)）会在查询可能正在读取时替换归档；遇到归档缺失或摘要不再匹配的更新会停止，不做任何改动。
+
+新增目标保留原有归档名称。Linux ARM64 在 `ubuntu-22.04-arm` 上原生构建（glibc 2.35），Windows ARM64 在 `windows-11-arm` 上构建。CI 调用 `installers.yml`，覆盖 Linux x64/ARM64、macOS 和 Windows x64/ARM64；发布流程还使用刚构建的本机可执行文件运行安装测试。Intel macOS 使用交叉编译，不在 Apple 芯片 runner 上执行。
 
 ## 首次发布与 crates.io 的速率限制 [#the-first-release-and-cratesios-rate-limit]
 

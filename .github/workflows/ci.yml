@@ -42,6 +42,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  installers:
+    uses: ./.github/workflows/installers.yml
+
   rust:
     name: Rust (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

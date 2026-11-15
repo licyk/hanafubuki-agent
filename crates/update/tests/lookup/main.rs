@@ -5,9 +5,7 @@
 use std::time::{Duration, Instant};
 
 use hanafubuki_agent_update::test_support::{sha256_digest, FakeAsset, FakeRelease, FakeResponse};
-use hanafubuki_agent_update::{
-    asset_name, ReleaseClient, UpdateError, UpdateProxy, Version, RELEASE_TARGETS,
-};
+use hanafubuki_agent_update::{asset_name, ReleaseClient, UpdateError, UpdateProxy, Version};
 use serde_json::{json, Value};
 
 /// The shape of GitHub's answer for v0.2.0: its eight assets with their
@@ -63,13 +61,18 @@ fn a_token_is_sent_only_when_given() {
 }
 
 #[test]
-fn githubs_answer_for_v0_2_0_reads_with_an_archive_for_every_target() {
+fn githubs_answer_for_v0_2_0_keeps_its_original_targets() {
     let server = FakeRelease::start();
     server.answer_latest(FakeResponse::ok(V0_2_0));
     let release = server.client(None).latest_blocking().unwrap();
     assert_eq!(release.version, Version::new(0, 2, 0));
     assert_eq!(release.assets.len(), 8);
-    for target in RELEASE_TARGETS {
+    for target in [
+        "x86_64-unknown-linux-gnu",
+        "x86_64-apple-darwin",
+        "aarch64-apple-darwin",
+        "x86_64-pc-windows-msvc",
+    ] {
         let name = asset_name(&release.version, target);
         let asset = release.asset(&name).unwrap_or_else(|| panic!("{name}"));
         assert!(asset.sha256.is_some(), "{name}");
@@ -78,6 +81,11 @@ fn githubs_answer_for_v0_2_0_reads_with_an_archive_for_every_target() {
             asset.url.as_str(),
             format!("https://github.com/licyk/hanafubuki-agent/releases/download/v0.2.0/{name}")
         );
+    }
+    for target in ["aarch64-unknown-linux-gnu", "aarch64-pc-windows-msvc"] {
+        assert!(release
+            .asset(&asset_name(&release.version, target))
+            .is_none());
     }
 }
 

@@ -134,3 +134,7 @@ bun run format:check:site
 CI 的验证只覆盖它实际运行的平台和命令；本地不要声称与 CI 等价，除非按当前的工作流复现了它。
 
 Linux 构建内置 bubblewrap 需要 C 编译器、`pkg-config` 和 libcap 开发包（Debian/Ubuntu：`libcap-dev`）。只验证原生沙箱可运行 `cargo test -p hanafubuki-agent-sandbox`。Windows 提升账户测试须显式设置 `HANAFUBUKI_TEST_ELEVATED_SANDBOX=1`：它会执行 UAC 初始化并创建本地账户和防火墙规则，因此 CI 使用一次性 runner。Linux 命名空间测试要求宿主允许非特权用户命名空间；CI 与 Codex 一样启用该能力。
+
+## 安装脚本测试 [#installer-tests]
+
+`node tests/installers/run.mjs` 使用本地 HTTP 发布夹具和 `rustc` 构建的原生可执行文件，运行真实的下载、校验、替换及 PATH 代码。测试覆盖指定/最新版本、空格与 Unicode 路径、重复安装、校验失败时保留旧程序，以及 PATH 修改的幂等性。Windows 同时运行 Windows PowerShell 5.1 和 PowerShell 7，用临时注册表键隔离真实用户 Path。通过 `--binary PATH --target TRIPLE` 可测试已有构建，发布流程使用此模式。`ci.yml` 调用可复用的 `installers.yml`，覆盖三个系统及 Linux、Windows ARM64。测试需要 Node 和 Rust，不安装网站依赖。

@@ -5,11 +5,13 @@
 use semver::Version;
 
 /// The targets `release.yml` builds, as `about.toml` lists them.
-pub const RELEASE_TARGETS: [&str; 4] = [
+pub const RELEASE_TARGETS: [&str; 6] = [
     "x86_64-unknown-linux-gnu",
     "x86_64-apple-darwin",
     "aarch64-apple-darwin",
     "x86_64-pc-windows-msvc",
+    "aarch64-unknown-linux-gnu",
+    "aarch64-pc-windows-msvc",
 ];
 
 /// The release target this build is, or `None` when no release is built for
@@ -31,6 +33,18 @@ pub fn this_target() -> Option<&'static str> {
         target_env = "msvc"
     )) {
         Some(RELEASE_TARGETS[3])
+    } else if cfg!(all(
+        target_os = "linux",
+        target_arch = "aarch64",
+        target_env = "gnu"
+    )) {
+        Some(RELEASE_TARGETS[4])
+    } else if cfg!(all(
+        target_os = "windows",
+        target_arch = "aarch64",
+        target_env = "msvc"
+    )) {
+        Some(RELEASE_TARGETS[5])
     } else {
         None
     }

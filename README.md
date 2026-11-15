@@ -1,75 +1,143 @@
+<div align="center">
+
 # hanafubuki-agent
 
-An AI coding and operations agent. It runs embedded as a Rust library in a
-host application, and standalone as the `hanafubuki-agent` command line
-and terminal interface (TUI).
+<p align="center">
+  <a href="https://github.com/licyk/hanafubuki-agent/stargazers"><img src="https://img.shields.io/github/stars/licyk/hanafubuki-agent?style=flat&logo=github&logoColor=silver&color=bluegreen&labelColor=grey" alt="Stars"></a>
+  <a href="https://github.com/licyk/hanafubuki-agent/issues"><img src="https://img.shields.io/github/issues/licyk/hanafubuki-agent?style=flat&logo=github&logoColor=silver&color=bluegreen&labelColor=grey" alt="Issues"></a>
+  <a href="https://github.com/licyk/hanafubuki-agent/actions/workflows/ci.yml"><img src="https://github.com/licyk/hanafubuki-agent/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/licyk/hanafubuki-agent/releases"><img src="https://img.shields.io/github/v/release/licyk/hanafubuki-agent?color=bluegreen&labelColor=grey" alt="Release"></a>
+  <a href="https://crates.io/crates/hanafubuki-agent"><img src="https://img.shields.io/crates/v/hanafubuki-agent?logo=rust&color=bluegreen&labelColor=grey" alt="crates.io"></a>
+</p>
 
-## Status
+[Documentation · 简体中文 / English](https://licyk.github.io/hanafubuki-agent/docs/)
 
-The Agent's crates live here, moved from
-[Hanafubuki](https://github.com/licyk/Hanafubuki), which embeds the Agent
-through the `hanafubuki-agent` facade. The facade also runs without a host
-(`AgentRuntime::standalone`), and the `hanafubuki-agent` binary runs the
-terminal interface, ported from Codex's (with its slash commands, transcript
-pager, `@` file mentions and session picker, and the model's thinking shown
-as it streams), or one headless turn (`exec`),
-and manages its configuration on it. Each release publishes the crates on
-crates.io and binaries for Linux (x86_64), macOS (x86_64, Apple silicon)
-and Windows (x86_64) on GitHub ([releasing](https://licyk.github.io/hanafubuki-agent/docs/releasing/)).
+</div>
 
-## Usage
+An AI coding and operations agent for your terminal, scripts and Rust applications.
+Use it on its own, or embed the same runtime in a host such as
+[Hanafubuki](https://github.com/licyk/Hanafubuki).
+
+- **Work in the terminal** with streamed answers and reasoning, file mentions, input history,
+  resumable sessions, and a unified settings center.
+- **Read, edit and run** code, search the web, fetch pages, and work in Git worktrees.
+  Permissions, automatic review and platform sandboxes control tool execution.
+- **Delegate work** to agents with configurable roles, tool restrictions and model choices.
+- **Keep context** across long tasks with durable history, memory, compaction and hierarchical
+  context compression.
+- **Connect your tools** through MCP, Skills, hooks and installable plugins. A failed plugin
+  is isolated from the runtime and other plugins.
+- **Automate or embed** with headless `exec`, JSON events, or a typed Rust facade and host plugin API.
+
+## Install
+
+Linux and macOS:
 
 ```sh
-cargo install hanafubuki-agent-cli    # or --path crates/cli in a checkout, or a release's binary
+curl -fsSL https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.sh | bash
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/licyk/hanafubuki-agent/main/install.ps1 | iex
+```
+
+The installers choose the native **x64 or ARM64** release, verify its SHA-256 and version,
+then install for the current user. No Rust toolchain or administrator access is needed.
+Open a new terminal and run `hanafubuki-agent --version`.
+Linux releases require glibc 2.35 or newer; macOS supports Intel and Apple silicon.
+Git Bash and MSYS2 can use the shell installer, which delegates to PowerShell on Windows.
+
+To choose a version or directory, download the script and run it with options:
+
+```sh
+bash install.sh --version 0.4.3 --install-dir "$HOME/.local/bin"
+```
+
+```powershell
+.\install.ps1 -Version 0.4.3 -InstallDir "$env:LOCALAPPDATA\hanafubuki-agent\bin"
+```
+
+You can also [download an archive](https://github.com/licyk/hanafubuki-agent/releases/latest)
+or build with Rust 1.99 or newer:
+
+```sh
+cargo install --locked hanafubuki-agent-cli
+```
+
+See [Installation](https://licyk.github.io/hanafubuki-agent/docs/installation/) for script
+options, default paths, checksums and removal. Update an existing installation with
+`hanafubuki-agent update`.
+
+## Start
+
+```sh
 hanafubuki-agent providers add OpenAI --base-url https://api.openai.com/v1 --api-key-env OPENAI_API_KEY
 hanafubuki-agent providers default provider-1 --model gpt-5.1
-hanafubuki-agent                      # the terminal interface
+hanafubuki-agent
+```
+
+Set `OPENAI_API_KEY` in your environment first. Use the provider ID returned by `providers add`
+if it differs from `provider-1`. Providers support Responses, Chat Completions and Anthropic
+interfaces; [configure the interface and model](https://licyk.github.io/hanafubuki-agent/docs/providers-models/)
+for your service.
+
+In the terminal, `/` lists commands, `/config` opens settings, `/model` selects a model,
+and `/permission` chooses the permission mode. `/quit` or Ctrl-C twice exits.
+
+## Command line
+
+```sh
 hanafubuki-agent "Explain this repository"
-hanafubuki-agent resume --last        # reopen the latest session
+hanafubuki-agent resume --last
 hanafubuki-agent exec "Summarize the open TODOs in this repository"
 hanafubuki-agent exec --json --approve allow:exec_command - < task.md
 hanafubuki-agent doctor
+hanafubuki-agent update --check
 ```
 
-With no command it opens the terminal interface (`/` lists its commands;
-`/quit`, or Ctrl-C twice, to leave), and `resume` reopens a session in it. `exec` prints the turn as text, or with `--json` one event per line, and
-exits with a code that says how the turn ended; approvals follow
-`--approve` (`deny` by default). The commands, flags, output formats and
-exit codes are in the [command-line reference](https://licyk.github.io/hanafubuki-agent/docs/cli-reference/), the
-configuration in [Configuration](https://licyk.github.io/hanafubuki-agent/docs/configuration/).
+`exec` prints a completed turn as text, or streams one JSON event per line with `--json`.
+Headless approval requests are denied unless an `--approve` rule allows them; the exit code
+records how the turn ended. See the [CLI reference](https://licyk.github.io/hanafubuki-agent/docs/cli-reference/),
+[JSON events](https://licyk.github.io/hanafubuki-agent/docs/json-events/) and
+[permission model](https://licyk.github.io/hanafubuki-agent/docs/permissions/).
 
 ## Embedding
 
-A host depends on `hanafubuki-agent` (the facade) and
-`hanafubuki-agent-contracts` (the plugin API its own plugins are written
-against), and supplies its plugins and ports through the host interface
-([Embedding the Agent](https://licyk.github.io/hanafubuki-agent/docs/embedding/), [Host plugins](https://licyk.github.io/hanafubuki-agent/docs/host-plugins/)).
+```toml
+[dependencies]
+hanafubuki-agent = "0.4"
+hanafubuki-agent-contracts = "0.4"
+```
 
-## Documentation
+Use `AgentRuntime::standalone` for the standalone defaults, or supply a host's ports and
+plugins through `AgentRuntime` and `AgentHostPorts`. The facade owns the Agent's processes,
+sessions and shutdown; it does not depend on Hanafubuki.
 
-The documentation is at <https://licyk.github.io/hanafubuki-agent/docs/>, in Chinese and English. Its source is
-[site/content/docs](site/content/docs) (`<slug>.mdx` in Chinese,
-`<slug>.en.mdx` in English; `bun run site:dev`, see
-[AGENTS.md](AGENTS.md#site)).
+[Embedding the Agent](https://licyk.github.io/hanafubuki-agent/docs/embedding/) explains the
+lifecycle; [Host plugins](https://licyk.github.io/hanafubuki-agent/docs/host-plugins/) describes
+how to add capabilities through the contracts registries.
 
-- Using the Agent: [Installation](https://licyk.github.io/hanafubuki-agent/docs/installation/),
-  [Quick start](https://licyk.github.io/hanafubuki-agent/docs/quick-start/),
-  [Terminal interface](https://licyk.github.io/hanafubuki-agent/docs/terminal-interface/), [exec](https://licyk.github.io/hanafubuki-agent/docs/exec/),
-  [Providers and models](https://licyk.github.io/hanafubuki-agent/docs/providers-models/),
-  [Permissions and approvals](https://licyk.github.io/hanafubuki-agent/docs/permissions/), [MCP](https://licyk.github.io/hanafubuki-agent/docs/mcp/),
-  [Skills](https://licyk.github.io/hanafubuki-agent/docs/skills/), [Troubleshooting](https://licyk.github.io/hanafubuki-agent/docs/troubleshooting/).
-- Configuration: [Configuration](https://licyk.github.io/hanafubuki-agent/docs/configuration/),
-  [Configuration reference](https://licyk.github.io/hanafubuki-agent/docs/config-reference/).
-- Reference: [Command-line reference](https://licyk.github.io/hanafubuki-agent/docs/cli-reference/),
-  [exec --json events](https://licyk.github.io/hanafubuki-agent/docs/json-events/), [Exit codes](https://licyk.github.io/hanafubuki-agent/docs/exit-codes/).
-- Embedding: [Embedding the Agent](https://licyk.github.io/hanafubuki-agent/docs/embedding/),
-  [Host plugins](https://licyk.github.io/hanafubuki-agent/docs/host-plugins/).
-- Development: [Architecture](https://licyk.github.io/hanafubuki-agent/docs/architecture/),
-  [Internals](https://licyk.github.io/hanafubuki-agent/docs/internals/), [Plugin rules](https://licyk.github.io/hanafubuki-agent/docs/plugin-rules/),
-  [Building and testing](https://licyk.github.io/hanafubuki-agent/docs/building-testing/),
-  [Contributing](https://licyk.github.io/hanafubuki-agent/docs/contributing/), [Releasing](https://licyk.github.io/hanafubuki-agent/docs/releasing/).
-- [AGENTS.md](AGENTS.md): the workspace rules and validation.
+## Development
 
-## License
+```sh
+git clone https://github.com/licyk/hanafubuki-agent.git
+cd hanafubuki-agent
+cargo run -p hanafubuki-agent-cli
+cargo xtask check
+cargo test --workspace --all-features
+node tests/installers/run.mjs
+```
 
-GPL-3.0-only. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+The repository pins Rust with `rust-toolchain.toml`. The bilingual documentation site lives
+in `site/` and uses Bun (`bun install --frozen-lockfile`, then `bun run site:dev`).
+[AGENTS.md](AGENTS.md) holds the workspace rules;
+[Building and testing](https://licyk.github.io/hanafubuki-agent/docs/building-testing/),
+[Architecture](https://licyk.github.io/hanafubuki-agent/docs/architecture/) and
+[Releasing](https://licyk.github.io/hanafubuki-agent/docs/releasing/) cover the development workflow.
+
+## Licence
+
+GPL-3.0-only. See [LICENSE](LICENSE) and [NOTICE](NOTICE), including attribution for code
+derived from Codex and billion-context/acp-kernel. Release archives include third-party licences.
