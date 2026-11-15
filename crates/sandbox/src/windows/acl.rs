@@ -9,6 +9,7 @@
 // `\\.\NUL`.
 
 use std::ffi::c_void;
+use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::os::windows::fs::OpenOptionsExt;
 use std::os::windows::io::AsRawHandle;
@@ -63,43 +64,70 @@ const FILE_MAPPING: GENERIC_MAPPING = GENERIC_MAPPING {
     GenericAll: FILE_ALL_ACCESS,
 };
 
+/// Why an ACE was not written: the object's DACL is not ours to touch, or a
+/// call on a DACL that is failed.
+#[derive(Debug)]
+pub(crate) enum AclError {
+    /// The object could not be opened for its access, so its ACEs stay as
+    /// they are and the path keeps what they already grant.
+    NotWritable,
+    Failed(String),
+}
+
+impl fmt::Display for AclError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NotWritable => formatter.write_str("its access cannot be changed"),
+            Self::Failed(message) => formatter.write_str(message),
+        }
+    }
+}
+
 /// Grants `sid` [`WRITE_ALLOW_MASK`] on `path` and everything under it,
 /// unless it has it already (and no explicit `FILE_DELETE_CHILD` an older
 /// grant gave).
-pub(crate) fn ensure_allow_write_ace(path: &Path, sid: &LocalSid) -> Result<(), String> {
+pub(crate) fn ensure_allow_write_ace(path: &Path, sid: &LocalSid) -> Result<(), AclError> {
     let dacl = Dacl::of(&open(path, READ_CONTROL)?, SE_FILE_OBJECT)?;
     if dacl.allows(sid, WRITE_ALLOW_MASK) && !dacl.explicitly_allows_any(sid, FILE_DELETE_CHILD) {
         return Ok(());
     }
-    let file = open(path, READ_CONTROL | WRITE_DAC)?;
+    let file = writable(path)?;
     dacl.set_with(&file, SE_FILE_OBJECT, sid, WRITE_ALLOW_MASK, SET_ACCESS)
 }
 
 /// Grants an elevated sandbox identity the reads its command needs.
-pub(crate) fn ensure_allow_read_ace(path: &Path, sid: &LocalSid) -> Result<(), String> {
+pub(crate) fn ensure_allow_read_ace(path: &Path, sid: &LocalSid) -> Result<(), AclError> {
     let mask = FILE_GENERIC_READ | FILE_GENERIC_EXECUTE;
     let dacl = Dacl::of(&open(path, READ_CONTROL)?, SE_FILE_OBJECT)?;
     if dacl.allows(sid, mask) {
         return Ok(());
     }
-    let file = open(path, READ_CONTROL | WRITE_DAC)?;
+    let file = writable(path)?;
     dacl.set_with(&file, SE_FILE_OBJECT, sid, mask, GRANT_ACCESS)
 }
 
 /// Denies `sid` writing `path` and everything under it, unless it is denied
-/// already (then a path it cannot change the DACL of is fine).
-pub(crate) fn add_deny_write_ace(path: &Path, sid: &LocalSid) -> Result<(), String> {
-    let writable = open(path, READ_CONTROL | WRITE_DAC);
-    let file = match &writable {
-        Ok(file) => file,
-        Err(_) => &open(path, READ_CONTROL)?,
-    };
-    let dacl = Dacl::of(file, SE_FILE_OBJECT)?;
+/// already. [`AclError::NotWritable`] when its DACL is left as it is: a path
+/// this user cannot open for its access keeps whatever its ACEs already
+/// grant, and a command reaches it as those ACEs allow.
+pub(crate) fn add_deny_write_ace(path: &Path, sid: &LocalSid) -> Result<(), AclError> {
+    let file = writable(path)?;
+    let dacl = Dacl::of(&file, SE_FILE_OBJECT)?;
     if dacl.denies(sid, DENY_WRITE_MASK) {
         return Ok(());
     }
-    let file = writable?;
     dacl.set_with(&file, SE_FILE_OBJECT, sid, DENY_WRITE_MASK, DENY_ACCESS)
+}
+
+/// `path` open for [`WRITE_DAC`], or [`AclError::NotWritable`] when its DACL
+/// is not this user's to change.
+fn writable(path: &Path) -> Result<File, AclError> {
+    OpenOptions::new()
+        .access_mode(READ_CONTROL | WRITE_DAC)
+        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+        .open(path)
+        .map_err(|_| AclError::NotWritable)
 }
 
 /// Lets `sid` read and write the null device, for redirections to `NUL`;
@@ -122,13 +150,13 @@ pub(crate) fn allow_null_device(sid: &LocalSid) {
     let _ = dacl.set_entry(&device, SE_KERNEL_OBJECT, sid, mask, SET_ACCESS, 0);
 }
 
-fn open(path: &Path, access: u32) -> Result<File, String> {
+fn open(path: &Path, access: u32) -> Result<File, AclError> {
     OpenOptions::new()
         .access_mode(access)
         .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
         .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
         .open(path)
-        .map_err(|error| format!("cannot open its ACL: {error}"))
+        .map_err(|_| AclError::NotWritable)
 }
 
 /// An object's DACL, with the security descriptor that holds it.
@@ -138,7 +166,7 @@ struct Dacl {
 }
 
 impl Dacl {
-    fn of(object: &File, kind: SE_OBJECT_TYPE) -> Result<Self, String> {
+    fn of(object: &File, kind: SE_OBJECT_TYPE) -> Result<Self, AclError> {
         let mut descriptor = std::ptr::null_mut();
         let mut acl = std::ptr::null_mut();
         // SAFETY: the handle is open with READ_CONTROL; the descriptor is
@@ -156,7 +184,9 @@ impl Dacl {
             )
         };
         if code != ERROR_SUCCESS {
-            return Err(format!("GetSecurityInfo failed: {code}"));
+            return Err(AclError::Failed(format!(
+                "cannot read the access (Windows error {code})"
+            )));
         }
         Ok(Self { descriptor, acl })
     }
@@ -242,7 +272,7 @@ impl Dacl {
         sid: &LocalSid,
         mask: u32,
         mode: ACCESS_MODE,
-    ) -> Result<(), String> {
+    ) -> Result<(), AclError> {
         self.set_entry(object, kind, sid, mask, mode, INHERIT)
     }
 
@@ -254,7 +284,7 @@ impl Dacl {
         mask: u32,
         mode: ACCESS_MODE,
         inheritance: u32,
-    ) -> Result<(), String> {
+    ) -> Result<(), AclError> {
         let entry = EXPLICIT_ACCESS_W {
             grfAccessPermissions: mask,
             grfAccessMode: mode,
@@ -272,7 +302,9 @@ impl Dacl {
         // below. A new deny goes before the allows, as Windows orders them.
         let code = unsafe { SetEntriesInAclW(1, &entry, self.acl, &mut updated) };
         if code != ERROR_SUCCESS {
-            return Err(format!("SetEntriesInAclW failed: {code}"));
+            return Err(AclError::Failed(format!(
+                "cannot build the access entry (Windows error {code})"
+            )));
         }
         // SAFETY: the handle is open with WRITE_DAC.
         let code = unsafe {
@@ -289,7 +321,9 @@ impl Dacl {
         // SAFETY: `SetEntriesInAclW` allocated it.
         unsafe { LocalFree(updated as HLOCAL) };
         if code != ERROR_SUCCESS {
-            return Err(format!("SetSecurityInfo failed: {code}"));
+            return Err(AclError::Failed(format!(
+                "cannot write the access entry (Windows error {code})"
+            )));
         }
         Ok(())
     }

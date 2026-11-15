@@ -15,6 +15,7 @@ use windows_sys::Win32::System::Threading::{
     LOGON_WITH_PROFILE, PROCESS_INFORMATION, STARTUPINFOW,
 };
 
+use super::super::token::LocalSid;
 use super::super::{acl, plan, process, token::last_error};
 use super::{pipes::Pipes, security, setup};
 use crate::helper::HelperRequest;
@@ -33,18 +34,24 @@ pub(crate) fn run(request: HelperRequest) -> Result<u32, String> {
     let group = security::account_sid(&install.credentials.group())?;
     let runner = ResolvedPath::resolve(std::env::current_exe().map_err(|e| e.to_string())?)
         .map_err(|e| e.to_string())?;
-    acl::ensure_allow_read_ace(runner.system(), &sid)?;
     let cwd = ResolvedPath::resolve(std::env::current_dir().map_err(|e| e.to_string())?)
         .map_err(|e| e.to_string())?;
+    let roots = crate::roots::resolve_roots(&request.writable_roots);
+    readable(&runner, &sid)?;
     // The primary identity needs ordinary access too; the restricted token's
     // capability check still confines writes to this command's current roots.
     if let Some(profile) = std::env::var_os("USERPROFILE") {
         let profile = ResolvedPath::resolve(profile).map_err(|e| e.to_string())?;
-        acl::ensure_allow_read_ace(profile.system(), &sid)?;
+        readable(&profile, &sid)?;
     }
-    acl::ensure_allow_read_ace(cwd.system(), &sid)?;
-    for root in crate::roots::resolve_roots(&request.writable_roots) {
-        acl::ensure_allow_write_ace(root.root.system(), &group)?;
+    for root in &roots {
+        writable(&root.root, &group)?;
+    }
+    // Inside a writable root the root's own grant covers reading, so a
+    // working directory there needs no separate ACE: a worktree whose DACL is
+    // not ours to change stays usable instead of being refused twice over.
+    if !roots.iter().any(|root| cwd.starts_with(&root.root)) {
+        readable(&cwd, &sid)?;
     }
     super::super::prepare(&request)?;
     let pipes = Pipes::create(&account.name)?;
@@ -175,6 +182,38 @@ fn bridge(mut child: Child, pipes: Pipes) -> Result<u32, String> {
     // stdin may be waiting for the enclosing ExecutorManager; the helper exits
     // immediately after returning the child's status, ending that reader too.
     Ok(code)
+}
+
+/// Grants `path` the reads a sandbox account's command needs.
+///
+/// A DACL this user may not change is left as it is, so the command reads
+/// what the path's own ACEs already allow rather than being refused: a
+/// directory whose owner is another account (an unresolvable SID, say) must
+/// not make every command in it fail. A failure to change a DACL this user
+/// may change still refuses the command.
+fn readable(path: &ResolvedPath, sid: &LocalSid) -> Result<(), String> {
+    grant(path, acl::ensure_allow_read_ace(path.system(), sid), "read")
+}
+
+/// Grants `path` the writes a sandbox account's command needs, under the
+/// same rule as [`readable`]: an unchanged DACL leaves the path as it was,
+/// so the command runs and its writes fail as those ACEs decide.
+fn writable(path: &ResolvedPath, sid: &LocalSid) -> Result<(), String> {
+    grant(
+        path,
+        acl::ensure_allow_write_ace(path.system(), sid),
+        "write",
+    )
+}
+
+fn grant(path: &ResolvedPath, result: Result<(), acl::AclError>, verb: &str) -> Result<(), String> {
+    match result {
+        Ok(()) | Err(acl::AclError::NotWritable) => Ok(()),
+        Err(acl::AclError::Failed(error)) => Err(format!(
+            "cannot let the sandbox account {verb} {}: {error}",
+            path.native_text()
+        )),
+    }
 }
 
 fn inherited_environment() -> Result<Vec<u16>, String> {

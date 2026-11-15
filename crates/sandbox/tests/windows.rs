@@ -26,12 +26,16 @@ fn main() {
 
 #[cfg(windows)]
 mod windows {
+    use std::os::windows::fs::OpenOptionsExt;
     use std::path::Path;
     use std::process::{Command, Output};
 
     use hanafubuki_agent_sandbox::{
         AgentSandboxMode, AgentWindowsSandbox, Sandbox, SandboxPolicy, SandboxSettings,
         SandboxStatus,
+    };
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_FLAG_BACKUP_SEMANTICS, READ_CONTROL, WRITE_DAC,
     };
 
     pub(super) fn run() {
@@ -47,8 +51,9 @@ mod windows {
             "{:?}",
             sandbox.status()
         );
-        type Check = fn(&Sandbox);
-        let checks: [(&str, Check); 6] = [
+        type SandboxCheck = fn(&Sandbox);
+        type CwdCheck = fn(&Sandbox, &Path);
+        let checks: [(&str, SandboxCheck); 7] = [
             (
                 "read_only_cannot_write_the_workspace",
                 read_only_cannot_write_the_workspace,
@@ -60,6 +65,10 @@ mod windows {
             (
                 "the_repository_stays_read_only",
                 the_repository_stays_read_only,
+            ),
+            (
+                "a_read_only_path_whose_access_cannot_change_does_not_refuse_the_command",
+                a_read_only_path_whose_access_cannot_change_does_not_refuse_the_command,
             ),
             (
                 "without_the_network_a_command_gets_the_offline_environment",
@@ -89,6 +98,14 @@ mod windows {
             );
             for (name, check) in checks {
                 check(&elevated);
+                eprintln!("ok: elevated {name}");
+            }
+            let cwd_checks: [(&str, CwdCheck); 1] = [(
+                "a_writable_root_whose_access_cannot_change_still_runs_its_command",
+                a_writable_root_whose_access_cannot_change_still_runs_its_command,
+            )];
+            for (name, check) in cwd_checks {
+                check(&elevated, &unchangeable_directory());
                 eprintln!("ok: elevated {name}");
             }
             stdio_round_trip(&elevated);
@@ -132,6 +149,16 @@ mod windows {
             policy,
             cmd(&format!("echo written>{}", file.display())),
         )
+    }
+
+    /// Workspace-write over `root` and `extra`, whose own `.git` stays
+    /// read-only but is not changeable here.
+    fn workspace_write_beside(root: &Path, extra: &Path) -> SandboxPolicy {
+        let mut policy = workspace_write(root, false);
+        if let SandboxPolicy::WorkspaceWrite { writable_roots, .. } = &mut policy {
+            writable_roots.push(extra.to_path_buf());
+        }
+        policy
     }
 
     /// Workspace-write over `root`, as a turn's settings make it.
@@ -216,6 +243,95 @@ mod windows {
             )),
         );
         assert!(workspace.path().join(".git").exists(), "{removed:?}");
+    }
+
+    /// A read-only path whose DACL this user cannot change (a `.git` under a
+    /// directory owned by someone else) must not refuse the command: the
+    /// deny that path would carry is skipped, and the root's grant still
+    /// confines writes.
+    fn a_read_only_path_whose_access_cannot_change_does_not_refuse_the_command(sandbox: &Sandbox) {
+        let workspace = directory();
+        let outside = directory();
+        std::fs::create_dir(workspace.path().join(".git")).unwrap();
+        let policy = workspace_write_beside(workspace.path(), &protected_directory());
+        let inside = workspace.path().join("ran");
+        let output = run_confined(
+            sandbox,
+            &policy,
+            cmd(&format!("echo ran>{}", inside.display())),
+        );
+        assert!(output.status.success(), "{output:?}");
+        assert!(inside.exists());
+        let escaped = outside.path().join("f");
+        let output = run_confined(
+            sandbox,
+            &policy,
+            cmd(&format!("echo escaped>{}", escaped.display())),
+        );
+        assert!(!output.status.success(), "{output:?}");
+        assert!(!escaped.exists());
+    }
+
+    /// A directory whose DACL this user may not change: the machine's own
+    /// configuration refuses even `WRITE_DAC` to an administrator, as a
+    /// directory owned by another account does to its ordinary users.
+    fn protected_directory() -> std::path::PathBuf {
+        let protected = Path::new(&std::env::var_os("SystemRoot").unwrap())
+            .join("System32")
+            .join("config");
+        assert!(
+            std::fs::OpenOptions::new()
+                .access_mode(READ_CONTROL | WRITE_DAC)
+                .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+                .open(&protected)
+                .is_err(),
+            "the fixture directory is writable to this user"
+        );
+        protected
+    }
+
+    /// A directory this user may read but may not change the DACL of, as a
+    /// directory owned by an unresolvable account is to its users. Its owner
+    /// is not the logged-on user, so no owner rights reach `WRITE_DAC`.
+    fn unchangeable_directory() -> std::path::PathBuf {
+        let directory = Path::new(&std::env::var_os("SystemRoot").unwrap()).to_path_buf();
+        assert!(
+            std::fs::OpenOptions::new()
+                .access_mode(READ_CONTROL)
+                .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+                .open(&directory)
+                .is_ok(),
+            "the fixture directory is not readable"
+        );
+        assert!(
+            std::fs::OpenOptions::new()
+                .access_mode(READ_CONTROL | WRITE_DAC)
+                .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+                .open(&directory)
+                .is_err(),
+            "the fixture directory is writable to this user"
+        );
+        directory
+    }
+
+    /// A command whose working directory and writable root both lie in a
+    /// directory this user may not change must still run: the grants keep the
+    /// DACL they find, and the restricted token still confines writes.
+    fn a_writable_root_whose_access_cannot_change_still_runs_its_command(
+        sandbox: &Sandbox,
+        cwd: &Path,
+    ) {
+        let policy = SandboxPolicy::WorkspaceWrite {
+            writable_roots: vec![cwd.to_path_buf()],
+            network_access: false,
+        };
+        let command = sandbox.wrap(&policy, cmd("ver")).unwrap();
+        let output = Command::new(&command[0])
+            .args(&command[1..])
+            .current_dir(cwd)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
     }
 
     fn without_the_network_a_command_gets_the_offline_environment(sandbox: &Sandbox) {
