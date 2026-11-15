@@ -4,3 +4,6 @@ site/.output/
 .nitro/
 .tanstack/
 .source/
+*.snap.new
+*.snap.new.*
+*.pending-snap

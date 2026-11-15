@@ -98,7 +98,11 @@ The update rules:
 
 ### The terminal interface's snapshots [#the-terminal-interfaces-snapshots]
 
-The terminal interface's rendering is snapshot-tested with [insta](https://insta.rs), the snapshot files living in a `snapshots/` directory beside the tests that assert them (that directory is not a module). A snapshot that does not match fails the test and leaves a `.snap.new` beside it; review and accept them one by one with `cargo insta review` (after `cargo install cargo-insta`), or accept all with `INSTA_UPDATE=always cargo test -p hanafubuki-agent-tui` and review the diff. As with the goldens, accept only intended changes.
+The terminal interface's rendering is snapshot-tested with [insta](https://insta.rs). Reviewed `.snap` files are versioned test baselines, kept in a `snapshots/` directory beside their tests; do not delete or ignore them as build artifacts. That directory is not a module.
+
+A mismatch still fails the test. `.cargo/config.toml` sets `INSTA_PENDING_DIR` to the workspace's `target/insta/`, preserving relative source paths there for pending snapshots. `.snap.new`, binary `.snap.new.*` companions and inline `.pending-snap` files are ignored, including leftovers from older runs beside the source. An explicit environment variable can override this destination.
+
+After `cargo install cargo-insta`, review from the repository root with `INSTA_PENDING_DIR=target/insta cargo insta review --include-ignored --include-hidden` (PowerShell: set `$env:INSTA_PENDING_DIR = 'target/insta'` first, then run the same `cargo insta review` command). Acceptance writes the baseline back to its source directory. Alternatively, `INSTA_UPDATE=always cargo test -p hanafubuki-agent-tui` updates baselines directly; review the diff and accept only intended changes. The pending directory can be deleted when its unreviewed results are no longer needed; it contains no baselines.
 
 ## The documentation site [#the-documentation-site]
 

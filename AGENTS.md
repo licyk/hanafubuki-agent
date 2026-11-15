@@ -233,6 +233,9 @@ mechanical rules below; keep the rest in review.
 - `src/` contains no `#[path]` attribute: the module tree is the directory tree.
 - Snapshot files (`insta`) live in the `snapshots/` directory beside the tests
   that assert them; a `snapshots/` directory is not a module.
+  Reviewed `.snap` baselines stay tracked. Pending snapshots go to
+  `target/insta/` through `.cargo/config.toml` (`INSTA_PENDING_DIR`);
+  `.snap.new`, `.snap.new.*` and `.pending-snap` artifacts are ignored.
 - Re-exports name their items (`pub use module::{Item, Other};`); `src/` has no
   glob re-export (`pub use module::*;`) at any visibility.
 - Production files contain no inline tests or `#[test]`; declare only an external

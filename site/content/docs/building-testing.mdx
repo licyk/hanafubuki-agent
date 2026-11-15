@@ -98,7 +98,11 @@ cargo test --workspace --all-features
 
 ### 终端界面的快照 [#the-terminal-interfaces-snapshots]
 
-终端界面的渲染用 [insta](https://insta.rs) 做快照测试，快照文件放在断言它们的测试旁边的 `snapshots/` 目录里（这个目录不是模块）。快照不匹配时测试失败，并在旁边写出 `.snap.new`；用 `cargo insta review`（需要 `cargo install cargo-insta`）逐个审查接受，或用 `INSTA_UPDATE=always cargo test -p hanafubuki-agent-tui` 全部接受后审查 diff。和 golden 一样，只接受有意的变化。
+终端界面的渲染用 [insta](https://insta.rs) 做快照测试。已审核的 `.snap` 是纳入版本控制的测试基准，保留在测试旁边的 `snapshots/` 目录中，不应作为构建产物删除或忽略。这个目录不是模块。
+
+快照不匹配时测试仍然失败。`.cargo/config.toml` 将 `INSTA_PENDING_DIR` 设为工作区内的 `target/insta/`，临时快照在其中保留相对于源码的目录结构。`.snap.new`、二进制快照的 `.snap.new.*` 附属文件和内联快照的 `.pending-snap` 都被忽略，也包括旧运行在源码旁留下的文件。显式设置环境变量可以覆盖这个输出位置。
+
+安装 `cargo-insta` 后，从仓库根目录执行 `INSTA_PENDING_DIR=target/insta cargo insta review --include-ignored --include-hidden` 逐个审查（PowerShell 先设置 `$env:INSTA_PENDING_DIR = 'target/insta'`，再执行相同的 `cargo insta review` 命令）。接受后会写回源码目录中的基准。也可以用 `INSTA_UPDATE=always cargo test -p hanafubuki-agent-tui` 直接更新基准，然后审查 diff；只接受有意的变化。不再需要未审核结果时，可以删除临时目录，其中不存放测试基准。
 
 ## 文档站点 [#the-documentation-site]
 

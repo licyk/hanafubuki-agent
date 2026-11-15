@@ -1,2 +1,5 @@
 [alias]
 xtask = "run --quiet --package xtask --"
+
+[env]
+INSTA_PENDING_DIR = { value = "target/insta", relative = true }
