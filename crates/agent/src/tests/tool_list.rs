@@ -138,12 +138,22 @@ async fn listing_names_is_visible_without_admitting_mcp_tools_on_every_protocol(
         assert!(output(protocol, &bodies[4], "invoke")
             .to_string()
             .contains("echo called with"));
+        let deadline = Instant::now() + TEST_SHUTDOWN_DEADLINE;
+        let stopping = service.clone();
         assert_eq!(
             tokio::task::spawn_blocking(move || {
-                service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+                stopping.stop_accepting_and_cancel_turns(deadline)
             })
             .await
             .unwrap(),
+            []
+        );
+        service.shutdown_mcp(deadline).await.unwrap();
+        assert_eq!(service.shutdown_plugins(deadline).await, []);
+        assert_eq!(
+            tokio::task::spawn_blocking(move || service.shutdown_workers_after_mcp(deadline))
+                .await
+                .unwrap(),
             []
         );
         std::fs::remove_dir_all(paths.app_data_dir).unwrap();
