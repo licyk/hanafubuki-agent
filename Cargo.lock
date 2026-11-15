@@ -3106,9 +3106,9 @@ dependencies = [
 
 [[package]]
 name = "kardia-core"
-version = "0.2.3"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "703991f1a0a4eec486e5ec39af3167823c8fdc187ab1ab82ac278fda2c95dc1e"
+checksum = "f6a7d2135b9d8aba24e16cae4cd7d9b209a6c18ed753eb072b94c947d112dc91"
 dependencies = [
  "futures",
  "indexmap",
@@ -3122,22 +3122,28 @@ dependencies = [
 
 [[package]]
 name = "kardia-fs"
-version = "0.2.3"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9368e4061bfb7a31d057dea5e85f6867ffdf7dd11bb63e014dbbae93377887f6"
+checksum = "2ddc9c8e86c048b8674404465fdf854d4596fc2eeb15d6a2a0ee4ffbe363595e"
 dependencies = [
+ "bytes",
+ "futures",
  "globset",
  "kardia-core",
  "notify",
  "parking_lot",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
  "tokio",
+ "url",
 ]
 
 [[package]]
 name = "kardia-guest"
-version = "0.2.3"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "504b5d500c612d89a53bc3744b22adb3aa69641ac6a7868e35f21bd51ec0c281"
+checksum = "66b20ce1266cc67ee2ddea79c266522a48e1bb9fe9efb5b9da7b342f00e9a758"
 dependencies = [
  "serde",
  "serde_json",
@@ -3145,9 +3151,9 @@ dependencies = [
 
 [[package]]
 name = "kardia-hmr"
-version = "0.2.3"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6159d197b3d9a3d3a9eb228bd612540131754a210b6c943c3e21bfeb5987a50"
+checksum = "3b4edbfb1d446405542675084aabdc535af88c150ec430d1ef6e76d278ed6171"
 dependencies = [
  "futures",
  "indexmap",
@@ -3163,9 +3169,9 @@ dependencies = [
 
 [[package]]
 name = "kardia-loader"
-version = "0.2.3"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b0ded01e8bca91f5dbfca1dc8b7d13750e5b6bc75eb320ca3055fd04414af08"
+checksum = "f81108165fdd399607efc79d06695126bbb674e8718f10c8fc7b5ae644bacd1d"
 dependencies = [
  "futures",
  "kardia-core",
@@ -3177,9 +3183,9 @@ dependencies = [
 
 [[package]]
 name = "kardia-macros"
-version = "0.2.3"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11e3bfd8b07876df33e3afedcb44c719a767984f14db872fac4a384261ca0f91"
+checksum = "8906e1effff0a47422a74c9f695ac1753c0fcdeeca17a0824593de0b13d82669"
 dependencies = [
  "proc-macro2",
  "quote",

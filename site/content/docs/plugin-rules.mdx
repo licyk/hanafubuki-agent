@@ -90,6 +90,8 @@ panic 消息进入日志和插件状态，从不进入模型。`mcp` 插件自�
 
 故障之后：插件被停止并报告 `failed`（`panicked in <extension point>: <message>`），宿主在重启策略的下一个延迟后自动再次挂载它（2 秒、10 秒、30 秒，10 分钟内三次）；超过之后直到 `retry_plugin`、新配置或重新开关它（在拆除结束之后）。启动失败（而不是 panic）的插件不会自动重启。
 
+Kardia 0.3 的恢复策略保持默认的 `Manual`，包括已安装 Guest 的 loader 条目。自动重启只由 Agent 自己的宿主和 Guest 监督器按照 `RestartPolicy` 调度，不同时开启 Kardia 的自动恢复。
+
 ### 插件调用的上限 [#bounds-on-plugin-calls]
 
 内核对插件的异步调用都不能无限期地拖住一个轮次：每个都有期限；超过期限，内核取消调用的令牌、丢弃它的 future，走那次调用的错误路径，所以挂起的插件只损失它本该贡献的东西。内核自己设定的期限是 `AgentHardLimits::plugin_call_deadline`（10 秒）：

@@ -17,9 +17,9 @@ checksum = "3bd1574e617a9a6c1f8f8181bd7e841e1f20e4277607ef28945765188d6284d4"
 
 [[package]]
 name = "kardia-guest"
-version = "0.2.3"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "504b5d500c612d89a53bc3744b22adb3aa69641ac6a7868e35f21bd51ec0c281"
+checksum = "66b20ce1266cc67ee2ddea79c266522a48e1bb9fe9efb5b9da7b342f00e9a758"
 dependencies = [
  "serde",
  "serde_json",

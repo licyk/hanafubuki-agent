@@ -15,7 +15,7 @@ use futures_util::future::BoxFuture;
 use futures_util::FutureExt;
 use hanafubuki_agent_host::GUEST_LOGGER_PREFIX;
 use hanafubuki_agent_packages::{PackageRuntime, ProcessRuntime, WasmRuntime};
-use kardia_core::{Error, PluginDef};
+use kardia_core::{Context, Error, PluginDef};
 use kardia_hmr::{GuestCommand, GuestMeta, ProcessGuest};
 use kardia_loader::{ModuleNotFound, Resolver};
 use parking_lot::RwLock;
@@ -98,7 +98,7 @@ impl GuestResolver {
 }
 
 impl Resolver for GuestResolver {
-    fn resolve(&self, name: &str) -> BoxFuture<'static, Result<PluginDef, Error>> {
+    fn resolve(&self, _ctx: &Context, name: &str) -> BoxFuture<'static, Result<PluginDef, Error>> {
         let resolved = self.plugins.read().get(name).cloned();
         let Some(resolved) = resolved else {
             let missing = ModuleNotFound {

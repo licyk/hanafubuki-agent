@@ -90,6 +90,8 @@ The panic message reaches the log and the plugin's status, never the model. The 
 
 After a fault the plugin is stopped and reports `failed` (`panicked in <extension point>: <message>`), and the host mounts it again by itself after the restart policy's next delay (2 s, 10 s, 30 s, three in ten minutes); past that, until `retry_plugin`, a new configuration or turning it off and on mounts it anew, once its teardown has ended. A plugin whose start failed, rather than one that panicked, is not restarted by itself.
 
+Kardia 0.3's recovery policy stays at its default `Manual`, including the installed guests' loader entries. The Agent's host and guest supervisor alone schedule automatic restarts under `RestartPolicy`; do not enable Kardia's automatic recovery alongside them.
+
 ### Bounds on plugin calls [#bounds-on-plugin-calls]
 
 No async kernel call into a plugin can hold up a turn for good: each has a deadline; past it the kernel cancels the call's token, drops its future and takes the call's error path, so a hung plugin costs only what it would have contributed. The deadline the kernel sets itself is `AgentHardLimits::plugin_call_deadline` (10 s):
