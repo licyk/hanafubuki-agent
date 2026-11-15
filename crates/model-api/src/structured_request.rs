@@ -209,6 +209,7 @@ async fn ask(
                 item: ModelOutputItem::ToolCall { call },
             } => {
                 if rung != ModelStructuredOutputCapability::RequiredTool
+                    || call.namespace.is_some()
                     || tool_name != Some(call.name.as_str())
                 {
                     return Err(failed(format!(

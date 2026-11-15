@@ -16,7 +16,7 @@ pub(in crate::service) fn trace_tool_call(identity: TurnIdentity, call: &ModelTo
         identity.session_id,
         identity.turn_id,
         identity.generation,
-        call.name,
+        crate::flattened_tool_call_name(call.namespace.as_deref(), &call.name),
         bounded_trace_content(&arguments)
     );
 }

@@ -124,7 +124,12 @@ fn transcript_line(item: &ConversationItem) -> Option<String> {
             duration_millis, ..
         } => Some(crate::exec::thought_for(*duration_millis)),
         ConversationItem::AssistantMessage { text, .. } => Some(format!("assistant: {text}")),
-        ConversationItem::ToolCall { name, .. } => Some(format!("→ {name}")),
+        ConversationItem::ToolCall {
+            namespace, name, ..
+        } => Some(format!(
+            "→ {}",
+            hanafubuki_agent::flattened_tool_call_name(namespace.as_deref(), name)
+        )),
         ConversationItem::ToolOutput { output, .. } => Some(
             if output.is_error {
                 "  failed"

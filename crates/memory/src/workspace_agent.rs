@@ -134,13 +134,17 @@ pub async fn run_memory_workspace_agent(
                 name: call.name.clone(),
                 arguments: call.arguments.clone(),
             });
-            let result = execute_workspace_tool(
-                &workspace,
-                &call.name,
-                call.arguments,
-                exact_secrets,
-                &mut written,
-            );
+            let result = if call.namespace.is_some() {
+                Err("memory workspace tools do not have a namespace".to_string())
+            } else {
+                execute_workspace_tool(
+                    &workspace,
+                    &call.name,
+                    call.arguments,
+                    exact_secrets,
+                    &mut written,
+                )
+            };
             let (value, is_error) = match result {
                 Ok(value) => (value, false),
                 Err(error) => (json!({"error": error}), true),

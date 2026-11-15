@@ -61,6 +61,18 @@ fn output(call_id: &str, text: &str, is_error: bool) -> ConversationItem {
 }
 
 #[test]
+fn exported_tool_calls_keep_the_namespace() {
+    let mut item = call("call-1", "read", json!({"path":"file"}));
+    let ConversationItem::ToolCall { namespace, .. } = &mut item else {
+        unreachable!()
+    };
+    *namespace = Some("workspace".into());
+    let exported = render_markdown(&[item, output("call-1", "content", false)]).unwrap();
+    assert!(exported.contains("workspace__read("));
+    assert!(exported.contains("content"));
+}
+
+#[test]
 fn messages_plans_and_calls_become_sections_in_order() {
     let items = [
         user("List the files."),

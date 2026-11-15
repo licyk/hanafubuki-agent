@@ -82,19 +82,20 @@ impl AgentService {
                 .find_map(|item| match &item.content {
                     ConversationItem::ToolCall {
                         call_id: id,
+                        namespace,
                         name,
                         arguments,
                         ..
-                    } if id == call_id => Some((name.clone(), arguments.clone())),
+                    } if id == call_id => {
+                        Some((namespace.clone(), name.clone(), arguments.clone()))
+                    }
                     _ => None,
                 })
         });
         Some(
-            call.and_then(|(name, arguments)| {
-                self.inner
-                    .registries
-                    .tool_presenters
-                    .subject(&name, &arguments)
+            call.and_then(|(namespace, name, arguments)| {
+                self.present_tool_call(namespace.as_deref(), &name, &arguments, None)
+                    .subject
             })
             .unwrap_or_default(),
         )

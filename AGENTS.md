@@ -107,6 +107,13 @@ of each is `site/content/docs/<slug>.en.mdx`, its Chinese twin `<slug>.mdx`.
   panic (`cargo xtask check-plugin-panics`); and the goldens pin what the
   model sees, so a model-visible change regenerates them on purpose
   ([Plugin rules](site/content/docs/plugin-rules.en.mdx)).
+- **Tool names** use `ToolName` and its `flattened_alias()` for registered
+  names, and the shared `flattened_tool_call_name(namespace, name)` for
+  textual projections of returned or persisted calls. Never drop a namespace
+  or hand-build a flattened name in a consumer. Dispatch keeps the exact
+  `(namespace, name)` identity from the advertised plan; private model tools
+  follow the same rule. See [Tool names](site/content/docs/plugin-rules.en.mdx#tool-names)
+  for protocol fitting, diagnostics, history and internal reviewer requests.
 
 ## Agent Content Logging
 

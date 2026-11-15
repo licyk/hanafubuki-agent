@@ -85,6 +85,24 @@ async fn rejected_call_output(
 }
 
 #[tokio::test]
+async fn an_unadvertised_namespace_is_preserved_in_the_rejection() {
+    let mut requested = call(
+        "control_instance",
+        json!({"instanceId":"instance-a", "action":"start"}),
+    );
+    requested.namespace = Some("other".into());
+    let output = rejected_call_output(
+        call_events(requested),
+        hanafubuki_agent_kernel::AgentSessionMode::Default,
+    )
+    .await;
+    assert_eq!(
+        output["error"],
+        "no tool named `other__control_instance` is available in this step"
+    );
+}
+
+#[tokio::test]
 async fn unknown_and_hidden_tools_get_one_identical_error_and_never_run() {
     let unknown = rejected_call_output(
         call_events(call("unknown_mutation", json!({}))),

@@ -179,6 +179,28 @@ async fn ask(
 }
 
 #[tokio::test]
+async fn forced_tool_response_cannot_discard_a_namespace() {
+    let mut events = call(
+        "submit_agent_conversation_title",
+        json!({"title": "Task center"}),
+    );
+    let ModelEvent::OutputItemCompleted {
+        item: ModelOutputItem::ToolCall { call },
+    } = &mut events[0]
+    else {
+        panic!("tool call fixture")
+    };
+    call.namespace = Some("unadvertised".into());
+    let session = ScriptedSession::new(
+        ModelStructuredOutputCapability::RequiredTool,
+        vec![Ok(events)],
+    );
+    assert!(
+        matches!(ask(&session, true).await, Err(ModelJsonObjectError::Failed(reason)) if reason.contains("unexpected tool call"))
+    );
+}
+
+#[tokio::test]
 async fn a_refused_native_output_falls_to_the_forced_tool_and_is_learned() {
     let session = ScriptedSession::new(
         ModelStructuredOutputCapability::NativeJsonSchema,

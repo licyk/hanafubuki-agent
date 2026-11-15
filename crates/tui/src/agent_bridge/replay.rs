@@ -131,7 +131,8 @@ pub(crate) fn transcript(
                 let shown = agent.present_tool_call(namespace.as_deref(), &name, &arguments, None);
                 transcript.push(ReplayedItem::Tool {
                     call_id: call_id.clone(),
-                    name: name.clone(),
+                    name: hanafubuki_agent::flattened_tool_call_name(namespace.as_deref(), &name)
+                        .into_owned(),
                     subject: shown.subject,
                     is_error: false,
                     display: None,

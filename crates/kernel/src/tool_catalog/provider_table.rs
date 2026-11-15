@@ -43,10 +43,7 @@ impl ProviderToolName {
 
     /// The flattened form names are unique by, whichever form the wire uses.
     fn flattened(&self) -> String {
-        match &self.namespace {
-            Some(namespace) => format!("{namespace}__{}", self.name),
-            None => self.name.clone(),
-        }
+        crate::flattened_tool_call_name(self.namespace.as_deref(), &self.name).into_owned()
     }
 }
 

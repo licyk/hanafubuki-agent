@@ -1,6 +1,7 @@
 //! The history as the compression crate's message log, and its view back as
 //! history items.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use hanafubuki_agent_compression::{is_rendered_summary, Message, Role};
@@ -25,12 +26,18 @@ impl<'a> MessageLog<'a> {
             .iter()
             .position(|item| matches!(item.content, ConversationItem::TurnStart { .. }))
             .unwrap_or(items.len());
-        let tool_names: HashMap<&str, &str> = items
+        let tool_names: HashMap<&str, Cow<'_, str>> = items
             .iter()
             .filter_map(|item| match &item.content {
-                ConversationItem::ToolCall { call_id, name, .. } => {
-                    Some((call_id.as_str(), name.as_str()))
-                }
+                ConversationItem::ToolCall {
+                    call_id,
+                    namespace,
+                    name,
+                    ..
+                } => Some((
+                    call_id.as_str(),
+                    crate::flattened_tool_call_name(namespace.as_deref(), name),
+                )),
                 _ => None,
             })
             .collect();
@@ -122,7 +129,10 @@ fn message_id(item: &AgentHistoryItem) -> String {
     format!("{}:{}", item.source_session_id, item.item_id.value())
 }
 
-fn item_message(item: &AgentHistoryItem, tool_names: &HashMap<&str, &str>) -> Option<Message> {
+fn item_message(
+    item: &AgentHistoryItem,
+    tool_names: &HashMap<&str, Cow<'_, str>>,
+) -> Option<Message> {
     let id = message_id(item);
     let image_handles = |images: &[crate::AgentImageAttachmentRef]| {
         images
@@ -145,10 +155,11 @@ fn item_message(item: &AgentHistoryItem, tool_names: &HashMap<&str, &str>) -> Op
         ),
         ConversationItem::ToolCall {
             call_id,
+            namespace,
             name,
             arguments,
             ..
-        } => Message::tool_call(id, call_id.clone(), name.clone(), arguments.to_string()),
+        } => Message::tool_call(id, call_id.clone(), crate::flattened_tool_call_name(namespace.as_deref(), name).into_owned(), arguments.to_string()),
         ConversationItem::ToolOutput {
             call_id,
             output,
@@ -161,7 +172,7 @@ fn item_message(item: &AgentHistoryItem, tool_names: &HashMap<&str, &str>) -> Op
                 call_id.clone(),
                 tool_names
                     .get(call_id.as_str())
-                    .copied()
+                    .map(|name| name.as_ref())
                     .unwrap_or_default(),
                 output_text(output),
             )

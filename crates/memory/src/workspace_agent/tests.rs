@@ -100,8 +100,22 @@ async fn restricted_agent_incrementally_updates_only_published_memory_files() {
             end_turn: Some(true),
         }),
     ]);
+    let mut namespaced = tool_turn(vec![(
+        "unadvertised",
+        "memory_write_file",
+        json!({"path":"MEMORY.md", "content":"must not be written"}),
+    )]);
+    for event in &mut namespaced {
+        if let Ok(ModelEvent::OutputItemCompleted {
+            item: ModelOutputItem::ToolCall { call },
+        }) = event
+        {
+            call.namespace = Some("unadvertised".into());
+        }
+    }
     let session = Arc::new(FixtureSession {
         turns: Mutex::new(VecDeque::from([
+            namespaced,
             tool_turn(vec![("1", "memory_list_files", json!({}))]),
             tool_turn(vec![
                 (
@@ -130,6 +144,9 @@ async fn restricted_agent_incrementally_updates_only_published_memory_files() {
     .await
     .unwrap();
     let requests = session.requests.lock().unwrap();
+    assert!(requests[1].input.iter().any(|item| matches!(item,
+        ModelInputItem::ToolOutput { call_id, output } if call_id == "call-unadvertised" && output.is_error
+    )));
     assert!(matches!(
         requests.first().and_then(|request| request.input.first()),
         Some(ModelInputItem::UserMessage { content })

@@ -272,7 +272,11 @@ impl AgentToolPlan {
                         .admitted_deferred_tools
                         .contains(&AgentToolSelection::from_planned_tool(registration)))
             })
-            .ok_or_else(|| AgentToolCatalogError::ToolNotAdvertised(name.to_string()))
+            .ok_or_else(|| {
+                AgentToolCatalogError::ToolNotAdvertised(
+                    crate::flattened_tool_call_name(namespace, name).into_owned(),
+                )
+            })
     }
 
     fn named(&self, namespace: Option<&str>, name: &str) -> Option<&AgentPlannedTool> {
@@ -292,16 +296,25 @@ impl AgentToolPlan {
             }
             hanafubuki_agent_model_api::ModelToolCallOrigin::ToolSearch => {
                 if !self.native_tool_search
+                    || call.namespace.is_some()
                     || call.name != hanafubuki_agent_model_api::NATIVE_TOOL_SEARCH_NAME
                 {
-                    return Err(AgentToolCatalogError::ToolNotAdvertised(call.name.clone()));
+                    return Err(AgentToolCatalogError::ToolNotAdvertised(
+                        crate::flattened_tool_call_name(call.namespace.as_deref(), &call.name)
+                            .into_owned(),
+                    ));
                 }
                 self.registrations
                     .iter()
                     .find(|registration| {
                         matches!(registration.binding, AgentPlannedToolBinding::PlanSearch)
                     })
-                    .ok_or_else(|| AgentToolCatalogError::ToolNotAdvertised(call.name.clone()))
+                    .ok_or_else(|| {
+                        AgentToolCatalogError::ToolNotAdvertised(
+                            crate::flattened_tool_call_name(call.namespace.as_deref(), &call.name)
+                                .into_owned(),
+                        )
+                    })
             }
         }
     }

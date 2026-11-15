@@ -64,7 +64,11 @@ fn replayable(history: &[Arc<AgentHistoryItem>]) -> bool {
         match &item.content {
             ConversationItem::CompactionSummary { .. }
             | ConversationItem::ProviderCompaction { .. } => return false,
-            ConversationItem::ToolCall { name, .. } if name == COMPRESS_TOOL_NAME => calls = true,
+            ConversationItem::ToolCall {
+                namespace: None,
+                name,
+                ..
+            } if name == COMPRESS_TOOL_NAME => calls = true,
             _ => {}
         }
     }

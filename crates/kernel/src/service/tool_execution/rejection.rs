@@ -9,6 +9,7 @@ use crate::{AgentToolGeneration, AgentToolId, AgentToolPresentation, AgentToolPr
 use hanafubuki_agent_contracts::{AgentActivityAction, ToolPresenterRegistry};
 use hanafubuki_agent_model_api::{ModelToolArgumentError, ModelToolCall};
 use serde_json::json;
+use std::borrow::Cow;
 
 /// What the kernel does with one call of a sampling step.
 pub(in crate::service) enum CallDisposition {
@@ -30,17 +31,18 @@ pub(in crate::service) enum CallDisposition {
 
 impl CallDisposition {
     pub(in crate::service) fn of(plan: &AgentToolPlan, call: &ModelToolCall) -> Self {
+        let name = crate::flattened_tool_call_name(call.namespace.as_deref(), &call.name);
         let registration = match plan.resolve_call(call) {
             Ok(registration) => registration.clone(),
             Err(_) => {
                 return match plan.unselected_deferred_call(call) {
                     Some(registration) => Self::Reject {
                         registration: Some(registration.clone()),
-                        output: Box::new(undiscovered_tool_output(&call.name)),
+                        output: Box::new(undiscovered_tool_output(&name)),
                     },
                     None => Self::Reject {
                         registration: None,
-                        output: Box::new(unavailable_tool_output(&call.name)),
+                        output: Box::new(unavailable_tool_output(&name)),
                     },
                 };
             }
@@ -48,7 +50,7 @@ impl CallDisposition {
         match &call.argument_error {
             Some(error) => Self::Reject {
                 registration: Some(registration),
-                output: Box::new(invalid_arguments_output(&call.name, error)),
+                output: Box::new(invalid_arguments_output(&name, error)),
             },
             None => Self::Run(registration),
         }
@@ -56,16 +58,16 @@ impl CallDisposition {
 
     /// The name the shell shows for the call: the planned tool's own name,
     /// or the wire name for a name the step does not offer.
-    pub(in crate::service) fn tool_name<'a>(&'a self, call: &'a ModelToolCall) -> &'a str {
+    pub(in crate::service) fn tool_name<'a>(&'a self, call: &'a ModelToolCall) -> Cow<'a, str> {
         match self {
             Self::Run(registration)
             | Self::Reject {
                 registration: Some(registration),
                 ..
-            } => &registration.model_spec.name,
+            } => Cow::Borrowed(&registration.model_spec.name),
             Self::Reject {
                 registration: None, ..
-            } => &call.name,
+            } => crate::flattened_tool_call_name(call.namespace.as_deref(), &call.name),
         }
     }
 

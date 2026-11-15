@@ -45,6 +45,23 @@ impl Harness {
 }
 
 #[test]
+fn a_namespaced_tool_keeps_its_name_when_the_session_is_resumed() {
+    let mut harness = Harness::start(vec![
+        hanafubuki_agent::test_support::namespace_tool_events("remote", "read", "{}"),
+        assistant_events("The tool is unavailable."),
+    ]);
+    let session = harness.exchange("Read the remote file.", "The tool is unavailable.");
+    assert!(harness.transcript().contains("Failed remote__read"));
+    harness.type_and_submit("/new");
+    harness.pump_until_no_session();
+    harness.type_and_submit(&format!("/resume {}", session.value()));
+    harness.pump_until("the complete replayed tool name", |harness| {
+        harness.app.bridge.session_id() == Some(session)
+            && harness.transcript().contains("Failed remote__read")
+    });
+}
+
+#[test]
 fn rename_names_the_session_and_resume_finds_it_by_title_or_id() {
     let mut harness = Harness::start(vec![
         assistant_events("First answer."),

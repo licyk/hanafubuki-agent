@@ -46,6 +46,41 @@ fn user(text: &str) -> ConversationItem {
 /// second: the first answer's reasoning leaves with it, and the second's
 /// stays right before its message, after the summary.
 #[test]
+fn compression_keeps_namespaced_calls_and_results_distinct_from_core_tools() {
+    let call = ConversationItem::ToolCall {
+        call_id: "call-1".into(),
+        namespace: Some("remote".into()),
+        name: "compress".into(),
+        origin: Default::default(),
+        catalog_revision: crate::AgentToolCatalogRevision([0; 32]),
+        provider_id: crate::AgentToolProviderId::parse("remote").unwrap(),
+        tool_id: crate::AgentToolId::parse("compress").unwrap(),
+        tool_generation: crate::AgentToolGeneration([0; 32]),
+        arguments: serde_json::json!({}),
+    };
+    let output = ConversationItem::ToolOutput {
+        call_id: "call-1".into(),
+        origin: Default::default(),
+        output: ToolOutput::structured(serde_json::json!({"result":"ok"}), false),
+        truncation: None,
+        images: Vec::new(),
+        tool_search_results: Vec::new(),
+        display_metadata: Default::default(),
+    };
+    let items = vec![
+        history_item(1, call.clone()),
+        history_item(2, output.clone()),
+    ];
+    let log = MessageLog::new(&items);
+    assert_eq!(log.messages.len(), 2);
+    assert!(log
+        .messages
+        .iter()
+        .all(|message| message.tool_name.as_deref() == Some("remote__compress")));
+    assert_eq!(log.apply_view(&log.messages), vec![call, output]);
+}
+
+#[test]
 fn reasoning_stays_with_the_message_it_preceded() {
     let items = vec![
         history_item(

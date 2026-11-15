@@ -87,6 +87,14 @@ pub fn sampling_progress_digest(
         hasher.update(message.as_bytes());
     }
     for call in tool_calls {
+        match &call.namespace {
+            Some(namespace) => {
+                hasher.update([1]);
+                hasher.update((namespace.len() as u64).to_le_bytes());
+                hasher.update(namespace.as_bytes());
+            }
+            None => hasher.update([0]),
+        }
         hasher.update(call.name.as_bytes());
         hasher.update(call.arguments.to_string().as_bytes());
     }

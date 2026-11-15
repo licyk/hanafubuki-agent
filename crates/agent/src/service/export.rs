@@ -89,6 +89,7 @@ pub(super) fn render_markdown(items: &[ConversationItem]) -> Option<String> {
             }
             ConversationItem::ToolCall {
                 call_id,
+                namespace,
                 name,
                 arguments,
                 ..
@@ -101,6 +102,7 @@ pub(super) fn render_markdown(items: &[ConversationItem]) -> Option<String> {
                     } if output_call == call_id => Some(output),
                     _ => None,
                 });
+                let name = crate::flattened_tool_call_name(namespace.as_deref(), name);
                 let mut body = format!("{name}({})", summarize_arguments(arguments));
                 if let Some(output) = output {
                     if output.is_error {

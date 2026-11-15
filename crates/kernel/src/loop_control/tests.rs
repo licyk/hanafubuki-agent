@@ -29,6 +29,27 @@ fn progress_digest_distinguishes_missing_commentary_and_final_phase() {
 }
 
 #[test]
+fn progress_digest_preserves_the_complete_tool_identity() {
+    let call = |namespace: Option<&str>, name: &str| ModelToolCall {
+        item_id: "item".into(),
+        call_id: "call".into(),
+        namespace: namespace.map(str::to_string),
+        name: name.into(),
+        arguments: serde_json::json!({}),
+        argument_error: None,
+    };
+    let digest = |call| sampling_progress_digest(&[], &[call], &BTreeSet::new());
+    assert_ne!(
+        digest(call(Some("first"), "read")),
+        digest(call(Some("second"), "read"))
+    );
+    assert_ne!(
+        digest(call(Some("first"), "read")),
+        digest(call(None, "first__read"))
+    );
+}
+
+#[test]
 fn repeated_follow_up_fails_at_stall_budget_but_changed_progress_resets_it() {
     let first = AgentProgressDigest([1; 32]);
     let changed = AgentProgressDigest([2; 32]);

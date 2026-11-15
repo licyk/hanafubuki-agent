@@ -110,6 +110,7 @@ pub use hanafubuki_agent_foundation::terminal_text::{
 /// What a hook in [`AgentHook`] is for, where it comes from and whether it
 /// is trusted.
 pub use hanafubuki_agent_hooks::{HookEventName, HookSource, HookTrust};
+pub use hanafubuki_agent_kernel::flattened_tool_call_name;
 pub use hanafubuki_agent_memory::{AgentMemoryContributionMode, AgentMemoryStatus};
 pub use hanafubuki_agent_packages::{
     ManifestFormat, MarketplaceAddRequest, MarketplaceSourceType, PackagePermissions,
