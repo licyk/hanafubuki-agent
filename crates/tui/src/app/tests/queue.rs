@@ -11,7 +11,7 @@
 
 use std::time::{Duration, Instant};
 
-use hanafubuki_agent::test_support::assistant_events;
+use hanafubuki_agent::test_support::{assistant_events, HOLD};
 use hanafubuki_agent::{AgentSessionListRequest, AgentTurnPhase, ConversationItem};
 use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 
@@ -146,6 +146,94 @@ fn enter_steers_the_running_turn_which_reads_it_at_its_next_step() {
         vec!["Start.", "steering: Also check the tests."]
     );
     assert!(!harness.screen().contains("Messages to be submitted"));
+}
+
+#[test]
+fn consumed_inputs_return_the_working_line_to_the_composer() {
+    for mode in [TranscriptMode::Terminal, TranscriptMode::Owned] {
+        for queued in [false, true] {
+            let held_answer = [HOLD.as_bytes(), &assistant_events("Continue.")].concat();
+            let mut harness =
+                Harness::start_with(vec![held_answer.clone(), held_answer], true, mode);
+            harness.type_and_submit("Start.");
+            harness.pump_until_running();
+            harness.pump_until("the first model request to be held", |harness| {
+                harness.server.requests().len() == 1
+            });
+            let gap = working_composer_gap(&harness.screen());
+            let message = "Also check the tests before continuing with the documentation.";
+            let header = if queued {
+                harness.type_and_queue(message);
+                "Queued follow-up inputs"
+            } else {
+                harness.type_and_submit(message);
+                "Messages to be submitted after next tool call"
+            };
+            let waiting = harness.pump_until_screen_shows(header);
+            assert!(working_composer_gap(&waiting) > gap, "{mode:?}:\n{waiting}");
+
+            harness.server.hold.notify_one();
+            harness.pump_until("the input consumed and the model continuing", |harness| {
+                harness.transcript().contains("› Also check the tests")
+                    && !harness.screen().contains(header)
+                    && harness.app.chat_widget.is_task_running()
+                    && harness.server.requests().len() == 2
+            });
+            assert!(harness.app.chat_widget.is_task_running());
+            let screen = harness.screen();
+            assert_eq!(working_composer_gap(&screen), gap, "{mode:?}:\n{screen}");
+
+            harness.server.hold.notify_one();
+            harness.pump_until_turn_ends();
+        }
+    }
+}
+
+#[test]
+fn editing_queued_inputs_releases_the_preview_rows() {
+    for mode in [TranscriptMode::Terminal, TranscriptMode::Owned] {
+        let held_answer = [HOLD.as_bytes(), &assistant_events("Done.")].concat();
+        let mut harness = Harness::start_with(vec![held_answer], true, mode);
+        harness.type_and_submit("Start.");
+        harness.pump_until_running();
+        let gap = working_composer_gap(&harness.screen());
+        harness.type_and_queue("First queued message.");
+        let one = harness.pump_until_screen_shows("Queued follow-up inputs");
+        let one_gap = working_composer_gap(&one);
+        harness.type_and_queue("Second queued message.");
+        let two = harness.pump_until_screen_shows("↳ Second queued message.");
+        assert!(working_composer_gap(&two) > one_gap, "{mode:?}:\n{two}");
+
+        harness.key_with(KeyCode::Left, KeyModifiers::SHIFT);
+        harness.app.draw(&mut harness.tui).unwrap();
+        let screen = harness.screen();
+        assert_eq!(
+            working_composer_gap(&screen),
+            one_gap,
+            "{mode:?}:\n{screen}"
+        );
+        harness.key_with(KeyCode::Left, KeyModifiers::SHIFT);
+        harness.app.draw(&mut harness.tui).unwrap();
+        let screen = harness.screen();
+        assert!(!screen.contains("Queued follow-up inputs"), "{screen}");
+        assert_eq!(working_composer_gap(&screen), gap, "{mode:?}:\n{screen}");
+
+        harness.server.hold.notify_one();
+        harness.pump_until_turn_ends();
+    }
+}
+
+fn working_composer_gap(screen: &str) -> usize {
+    let lines: Vec<_> = screen.lines().collect();
+    let working = lines
+        .iter()
+        .position(|line| line.contains("esc to interrupt"))
+        .expect(screen);
+    let composer = lines
+        .iter()
+        .rposition(|line| line.starts_with('›'))
+        .expect(screen);
+    composer - working
 }
 
 #[test]

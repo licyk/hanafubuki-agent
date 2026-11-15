@@ -307,6 +307,7 @@ fn the_status_line_adds_the_turns_thinking_time_and_the_separator_keeps_it() {
     tool_completed(&mut chat, "call-1", "Cargo.toml");
     chat.handle_turn_update(TurnUpdate::MessageDelta("Done.".to_string()));
     chat.handle_turn_update(TurnUpdate::MessageCompleted);
+    chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Completed));
     let (cells, _) = drain(&events);
     assert!(
         cells
@@ -314,6 +315,72 @@ fn the_status_line_adds_the_turns_thinking_time_and_the_separator_keeps_it() {
             .any(|cell| cell.starts_with("─ Worked for 0s · thought for 20.7s ──")),
         "{cells:?}"
     );
+}
+
+#[test]
+fn progress_messages_keep_streaming_and_only_the_completed_turn_gets_a_time_summary() {
+    for owned in [true, false] {
+        let (mut chat, events) = chat_in(owned);
+        let mut entries = Vec::new();
+        chat.handle_turn_update(TurnUpdate::Started);
+        transcript(&events, &mut entries);
+        entries.clear();
+        for step in 0..3 {
+            let call_id = format!("call-{step}");
+            tool_started(&mut chat, &call_id, "exec_command", Some("ls"));
+            tool_completed(&mut chat, &call_id, "Cargo.toml");
+            chat.handle_turn_update(TurnUpdate::MessageDelta(format!("Progress {step}.")));
+            chat.handle_turn_update(TurnUpdate::MessageCompleted);
+            transcript(&events, &mut entries);
+            let text = texts(&entries);
+            assert_eq!(text.last(), Some(&format!("• Progress {step}.")));
+            assert!(
+                !text.iter().any(|line| line.contains("Worked for")),
+                "{text:?}"
+            );
+        }
+        chat.handle_turn_update(TurnUpdate::MessageDelta("Done.".to_string()));
+        chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Completed));
+        transcript(&events, &mut entries);
+        let text = texts(&entries);
+        assert_eq!(text[text.len() - 2], "• Done.");
+        assert!(text.last().unwrap().starts_with("─ Worked for"), "{text:?}");
+        assert_eq!(
+            text.iter()
+                .filter(|line| line.contains("Worked for"))
+                .count(),
+            1
+        );
+
+        entries.clear();
+        chat.handle_turn_update(TurnUpdate::Started);
+        chat.handle_turn_update(TurnUpdate::MessageDelta("Next answer.".to_string()));
+        chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Completed));
+        transcript(&events, &mut entries);
+        assert_eq!(texts(&entries), vec!["• Next answer."]);
+    }
+}
+
+#[test]
+fn an_unsuccessful_turn_has_no_completed_work_time_summary() {
+    for owned in [true, false] {
+        for end in [
+            TurnEnd::Interrupted,
+            TurnEnd::Failed("provider failed".to_string()),
+        ] {
+            let (mut chat, events) = chat_in(owned);
+            let mut entries = Vec::new();
+            chat.handle_turn_update(TurnUpdate::Started);
+            tool_started(&mut chat, "call-1", "exec_command", Some("ls"));
+            tool_completed(&mut chat, "call-1", "Cargo.toml");
+            chat.handle_turn_update(TurnUpdate::MessageDelta("Working.".to_string()));
+            chat.handle_turn_update(TurnUpdate::Ended(end));
+            transcript(&events, &mut entries);
+            assert!(!texts(&entries)
+                .iter()
+                .any(|line| line.contains("Worked for")));
+        }
+    }
 }
 
 #[test]
@@ -419,7 +486,8 @@ fn an_entry_that_starts_while_a_message_streams_goes_in_its_place_at_once() {
                 "• Called read_file\n  └ fn main() {}"
             ]
         );
-        assert_eq!(texts.last().map(String::as_str), Some("• Found it."));
+        assert_eq!(texts[3], "• Found it.");
+        assert!(texts[4].starts_with("─ Worked for"), "{texts:?}");
     }
 }
 

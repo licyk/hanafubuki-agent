@@ -68,10 +68,15 @@ impl AgentService {
                 })?;
             // Every earlier step's tool outputs are committed by now, so the
             // turn ends with complete history.
-            if step > self.inner.limits.maximum_sampling_steps {
+            if let Some(limit) = self
+                .inner
+                .limits
+                .maximum_sampling_steps
+                .filter(|limit| step > *limit)
+            {
                 return Err(AgentError::LimitExceeded {
                     resource: "sampling steps",
-                    limit: self.inner.limits.maximum_sampling_steps as usize,
+                    limit: limit as usize,
                 });
             }
             let model = turn.model_session.clone();

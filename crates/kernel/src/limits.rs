@@ -1,13 +1,10 @@
 use std::time::Duration;
 
-/// Absolute limits for the first Agent implementation.
-///
-/// Configurable defaults introduced later must remain at or below these caps.
-/// This prevents an unbounded model/tool loop even when a provider repeatedly
-/// requests follow-up work.
+/// Resource bounds and optional whole-turn limits supplied by the host.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AgentHardLimits {
-    pub maximum_sampling_steps: u32,
+    /// No sampling-count limit when absent.
+    pub maximum_sampling_steps: Option<u32>,
     pub maximum_concurrent_tool_calls: usize,
     pub maximum_tool_argument_bytes: usize,
     pub maximum_tool_output_bytes: usize,
@@ -22,7 +19,8 @@ pub struct AgentHardLimits {
     pub maximum_history_bytes: usize,
     pub stream_idle_timeout: Duration,
     pub approval_timeout: Duration,
-    pub turn_deadline: Duration,
+    /// No whole-turn deadline when absent; individual operations stay bounded.
+    pub turn_deadline: Option<Duration>,
     /// How long the kernel waits for one context, turn admission, tool
     /// source or prompt `prepare` contribution, or for a tool's
     /// `permission`. A call past it is cancelled: the contribution is left
@@ -32,7 +30,7 @@ pub struct AgentHardLimits {
 }
 
 pub const FIRST_BATCH_HARD_LIMITS: AgentHardLimits = AgentHardLimits {
-    maximum_sampling_steps: 32,
+    maximum_sampling_steps: None,
     maximum_concurrent_tool_calls: 8,
     maximum_tool_argument_bytes: 64 * 1024,
     maximum_tool_output_bytes: 256 * 1024,
@@ -44,7 +42,7 @@ pub const FIRST_BATCH_HARD_LIMITS: AgentHardLimits = AgentHardLimits {
     maximum_history_bytes: 4 * 1024 * 1024,
     stream_idle_timeout: Duration::from_secs(120),
     approval_timeout: Duration::from_secs(15 * 60),
-    turn_deadline: Duration::from_secs(30 * 60),
+    turn_deadline: None,
     plugin_call_deadline: Duration::from_secs(10),
     event_buffer_capacity: 1_024,
 };

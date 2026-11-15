@@ -1,9 +1,72 @@
-//! The turn's own limits: after `maximum_sampling_steps` samples the turn
+//! Optional turn limits: after `maximum_sampling_steps` samples the turn
 //! fails with that limit, and at `turn_deadline` it is cancelled as a user's
 //! cancel would, committing what its calls finished, and fails naming the
 //! deadline.
 
 use super::*;
+
+#[tokio::test(start_paused = true)]
+async fn default_limits_allow_more_than_32_samples_and_30_minutes_of_progress() {
+    let steps = 40;
+    let responses = (0..steps)
+        .map(|step| {
+            calls_events(&[(
+                &format!("call-{step}"),
+                "read_task_log",
+                json!({ "offset": step }),
+            )])
+        })
+        .chain([deterministic_assistant_events("Finished the long task.")]);
+    let model = ScriptedEventModel::new(responses);
+    let entered = Arc::new(Barrier::new(2));
+    let release = Arc::new(Barrier::new(2));
+    let tools = FakeTools::new((0..steps).map(|step| {
+        FakeRegisteredExchange::success(
+            "read_task_log",
+            json!({ "offset": step }),
+            json!({ "line": step }),
+        )
+    }))
+    .await
+    .with_invoke_gate(entered.clone(), release.clone());
+    let service = AgentService::with_limits(
+        Arc::new(model.clone()),
+        tools.registries(),
+        FIRST_BATCH_HARD_LIMITS,
+    );
+    let session = service.create_session(config()).unwrap();
+    let executing = service.clone();
+    let started = tokio::time::Instant::now();
+    let mut turn_task = tokio::spawn(async move {
+        executing
+            .start_turn(session.id, "Read the log.".to_string())
+            .await
+    });
+
+    for _ in 0..steps {
+        tokio::select! {
+            result = &mut turn_task => panic!("long turn ended before all calls: {result:?}"),
+            _ = entered.wait() => {}
+        }
+        tokio::time::advance(Duration::from_secs(60)).await;
+        release.wait().await;
+    }
+
+    turn_task.await.unwrap().unwrap();
+    assert!(started.elapsed() >= Duration::from_secs(40 * 60));
+    assert_eq!(model.requests().len(), steps + 1);
+    assert_eq!(tools.calls().len(), steps);
+    assert_eq!(
+        tool_outputs(&service, session.id),
+        (0..steps)
+            .map(|step| (format!("call-{step}"), false))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        service.snapshot(session.id).unwrap().turn.unwrap().phase,
+        AgentTurnPhase::Completed
+    );
+}
 
 fn tool_outputs(service: &AgentService, session_id: AgentSessionId) -> Vec<(String, bool)> {
     test_session_view(service, session_id)
@@ -32,7 +95,7 @@ async fn a_turn_ends_after_its_maximum_sampling_steps_with_its_outputs_committed
     ])
     .await;
     let limits = AgentHardLimits {
-        maximum_sampling_steps: 2,
+        maximum_sampling_steps: Some(2),
         ..FIRST_BATCH_HARD_LIMITS
     };
     let service = AgentService::with_limits(Arc::new(model.clone()), tools.registries(), limits);
@@ -88,7 +151,7 @@ async fn a_turn_past_its_deadline_is_stopped_with_its_finished_calls_committed()
     )])
     .await;
     let limits = AgentHardLimits {
-        turn_deadline: Duration::from_millis(300),
+        turn_deadline: Some(Duration::from_millis(300)),
         ..FIRST_BATCH_HARD_LIMITS
     };
     let service = AgentService::with_limits(Arc::new(model.clone()), tools.registries(), limits);
@@ -146,7 +209,7 @@ async fn a_deadline_passing_after_a_user_cancel_keeps_the_cancel() {
         .await
         .with_invoke_gate(entered.clone(), release.clone());
     let limits = AgentHardLimits {
-        turn_deadline: Duration::from_millis(100),
+        turn_deadline: Some(Duration::from_millis(100)),
         ..FIRST_BATCH_HARD_LIMITS
     };
     let service = AgentService::with_limits(Arc::new(model), tools.registries(), limits);

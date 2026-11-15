@@ -388,15 +388,14 @@ pub(crate) fn new_warning_event(message: String) -> PlainHistoryCell {
     PlainHistoryCell::new(vec![vec![format!("⚠ {message}").yellow()].into()])
 }
 
-/// A divider between the work of a turn and its final answer, with how
-/// long the turn worked and, when it thought, how long it thought.
+/// The completed turn's elapsed and thinking time, after its last message.
 #[derive(Debug)]
-pub(crate) struct FinalMessageSeparator {
+pub(crate) struct TurnCompletionSummary {
     elapsed_seconds: Option<u64>,
     thought: Option<Duration>,
 }
 
-impl FinalMessageSeparator {
+impl TurnCompletionSummary {
     pub(crate) fn new(elapsed_seconds: Option<u64>, thought: Option<Duration>) -> Self {
         Self {
             elapsed_seconds,
@@ -417,7 +416,7 @@ impl FinalMessageSeparator {
     }
 }
 
-impl HistoryCell for FinalMessageSeparator {
+impl HistoryCell for TurnCompletionSummary {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         match self.label() {
             Some(label) => {

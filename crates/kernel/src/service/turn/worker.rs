@@ -4,7 +4,7 @@ use crate::model::{AgentError, AgentEventSink, AgentTurnOutcome};
 use crate::service::{exact_turn, AgentService, TurnExecutionGuard, TurnIdentity, TurnKind};
 use hanafubuki_agent_foundation::panic::catch_panic_async;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 impl AgentService {
     /// Runs an admitted turn to its terminal commit; its outcome is `None`
@@ -67,7 +67,7 @@ impl AgentService {
     }
 
     /// Runs the turn's sampling loop (or its `!command`) to its terminal
-    /// commit. At the turn's deadline the turn is cancelled as a user's
+    /// commit. At an optional turn deadline the turn is cancelled as a user's
     /// cancel would, and its end is committed as a failure that names the
     /// limit.
     async fn drive_turn(
@@ -75,10 +75,18 @@ impl AgentService {
         identity: TurnIdentity,
         event_sink: &dyn AgentEventSink,
     ) -> Result<Option<AgentTurnOutcome>, AgentError> {
-        let deadline = tokio::time::sleep(self.inner.limits.turn_deadline);
+        let deadline = async {
+            match self.inner.limits.turn_deadline {
+                Some(duration) => {
+                    tokio::time::sleep(duration).await;
+                    duration
+                }
+                None => std::future::pending().await,
+            }
+        };
         tokio::pin!(deadline);
         let mut deadline_passed = false;
-        let mut deadline_cancelled = false;
+        let mut deadline_cancelled = None;
         loop {
             let loop_result = {
                 let run = self.run_turn(identity, event_sink);
@@ -86,9 +94,11 @@ impl AgentService {
                 loop {
                     tokio::select! {
                         result = &mut run => break result,
-                        () = &mut deadline, if !deadline_passed => {
+                        duration = &mut deadline, if !deadline_passed => {
                             deadline_passed = true;
-                            deadline_cancelled = self.cancel_at_deadline(identity).await;
+                            if self.cancel_at_deadline(identity, duration).await {
+                                deadline_cancelled = Some(duration);
+                            }
                         }
                     }
                 }
@@ -119,14 +129,12 @@ impl AgentService {
                     }
                     result => return result,
                 },
-                Err(AgentError::Cancelled) if deadline_cancelled => {
-                    let error = AgentError::TurnDeadlineExceeded {
-                        deadline: self.inner.limits.turn_deadline,
-                    };
-                    self.finish_failed(identity, &error, event_sink).await?;
-                    return Err(error);
-                }
                 Err(AgentError::Cancelled) => {
+                    if let Some(deadline) = deadline_cancelled {
+                        let error = AgentError::TurnDeadlineExceeded { deadline };
+                        self.finish_failed(identity, &error, event_sink).await?;
+                        return Err(error);
+                    }
                     self.finish_cancelled(identity, event_sink).await?;
                     return Err(AgentError::Cancelled);
                 }
@@ -163,7 +171,7 @@ impl AgentService {
 
     /// Cancels a turn that reached its deadline; false when the user had
     /// cancelled it already or it is no longer running.
-    async fn cancel_at_deadline(&self, identity: TurnIdentity) -> bool {
+    async fn cancel_at_deadline(&self, identity: TurnIdentity, deadline: Duration) -> bool {
         let cancelled_already = self
             .session(identity.session_id)
             .and_then(|cell| {
@@ -181,7 +189,7 @@ impl AgentService {
             identity.session_id,
             identity.turn_id,
             identity.generation,
-            self.inner.limits.turn_deadline.as_secs()
+            deadline.as_secs()
         );
         self.request_turn_cancellation(identity.session_id, identity.turn_id, identity.generation)
             .await

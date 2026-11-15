@@ -82,7 +82,7 @@ impl ChatWidget {
                 self.on_work(work);
             }
         }
-        self.needs_final_message_separator = false;
+        self.had_work_activity = false;
         if self.setup_needed {
             self.open_setup();
         }

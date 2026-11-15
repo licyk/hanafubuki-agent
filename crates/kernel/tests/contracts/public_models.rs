@@ -12,7 +12,7 @@ fn first_batch_hard_limits_are_an_explicit_contract() {
     assert_eq!(
         FIRST_BATCH_HARD_LIMITS,
         AgentHardLimits {
-            maximum_sampling_steps: 32,
+            maximum_sampling_steps: None,
             maximum_concurrent_tool_calls: 8,
             maximum_tool_argument_bytes: 64 * 1024,
             maximum_tool_output_bytes: 256 * 1024,
@@ -24,7 +24,7 @@ fn first_batch_hard_limits_are_an_explicit_contract() {
             maximum_history_bytes: 4 * 1024 * 1024,
             stream_idle_timeout: Duration::from_secs(120),
             approval_timeout: Duration::from_secs(15 * 60),
-            turn_deadline: Duration::from_secs(30 * 60),
+            turn_deadline: None,
             plugin_call_deadline: Duration::from_secs(10),
             event_buffer_capacity: 1024,
         }

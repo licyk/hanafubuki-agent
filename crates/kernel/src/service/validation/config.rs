@@ -287,7 +287,7 @@ fn is_common_environment_name(name: &str) -> bool {
 }
 
 pub(in crate::service) fn assert_valid_limits(limits: AgentHardLimits) {
-    assert!(limits.maximum_sampling_steps > 0);
+    assert!(limits.maximum_sampling_steps.is_none_or(|limit| limit > 0));
     assert!(limits.maximum_concurrent_tool_calls > 0);
     assert!(limits.maximum_tool_argument_bytes > 0);
     assert!(
@@ -300,7 +300,9 @@ pub(in crate::service) fn assert_valid_limits(limits: AgentHardLimits) {
     assert!(limits.maximum_history_bytes > 0);
     assert!(limits.event_buffer_capacity > 0);
     assert!(!limits.approval_timeout.is_zero());
-    assert!(!limits.turn_deadline.is_zero());
+    assert!(limits
+        .turn_deadline
+        .is_none_or(|deadline| !deadline.is_zero()));
     assert!(!limits.plugin_call_deadline.is_zero());
 }
 

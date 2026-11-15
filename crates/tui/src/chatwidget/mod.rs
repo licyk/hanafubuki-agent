@@ -96,9 +96,6 @@ pub(crate) struct ChatWidget {
     /// How many queued rows the commit ticks commit.
     adaptive_chunking: AdaptiveChunkingPolicy,
     last_rendered_width: Cell<Option<usize>>,
-    /// Something was written since the last streamed message; the next one
-    /// gets a separator, with the time worked when there was work.
-    needs_final_message_separator: bool,
     had_work_activity: bool,
     /// The status line while a model request is retried, kept until the
     /// retry gets an answer.
@@ -164,7 +161,6 @@ impl ChatWidget {
             plan_stream_controller: None,
             adaptive_chunking: AdaptiveChunkingPolicy::default(),
             last_rendered_width: Cell::new(None),
-            needs_final_message_separator: false,
             had_work_activity: false,
             retry_status_header: None,
             quit_shortcut_expires_at: None,
@@ -418,16 +414,12 @@ impl ChatWidget {
 
     fn add_boxed_history(&mut self, cell: Box<dyn HistoryCell>) {
         self.close_exploration();
-        if !cell.display_lines(u16::MAX).is_empty() {
-            self.needs_final_message_separator = true;
-        }
         self.app_event_tx.send(AppEvent::InsertHistoryCell(cell));
     }
 
     /// Hands the transcript an entry that changes in place from its start.
     fn insert_live_entry(&mut self, entry: Arc<dyn HistoryCell>) {
         self.close_exploration();
-        self.needs_final_message_separator = true;
         self.app_event_tx.send(AppEvent::InsertLiveEntry(entry));
     }
 

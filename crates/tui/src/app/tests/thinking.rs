@@ -119,8 +119,7 @@ fn ctrl_o_reaches_the_thought_while_an_approval_waits() {
 
 /// The model thinks, starts its answer and only then completes the thought,
 /// as the Responses API may: once the answer starts the entry has thought,
-/// and the turn's thinking time, on the status line and the rule before the
-/// answer, stops.
+/// and the turn's thinking time stops. The summary waits for the turn's end.
 #[test]
 fn the_thought_ends_when_the_answer_starts_before_its_late_completion() {
     for mode in MODES {
@@ -147,8 +146,8 @@ fn the_thought_ends_when_the_answer_starts_before_its_late_completion() {
         let thought = thinking_total(&screen);
         let transcript = harness.transcript();
         assert!(
-            transcript.contains(&format!("· thought for {thought} ─")),
-            "{mode:?}: {thought}\n{transcript}"
+            !transcript.contains("Worked for"),
+            "{mode:?}:\n{transcript}"
         );
         std::thread::sleep(Duration::from_millis(300));
         harness.app.draw(&mut harness.tui).unwrap();
@@ -157,6 +156,15 @@ fn the_thought_ends_when_the_answer_starts_before_its_late_completion() {
         harness.server.hold.notify_one();
         harness.pump_until_turn_ends();
         let transcript = harness.transcript();
+        assert!(
+            transcript.contains(&format!("· thought for {thought} ─")),
+            "{mode:?}: {thought}\n{transcript}"
+        );
+        assert_eq!(
+            transcript.matches("Worked for").count(),
+            1,
+            "{mode:?}:\n{transcript}"
+        );
         assert_eq!(
             transcript.matches("• Thought · ").count(),
             1,

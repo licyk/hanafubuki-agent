@@ -310,7 +310,7 @@ fn waiting_messages_show_between_the_status_and_the_composer() {
 }
 
 #[test]
-fn waiting_messages_keep_their_rows_until_the_turn_ends() {
+fn consumed_messages_release_their_rows_while_the_turn_keeps_running() {
     let (mut pane, _rx) = pane();
     pane.set_task_running(true);
     let width = 60;
@@ -323,15 +323,15 @@ fn waiting_messages_keep_their_rows_until_the_turn_ends() {
     pane.set_pending_input(steer("Check the tests first."));
     let waiting = pane.desired_height(width);
     assert!(waiting > idle);
-    // The turn reads it: its rows stay, blank, and the next message's
-    // take their place.
+    // The turn reads it without ending: the status returns to the composer.
     pane.set_pending_input(PendingInput::default());
-    assert_eq!(pane.desired_height(width), waiting);
-    let area = Rect::new(0, 0, width, waiting);
+    assert_eq!(pane.desired_height(width), idle);
+    let area = Rect::new(0, 0, width, idle);
     assert!(!render_snapshot(&pane, area).contains("Check the tests"));
     pane.set_pending_input(steer("Then the docs."));
     assert_eq!(pane.desired_height(width), waiting);
     pane.set_pending_input(PendingInput::default());
+    assert_eq!(pane.desired_height(width), idle);
     pane.set_task_running(false);
     assert!(pane.desired_height(width) < idle);
 }

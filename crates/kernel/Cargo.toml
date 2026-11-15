@@ -33,7 +33,7 @@ uuid = { workspace = true, features = ["serde", "v7"] }
 hanafubuki-agent-contracts = { workspace = true, features = ["test-support"] }
 hanafubuki-agent-approval = { workspace = true, features = ["test-support"] }
 hanafubuki-agent-model-api = { workspace = true, features = ["test-support"] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "test-util"] }
 
 [[test]]
 name = "loop_contract"

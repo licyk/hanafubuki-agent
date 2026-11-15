@@ -11,6 +11,7 @@ use super::input_queue::Ending;
 use super::ChatWidget;
 use crate::agent_bridge::{TurnEnd, TurnUpdate, Warning, WarningSource};
 use crate::history_cell::{self, explores, LiveCell, ThinkingCell, ToolCallCell};
+use crate::status_indicator_widget::StatusIndicatorWidget;
 
 const WORKING: &str = "Working";
 
@@ -141,6 +142,7 @@ impl ChatWidget {
         self.bottom_pane.set_task_running(true);
         self.bottom_pane.set_interrupt_hint_visible(true);
         self.retry_status_header = None;
+        self.had_work_activity = false;
         self.finish_plan();
         self.bottom_pane.update_status(WORKING.to_string(), None);
         self.input_queue.turn_started();
@@ -280,6 +282,15 @@ impl ChatWidget {
         for cell in ended {
             cell.update(ToolCallCell::end_running);
             self.complete_settled_tool(cell);
+        }
+        // A message may be progress text, or a final answer followed by a
+        // continuation hook. Only the turn's end confirms the work is done.
+        if matches!(&end, TurnEnd::Completed) && self.had_work_activity && !self.user_shell {
+            let status = self.bottom_pane.status_widget();
+            self.add_to_history(history_cell::TurnCompletionSummary::new(
+                status.map(StatusIndicatorWidget::elapsed_seconds),
+                status.and_then(StatusIndicatorWidget::thinking_duration),
+            ));
         }
         self.bottom_pane.dismiss_all_requests();
         self.bottom_pane.set_task_running(false);
