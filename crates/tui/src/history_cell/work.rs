@@ -2,13 +2,14 @@
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use hanafubuki_agent::PermissionReviewStatus;
 use ratatui::style::Stylize;
-use ratatui::text::Line;
+use ratatui::text::{Line, Span};
 
 use super::{raw_lines_from_source, ActivityDisclosure, HistoryCell};
 use crate::agent_bridge::WorkSnapshot;
 use crate::render::line_utils::prefix_lines;
-use crate::shimmer::shimmer_spans;
+use crate::shimmer::{blinking_white_bullet, shimmer_spans};
 use crate::status_indicator_widget::fmt_elapsed_tenths;
 use crate::wrapping::{word_wrap_lines, RtOptions};
 
@@ -32,6 +33,7 @@ impl WorkCell {
                 id: format!("compaction:h{item_id}"),
                 title: "Context compacted".to_string(),
                 subject: None,
+                review_status: None,
                 text: Some(summary),
                 started_at: 0,
                 completed_at: Some(0),
@@ -67,12 +69,13 @@ impl WorkCell {
     }
 
     fn header(&self) -> Line<'static> {
+        let elapsed = self.elapsed();
         let duration = if self.timed {
-            format!(" · {}", fmt_elapsed_tenths(self.elapsed()))
+            format!(" · {}", fmt_elapsed_tenths(elapsed))
         } else {
             String::new()
         };
-        let mut spans = vec!["• ".dim()];
+        let mut spans = vec![self.bullet(elapsed), " ".into()];
         if self.finished() {
             spans.push(self.snapshot.title.clone().dim());
         } else {
@@ -80,6 +83,21 @@ impl WorkCell {
         }
         spans.push(duration.dim());
         Line::from(spans)
+    }
+
+    fn bullet(&self, elapsed: Duration) -> Span<'static> {
+        match self.snapshot.review_status {
+            Some(PermissionReviewStatus::Reviewing) => blinking_white_bullet(elapsed),
+            Some(PermissionReviewStatus::Approved) => "•".green().bold(),
+            Some(
+                PermissionReviewStatus::Denied
+                | PermissionReviewStatus::TimedOut
+                | PermissionReviewStatus::Failed
+                | PermissionReviewStatus::Aborted,
+            ) => "•".red().bold(),
+            None if !self.finished() => blinking_white_bullet(elapsed),
+            None => "•".dim(),
+        }
     }
 
     fn text(&self) -> &str {
@@ -93,9 +111,9 @@ impl HistoryCell for WorkCell {
         if let Some(subject) = &self.snapshot.subject {
             let body = word_wrap_lines(
                 raw_lines_from_source(subject),
-                RtOptions::new(usize::from(width.saturating_sub(2)).max(1)),
+                RtOptions::new(usize::from(width.saturating_sub(4)).max(1)),
             );
-            lines.extend(prefix_lines(body, "  ".into(), "  ".into()));
+            lines.extend(prefix_lines(body, "  └ ".into(), "    ".into()));
         }
         lines
     }
@@ -116,7 +134,11 @@ impl HistoryCell for WorkCell {
     fn raw_lines(&self) -> Vec<Line<'static>> {
         let mut lines = vec![self.header()];
         if let Some(subject) = &self.snapshot.subject {
-            lines.extend(raw_lines_from_source(subject));
+            lines.extend(prefix_lines(
+                raw_lines_from_source(subject),
+                "  └ ".into(),
+                "    ".into(),
+            ));
         }
         lines.extend(raw_lines_from_source(self.text()));
         lines

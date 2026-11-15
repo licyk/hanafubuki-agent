@@ -12,7 +12,7 @@ use ratatui::text::{Line, Span};
 
 use super::{plain_lines, raw_lines_from_source, ActivityDisclosure, HistoryCell};
 use crate::render::line_utils::prefix_lines;
-use crate::shimmer::shimmer_spans;
+use crate::shimmer::{blinking_white_bullet, shimmer_spans};
 use crate::status_indicator_widget::fmt_elapsed_tenths;
 
 /// What a thinking's activity id starts with, so Ctrl-O finds them all.
@@ -94,16 +94,19 @@ impl ThinkingCell {
     }
 
     fn header(&self) -> Line<'static> {
-        let mut spans: Vec<Span<'static>> = vec!["• ".dim()];
+        let mut spans: Vec<Span<'static>> = Vec::new();
         match self.state {
             ThinkingState::Live { started } => {
+                let elapsed = started.elapsed();
+                spans.extend([blinking_white_bullet(elapsed), " ".into()]);
                 spans.extend(shimmer_spans("Thinking"));
-                spans.push(format!(" {}", fmt_elapsed_tenths(started.elapsed())).dim());
+                spans.push(format!(" {}", fmt_elapsed_tenths(elapsed)).dim());
             }
             ThinkingState::Completed {
                 duration,
                 truncated,
             } => {
+                spans.push("• ".dim());
                 spans.push(format!("Thought · {}", fmt_elapsed_tenths(duration)).dim());
                 if truncated {
                     spans.push(" (truncated)".dim().italic());

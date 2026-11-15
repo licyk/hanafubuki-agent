@@ -32,6 +32,28 @@ fn replayed(text: &str, duration_millis: u64, truncated: bool) -> ThinkingCell {
 }
 
 #[test]
+fn thinking_blinks_white_until_completed_and_replay_stays_still() {
+    use ratatui::style::Color;
+
+    let mut cell = live(THOUGHT);
+    for (millis, text) in [(100, "•"), (700, " "), (1_300, "•")] {
+        cell.state = ThinkingState::Live {
+            started: Instant::now() - Duration::from_millis(millis),
+        };
+        let header = cell.header();
+        assert_eq!(header.spans[0].content, text);
+        assert_eq!(header.spans[0].style.fg, Some(Color::White));
+        assert!(cell.transcript_animation_tick().is_some());
+    }
+    cell.complete(Some(700));
+    let replay = replayed(THOUGHT, 700, false);
+    for finished in [&cell, &replay] {
+        assert_eq!(render(&finished.display_lines(80)), "• Thought · 0.7s");
+        assert!(finished.transcript_animation_tick().is_none());
+    }
+}
+
+#[test]
 fn a_live_cell_counts_up_in_tenths_and_is_its_header_collapsed() {
     let cell = live(THOUGHT);
     let collapsed = render(&cell.display_lines(40));

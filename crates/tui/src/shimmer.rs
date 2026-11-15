@@ -16,6 +16,14 @@ fn elapsed_since_start() -> Duration {
     start.elapsed()
 }
 
+pub(crate) fn blinking_white_bullet(elapsed: Duration) -> Span<'static> {
+    if (elapsed.as_millis() / 600).is_multiple_of(2) {
+        "•".white().bold()
+    } else {
+        " ".white()
+    }
+}
+
 pub(crate) fn shimmer_spans(text: &str) -> Vec<Span<'static>> {
     let chars: Vec<char> = text.chars().collect();
     if chars.is_empty() {
