@@ -273,10 +273,10 @@ Provider 的错误是否拒绝了请求的推理参数，由 `hanafubuki-agent-m
 
 标题、标题建议、回顾、记忆提取和自动权限审查都在对话之外向模型要一个 JSON 对象，经由 `request_json_object`（`model-api/src/structured_request.rs`）。要它的方式有三种，即三级（`ModelStructuredOutputCapability`），由好到差：
 
-| 级别               | 请求                                                                                                                                                        |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NativeJsonSchema` | 协议的 JSON schema 输出（Responses 的 `text.format`、Chat Completions 的 `response_format`），不带工具                                                      |
-| `RequiredTool`     | 一个输入 schema 即该对象 schema 的工具，用 `tool_choice` 强制调用；调用方不提供工具或会话不能强制工具时跳过                                                 |
+| 级别               | 请求                                                                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `NativeJsonSchema` | 协议的 JSON schema 输出（Responses 的 `text.format`、Chat Completions 的 `response_format`），不带工具                                |
+| `RequiredTool`     | 一个输入 schema 即该对象 schema 的工具，用 `tool_choice` 强制调用；调用方不提供工具或会话不能强制工具时跳过                           |
 | `Text`             | 不带工具也不带输出格式；指令多一句话，要求只回答一个符合该 schema 的 JSON 对象，并附上完整 schema（`schema_in_text`），权限审查也一样 |
 
 - **从哪一级开始。** 从协议的那一级（Responses 和 Chat Completions 为原生，Anthropic Messages 为强制工具，什么都没说的传输层为文本）开始，再按路由学到的级别（`ModelMetadata::structured_output`）降低。从注册表回答它的会话是 `create_private_model_session` 给出的会话（标题、建议、回顾、提取）和审查者的会话（`learning_model_session`）；给不出路由的传输层什么也学不到。

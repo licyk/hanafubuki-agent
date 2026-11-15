@@ -317,6 +317,51 @@ async fn a_refused_native_output_falls_to_text_and_stays_strict() {
 }
 
 #[test]
+fn namespaced_calls_and_results_use_the_shared_flattened_name_in_review_evidence() {
+    let mut transcript = pending_tool_transcript();
+    let call = transcript
+        .iter_mut()
+        .find(|item| matches!(item, ConversationItem::ToolCall { .. }))
+        .unwrap();
+    let ConversationItem::ToolCall {
+        namespace,
+        name,
+        call_id,
+        ..
+    } = call
+    else {
+        unreachable!();
+    };
+    *namespace = Some("workspace".to_string());
+    *name = "apply_patch".to_string();
+    let call_id = call_id.clone();
+    transcript.push(ConversationItem::ToolOutput {
+        call_id,
+        origin: hanafubuki_agent_model_api::ModelToolCallOrigin::Function,
+        output: hanafubuki_agent_tool_contracts::ToolOutput {
+            content: vec![ToolOutputContent::Text {
+                text: "patched".to_string(),
+            }],
+            structured_content: None,
+            is_error: false,
+        },
+        truncation: None,
+        images: Vec::new(),
+        tool_search_results: Vec::new(),
+        display_metadata: Default::default(),
+    });
+    let evidence = build_permission_review_evidence(&transcript);
+    assert!(evidence.entries.iter().any(|entry| matches!(
+        &entry.role,
+        PermissionReviewEvidenceRole::ToolCall { name } if name == "workspace__apply_patch"
+    )));
+    assert!(evidence.entries.iter().any(|entry| matches!(
+        &entry.role,
+        PermissionReviewEvidenceRole::ToolResult { name: Some(name) } if name == "workspace__apply_patch"
+    )));
+}
+
+#[test]
 fn evidence_is_bounded_utf8_safe_and_binary_content_is_omitted() {
     let mut transcript = vec![ConversationItem::UserMessage {
         text: format!("first-{}", "界".repeat(8_000)),

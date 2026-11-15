@@ -281,10 +281,10 @@ The kernel (`run_sampling_request`) retries a turn's request once without its re
 
 A title, a title suggestion, a recap, a memory extraction and an automatic permission review each ask a model for one JSON object outside any conversation, through `request_json_object` (`model-api/src/structured_request.rs`). There are three ways of asking it, rungs (`ModelStructuredOutputCapability`), best first:
 
-| Rung               | The request                                                                                                                                                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NativeJsonSchema` | the protocol's JSON-schema output (Responses' `text.format`, Chat Completions' `response_format`), no tools                                                                                                               |
-| `RequiredTool`     | one tool whose input schema is the object's, forced with `tool_choice`; skipped when the caller offers no tool or the session cannot force one                                                                            |
+| Rung               | The request                                                                                                                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NativeJsonSchema` | the protocol's JSON-schema output (Responses' `text.format`, Chat Completions' `response_format`), no tools                                                                                            |
+| `RequiredTool`     | one tool whose input schema is the object's, forced with `tool_choice`; skipped when the caller offers no tool or the session cannot force one                                                         |
 | `Text`             | no tools and no output format; the instructions gain one sentence asking for only a JSON object that matches the schema, with the complete schema (`schema_in_text`), including for permission reviews |
 
 - **Where it starts.** At the protocol's rung (Responses and Chat Completions native, Anthropic Messages the forced tool, a transport that says nothing text), lowered by the rung the route learned (`ModelMetadata::structured_output`). The sessions that answer it from the registry are the ones `create_private_model_session` gives (titles, suggestions, recaps, extractions) and the reviewer's (`learning_model_session`); a transport that names no route learns nothing.

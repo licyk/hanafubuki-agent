@@ -46,6 +46,90 @@ fn body(request: &CapturedRequest) -> serde_json::Value {
     serde_json::from_slice(&request.body).unwrap()
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn permission_review_on_a_stateless_responses_gateway_keeps_the_text_schema() {
+    let arguments = json!({ "cmd": approved_command(), "yield_time_ms": 30_000 }).to_string();
+    let assessment = json!({
+        "riskLevel": "low",
+        "userAuthorization": "explicit",
+        "outcome": "allow",
+        "rationale": "The user requested this command."
+    })
+    .to_string();
+    let mut responses = Vec::new();
+    for _ in 0..2 {
+        responses.extend([
+            (tool_events("exec_command", &arguments), Duration::ZERO),
+            (assistant_events(&assessment), Duration::ZERO),
+            (assistant_events("Ran it."), Duration::ZERO),
+        ]);
+    }
+    let server = FakeServer::refusing(
+        responses,
+        GatewayRefusals {
+            structured_output: true,
+            tool_choice: false,
+        },
+    )
+    .await;
+    let (service, paths, _) = service_with_config("review-stateless-gateway", |_, config| {
+        configure_test_provider(config, &server.base_url, None);
+        config
+            .write_settings(crate::AgentSettingsPatch {
+                sandbox_mode: Some(Some(AgentSandboxMode::FullAccess)),
+                ..Default::default()
+            })
+            .unwrap();
+    });
+    let session = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap();
+    service
+        .set_session_permission_mode(session.id, AgentPermissionMode::AutoReview)
+        .unwrap();
+    for _ in 0..2 {
+        service
+            .start_turn(session.id, "Run the command.".to_string().into())
+            .await
+            .unwrap();
+        let request = body(server.requests().last().unwrap());
+        let output = request["input"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .rev()
+            .find(|item| item["type"] == "function_call_output")
+            .unwrap();
+        assert!(output["output"]
+            .as_str()
+            .unwrap()
+            .contains("approved-agent-command"));
+    }
+    let requests = server.requests();
+    assert_eq!(requests.len(), 7, "only the first native review is refused");
+    assert!(body(&requests[1])["text"]["format"].is_object());
+    for index in [2, 5] {
+        let request = body(&requests[index]);
+        assert!(request.get("text").is_none());
+        assert!(request["tools"].as_array().unwrap().is_empty());
+        assert_eq!(request["tool_choice"], "none");
+        let instructions = request["instructions"].as_str().unwrap();
+        let schema: serde_json::Value =
+            serde_json::from_str(&instructions[instructions.find('{').unwrap()..]).unwrap();
+        assert_eq!(
+            schema["properties"]["userAuthorization"]["enum"],
+            json!(["explicit", "implicit", "absent", "conflicting"])
+        );
+        assert_eq!(
+            schema["properties"]["outcome"]["enum"],
+            json!(["allow", "deny"])
+        );
+        assert_eq!(schema["additionalProperties"], false);
+    }
+    finish(service, paths);
+}
+
 /// The reported gateway: `text.format` refused with a 400. The recap comes
 /// through the forced tool, and the next one asks for it at once.
 // The managed turn's task must finish while `shutdown` blocks this thread.
