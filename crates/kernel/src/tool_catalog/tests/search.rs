@@ -77,6 +77,8 @@ async fn mode_and_provider_capabilities_filter_sourced_tools_before_search_index
         .unwrap();
     assert!(plan_mode.deferred_registrations().next().is_none());
     assert!(plan_mode.search_deferred("mutation", 10).is_empty());
+    assert!(plan_mode.list_deferred(None, 0, 50).tools.is_empty());
+    assert!(plan_mode.resolve(None, "tool_list").is_err());
 
     let mut unsupported_context = plan_context(AgentSessionMode::Default, true);
     unsupported_context.provider_capabilities.function_tools = false;
@@ -85,6 +87,7 @@ async fn mode_and_provider_capabilities_filter_sourced_tools_before_search_index
         .await
         .unwrap();
     assert!(unsupported.registrations().is_empty());
+    assert!(unsupported.list_deferred(None, 0, 50).tools.is_empty());
 }
 
 #[tokio::test]
@@ -548,7 +551,7 @@ async fn oversized_sourced_catalog_is_deferred_by_stable_name_order() {
         .deferred_registrations()
         .map(|registration| registration.model_spec.name.clone())
         .collect::<Vec<_>>();
-    assert_eq!(direct.len(), MAX_AGENT_DIRECT_TOOL_ENTRIES + 1);
+    assert_eq!(direct.len(), MAX_AGENT_DIRECT_TOOL_ENTRIES + 2);
     assert_eq!(direct.first().map(String::as_str), Some("dynamic_000"));
     assert_eq!(direct[MAX_AGENT_DIRECT_TOOL_ENTRIES - 1], "dynamic_127");
     assert_eq!(direct.last().map(String::as_str), Some("tool_search"));

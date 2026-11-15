@@ -109,7 +109,7 @@ const REWORDED: [&str; 3] = ["spawn_agent", "send_message", "wait_agent"];
 /// With `wakeOnBackgroundTasks` off, the first request of a session is the
 /// one before wakes (`default_mode_request_before_wake.json`, kept as it
 /// was, never regenerated), byte for byte, but for the reworded
-/// descriptions of three tools: the guidance tells the model to wait.
+/// descriptions of three tools and the later catalog changes normalized below.
 #[tokio::test(flavor = "multi_thread")]
 async fn with_the_wake_off_a_request_is_the_one_before_wakes() {
     let off = first_request_with(
@@ -140,14 +140,15 @@ async fn with_the_wake_off_a_request_is_the_one_before_wakes() {
 
 /// `request` without the descriptions of the [`REWORDED`] tools and their
 /// arguments, allowing the later nesting/default-limit guidance change.
-/// The rebuilt web catalog is pinned by current request goldens, separately
-/// from this immutable pre-wake fixture.
+/// The rebuilt web catalog and names-only discovery are pinned by current
+/// request goldens, separately from this immutable pre-wake fixture.
 fn without_reworded(mut request: Value) -> Value {
     request["tools"].as_array_mut().unwrap().retain(|tool| {
         !matches!(
             tool["name"].as_str(),
             Some(
                 "web_search"
+                    | "tool_list"
                     | "advanced_search"
                     | "multi_search"
                     | "platform_search"
@@ -162,6 +163,9 @@ fn without_reworded(mut request: Value) -> Value {
         )
     });
     for tool in request["tools"].as_array_mut().unwrap() {
+        if tool["type"] == "tool_search" {
+            tool.as_object_mut().unwrap().remove("description");
+        }
         if REWORDED.contains(&tool["name"].as_str().unwrap_or_default()) {
             tool.as_object_mut().unwrap().remove("description");
             for property in tool["parameters"]["properties"]

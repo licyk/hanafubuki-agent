@@ -26,6 +26,10 @@ fn rows(rendered: &str) -> Vec<&str> {
 fn a_running_command_shows_the_last_lines_it_printed_and_expands_to_the_stream() {
     let mut cell = running("cargo test");
     assert_eq!(rows(&render(&cell, 60)), ["  └ (running…)"]);
+    assert_eq!(
+        cell.activity_disclosure(60),
+        Some(ActivityDisclosure::Generic)
+    );
     cell.push_output("call-1", &numbered(5), false);
     cell.push_output("call-1", "compiling\tfoo", false);
     let collapsed = render(&cell, 60);
@@ -36,7 +40,7 @@ fn a_running_command_shows_the_last_lines_it_printed_and_expands_to_the_stream()
     );
     assert_eq!(
         cell.activity_disclosure(60),
-        Some(ActivityDisclosure::OutputLines(3))
+        Some(ActivityDisclosure::Generic)
     );
     let expanded = text(&cell.transcript_lines(60));
     assert_eq!(

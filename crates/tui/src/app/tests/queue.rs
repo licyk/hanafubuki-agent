@@ -431,6 +431,46 @@ fn a_parked_conversations_queue_drains_while_the_side_one_has_the_focus() {
 }
 
 #[test]
+fn submitting_a_message_returns_to_latest_but_editing_does_not() {
+    for (running, submit_key) in [
+        (false, KeyCode::Enter),
+        (true, KeyCode::Enter),
+        (true, KeyCode::Tab),
+    ] {
+        let mut harness = Harness::start_timed(
+            vec![never(assistant_events("Too slow."))],
+            true,
+            TranscriptMode::Owned,
+        );
+        if running {
+            harness.type_and_submit("Start.");
+            harness.pump_until_running();
+        }
+        for note in 0..60 {
+            harness
+                .app
+                .chat_widget
+                .add_info_message(format!("note {note:02}"));
+        }
+        harness.pump_until_screen_shows("note 59");
+        harness.key(KeyCode::PageUp);
+        harness.type_draft("Continue.");
+        harness.key_with(KeyCode::Char('j'), KeyModifiers::CONTROL);
+        harness.app.draw(&mut harness.tui).unwrap();
+        assert!(!harness.app.transcript_view.is_following());
+        assert!(harness.screen().contains("Back to bottom"));
+
+        harness.key(submit_key);
+        harness.pump_until("the submitted message to resume following", |harness| {
+            harness.app.transcript_view.is_following()
+                && !harness.screen().contains("Back to bottom")
+        });
+        assert!(harness.screen().contains("note 59"));
+        assert!(harness.app.chat_widget.composer_is_empty());
+    }
+}
+
+#[test]
 fn esc_returns_a_scrolled_conversation_to_the_bottom_before_it_interrupts() {
     let mut harness = Harness::start_timed(
         vec![never(assistant_events("Too slow."))],

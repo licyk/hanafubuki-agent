@@ -19,7 +19,10 @@ pub struct AgentToolSearchInfo {
 }
 
 pub(super) fn build_search_info(tool: &AgentPlannedTool) -> Option<AgentToolSearchInfo> {
-    if matches!(tool.binding, AgentPlannedToolBinding::PlanSearch) {
+    if matches!(
+        tool.binding,
+        AgentPlannedToolBinding::PlanSearch | AgentPlannedToolBinding::PlanList
+    ) {
         return None;
     }
     let mut parts = vec![
@@ -237,6 +240,36 @@ impl AgentToolSearchIndex {
         self.documents.len()
     }
 
+    pub(super) fn list(
+        &self,
+        source: Option<&str>,
+        offset: usize,
+        limit: usize,
+    ) -> AgentToolListPage {
+        let mut names = self
+            .documents
+            .iter()
+            .filter(|document| {
+                source.is_none_or(|source| document.source.info.source_name == source)
+            })
+            .map(|document| document.source.model_name.as_str())
+            .collect::<Vec<_>>();
+        names.sort_unstable();
+        let total = names.len();
+        let tools = names
+            .into_iter()
+            .skip(offset)
+            .take(limit)
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        let next = offset.saturating_add(tools.len());
+        AgentToolListPage {
+            tools,
+            total,
+            next_offset: (next < total).then_some(next),
+        }
+    }
+
     pub(super) fn search(&self, query: &str, limit: usize) -> Vec<AgentToolSearchMatch> {
         let query_terms = tokenize(query);
         if query_terms.is_empty() || self.documents.is_empty() {
@@ -290,15 +323,12 @@ impl AgentToolSearchIndex {
     }
 }
 
-/// The name a search result tells the model to call: the wire name where it
-/// is a top-level one (a protocol without native search calls it so), the
-/// tool's own name where the provider's search hands over its namespace.
+/// The fitted wire name, including its namespace, for discovery results.
 fn search_model_name(tool: &AgentPlannedTool) -> String {
     match super::provider_table::ProviderToolName::of_spec(&tool.provider_spec) {
-        Some(super::provider_table::ProviderToolName {
-            namespace: None,
-            name,
-        }) => name,
+        Some(super::provider_table::ProviderToolName { namespace, name }) => {
+            crate::flattened_tool_call_name(namespace.as_deref(), &name).into_owned()
+        }
         _ => tool.model_spec.name.clone(),
     }
 }

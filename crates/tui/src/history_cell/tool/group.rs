@@ -1,9 +1,7 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-//! A run of read, list and search calls in one entry, after Codex's
-//! exploration cell: `Exploring` while one runs, then `Explored`, with a
-//! row per call (`Read a, b` for consecutive reads). Expanded, each call's
-//! own view under its header.
+//! Consecutive calls of one kind in a compact entry, after Codex's
+//! exploration cell. Expanded, each call keeps its own view.
 
 use hanafubuki_agent::AgentToolDisplay;
 use ratatui::style::Stylize;
@@ -13,15 +11,47 @@ use unicode_width::UnicodeWidthStr;
 use super::{counted, frame, wrapped, Extent, ToolCall, LIST_DIRECTORY, READ_FILE, SEARCH_TEXT};
 use crate::render::line_utils::prefix_lines;
 
-pub(super) fn lines(calls: &[ToolCall], width: u16, expanded: bool) -> Vec<Line<'static>> {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ToolGroup {
+    Exploration,
+    Skills,
+    Mcp,
+}
+
+impl ToolGroup {
+    pub(crate) fn for_name(name: &str) -> Option<Self> {
+        match name {
+            READ_FILE | LIST_DIRECTORY | SEARCH_TEXT => Some(Self::Exploration),
+            "skills_list" | "skills_read" | "enable_skill" | "disable_skill" => Some(Self::Skills),
+            "list_mcp_resources" | "list_mcp_resource_templates" | "read_mcp_resource" => {
+                Some(Self::Mcp)
+            }
+            name if name.starts_with("mcp__") => Some(Self::Mcp),
+            _ => None,
+        }
+    }
+
+    fn title(self, running: bool) -> &'static str {
+        match (self, running) {
+            (Self::Exploration, true) => "Exploring",
+            (Self::Exploration, false) => "Explored",
+            (Self::Skills, true) => "Using skills",
+            (Self::Skills, false) => "Used skills",
+            (Self::Mcp, true) => "Calling MCP",
+            (Self::Mcp, false) => "Called MCP",
+        }
+    }
+}
+
+pub(super) fn lines(
+    group: ToolGroup,
+    calls: &[ToolCall],
+    width: u16,
+    expanded: bool,
+) -> Vec<Line<'static>> {
     let running = calls.iter().find(|call| call.outcome.is_none());
     let failed = calls.iter().filter(|call| failed(call)).count();
-    let mut title = vec![if running.is_some() {
-        "Exploring"
-    } else {
-        "Explored"
-    }
-    .bold()];
+    let mut title = vec![group.title(running.is_some()).bold()];
     if failed > 0 {
         title.push(format!(" · {failed} failed").red());
     }
@@ -36,7 +66,7 @@ pub(super) fn lines(calls: &[ToolCall], width: u16, expanded: bool) -> Vec<Line<
             .flat_map(|call| expanded_call(call, extent))
             .collect()
     } else {
-        rows(calls, extent.columns)
+        rows(group, calls, extent)
     };
     frame(bullet, title, None, body, width)
 }
@@ -48,7 +78,8 @@ fn failed(call: &ToolCall) -> bool {
 }
 
 /// A row per call, consecutive reads that did not fail in one.
-fn rows(calls: &[ToolCall], columns: usize) -> Vec<Line<'static>> {
+fn rows(group: ToolGroup, calls: &[ToolCall], view_extent: Extent) -> Vec<Line<'static>> {
+    let columns = view_extent.columns;
     let mut rows = Vec::new();
     let mut rest = calls;
     while let Some((call, after)) = rest.split_first() {
@@ -70,15 +101,33 @@ fn rows(calls: &[ToolCall], columns: usize) -> Vec<Line<'static>> {
             }
         }
         let verb = verb(&call.name);
-        let mut row = vec![verb.clone().cyan(), " ".into(), subjects.join(", ").into()];
+        let mut row = vec![verb.clone().cyan()];
+        if !subjects.is_empty() {
+            row.push(if group == ToolGroup::Mcp { ": " } else { " " }.into());
+            row.push(subjects.join(", ").into());
+        }
         if reads == 1 {
             row.extend(extent(call));
+            if group != ToolGroup::Exploration && call.outcome.is_none() {
+                row.push(" (running)".dim());
+            }
         }
         rows.extend(wrapped(
             Line::from(row),
             columns,
-            " ".repeat(verb.width() + 1),
+            " ".repeat(if group == ToolGroup::Exploration {
+                verb.width() + 1
+            } else {
+                2
+            }),
         ));
+        if group != ToolGroup::Exploration && failed(call) {
+            rows.extend(prefix_lines(
+                call.view(view_extent.nested()).preview,
+                "  ".into(),
+                "  ".into(),
+            ));
+        }
     }
     rows
 }
@@ -88,6 +137,13 @@ fn verb(name: &str) -> String {
         READ_FILE => "Read",
         LIST_DIRECTORY => "List",
         SEARCH_TEXT => "Search",
+        "skills_list" => "List skills",
+        "skills_read" => "Read skill",
+        "enable_skill" => "Enable skill",
+        "disable_skill" => "Disable skill",
+        "list_mcp_resources" => "List resources",
+        "list_mcp_resource_templates" => "List resource templates",
+        "read_mcp_resource" => "Read resource",
         name => name,
     }
     .to_string()

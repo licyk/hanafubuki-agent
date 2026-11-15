@@ -10,7 +10,7 @@ use hanafubuki_agent::{AgentReasoningId, AgentTaskPlanSnapshot, AgentToolCallDis
 use super::input_queue::Ending;
 use super::ChatWidget;
 use crate::agent_bridge::{TurnEnd, TurnUpdate, Warning, WarningSource};
-use crate::history_cell::{self, explores, LiveCell, ThinkingCell, ToolCallCell};
+use crate::history_cell::{self, LiveCell, ThinkingCell, ToolCallCell, ToolGroup};
 use crate::status_indicator_widget::StatusIndicatorWidget;
 
 const WORKING: &str = "Working";
@@ -168,25 +168,28 @@ impl ChatWidget {
         self.complete_live_entry(cell);
     }
 
-    /// An exploring call joins the exploring calls just before it;
-    /// another call is an entry of its own.
+    /// Consecutive calls of the same group share an entry.
     fn on_tool_started(&mut self, call_id: String, name: String, subject: Option<String>) {
         self.had_work_activity = true;
-        let explores = explores(&name);
+        let group = ToolGroup::for_name(&name);
         let mut call = history_cell::new_tool_call(call_id.clone(), name, subject);
         // A `!command`'s turn runs one call: the person's command.
         if self.user_shell {
             call = call.typed_by_user();
         }
-        if let Some(run) = self.exploration.clone().filter(|_| explores) {
+        if let Some(run) = self
+            .tool_group
+            .clone()
+            .filter(|run| group.is_some() && run.cell().group() == group)
+        {
             run.update(|cell| cell.join(call));
             self.running_tools.push((call_id, run));
             return;
         }
         let cell = LiveCell::new(call);
         self.insert_live_entry(cell.clone());
-        if explores {
-            self.exploration = Some(cell.clone());
+        if group.is_some() {
+            self.tool_group = Some(cell.clone());
         }
         self.running_tools.push((call_id, cell));
     }
@@ -238,9 +241,9 @@ impl ChatWidget {
         self.complete_settled_tool(cell);
     }
 
-    /// No exploring call joins the run of them from now on.
-    pub(super) fn close_exploration(&mut self) {
-        if let Some(run) = self.exploration.take() {
+    /// No further call joins this group.
+    pub(super) fn close_tool_group(&mut self) {
+        if let Some(run) = self.tool_group.take() {
             self.complete_settled_tool(run);
         }
     }
@@ -249,7 +252,7 @@ impl ChatWidget {
     /// complete: Scrollback's tail may write it from then on.
     fn complete_settled_tool(&self, cell: Arc<LiveCell<ToolCallCell>>) {
         let same = |other: &Arc<LiveCell<ToolCallCell>>| Arc::ptr_eq(other, &cell);
-        let unsettled = self.exploration.as_ref().is_some_and(same)
+        let unsettled = self.tool_group.as_ref().is_some_and(same)
             || self.running_tools.iter().any(|(_, other)| same(other))
             || self.awaiting_display.iter().any(|(_, other)| same(other));
         if !unsettled {
@@ -273,7 +276,7 @@ impl ChatWidget {
         self.finish_plan();
         // A call the turn's end overtook is written as it stood.
         let mut ended: Vec<Arc<LiveCell<ToolCallCell>>> =
-            self.exploration.take().into_iter().collect();
+            self.tool_group.take().into_iter().collect();
         for (_, cell) in std::mem::take(&mut self.running_tools) {
             if !ended.iter().any(|other| Arc::ptr_eq(other, &cell)) {
                 ended.push(cell);

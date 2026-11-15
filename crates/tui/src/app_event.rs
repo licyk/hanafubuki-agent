@@ -110,6 +110,8 @@ pub(crate) enum AppCommand {
     Copy(String),
     /// Owned mode: select mode in the transcript, to copy with the keys.
     SelectTranscript,
+    /// A message submitted from the composer resumes following its conversation.
+    FollowLatest,
     /// `/clear`: the terminal's scrollback and screen (terminal mode) or
     /// the transcript (owned mode) are cleared.
     ClearScreen,

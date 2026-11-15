@@ -1,6 +1,6 @@
 //! The session's capability scope (site/content/docs/plugin-rules.en.mdx,
 //! "Capability scope"): a tool it leaves out is absent exactly like an
-//! unknown one, the kernel's own tools and `tool_search` survive any scope,
+//! unknown one, the kernel's own tools and discovery tools survive any scope,
 //! a plugin it turns off neither prompts nor continues the turn, approval
 //! rules and tool lifecycle hooks still apply, the cap tightens the turn's
 //! mode, children are never wider, the role changes only between turns,
@@ -129,6 +129,7 @@ async fn a_tool_the_scope_leaves_out_is_absent_exactly_like_an_unknown_one() {
         // has no deferred tool left to find.
         assert!(!has_section(&requests[0], "tool_catalog_omissions"));
         assert!(!offered.contains(&"tool_search".to_string()), "{offered:?}");
+        assert!(!offered.contains(&"tool_list".to_string()), "{offered:?}");
     }
 }
 
@@ -144,6 +145,7 @@ async fn the_kernels_tools_and_tool_search_survive_any_scope() {
             allow: vec![names(&["configure_instance"])],
             deny: names(&[
                 "tool_search",
+                "tool_list",
                 "update_plan",
                 "new_context",
                 "request_user_input",
@@ -165,6 +167,7 @@ async fn the_kernels_tools_and_tool_search_survive_any_scope() {
         [
             "new_context",
             "request_user_input",
+            "tool_list",
             "tool_search",
             "update_plan"
         ]

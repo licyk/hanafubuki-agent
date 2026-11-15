@@ -3,7 +3,7 @@
 use hanafubuki_agent::{AgentListingEntry, AgentListingEntryKind, AgentToolDisplay};
 
 use super::{both, no_display, render};
-use crate::history_cell::tool::{explores, new_tool_call, ToolCallCell};
+use crate::history_cell::tool::{new_tool_call, ToolCallCell, ToolGroup};
 use crate::history_cell::{ActivityDisclosure, HistoryCell};
 
 fn read(text: &str) -> AgentToolDisplay {
@@ -26,8 +26,11 @@ fn joined(run: &mut ToolCallCell, id: &str, name: &str, subject: &str) {
 
 #[test]
 fn reads_lists_and_searches_explore() {
-    assert!(explores("read_file") && explores("list_directory") && explores("search_text"));
-    assert!(!explores("exec_command") && !explores("apply_patch"));
+    for name in ["read_file", "list_directory", "search_text"] {
+        assert_eq!(ToolGroup::for_name(name), Some(ToolGroup::Exploration));
+    }
+    assert_eq!(ToolGroup::for_name("exec_command"), None);
+    assert_eq!(ToolGroup::for_name("apply_patch"), None);
 }
 
 #[test]

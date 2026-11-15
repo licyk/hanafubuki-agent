@@ -45,12 +45,10 @@ fn the_preview_shares_one_limit_across_items_and_the_transcript_keeps_all() {
         text_item("first\nsecond"),
         text_item("third\nfourth\nfifth"),
     ]);
-    insta::assert_snapshot!(both(&cell, 80), @r"
-    • Called mcp__search__lookup: rust
-      └ first
-        second
-        third
-    ─── expanded (Some(OutputLines(2))) ───
+    insta::assert_snapshot!(both(&cell, 80), @"
+    • Called MCP
+      └ mcp__search__lookup: rust
+    ─── expanded (Some(Generic)) ───
     • Called mcp__search__lookup: rust
       └ first
         second
@@ -102,10 +100,8 @@ fn each_item_shows_as_text_or_a_one_line_summary() {
         text_item("[unsupported MCP content: future_block]"),
     ]);
     insta::assert_snapshot!(both(&cell, 80), @r#"
-    • Called mcp__search__lookup: rust
-      └ {"result": [1, 2, 3], "text": "long output 🦀"}
-        image/png · 8 B
-        audio/wav · 35.2 KiB
+    • Called MCP
+      └ mcp__search__lookup: rust
     ─── expanded (Some(Generic)) ───
     • Called mcp__search__lookup: rust
       └ {
@@ -131,8 +127,8 @@ fn a_json_output_is_compact_collapsed_indented_expanded_and_as_it_came_raw() {
     let json = r#"{"name":"ratatui","versions":["0.29","0.30"],"meta":{"stars":10000,"empty":{}}}"#;
     let cell = mcp(vec![text_item(json)]);
     insta::assert_snapshot!(both(&cell, 60), @r#"
-    • Called mcp__search__lookup: rust
-      └ {"name": "ratatui", "versions": ["0.29", "0.30"], "meta…
+    • Called MCP
+      └ mcp__search__lookup: rust
     ─── expanded (Some(Generic)) ───
     • Called mcp__search__lookup: rust
       └ {
@@ -216,7 +212,7 @@ fn a_multi_megabyte_image_is_one_summary_row() {
     let cell = shown("mcp__shots__take", None, display);
     assert_eq!(
         both(&cell, 80),
-        "• Called mcp__shots__take\n  └ image/png · 6.0 MiB\n─── expanded (None) ───\n• Called mcp__shots__take\n  └ image/png · 6.0 MiB"
+        "• Called MCP\n  └ mcp__shots__take\n─── expanded (Some(Generic)) ───\n• Called mcp__shots__take\n  └ image/png · 6.0 MiB"
     );
 }
 
@@ -289,8 +285,6 @@ fn structured_mcp_content_shows_its_items() {
         None,
         AgentToolDisplay::fallback(&output),
     );
-    assert_eq!(
-        render(&cell, 80),
-        "• Called mcp__weather__now\n  └ {\"temperature\": 21, \"unit\": \"C\"}"
-    );
+    assert_eq!(render(&cell, 80), "• Called MCP\n  └ mcp__weather__now");
+    assert!(text(&cell.transcript_lines(80)).contains("\"temperature\": 21"));
 }

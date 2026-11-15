@@ -26,6 +26,10 @@ impl App {
         command: AppCommand,
     ) {
         match command {
+            AppCommand::FollowLatest => {
+                self.transcript_view.jump_to_latest();
+                self.schedule_frame(Instant::now());
+            }
             AppCommand::Copy(text) => self.copy_text(&text),
             AppCommand::SelectTranscript => {
                 if !self

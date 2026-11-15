@@ -23,6 +23,13 @@ impl AgentService {
                     })
                     .await
             }
+            crate::AgentPlannedToolBinding::PlanList => {
+                runtime
+                    .dispatch(class, async {
+                        self.execute_plan_list(call, runtime.catalog())
+                    })
+                    .await
+            }
             crate::AgentPlannedToolBinding::Handler => {
                 return self
                     .execute_handler_tool_call(

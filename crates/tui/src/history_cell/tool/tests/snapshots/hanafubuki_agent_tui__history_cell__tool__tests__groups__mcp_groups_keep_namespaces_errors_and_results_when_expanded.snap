@@ -1,0 +1,14 @@
+---
+source: crates/tui/src/history_cell/tool/tests/groups.rs
+expression: "both(&cell, 80)"
+---
+• Called MCP · 1 failed
+  └ mcp__one__lookup: MCP one
+    mcp__two__lookup: MCP two (failed)
+      Access denied
+─── expanded (Some(Generic)) ───
+• Called MCP · 1 failed
+  └ Called mcp__one__lookup: MCP one
+      first result
+    Failed mcp__two__lookup: MCP two
+      Access denied

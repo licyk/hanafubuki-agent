@@ -258,7 +258,7 @@ fn request(input: Vec<ModelInputItem>) -> ModelRequest {
     tools.push(hanafubuki_agent_model_api::ModelToolSpec {
         name: hanafubuki_agent_model_api::FALLBACK_TOOL_SEARCH_NAME.to_string(),
         description: format!(
-            "# Tool discovery\n\nSearch deferred tool metadata with BM25 and expose matching tools for the next model call. The default result limit is {}.\n\nAvailable sources:\n- builtin\n\nSome tools are not provided upfront. Use `tool_search` to discover required tools. For MCP tool discovery, use `tool_search` instead of `list_mcp_resources` or `list_mcp_resource_templates`.",
+            "# Tool discovery\n\nSearch deferred tool metadata with BM25 and expose matching tools for the next model call. The default result limit is {}.\n\nAvailable sources:\n- builtin\n\nSome tools are not provided upfront. Use `tool_list` to browse tool names without schemas or enabling tools, then `tool_search` with a name or task description to obtain the definitions needed to call them. For MCP tool discovery, use these tools instead of `list_mcp_resources` or `list_mcp_resource_templates`.",
             hanafubuki_agent_kernel::DEFAULT_AGENT_TOOL_SEARCH_RESULTS
         ),
         input_schema: json!({
@@ -271,6 +271,20 @@ fn request(input: Vec<ModelInputItem>) -> ModelRequest {
             "additionalProperties": false
         }),
         strict: true,
+    });
+    tools.push(hanafubuki_agent_model_api::ModelToolSpec {
+        name: "tool_list".into(),
+        description: "List deferred tool names without descriptions or schemas, without enabling them. Use source to filter by an exact source id from tool_search's Available sources. Results are sorted by name; offset defaults to 0 and limit to 50 (maximum 50). Follow next_offset to browse more, then use tool_search with a name to obtain its definition before calling it. The list reflects the current step's catalog.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "source": {"type": ["string", "null"]},
+                "offset": {"type": ["integer", "null"], "minimum": 0},
+                "limit": {"type": ["integer", "null"], "minimum": 1, "maximum": 50}
+            },
+            "additionalProperties": false
+        }),
+        strict: false,
     });
     for tool in &mut tools {
         tool.strict = false;
@@ -925,6 +939,7 @@ mod budget;
 mod context_and_skills;
 mod continuation;
 mod deadlines;
+mod discovery;
 mod handlers;
 mod host_context;
 mod image_tool;

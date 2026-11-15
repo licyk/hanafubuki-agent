@@ -207,7 +207,10 @@ fn registration_refuses_reserved_taken_and_oversized_names() {
     for reserved in crate::AgentCoreTool::ALL
         .iter()
         .map(|tool| tool.name())
-        .chain([hanafubuki_agent_model_api::FALLBACK_TOOL_SEARCH_NAME])
+        .chain([
+            hanafubuki_agent_model_api::FALLBACK_TOOL_SEARCH_NAME,
+            "tool_list",
+        ])
     {
         assert!(hanafubuki_agent_contracts::RESERVED_TOOL_NAMES.contains(&reserved));
         assert!(matches!(
@@ -217,7 +220,7 @@ fn registration_refuses_reserved_taken_and_oversized_names() {
     }
     assert_eq!(
         hanafubuki_agent_contracts::RESERVED_TOOL_NAMES.len(),
-        crate::AgentCoreTool::ALL.len() + 1
+        crate::AgentCoreTool::ALL.len() + 2
     );
     let flat = named_fixture(ToolName::parse("calendar__create").unwrap());
     let namespaced =

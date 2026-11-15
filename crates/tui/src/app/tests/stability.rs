@@ -127,7 +127,7 @@ fn assert_moved_by_growth(previous: &Frame, next: &Frame, following: bool, step:
 }
 
 #[test]
-fn a_running_command_keeps_its_shape_through_its_clock_output_completion_and_display() {
+fn a_running_command_keeps_its_shape_until_its_final_display() {
     // `• Running ` and the command fill 93 of the 100 columns: a clock of
     // 9.9s would fit after it, one of 10.0s would wrap it.
     let command = format!("probe-{}", "x".repeat(77));
@@ -148,12 +148,19 @@ fn a_running_command_keeps_its_shape_through_its_clock_output_completion_and_dis
         tool.update(|cell| cell.started_ago("call-1", Duration::from_millis(900)));
         harness.send(AppEvent::InsertLiveEntry(tool.clone()));
         let first = harness.frame("probe-");
-        assert_eq!(first.height, 2, "{}", first.rows.join("\n"));
+        assert_eq!(first.height, 3, "{}", first.rows.join("\n"));
+        assert!(first.rows.iter().any(|row| row.contains("+ Show details")));
         let viewport = harness.tui.terminal.viewport_area;
         for (index, step) in steps.iter().enumerate() {
             tool.update(|cell| step(cell));
             let frame = harness.frame("probe-");
             let screen = frame.rows.join("\n");
+            if index == steps.len() - 1 {
+                // The final short result needs no disclosure control.
+                assert_eq!(frame.height, 2, "{screen}");
+                assert!(!screen.contains("Show details"));
+                continue;
+            }
             assert_eq!(
                 (frame.header, frame.height),
                 (first.header, first.height),
@@ -166,9 +173,10 @@ fn a_running_command_keeps_its_shape_through_its_clock_output_completion_and_dis
             );
             assert_eq!(harness.tui.terminal.viewport_area, viewport);
         }
+        let displayed = harness.frame("probe-");
         harness.send(AppEvent::LiveEntryCompleted(tool));
         let last = harness.frame("probe-");
-        assert_eq!(last.rows[..last.header], first.rows[..first.header]);
+        assert_eq!(last.rows[..last.header], displayed.rows[..displayed.header]);
         assert_eq!(last.rows[last.header + 1], "  └ built");
     }
 }
@@ -206,7 +214,12 @@ fn an_entry_grows_by_at_most_its_control_and_two_rows_and_only_the_rows_above_fo
             let tool = call(name, subject);
             harness.send(AppEvent::InsertLiveEntry(tool.clone()));
             let mut previous = harness.frame(subject);
-            assert_eq!(previous.height, 2, "{}", previous.rows.join("\n"));
+            assert_eq!(
+                previous.height,
+                if name == "exec_command" { 3 } else { 2 },
+                "{}",
+                previous.rows.join("\n")
+            );
             for (index, step) in steps.iter().enumerate() {
                 tool.update(|cell| step(cell));
                 let frame = harness.frame(subject);

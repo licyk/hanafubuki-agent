@@ -84,9 +84,8 @@ pub(crate) struct ChatWidget {
     /// (`TurnUpdate::ToolDisplayed`); their entries stay live until it
     /// arrives.
     awaiting_display: Vec<(String, Arc<LiveCell<ToolCallCell>>)>,
-    /// The entry of the exploring calls in a row, which the next exploring
-    /// call joins until another entry comes.
-    exploration: Option<Arc<LiveCell<ToolCallCell>>>,
+    /// The open group of consecutive calls, which the next matching call may join.
+    tool_group: Option<Arc<LiveCell<ToolCallCell>>>,
     /// The reasoning items the model is thinking in, in the order they
     /// started.
     live_thinking: Vec<(AgentReasoningId, Arc<LiveCell<ThinkingCell>>)>,
@@ -154,7 +153,7 @@ impl ChatWidget {
             bottom_pane,
             running_tools: Vec::new(),
             awaiting_display: Vec::new(),
-            exploration: None,
+            tool_group: None,
             live_thinking: Vec::new(),
             work_entries: std::collections::HashMap::new(),
             stream_controller: None,
@@ -238,7 +237,12 @@ impl ChatWidget {
                 return;
             }
         }
-        match self.bottom_pane.handle_key_event(key_event) {
+        let input = self.bottom_pane.handle_key_event(key_event);
+        if matches!(input, InputResult::Submitted(_) | InputResult::Queued(_)) {
+            self.app_event_tx
+                .send(AppEvent::Command(AppCommand::FollowLatest));
+        }
+        match input {
             InputResult::Submitted(text) => self.submit_user_message(text),
             InputResult::Queued(text) => self.queue_user_message(text),
             InputResult::Command(command, args) => self.dispatch_command(command, args),
@@ -413,13 +417,13 @@ impl ChatWidget {
     }
 
     fn add_boxed_history(&mut self, cell: Box<dyn HistoryCell>) {
-        self.close_exploration();
+        self.close_tool_group();
         self.app_event_tx.send(AppEvent::InsertHistoryCell(cell));
     }
 
     /// Hands the transcript an entry that changes in place from its start.
     fn insert_live_entry(&mut self, entry: Arc<dyn HistoryCell>) {
-        self.close_exploration();
+        self.close_tool_group();
         self.app_event_tx.send(AppEvent::InsertLiveEntry(entry));
     }
 

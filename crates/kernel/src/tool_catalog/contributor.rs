@@ -208,6 +208,7 @@ impl AgentToolPlanner {
                 && !context.provider_capabilities.native_tool_search
             {
                 registration.exposure = ToolExposure::Direct;
+                set_tool_spec_deferred(&mut registration.provider_spec, false);
             }
         }
         let mut planned = Vec::with_capacity(registrations.len());
@@ -237,10 +238,11 @@ impl AgentToolPlanner {
         }
         defer_oversized_direct_catalog(&mut registrations)?;
         let mut additional_model_specs = Vec::new();
-        let has_native_deferred_tools = context.provider_capabilities.native_tool_search
-            && registrations
-                .iter()
-                .any(|registration| registration.exposure == ToolExposure::Deferred);
+        let has_deferred_tools = registrations
+            .iter()
+            .any(|registration| registration.exposure == ToolExposure::Deferred);
+        let has_native_deferred_tools =
+            context.provider_capabilities.native_tool_search && has_deferred_tools;
         if has_native_deferred_tools {
             let description = tool_search_description(&registrations);
             additional_model_specs.push(ToolSpec::ToolSearch(ToolSearchSpec {
@@ -257,12 +259,12 @@ impl AgentToolPlanner {
                 }),
             }));
             registrations.push(plan_search_registration(ToolExposure::Hidden, description)?);
-        } else if registrations
-            .iter()
-            .any(|registration| registration.exposure == ToolExposure::Deferred)
-        {
+        } else if has_deferred_tools {
             let description = tool_search_description(&registrations);
             registrations.push(plan_search_registration(ToolExposure::Direct, description)?);
+        }
+        if has_deferred_tools {
+            registrations.push(plan_list_registration()?);
         }
         if !context.provider_capabilities.strict_json_schema {
             let specifications = registrations

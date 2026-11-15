@@ -549,6 +549,71 @@ fn exploring_calls_in_a_row_share_an_entry_until_another_comes() {
 }
 
 #[test]
+fn skill_and_mcp_runs_are_separate_and_replay_as_they_did_live() {
+    for owned in [true, false] {
+        let (mut chat, events) = chat_in(owned);
+        let mut entries = Vec::new();
+        chat.handle_turn_update(TurnUpdate::Started);
+        transcript(&events, &mut entries);
+        entries.clear();
+        let calls = [
+            ("read-1", "read_file", Some("a.rs")),
+            ("read-2", "read_file", Some("b.rs")),
+            ("skill-1", "skills_list", None),
+            ("skill-2", "skills_read", Some("user:rust")),
+            ("mcp-1", "mcp__one__lookup", Some("MCP one")),
+            ("mcp-2", "mcp__two__lookup", Some("MCP two")),
+            ("skill-3", "enable_skill", Some("user:rust")),
+            ("exec", "exec_command", Some("pwd")),
+            ("mcp-3", "read_mcp_resource", Some("file:///docs")),
+        ];
+        let mut replay = Vec::new();
+        for (id, name, subject) in calls {
+            tool_started(&mut chat, id, name, subject);
+            tool_completed(&mut chat, id, "result");
+            transcript(&events, &mut entries);
+            replay.push(ReplayedItem::Tool {
+                call_id: id.into(),
+                name: name.into(),
+                subject: subject.map(str::to_string),
+                is_error: false,
+                display: Some(AgentToolDisplay::Text {
+                    text: "result".into(),
+                }),
+            });
+        }
+        let live = texts(&entries);
+        assert_eq!(live.len(), 6);
+        assert!(live[0].starts_with("• Explored"));
+        assert_eq!(
+            live[1],
+            "• Used skills\n  └ List skills\n    Read skill user:rust"
+        );
+        assert_eq!(
+            live[2],
+            "• Called MCP\n  └ mcp__one__lookup: MCP one\n    mcp__two__lookup: MCP two"
+        );
+        assert!(live[3].starts_with("• Used skills"));
+        assert!(live[4].starts_with("• Called exec_command: pwd"));
+        assert_eq!(live[5], "• Called MCP\n  └ Read resource: file:///docs");
+        let replayed = chat.replayed_cells(replay);
+        assert_eq!(
+            live,
+            replayed
+                .iter()
+                .map(|cell| cell_text(cell.as_ref()))
+                .collect::<Vec<_>>()
+        );
+        for (live, replayed) in entries.iter().zip(&replayed) {
+            assert_eq!(
+                cell_lines(live.as_ref(), true),
+                cell_lines(replayed.as_ref(), true)
+            );
+        }
+    }
+}
+
+#[test]
 fn a_replayed_run_of_exploring_calls_is_one_entry_as_it_was_live() {
     let (mut chat, events) = chat();
     drain(&events);

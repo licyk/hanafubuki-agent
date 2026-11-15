@@ -371,6 +371,15 @@ impl AgentToolPlan {
         self.search_index.search(query, requested_limit)
     }
 
+    pub(crate) fn list_deferred(
+        &self,
+        source: Option<&str>,
+        offset: usize,
+        limit: usize,
+    ) -> AgentToolListPage {
+        self.search_index.list(source, offset, limit)
+    }
+
     pub fn selected_tools_pollute_memory(&self, selections: &[AgentToolSelection]) -> bool {
         selections.iter().any(|selection| {
             self.registrations.iter().any(|registration| {
@@ -389,4 +398,11 @@ pub struct AgentToolSearchMatch {
     pub model_name: String,
     pub description: String,
     pub score_milli: u32,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize)]
+pub(crate) struct AgentToolListPage {
+    pub tools: Vec<String>,
+    pub total: usize,
+    pub next_offset: Option<usize>,
 }

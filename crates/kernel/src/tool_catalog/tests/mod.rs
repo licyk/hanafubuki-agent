@@ -177,6 +177,7 @@ fn plan_context(mode: AgentSessionMode, strict_json_schema: bool) -> AgentToolCa
 
 mod dynamic;
 mod fixed;
+mod listing;
 mod provider_table;
 mod registered;
 mod search;

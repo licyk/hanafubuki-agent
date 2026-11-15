@@ -58,6 +58,7 @@ mod standalone;
 mod startup;
 mod structured_output;
 mod titles;
+mod tool_list;
 mod tools;
 mod user_shell;
 mod wake;

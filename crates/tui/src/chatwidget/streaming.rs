@@ -167,7 +167,7 @@ impl ChatWidget {
             return;
         };
         if update.committed.is_some() {
-            self.close_exploration();
+            self.close_tool_group();
         }
         self.app_event_tx.send(AppEvent::StreamUpdate(update));
     }

@@ -145,6 +145,7 @@ pub enum AgentPlannedToolBinding {
     /// tool source for one step.
     Handler,
     PlanSearch,
+    PlanList,
 }
 
 impl AgentToolSelection {
@@ -167,7 +168,7 @@ impl AgentPlannedTool {
                 .handler
                 .as_ref()
                 .is_some_and(|binding| !binding.is_sourced()),
-            AgentPlannedToolBinding::PlanSearch => false,
+            AgentPlannedToolBinding::PlanSearch | AgentPlannedToolBinding::PlanList => false,
         }
     }
 
@@ -363,11 +364,12 @@ impl AgentPlannedTool {
         Ok(planned)
     }
 
-    pub(super) fn plan_search(
+    pub(super) fn plan_discovery(
         provider_id: AgentToolProviderId,
         mut model_spec: ModelToolSpec,
         execution_class: AgentToolExecutionClass,
         exposure: ToolExposure,
+        binding: AgentPlannedToolBinding,
     ) -> Result<Self, AgentToolCatalogError> {
         model_spec.strict = false;
         let tool_id = AgentToolId::parse(model_spec.name.clone())
@@ -386,7 +388,7 @@ impl AgentPlannedTool {
             &model_spec,
             &provider_spec,
             exposure,
-            AgentPlannedToolBinding::PlanSearch,
+            binding,
             execution_class,
         ))
         .map_err(|_| AgentToolCatalogError::InvalidSchema)?;
@@ -398,7 +400,7 @@ impl AgentPlannedTool {
             provider_spec,
             namespace_description: None,
             exposure,
-            binding: AgentPlannedToolBinding::PlanSearch,
+            binding,
             execution_class,
             presentation: AgentToolPresentation {
                 action: AgentActivityAction::USE_TOOL,

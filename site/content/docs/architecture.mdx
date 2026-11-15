@@ -98,7 +98,7 @@ Agent 是一个**内核**（`hanafubuki-agent-kernel`），拥有会话、轮次
 
 ### 每个步骤的计划 [#a-plan-per-step]
 
-每个采样步骤构建一个不可变的 `AgentToolPlan`：内核的核心工具（`new_context`、`update_plan`、`request_user_input`，会话的压缩策略为 `hierarchical` 时还有五个压缩工具），注册的工具（每个处理器对这一步的 `availability`），每个工具源为这一步提供的工具，以及有工具被延迟时的 `tool_search`。随后会话的能力范围排除它不允许的每个插件工具，它关闭的插件的工具源不会被询问；被排除的工具与未知工具一样不存在，也不算遗漏（[能力范围](/docs/plugin-rules#capability-scope)）。内核自己的工具和 `tool_search` 从不被排除。计划同时冻结该步骤的审批规则快照和工具源的计划租约；调用针对宣告它的那个计划运行，租约让工具规划时依赖的东西（例如一个 MCP 连接）存活到步骤结束。计划模式只在范围保留的工具中保留 `ReadOnly` 工具、`request_user_input` 和压缩工具。
+每个采样步骤构建一个不可变的 `AgentToolPlan`：内核的核心工具（`new_context`、`update_plan`、`request_user_input`，会话的压缩策略为 `hierarchical` 时还有五个压缩工具），注册的工具（每个处理器对这一步的 `availability`），每个工具源为这一步提供的工具，以及有工具被延迟时的 `tool_search` 和 `tool_list`。随后会话的能力范围排除它不允许的每个插件工具，它关闭的插件的工具源不会被询问；被排除的工具与未知工具一样不存在，也不算遗漏（[能力范围](/docs/plugin-rules#capability-scope)）。内核自己的工具和工具发现工具从不被排除。计划同时冻结该步骤的审批规则快照和工具源的计划租约；调用针对宣告它的那个计划运行，租约让工具规划时依赖的东西（例如一个 MCP 连接）存活到步骤结束。计划模式只在范围保留的工具中保留 `ReadOnly` 工具、`request_user_input` 和压缩工具。
 
 ### 线路上的名字 [#names-on-the-wire]
 
@@ -111,6 +111,8 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 ### 暴露与延迟工具 [#exposure-and-deferred-tools]
 
 `ToolExposure` 是 `Direct`、`Deferred`、`DirectModelOnly` 或 `Hidden`。直接目录超出预算时，只有工具源的直接工具会被延迟，并在各提供者之间公平分配。延迟的工具通过 `tool_search`（对名称、说明和 schema 的 BM25 索引）找到；搜索提交它的输出，然后提交一个 `ConversationItem::ToolSelection`。规划器接受上次压缩以来模型上下文中的选择，所以选择跨轮次有效，直到下次压缩。
+
+`tool_list` 浏览当前步骤的延迟工具索引，不选择任何工具。它在所有协议中都是普通只读函数，包括支持原生工具搜索的 Responses：输出只有适配协议后的工具名和分页信息，不含说明或 schema。可选的 `source` 按提供者 ID 精确筛选，`offset` 从零开始，`limit` 默认为 50 并收敛到 1–50。名称排序后返回，`next_offset: null` 表示最后一页。被模式、能力范围或提供者能力排除的工具不出现在搜索或列举结果中。列举不会提交 `ToolSelection`；模型仍需通过 `tool_search` 获取定义后调用。在不支持原生延迟工具的协议中，选择工具会将它提升为直接暴露，同时清除线上的延迟标记。
 
 ### 调用流水线 [#the-call-pipeline]
 

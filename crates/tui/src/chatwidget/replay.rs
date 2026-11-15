@@ -9,7 +9,7 @@ use hanafubuki_agent::AgentToolCallDisplay;
 use super::ChatWidget;
 use crate::agent_bridge::{HooksCall, OpenedSession, ReplayedItem};
 use crate::app_event::{AgentCommand, AppEvent, Op};
-use crate::history_cell::{self, explores, HistoryCell, ToolCallCell};
+use crate::history_cell::{self, HistoryCell, ToolCallCell, ToolGroup};
 use crate::user_message::image_rows;
 
 impl ChatWidget {
@@ -32,7 +32,7 @@ impl ChatWidget {
                 )
             });
         }
-        self.exploration = None;
+        self.tool_group = None;
         self.live_thinking.clear();
         self.work_entries.clear();
         self.stream_controller = None;
@@ -96,14 +96,21 @@ impl ChatWidget {
     }
 
     /// The cells of replayed transcript items, oldest first. Consecutive
-    /// exploring calls share one, as they did live.
+    /// calls of the same group share one, as they did live.
     pub(crate) fn replayed_cells(&self, items: Vec<ReplayedItem>) -> Vec<Box<dyn HistoryCell>> {
         let mut cells: Vec<Box<dyn HistoryCell>> = Vec::new();
-        let mut exploration: Option<ToolCallCell> = None;
+        let mut tool_group: Option<ToolCallCell> = None;
         for item in items {
-            let explores = matches!(&item, ReplayedItem::Tool { name, .. } if explores(name));
-            if !explores {
-                if let Some(cell) = exploration.take() {
+            let group = match &item {
+                ReplayedItem::Tool { name, .. } => ToolGroup::for_name(name),
+                _ => None,
+            };
+            if group.is_none()
+                || tool_group
+                    .as_ref()
+                    .is_some_and(|cell| cell.group() != group)
+            {
+                if let Some(cell) = tool_group.take() {
                     cells.push(Box::new(cell));
                 }
             }
@@ -150,9 +157,9 @@ impl ChatWidget {
                             display,
                         },
                     );
-                    match exploration.as_mut() {
-                        Some(run) if explores => run.join(cell),
-                        _ if explores => exploration = Some(cell),
+                    match tool_group.as_mut() {
+                        Some(run) if group.is_some() => run.join(cell),
+                        _ if group.is_some() => tool_group = Some(cell),
                         _ => cells.push(Box::new(cell)),
                     }
                 }
@@ -170,7 +177,7 @@ impl ChatWidget {
                 }
             }
         }
-        if let Some(cell) = exploration {
+        if let Some(cell) = tool_group {
             cells.push(Box::new(cell));
         }
         cells

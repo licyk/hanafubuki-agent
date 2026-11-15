@@ -8,7 +8,7 @@ use hanafubuki_agent::AgentReasoningId;
 use ratatui::buffer::Buffer;
 
 use super::*;
-use crate::history_cell::{LiveCell, ThinkingCell};
+use crate::history_cell::{new_tool_call, LiveCell, ThinkingCell};
 use crate::transcript_view::tests::fixtures::{cell, key, mouse, prompt, render, text, tool_call};
 
 #[test]
@@ -60,6 +60,54 @@ fn a_click_on_the_control_toggles_and_the_detailed_view_has_none() {
     let detailed = text(&render(&mut view, &cells, 30, 40));
     assert!(detailed.contains("out 15") && !detailed.contains("Show less"));
     assert_eq!(view.handle_key(key(KeyCode::F(4)), &cells), None);
+}
+
+#[test]
+fn a_command_expands_before_its_first_output_and_keeps_streaming_in_details() {
+    let call = LiveCell::new(new_tool_call(
+        "call-1".into(),
+        "exec_command".into(),
+        Some("cargo test".into()),
+    ));
+    let cells: Vec<Arc<dyn HistoryCell>> = vec![call.clone()];
+    let mut view = TranscriptView::default();
+    let frame = render(&mut view, &cells, 60, 20);
+    let row = row_of(&frame, "+ Show details", 0);
+    view.handle_mouse(
+        mouse(MouseEventKind::Down(MouseButton::Left), 6, row),
+        &cells,
+    );
+    assert!(text(&render(&mut view, &cells, 60, 20)).contains("− Hide details"));
+
+    for output in ["first\n", "second\n", "third\nfourth\nfifth\n"] {
+        call.update(|cell| cell.push_output("call-1", output, false));
+        let shown = text(&render(&mut view, &cells, 60, 20));
+        assert!(shown.contains("first"), "{shown}");
+        assert!(shown.contains("$ cargo test"), "{shown}");
+        assert!(shown.contains("− Hide details"), "{shown}");
+    }
+    let shown = text(&render(&mut view, &cells, 60, 20));
+    assert!(shown.contains("fifth"));
+    call.update(|cell| cell.complete("call-1", false));
+    assert!(text(&render(&mut view, &cells, 60, 20)).contains("− Hide details"));
+
+    call.update(|cell| {
+        cell.show(
+            "call-1",
+            hanafubuki_agent::AgentToolCallDisplay {
+                subject: None,
+                display: Some(hanafubuki_agent::AgentToolDisplay::Text {
+                    text: "first\nsecond\nthird\nfourth\nfifth".into(),
+                }),
+            },
+        )
+    });
+    let shown = text(&render(&mut view, &cells, 60, 20));
+    assert!(
+        shown.contains("first") && shown.contains("fifth"),
+        "{shown}"
+    );
+    assert!(shown.contains("− Show less"), "{shown}");
 }
 
 #[test]

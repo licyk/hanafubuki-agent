@@ -1353,6 +1353,39 @@
         "type": "function"
       },
       {
+        "description": "List deferred tool names without descriptions or schemas, without enabling them. Use source to filter by an exact source id from tool_search's Available sources. Results are sorted by name; offset defaults to 0 and limit to 50 (maximum 50). Follow next_offset to browse more, then use tool_search with a name to obtain its definition before calling it. The list reflects the current step's catalog.",
+        "name": "tool_list",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "maximum": 50,
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "offset": {
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "strict": false,
+        "type": "function"
+      },
+      {
         "description": "Update the existing goal.\nSet status to `paused` only at the user's explicit request to pause this goal, never on your own initiative. Ask if unclear; a later resume revokes that request. Report the returned status and stop goal work. Budget limits take precedence over pausing.\nSet status to `complete` only when the objective has actually been achieved and no required work remains.\nSet status to `blocked` only when the same blocking condition has repeated for at least three consecutive goal turns, counting the original/user-triggered turn and any automatic continuations, and the agent cannot make meaningful progress without user input or an external-state change.\nIf the user resumes a goal that was previously marked `blocked`, treat the resumed run as a fresh blocked audit. If the same blocking condition then repeats for at least three consecutive resumed goal turns, set status to `blocked` again.\nOnce the blocked threshold is satisfied, do not keep reporting that you are still blocked while leaving the goal active; set status to `blocked`.\nDo not use `blocked` merely because the work is hard, slow, uncertain, incomplete, or would benefit from clarification.\nDo not mark a goal complete merely because its budget is nearly exhausted or because you are stopping work.\nYou cannot use this tool to resume or budget-limit a goal; those status changes are controlled by the user or system.\nWhen marking a budgeted goal achieved with status `complete`, report the final token usage from the tool result to the user.",
         "name": "update_goal",
         "parameters": {
@@ -1744,7 +1777,7 @@
         "type": "function"
       },
       {
-        "description": "# Tool discovery\n\nSearch deferred tool metadata with BM25 and expose matching tools for the next model call. The default result limit is 8.\n\nAvailable sources:\n- builtin\n\nSome tools are not provided upfront. Use `tool_search` to discover required tools. For MCP tool discovery, use `tool_search` instead of `list_mcp_resources` or `list_mcp_resource_templates`.",
+        "description": "# Tool discovery\n\nSearch deferred tool metadata with BM25 and expose matching tools for the next model call. The default result limit is 8.\n\nAvailable sources:\n- builtin\n\nSome tools are not provided upfront. Use `tool_list` to browse tool names without schemas or enabling tools, then `tool_search` with a name or task description to obtain the definitions needed to call them. For MCP tool discovery, use these tools instead of `list_mcp_resources` or `list_mcp_resource_templates`.",
         "execution": "client",
         "parameters": {
           "additionalProperties": false,
@@ -3195,6 +3228,39 @@
         "type": "function"
       },
       {
+        "description": "List deferred tool names without descriptions or schemas, without enabling them. Use source to filter by an exact source id from tool_search's Available sources. Results are sorted by name; offset defaults to 0 and limit to 50 (maximum 50). Follow next_offset to browse more, then use tool_search with a name to obtain its definition before calling it. The list reflects the current step's catalog.",
+        "name": "tool_list",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "maximum": 50,
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "offset": {
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "source": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "strict": false,
+        "type": "function"
+      },
+      {
         "description": "Update the existing goal.\nSet status to `paused` only at the user's explicit request to pause this goal, never on your own initiative. Ask if unclear; a later resume revokes that request. Report the returned status and stop goal work. Budget limits take precedence over pausing.\nSet status to `complete` only when the objective has actually been achieved and no required work remains.\nSet status to `blocked` only when the same blocking condition has repeated for at least three consecutive goal turns, counting the original/user-triggered turn and any automatic continuations, and the agent cannot make meaningful progress without user input or an external-state change.\nIf the user resumes a goal that was previously marked `blocked`, treat the resumed run as a fresh blocked audit. If the same blocking condition then repeats for at least three consecutive resumed goal turns, set status to `blocked` again.\nOnce the blocked threshold is satisfied, do not keep reporting that you are still blocked while leaving the goal active; set status to `blocked`.\nDo not use `blocked` merely because the work is hard, slow, uncertain, incomplete, or would benefit from clarification.\nDo not mark a goal complete merely because its budget is nearly exhausted or because you are stopping work.\nYou cannot use this tool to resume or budget-limit a goal; those status changes are controlled by the user or system.\nWhen marking a budgeted goal achieved with status `complete`, report the final token usage from the tool result to the user.",
         "name": "update_goal",
         "parameters": {
@@ -3586,7 +3652,7 @@
         "type": "function"
       },
       {
-        "description": "# Tool discovery\n\nSearch deferred tool metadata with BM25 and expose matching tools for the next model call. The default result limit is 8.\n\nAvailable sources:\n- builtin\n\nSome tools are not provided upfront. Use `tool_search` to discover required tools. For MCP tool discovery, use `tool_search` instead of `list_mcp_resources` or `list_mcp_resource_templates`.",
+        "description": "# Tool discovery\n\nSearch deferred tool metadata with BM25 and expose matching tools for the next model call. The default result limit is 8.\n\nAvailable sources:\n- builtin\n\nSome tools are not provided upfront. Use `tool_list` to browse tool names without schemas or enabling tools, then `tool_search` with a name or task description to obtain the definitions needed to call them. For MCP tool discovery, use these tools instead of `list_mcp_resources` or `list_mcp_resource_templates`.",
         "execution": "client",
         "parameters": {
           "additionalProperties": false,

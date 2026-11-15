@@ -13,13 +13,13 @@
 //! clock goes after its header only where its widest fits, so the header
 //! wraps the same as the clock counts and as it will once finished.
 //!
-//! Consecutive read, list and search calls share one entry, Codex's
-//! exploration cell (`exploration`): its activity ids are its calls'.
+//! Consecutive exploration, Skill or MCP calls of the same kind share an
+//! entry (`group`), after Codex's exploration cell: its activity ids are its calls'.
 
 mod command;
 mod content;
-mod exploration;
 mod file_read;
+mod group;
 mod listing;
 mod live_output;
 mod mutation;
@@ -36,6 +36,7 @@ use ratatui::style::Stylize;
 use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthStr;
 
+pub(crate) use group::ToolGroup;
 use live_output::LiveOutput;
 
 use super::{plain_lines, ActivityDisclosure, HistoryCell};
@@ -61,13 +62,7 @@ const CLOCK_TICK_MILLIS: u128 = 100;
 /// header: its widest, ` · 99h 59m 59s`.
 const CLOCK_COLUMNS: usize = 14;
 
-/// Whether consecutive calls of the tool share one entry. Decided by name:
-/// a call joins its entry when it starts, before any display.
-pub(crate) fn explores(name: &str) -> bool {
-    matches!(name, READ_FILE | LIST_DIRECTORY | SEARCH_TEXT)
-}
-
-/// One entry: a call, or a run of exploring calls.
+/// One entry: a call, or a group of consecutive calls of the same kind.
 #[derive(Debug)]
 pub(crate) struct ToolCallCell {
     calls: Vec<ToolCall>,
@@ -129,6 +124,12 @@ pub(crate) fn new_user_shell_command(call_id: String, shown: AgentToolCallDispla
 }
 
 impl ToolCallCell {
+    pub(crate) fn group(&self) -> Option<ToolGroup> {
+        self.calls
+            .first()
+            .and_then(|call| ToolGroup::for_name(&call.name))
+    }
+
     /// The entry of a command the person typed (`!command`).
     pub(crate) fn typed_by_user(mut self) -> Self {
         for call in &mut self.calls {
@@ -219,7 +220,10 @@ impl ToolCallCell {
 
     fn lines(&self, width: u16, extent: Extent) -> Vec<Line<'static>> {
         match &self.calls[..] {
-            [call] => {
+            [call]
+                if extent.expanded
+                    || !matches!(self.group(), Some(ToolGroup::Skills | ToolGroup::Mcp)) =>
+            {
                 let view = call.view(extent);
                 let body = if extent.expanded {
                     view.details
@@ -229,7 +233,12 @@ impl ToolCallCell {
                 let bullet = call.bullet(view.failed);
                 frame(bullet, view.title, call.clock(), body, width)
             }
-            calls => exploration::lines(calls, width, extent.expanded),
+            calls => group::lines(
+                self.group().unwrap_or(ToolGroup::Exploration),
+                calls,
+                width,
+                extent.expanded,
+            ),
         }
     }
 }
@@ -256,7 +265,15 @@ impl HistoryCell for ToolCallCell {
 
     fn activity_disclosure(&self, width: u16) -> Option<ActivityDisclosure> {
         match &self.calls[..] {
-            [call] => call.view(Extent::new(width, false)).hidden,
+            [call]
+                if call.name == EXEC_COMMAND
+                    && call.outcome.as_ref().is_none_or(|outcome| !outcome.shown) =>
+            {
+                Some(ActivityDisclosure::Generic)
+            }
+            [call] if !matches!(self.group(), Some(ToolGroup::Skills | ToolGroup::Mcp)) => {
+                call.view(Extent::new(width, false)).hidden
+            }
             // A run's details always show more than its rows: each call's
             // own view.
             _ => Some(ActivityDisclosure::Generic),

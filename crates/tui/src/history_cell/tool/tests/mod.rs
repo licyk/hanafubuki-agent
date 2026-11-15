@@ -5,6 +5,7 @@ mod colour;
 mod content;
 mod diffs;
 mod exploration;
+mod groups;
 mod shape;
 mod streamed;
 mod user_shell;
@@ -90,7 +91,10 @@ fn a_running_call_shows_its_command_or_its_name_and_subject() {
         "{}",
         render(&cell, 60)
     );
-    assert_eq!(cell.activity_disclosure(60), None);
+    assert_eq!(
+        cell.activity_disclosure(60),
+        Some(ActivityDisclosure::Generic)
+    );
     assert!(cell.transcript_animation_tick().is_some());
     let cell = new_tool_call(
         "call-1".to_string(),
@@ -222,7 +226,7 @@ fn a_display_without_a_subject_keeps_the_one_the_call_started_with() {
     );
     assert_eq!(
         render(&cell, 60),
-        "• Called mcp__docs__lookup: rust\n  └ ok"
+        "• Called MCP\n  └ mcp__docs__lookup: rust"
     );
     // A display for another call changes nothing.
     cell.show(
@@ -244,10 +248,7 @@ fn a_long_preview_row_is_cut_and_its_whole_line_is_a_detail() {
             text: "a line much wider than the entry it is shown in".to_string(),
         },
     );
-    assert_eq!(
-        render(&cell, 24),
-        "• Called\n    mcp__docs__lookup\n  └ a line much wider t…"
-    );
+    assert_eq!(render(&cell, 24), "• Called MCP\n  └ mcp__docs__lookup");
     assert_eq!(
         cell.activity_disclosure(24),
         Some(ActivityDisclosure::Generic)

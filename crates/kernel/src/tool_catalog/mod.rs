@@ -31,6 +31,7 @@ pub const MAX_AGENT_TOOL_CATALOG_SCHEMA_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_AGENT_DIRECT_TOOL_SCHEMA_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_AGENT_TOOL_SEARCH_RESULTS: usize = 20;
 pub const DEFAULT_AGENT_TOOL_SEARCH_RESULTS: usize = 8;
+pub(crate) const MAX_AGENT_TOOL_LIST_RESULTS: usize = 50;
 pub(crate) type AgentToolContributionFuture<'a> =
     Pin<Box<dyn Future<Output = Result<AgentToolContribution, AgentToolCatalogError>> + Send + 'a>>;
 
@@ -52,6 +53,7 @@ pub use contributor::{AgentToolCatalogContext, AgentToolSelection};
 pub(crate) use contributor::{AgentToolContribution, AgentToolContributor, AgentToolPlanner};
 pub use error::{validate_dynamic_tool_arguments, AgentToolCatalogError};
 pub(crate) use kernel_tools::CoreAgentToolContributor;
+pub(crate) use plan::AgentToolListPage;
 pub(crate) use plan::ToolLifecycleHookEntry;
 pub use plan::{AgentToolPlan, AgentToolSearchMatch};
 pub(crate) use registered::RegisteredAgentToolContributor;
