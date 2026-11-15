@@ -10,6 +10,7 @@ use crate::agent_bridge::WorkSnapshot;
 use crate::render::line_utils::prefix_lines;
 use crate::shimmer::shimmer_spans;
 use crate::status_indicator_widget::fmt_elapsed_tenths;
+use crate::wrapping::{word_wrap_lines, RtOptions};
 
 #[derive(Debug)]
 pub(crate) struct WorkCell {
@@ -30,6 +31,7 @@ impl WorkCell {
             snapshot: WorkSnapshot {
                 id: format!("compaction:h{item_id}"),
                 title: "Context compacted".to_string(),
+                subject: None,
                 text: Some(summary),
                 started_at: 0,
                 completed_at: Some(0),
@@ -86,12 +88,20 @@ impl WorkCell {
 }
 
 impl HistoryCell for WorkCell {
-    fn display_lines(&self, _width: u16) -> Vec<Line<'static>> {
-        vec![self.header()]
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let mut lines = vec![self.header()];
+        if let Some(subject) = &self.snapshot.subject {
+            let body = word_wrap_lines(
+                raw_lines_from_source(subject),
+                RtOptions::new(usize::from(width.saturating_sub(2)).max(1)),
+            );
+            lines.extend(prefix_lines(body, "  ".into(), "  ".into()));
+        }
+        lines
     }
 
     fn transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
-        let mut lines = vec![self.header()];
+        let mut lines = self.display_lines(width);
         let mut body = Vec::new();
         crate::markdown::append_markdown(
             self.text(),
@@ -105,6 +115,9 @@ impl HistoryCell for WorkCell {
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
         let mut lines = vec![self.header()];
+        if let Some(subject) = &self.snapshot.subject {
+            lines.extend(raw_lines_from_source(subject));
+        }
         lines.extend(raw_lines_from_source(self.text()));
         lines
     }

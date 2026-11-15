@@ -8,6 +8,7 @@ use hanafubuki_agent::{
 pub(crate) struct WorkSnapshot {
     pub(crate) id: String,
     pub(crate) title: String,
+    pub(crate) subject: Option<String>,
     pub(crate) text: Option<String>,
     pub(crate) started_at: u64,
     pub(crate) completed_at: Option<u64>,
@@ -77,6 +78,7 @@ impl WorkSnapshot {
         Some(Self {
             id: format!("compaction:{}", snapshot.id),
             title,
+            subject: None,
             text: snapshot.summary.clone(),
             started_at: snapshot.created_at,
             completed_at: snapshot.status.is_terminal().then_some(snapshot.updated_at),
@@ -94,7 +96,7 @@ impl WorkSnapshot {
         completed_at: Option<u64>,
     ) -> Self {
         let label = match status {
-            PermissionReviewStatus::Reviewing => "Automatic approval review",
+            PermissionReviewStatus::Reviewing => "Reviewing approval request",
             PermissionReviewStatus::Approved => "Automatic approval review approved",
             PermissionReviewStatus::Denied => "Automatic approval review denied",
             PermissionReviewStatus::TimedOut => "Automatic approval review timed out",
@@ -103,7 +105,8 @@ impl WorkSnapshot {
         };
         Self {
             id: format!("permission-review:{id}"),
-            title: format!("{label}: {action}"),
+            title: label.to_string(),
+            subject: Some(action),
             text: rationale,
             started_at,
             completed_at,

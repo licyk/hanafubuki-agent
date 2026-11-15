@@ -5,6 +5,7 @@ fn work(id: &str, text: &str, done: bool) -> TurnUpdate {
     TurnUpdate::Work(WorkSnapshot {
         id: id.to_string(),
         title: "Working activity".to_string(),
+        subject: None,
         text: Some(text.to_string()),
         started_at: 1_000,
         completed_at: done.then_some(2_000),
@@ -110,7 +111,7 @@ fn saved_review_replays_its_original_duration_and_rationale() {
         .collect::<Vec<_>>()
         .join("\n");
     assert!(
-        lines.contains("Automatic approval review denied: run command · 2.5s"),
+        lines.contains("Automatic approval review denied · 2.5s\n  run command"),
         "{lines}"
     );
     assert!(lines.contains("Outside the requested scope"), "{lines}");
