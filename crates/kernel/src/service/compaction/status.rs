@@ -16,15 +16,44 @@ impl Drop for CompactionExecutionGuard {
 }
 
 impl AgentService {
+    pub(super) async fn stream_compaction_summary(
+        &self,
+        identity: CompactionIdentity,
+        summary: &str,
+        event_sink: Option<&dyn AgentEventSink>,
+    ) -> Result<(), AgentError> {
+        super::execute::validate_compaction_summary(summary, self.inner.limits)?;
+        let Some(event_sink) = event_sink else {
+            return Ok(());
+        };
+        let cell = self.session(identity.session_id)?;
+        let event = {
+            let mut record = cell.lock_after_persistence().await?;
+            let compaction = exact_compaction_mut(&mut record, identity)?;
+            if compaction.snapshot.summary.as_deref() == Some(summary) {
+                return Ok(());
+            }
+            compaction.snapshot.summary = Some(summary.to_owned());
+            compaction.snapshot.updated_at = now_millis_u64();
+            let snapshot = compaction.snapshot.clone();
+            let event = record_compaction_event(&mut record, snapshot, self.inner.limits);
+            let revision = record.status.revision;
+            exact_compaction_mut(&mut record, identity)?.operation_revision = revision;
+            event
+        };
+        event_sink.emit(event);
+        Ok(())
+    }
+
     pub(super) async fn set_compaction_status(
         &self,
         identity: CompactionIdentity,
         status: AgentCompactionStatus,
         summary: Option<String>,
         usage: Option<AgentCompactionUsage>,
-    ) -> Result<(), AgentError> {
+    ) -> Result<AgentEvent, AgentError> {
         let cell = self.session(identity.session_id)?;
-        let staged = {
+        let (staged, event) = {
             let mut guard = cell.lock_after_persistence().await?;
             let record = &mut *guard;
             let previous = record.rollback_state();
@@ -40,17 +69,17 @@ impl AgentService {
                 .expect("checked")
                 .snapshot
                 .clone();
-            record_compaction_event(record, snapshot, self.inner.limits);
+            let event = record_compaction_event(record, snapshot, self.inner.limits);
             record
                 .runtime
                 .compaction
                 .as_mut()
                 .expect("checked")
                 .operation_revision = record.status.revision;
-            StagedPersistence::commit(&cell, record, previous)
+            (StagedPersistence::commit(&cell, record, previous), event)
         };
         self.persist_staged(staged).await?;
-        Ok(())
+        Ok(event)
     }
 
     /// Commits the compaction's end and returns its event; nothing when the

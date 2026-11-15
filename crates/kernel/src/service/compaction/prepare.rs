@@ -75,8 +75,6 @@ impl AgentService {
             )
         };
         self.persist_staged(staged).await?;
-        self.set_compaction_status(identity, AgentCompactionStatus::Running, None, None)
-            .await?;
         Ok(source.into_plan(identity, phase, cancellation, transport, images))
     }
 

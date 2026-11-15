@@ -441,7 +441,11 @@ impl RecordingSink {
             .unwrap()
             .iter()
             .filter_map(|event| match &event.kind {
-                AgentEventKind::CompactionUpdated { compaction } => Some(compaction.phase),
+                AgentEventKind::CompactionUpdated { compaction }
+                    if compaction.status == AgentCompactionStatus::Completed =>
+                {
+                    Some(compaction.phase)
+                }
                 _ => None,
             })
             .collect()

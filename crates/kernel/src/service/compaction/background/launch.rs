@@ -109,7 +109,7 @@ impl AgentService {
         tokio::spawn(async move {
             let _guard = guard;
             let result = hanafubuki_agent_foundation::panic::catch_panic_async(
-                service.execute_compaction_inner(&plan),
+                service.execute_compaction_inner(&plan, None),
             )
             .await;
             service

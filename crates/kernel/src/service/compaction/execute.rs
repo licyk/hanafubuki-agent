@@ -17,16 +17,22 @@ impl AgentService {
             identity,
             armed: true,
         };
-        let result = self.execute_compaction_inner(&plan).await;
+        let event = self
+            .set_compaction_status(identity, AgentCompactionStatus::Running, None, None)
+            .await?;
+        event_sink.emit(event);
+        let result = self.execute_compaction_inner(&plan, Some(event_sink)).await;
         let result = match result {
             Ok(sample) => {
-                self.set_compaction_status(
-                    identity,
-                    AgentCompactionStatus::ReadyToInstall,
-                    sample.summary.clone(),
-                    Some(compaction_usage(&sample)),
-                )
-                .await?;
+                let event = self
+                    .set_compaction_status(
+                        identity,
+                        AgentCompactionStatus::ReadyToInstall,
+                        sample.summary.clone(),
+                        Some(compaction_usage(&sample)),
+                    )
+                    .await?;
+                event_sink.emit(event);
                 match self
                     .commit_compaction(&plan, &sample, InstallMode::Cas)
                     .await
@@ -80,13 +86,14 @@ impl AgentService {
     pub(super) async fn execute_compaction_inner(
         &self,
         plan: &CompactionPlan,
+        event_sink: Option<&dyn AgentEventSink>,
     ) -> Result<CompactionSample, AgentError> {
         let estimated_input_tokens = estimate_model_request_tokens(&plan.request)?;
         let initial_context_digest = canonical_context_digest(&plan.canonical_initial_context);
         match plan.implementation {
             AgentCompactionImplementation::LocalSummary => {
                 let (summary, usage, estimated_input_tokens) =
-                    self.collect_local_summary(plan).await?;
+                    self.collect_local_summary(plan, event_sink).await?;
                 if summary.trim().is_empty() {
                     return Err(AgentError::Protocol(
                         "local compaction returned an empty assistant summary".to_string(),
@@ -143,6 +150,7 @@ impl AgentService {
     async fn collect_local_summary(
         &self,
         plan: &CompactionPlan,
+        event_sink: Option<&dyn AgentEventSink>,
     ) -> Result<(String, Option<hanafubuki_agent_model_api::ModelUsage>, u64), AgentError> {
         let mut retries = 0u32;
         let mut trim_index = 0usize;
@@ -172,6 +180,7 @@ impl AgentService {
             };
             let mut started_response_id = None;
             let mut last_summary = None;
+            let mut streaming_summary = (String::new(), String::new());
             let mut saw_output = false;
             let attempt = loop {
                 let Some(event) = stream.next().await else {
@@ -200,11 +209,23 @@ impl AgentService {
                             ));
                         }
                     }
-                    Ok(
-                        ModelEvent::OutputItemAdded { .. } | ModelEvent::AssistantTextDelta { .. },
-                    ) => {
+                    Ok(ModelEvent::OutputItemAdded { .. }) => {
                         require_response_started(&started_response_id)?;
                         saw_output = true;
+                    }
+                    Ok(ModelEvent::AssistantTextDelta { item_id, delta }) => {
+                        require_response_started(&started_response_id)?;
+                        saw_output = true;
+                        if streaming_summary.0 != item_id {
+                            streaming_summary = (item_id, String::new());
+                        }
+                        streaming_summary.1.push_str(&delta);
+                        self.stream_compaction_summary(
+                            plan.identity,
+                            &streaming_summary.1,
+                            event_sink,
+                        )
+                        .await?;
                     }
                     Ok(ModelEvent::ReasoningDelta { .. }) => {
                         require_response_started(&started_response_id)?;
@@ -214,6 +235,8 @@ impl AgentService {
                         saw_output = true;
                         match item {
                             ModelOutputItem::AssistantMessage { text, .. } => {
+                                self.stream_compaction_summary(plan.identity, &text, event_sink)
+                                    .await?;
                                 last_summary = Some(text)
                             }
                             ModelOutputItem::ToolCall { .. }
@@ -401,12 +424,10 @@ fn trim_local_compaction_request(
     Ok(())
 }
 
-fn validate_compaction_summary(summary: &str, limits: AgentHardLimits) -> Result<(), AgentError> {
-    if summary.trim().is_empty() {
-        return Err(AgentError::Protocol(
-            "compaction summary must not be empty".to_string(),
-        ));
-    }
+pub(super) fn validate_compaction_summary(
+    summary: &str,
+    limits: AgentHardLimits,
+) -> Result<(), AgentError> {
     enforce_size(
         "compaction summary bytes",
         summary.len(),
