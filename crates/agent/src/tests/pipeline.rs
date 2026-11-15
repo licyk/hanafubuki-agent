@@ -493,7 +493,10 @@ async fn a_namespaced_mcp_call_resolves_through_the_wire_names_only() {
     );
     assert_eq!(
         outputs[2].1,
-        Value::String("{\"error\":\"no tool named `missing` is available in this step\"}".into())
+        Value::String(
+            "{\"error\":\"no tool named `mcp__fixture__missing` is available in this step\"}"
+                .into()
+        )
     );
     let second: Value = serde_json::from_slice(&model.requests()[1].body).unwrap();
     let replayed = second["input"]
