@@ -482,8 +482,14 @@ async fn a_session_of_commands_reopens_and_continues() {
         .await
         .unwrap();
     turn_end(&sink).await;
+    // The terminal event can precede teardown on this runtime. Shutdown
+    // must wait off-runtime so that teardown can finish.
     assert_eq!(
-        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        tokio::task::spawn_blocking(move || {
+            service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        })
+        .await
+        .unwrap(),
         []
     );
 
@@ -517,7 +523,11 @@ async fn a_session_of_commands_reopens_and_continues() {
     );
     assert!(input.contains("The command did not finish."), "{input}");
     assert_eq!(
-        reopened.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        tokio::task::spawn_blocking(move || {
+            reopened.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        })
+        .await
+        .unwrap(),
         []
     );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);

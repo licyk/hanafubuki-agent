@@ -162,12 +162,12 @@ search_code = "direct"
 
 **The exposure policy** (`exposurePolicy`, `toolExposurePolicies`) decides how the model sees a tool:
 
-| Value                  | Does                                                                                            |
-| ---------------------- | ----------------------------------------------------------------------------------------------- |
-| `"direct"`             | The tool is given to the model with every request                                               |
+| Value                  | Does                                                                                                                                     |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `"direct"`             | The tool is given to the model with every request                                                                                        |
 | `"deferred"` (default) | Not given directly: the model browses names with `tool_list`, then loads definitions with `tool_search` when needed, which saves context |
-| `"hidden"`             | Never offered to the model                                                                      |
-| `"direct_model_only"`  | As `direct`, for a tool meant for the model and not an application's interface                  |
+| `"hidden"`             | Never offered to the model                                                                                                               |
+| `"direct_model_only"`  | As `direct`, for a tool meant for the model and not an application's interface                                                           |
 
 A non-empty `enabledTools` opens only the tools it lists; the tools in `disabledTools` are not opened.
 

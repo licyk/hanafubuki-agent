@@ -27,7 +27,7 @@ A few tools are always there: `update_plan` (the task plan), `request_user_input
 All arguments are optional: `source` is an exact provider ID (for example, `mcp.rea`; available sources are shown in the `tool_search` description), `offset` defaults to 0, and `limit` defaults to 50, with values outside 1–50 clamped to that range. Omitting `source` lists across providers. For example, the model can call `tool_list` with:
 
 ```json
-{"source": "mcp.rea", "offset": 0, "limit": 50}
+{ "source": "mcp.rea", "offset": 0, "limit": 50 }
 ```
 
 The result contains `tools` (names only), `total` (the matching count) and `next_offset` (the next page's offset, or `null` at the end). An unknown source or an offset past the end returns an empty page. Pages reflect the current step's catalog; connecting or disabling a server can change it.

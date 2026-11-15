@@ -27,7 +27,7 @@ icon: Wrench
 所有参数均可省略：`source` 是精确的提供者 ID（例如 `mcp.rea`；可用来源列在 `tool_search` 的说明中），`offset` 默认为 0，`limit` 默认为 50，超出 1–50 的值会收敛到这个范围。省略 `source` 时跨提供者列举。例如，模型可以用以下参数调用 `tool_list`：
 
 ```json
-{"source": "mcp.rea", "offset": 0, "limit": 50}
+{ "source": "mcp.rea", "offset": 0, "limit": 50 }
 ```
 
 结果包含 `tools`（只有名称）、`total`（匹配的工具总数）和 `next_offset`（下一页偏移量，末页为 `null`）。未知来源或超出末尾的偏移量返回空页。分页反映当前步骤的目录；连接或禁用服务器会改变目录。
