@@ -139,10 +139,13 @@ async fn listing_names_is_visible_without_admitting_mcp_tools_on_every_protocol(
             .to_string()
             .contains("echo called with"));
         assert_eq!(
-            service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+            tokio::task::spawn_blocking(move || {
+                service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+            })
+            .await
+            .unwrap(),
             []
         );
-        drop(service);
         std::fs::remove_dir_all(paths.app_data_dir).unwrap();
     }
 }
