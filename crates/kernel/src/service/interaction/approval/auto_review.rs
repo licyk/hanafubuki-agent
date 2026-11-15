@@ -90,14 +90,19 @@ impl AgentService {
             ))),
             Err(PermissionReviewError::Cancelled) => Err(AgentError::Cancelled),
             Err(PermissionReviewError::TimedOut) => Ok(ToolApprovalDisposition::Rejected(
-                "automatic permission review timed out; the action was not executed".to_string(),
+                review_failure("automatic permission review timed out", "the reviewer exceeded its time limit"),
             )),
-            Err(PermissionReviewError::Failed(_)) => Ok(ToolApprovalDisposition::Rejected(
-                "automatic permission review failed closed; the action was not executed"
-                    .to_string(),
+            Err(PermissionReviewError::Failed(reason)) => Ok(ToolApprovalDisposition::Rejected(
+                review_failure("automatic permission review failed closed", reason),
             )),
         }
     }
+}
+
+fn review_failure(status: &str, reason: &str) -> String {
+    format!(
+        "{status}; the action was not executed: {reason}. This is a reviewer failure, not a permission denial or a sandbox failure. Do not retry with require_escalated or another workaround; report the review failure to the user."
+    )
 }
 
 /// The recorded status of a finished review and the assessment it keeps.

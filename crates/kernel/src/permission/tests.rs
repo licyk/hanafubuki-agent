@@ -258,7 +258,11 @@ async fn text_only_route_uses_no_tool_json_fallback() {
     .await
     .unwrap();
     assert_eq!(assessment.outcome, PermissionAssessmentOutcome::Deny);
-    assert!(session.requests.lock().unwrap()[0].output_format.is_none());
+    let requests = session.requests.lock().unwrap();
+    assert!(requests[0].output_format.is_none());
+    assert!(requests[0]
+        .instructions
+        .contains(&review_schema().to_string()));
 }
 
 /// A refused native output falls to plain text at once, never to a forced
@@ -286,7 +290,10 @@ async fn a_refused_native_output_falls_to_text_and_stays_strict() {
     assert!(requests[0].output_format.is_some());
     assert!(requests[1].output_format.is_none() && requests[1].tools.is_empty());
     assert_eq!(requests[1].tool_choice, ModelToolChoice::None);
-    assert_eq!(requests[1].instructions, REVIEW_INSTRUCTIONS);
+    assert!(requests[1].instructions.starts_with(REVIEW_INSTRUCTIONS));
+    assert!(requests[1]
+        .instructions
+        .contains(&review_schema().to_string()));
 
     // What the text rung keeps out of a tolerant reading: a fence, words
     // around the object.
@@ -536,7 +543,9 @@ async fn remote_failure_fails_closed() {
             CancellationToken::default(),
         )
         .await,
-        Err(PermissionReviewError::Failed(message)) if message.contains("review unavailable")
+        Err(PermissionReviewError::Failed(
+            "reviewer model request failed or returned an invalid response"
+        ))
     ));
 }
 

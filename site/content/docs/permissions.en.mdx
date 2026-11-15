@@ -186,7 +186,7 @@ In automatic review mode, an operation that needs an approval is reviewed by **t
 
 - Allowed, the operation runs; denied, the model is told why.
 - Three denials in a row stop the turn, so the model does not keep trying.
-- A review that times out (after 90 seconds) or fails denies the operation.
+- A review that times out (after 90 seconds) or fails leaves the operation unexecuted. This is a reviewer failure, not a permission denial or a sandbox failure. The tool error gives a local diagnostic without exposing the provider's response and tells the model to report the failure instead of retrying with `require_escalated` or a workaround.
 - The review is kept in the session's history; `exec --json` has it as the `permission_review_*` events.
 - You can approve an operation a review denied; see below.
 

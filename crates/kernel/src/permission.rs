@@ -43,7 +43,8 @@ const REVIEW_INSTRUCTIONS: &str = concat!(
 pub enum PermissionReviewError {
     Cancelled,
     TimedOut,
-    Failed(String),
+    /// A local diagnostic, never the provider's response or request identifiers.
+    Failed(&'static str),
 }
 
 impl std::fmt::Display for PermissionReviewError {
@@ -332,8 +333,7 @@ async fn review_permission_with_timeout(
             output_name: "permission_assessment",
             output_description: "Final assessment of the exact proposed action.",
             tool: None,
-            // Its instructions already ask for exactly the object.
-            schema_in_text: false,
+            schema_in_text: true,
             timeout: total_timeout,
         },
         cancellation,
@@ -342,11 +342,13 @@ async fn review_permission_with_timeout(
     .map_err(|error| match error {
         ModelJsonObjectError::Cancelled => PermissionReviewError::Cancelled,
         ModelJsonObjectError::TimedOut => PermissionReviewError::TimedOut,
-        ModelJsonObjectError::Failed(message) => PermissionReviewError::Failed(message),
+        ModelJsonObjectError::Failed(_) => PermissionReviewError::Failed(
+            "reviewer model request failed or returned an invalid response",
+        ),
     })?;
     if answer.text.len() > MAX_RATIONALE_BYTES.saturating_mul(4) {
         return Err(PermissionReviewError::Failed(
-            "reviewer assessment response exceeds its limit".into(),
+            "reviewer assessment response exceeds its limit",
         ));
     }
     parse_assessment_text(&answer.text)
@@ -438,10 +440,10 @@ fn build_review_prompt(
     action: &ApprovalAction,
 ) -> Result<String, PermissionReviewError> {
     let action_json = serde_json::to_string(action)
-        .map_err(|_| PermissionReviewError::Failed("could not encode action".into()))?;
+        .map_err(|_| PermissionReviewError::Failed("could not encode action"))?;
     if action_json.len() > MAX_ACTION_JSON_BYTES {
         return Err(PermissionReviewError::Failed(
-            "resolved action exceeds the reviewer input limit".into(),
+            "resolved action exceeds the reviewer input limit",
         ));
     }
     let mut prompt = String::from(
@@ -477,19 +479,18 @@ fn build_review_prompt(
 }
 
 fn parse_assessment_text(text: &str) -> Result<PermissionAssessment, PermissionReviewError> {
-    let value: Value = serde_json::from_str(text.trim()).map_err(|_| {
-        PermissionReviewError::Failed("reviewer assessment was not exact JSON".into())
-    })?;
+    let value: Value = serde_json::from_str(text.trim())
+        .map_err(|_| PermissionReviewError::Failed("reviewer assessment was not exact JSON"))?;
     parse_assessment(value)
 }
 
 fn parse_assessment(value: Value) -> Result<PermissionAssessment, PermissionReviewError> {
     let wire: WireAssessment = serde_json::from_value(value).map_err(|_| {
-        PermissionReviewError::Failed("reviewer decision does not match the schema".into())
+        PermissionReviewError::Failed("reviewer decision does not match the schema")
     })?;
     if wire.rationale.trim().is_empty() || wire.rationale.len() > MAX_RATIONALE_BYTES {
         return Err(PermissionReviewError::Failed(
-            "reviewer rationale is empty or exceeds its limit".into(),
+            "reviewer rationale is empty or exceeds its limit",
         ));
     }
     Ok(PermissionAssessment {

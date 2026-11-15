@@ -185,7 +185,7 @@ Run Posix command outside the sandbox in /home/me/project: npm install (reason: 
 
 - 允许时直接执行；拒绝时模型会收到理由。
 - 连续三次拒绝会停止回合，避免模型反复尝试。
-- 审查超时（90 秒）或失败时拒绝这个操作。
+- 审查超时（90 秒）或失败时不执行操作。这是审查过程故障，不是权限拒绝或沙箱执行失败。工具错误会给出本地诊断，不暴露 Provider 的原始响应，并要求模型报告故障，不要通过 `require_escalated` 或其他变通方式重试。
 - 审查过程记录在会话历史中，`exec --json` 中是 `permission_review_*` 事件。
 - 审查拒绝的操作可以由你批准，见下文。
 

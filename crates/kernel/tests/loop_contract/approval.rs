@@ -371,6 +371,10 @@ async fn auto_review_transport_failure_is_failed_without_exposing_provider_call_
     let next_request = serde_json::to_string(&requests[2].input).unwrap();
     assert!(next_request
         .contains("automatic permission review failed closed; the action was not executed"));
+    assert!(next_request.contains("reviewer model request failed or returned an invalid response"));
+    assert!(next_request.contains("not a permission denial or a sandbox failure"));
+    assert!(next_request.contains("Do not retry with require_escalated"));
+    assert!(!next_request.contains("No tool output found"));
     assert!(!next_request.contains("call_provider_secret"));
     assert!(!next_request.contains("request_provider_secret"));
     assert!(test_session_view(&service, session.id)
@@ -386,6 +390,54 @@ async fn auto_review_transport_failure_is_failed_without_exposing_provider_call_
                 ..
             }
         )));
+}
+
+#[tokio::test]
+async fn invalid_review_reports_a_safe_reason_without_dispatching() {
+    for (answer, reason) in [
+        (
+            "not JSON provider_secret",
+            "reviewer assessment was not exact JSON",
+        ),
+        (
+            r#"{"riskLevel":"low","userAuthorization":"authorized","outcome":"allow","rationale":"provider_secret"}"#,
+            "reviewer decision does not match the schema",
+        ),
+    ] {
+        let model = ScriptedEventModel::new([
+            mutation_tool_call_events(),
+            deterministic_assistant_events(answer),
+            deterministic_assistant_events("review failed"),
+        ]);
+        let tools = FakeTools::new([]).await;
+        let service = AgentService::new(Arc::new(model.clone()), tools.registries());
+        let session = service.create_session(config()).unwrap();
+        service
+            .start_turn(
+                session.id,
+                permission_turn_input(hanafubuki_agent_kernel::AgentPermissionMode::AutoReview),
+            )
+            .await
+            .unwrap();
+
+        assert!(tools.calls().is_empty());
+        let requests = model.requests();
+        let next_request = serde_json::to_string(&requests[2].input).unwrap();
+        assert!(next_request.contains(reason));
+        assert!(next_request.contains("Do not retry with require_escalated"));
+        assert!(!next_request.contains("provider_secret"));
+        let events = service.events_since(session.id, None).unwrap().events;
+        assert!(events.iter().any(|event| matches!(
+            event.kind,
+            AgentEventKind::PermissionReviewCompleted {
+                status: hanafubuki_agent_kernel::PermissionReviewStatus::Failed,
+                ..
+            }
+        )));
+        assert!(!events
+            .iter()
+            .any(|event| matches!(event.kind, AgentEventKind::ApprovalRequested { .. })));
+    }
 }
 
 #[tokio::test]
