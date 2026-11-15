@@ -8,10 +8,10 @@ expression: rendered
   Anthropic becomes the default; new sessions run this model.
 
   Type to search models
-                                                                         Context  Thinking  Vision
-  claude-sonnet-4-5           Claude Sonnet 4.5                             200K  yes       yes
-› claude-haiku-4-5 (current)  Claude Haiku 4.5                              200K  yes       yes
-  claude-2.1                                                                   ?  no        ?
+  Model                       Provider                                   Context  Thinking  Vision
+  claude-sonnet-4-5           Anthropic                                     200K  yes       yes
+› claude-haiku-4-5 (current)  Anthropic                                     200K  yes       yes
+  claude-2.1                  Anthropic                                        ?  no        ?
   Enter a model id…           one the Provider does not list
 
   claude-haiku-4-5 · Anthropic: context 200K (reported) · max output 64K (reported) · thinking low,
@@ -23,10 +23,10 @@ expression: rendered
   Anthropic becomes the default; new sessions run this model.
 
   Type to search models
-                                                     Context  Thinking  Vision
-  claude-sonnet-4-5           Claude Sonnet 4.5         200K  yes       yes
-› claude-haiku-4-5 (current)  Claude Haiku 4.5          200K  yes       yes
-  claude-2.1                                               ?  no        ?
+  Model                       Provider               Context  Thinking  Vision
+  claude-sonnet-4-5           Anthropic                 200K  yes       yes
+› claude-haiku-4-5 (current)  Anthropic                 200K  yes       yes
+  claude-2.1                  Anthropic                    ?  no        ?
   Enter a model id…           one the Provider does not list
 
   claude-haiku-4-5 · Anthropic: context 200K (reported) · max output 64K
@@ -40,11 +40,11 @@ expression: rendered
   run this model.
 
   Type to search models
-  claude-sonnet-4-5  Claude Sonnet 4.5
+  claude-sonnet-4-5  Anthropic
     context 200K · thinking yes · vision yes
-› claude-haiku-4-5 (current)  Claude Haiku 4.5
+› claude-haiku-4-5 (current)  Anthropic
     context 200K · thinking yes · vision yes
-  claude-2.1
+  claude-2.1  Anthropic
     context ? · thinking no · vision ?
   Enter a model id…
     one the Provider does not list

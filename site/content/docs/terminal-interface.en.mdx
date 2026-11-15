@@ -191,12 +191,14 @@ A message that starts with `/` is a command. Typing `/` opens a popup of them, n
 
 ## The model list [#model-list]
 
+The table labels all columns: **Model**, **Provider**, **Context**, **Thinking** and **Vision**, aligned with their values. The provider's settings picker uses the same labels; narrow screens keep the stacked facts layout.
+
 `/model` opens its list at once, before any Provider has answered. The session's model comes first, with what is already known of it (its own settings, what a refusal taught, the last listing, models.dev when it is on, the built-in window; nothing is requested for it), then one row per enabled Provider saying `listing…`. Each Provider is listed by a request of its own, and its models take its row's place as soon as it answers, in a fixed order: the Providers by name, each one's models in its listing's order. So a slow or unreachable Provider holds up no other. Under the list, `• Listing models… 3 of 6 Providers answered · 4s` counts the Providers that have answered, listed or failed, and how long the list has waited; it goes once every Provider has answered. With no Provider enabled it says `No Provider is enabled: /providers adds one.` Rows that arrive keep what you typed in the search, the selected row and its line on the screen: the rows around it move, it does not.
 
 Each model's row shows its id, its Provider and three columns under a header:
 
 ```text
-                                                     Context  Thinking  Vision
+  Model                               Provider       Context  Thinking  Vision
 › claude-sonnet-4-5 (current)            Anthropic      200K  yes       yes
   gpt-5.1                                OpenAI         272K  ?         ?
   meta-llama/llama-3.1-405b-instruct:f…  OpenRouter     131K  no        no
@@ -576,6 +578,8 @@ Enter edits in a copy of the session: it is forked before the message's turn and
 - With no message yet, the second Esc says `No previous message to edit.` In Fullscreen, browsing reaches the messages loaded so far; scrolling up loads earlier ones. In Scrollback, those of a resumed session's latest 200 items.
 
 ## Thinking [#thinking]
+
+Live thinking, context compaction and automatic approval review titles use the same moving highlight as **Working**. The status row's **Thinking** label also animates while reasoning is active and animations are enabled. Completed activities and accumulated thinking time remain static.
 
 Each stretch of the model's thinking (a reasoning item) is an entry of its own, in the conversation where it happened, in order with the answers and tool calls: a step that thinks, calls a tool, thinks again and answers shows four entries. While the model thinks it reads `• Thinking 3.4s`, counting up in tenths of a second; when the stretch ends it becomes `• Thought · 20.7s` in place (`1m 05s` past a minute). A stretch ends at the latest when the model starts its answer or a tool call, also when the Provider reports the thinking done only later (the Responses API may); what the Provider sends of it after that is not shown here, but is kept, and a resumed session shows it.
 

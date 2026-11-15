@@ -8,6 +8,7 @@ use ratatui::text::Line;
 use super::{raw_lines_from_source, ActivityDisclosure, HistoryCell};
 use crate::agent_bridge::WorkSnapshot;
 use crate::render::line_utils::prefix_lines;
+use crate::shimmer::shimmer_spans;
 use crate::status_indicator_widget::fmt_elapsed_tenths;
 
 #[derive(Debug)]
@@ -69,7 +70,14 @@ impl WorkCell {
         } else {
             String::new()
         };
-        Line::from(format!("• {}{duration}", self.snapshot.title).dim())
+        let mut spans = vec!["• ".dim()];
+        if self.finished() {
+            spans.push(self.snapshot.title.clone().dim());
+        } else {
+            spans.extend(shimmer_spans(&self.snapshot.title));
+        }
+        spans.push(duration.dim());
+        Line::from(spans)
     }
 
     fn text(&self) -> &str {

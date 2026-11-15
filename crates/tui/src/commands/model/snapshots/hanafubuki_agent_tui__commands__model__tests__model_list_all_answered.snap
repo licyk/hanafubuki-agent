@@ -8,7 +8,7 @@ expression: rendered
   Switch the model of this session.
 
   Type to search models
-                                                                         Context  Thinking  Vision
+  Model                                    Provider                      Context  Thinking  Vision
 › claude-sonnet-4-5 (current)              Anthropic                        200K  yes       yes
   claude-haiku-4-5                         Anthropic                        200K  yes       yes
   qwen3-coder:30b                          Local                               ?  ?         ?
@@ -27,7 +27,7 @@ expression: rendered
   Switch the model of this session.
 
   Type to search models
-                                                     Context  Thinking  Vision
+  Model                                  Provider    Context  Thinking  Vision
 › claude-sonnet-4-5 (current)            Anthropic      200K  yes       yes
   claude-haiku-4-5                       Anthropic      200K  yes       yes
   qwen3-coder:30b                        Local             ?  ?         ?

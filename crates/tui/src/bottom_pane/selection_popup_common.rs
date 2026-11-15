@@ -180,20 +180,30 @@ fn columns(
     }
 }
 
-/// Whether the visible rows have their facts in columns, which a header
-/// can name.
-pub(crate) fn facts_in_columns(
+/// Column labels use the same widths as the visible rows.
+pub(crate) fn column_header(
     rows_all: &[GenericDisplayRow],
     state: &ScrollState,
     max_results: usize,
     width: u16,
-) -> bool {
+    headers: &[String; 3],
+) -> Option<Line<'static>> {
     let visible_items = max_results.min(rows_all.len());
     let start_idx = start_index(rows_all, state, visible_items);
-    matches!(
-        columns(rows_all, start_idx, visible_items, width),
-        Columns::Tabular { .. }
-    )
+    let Columns::Tabular { name, .. } = columns(rows_all, start_idx, visible_items, width) else {
+        return None;
+    };
+    let row = GenericDisplayRow {
+        name: format!("  {}", headers[0]),
+        description: Some(headers[1].clone()),
+        ..Default::default()
+    };
+    let facts = RowFacts {
+        columns: headers[2].clone(),
+        ..Default::default()
+    };
+    let description = (width as usize).saturating_sub(name + 4 + facts.columns.width());
+    Some(tabular_line(&row, &facts, name, description, width).dim())
 }
 
 /// The first visible row: the scroll position, moved so the selected row

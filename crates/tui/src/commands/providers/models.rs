@@ -81,7 +81,7 @@ impl ModelPicker {
             .iter()
             .map(|model| SelectionItem {
                 name: model.entry.id.clone(),
-                description: model.entry.display_name.clone(),
+                description: Some(listed.name.clone()),
                 is_current: listed.current.as_deref() == Some(model.entry.id.as_str()),
                 search_value: Some(
                     [Some(&model.entry.id), model.entry.display_name.as_ref()]
@@ -121,7 +121,7 @@ impl ModelPicker {
                 is_searchable: true,
                 search_placeholder: Some("Type to search models".to_string()),
                 initial_selected_idx: selected,
-                facts_header: Some(FACTS_HEADER.to_string()),
+                facts_header: Some(["Model".into(), "Provider".into(), FACTS_HEADER.into()]),
                 ..Default::default()
             },
             self.tx.clone(),

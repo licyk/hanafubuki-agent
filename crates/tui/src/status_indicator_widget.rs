@@ -289,7 +289,13 @@ impl Renderable for StatusIndicatorWidget {
         }
         spans.push(format!(" {pretty_elapsed}").dim());
         if let Some(thinking) = self.thinking.total_at(now) {
-            spans.push(format!(" (Thinking {})", fmt_elapsed_tenths(thinking)).dim());
+            spans.push(" (".dim());
+            if self.animations_enabled && self.thinking.active_since.is_some() {
+                spans.extend(shimmer_spans("Thinking"));
+            } else {
+                spans.push("Thinking".dim());
+            }
+            spans.push(format!(" {})", fmt_elapsed_tenths(thinking)).dim());
         }
         if let Some(key) = keymap::hint(Action::InterruptTurn).filter(|_| self.show_interrupt_hint)
         {

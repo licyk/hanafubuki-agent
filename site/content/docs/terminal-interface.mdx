@@ -190,12 +190,14 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 
 ## 模型列表 [#model-list]
 
+表格显示与各列对齐的 **Model**、**Provider**、**Context**、**Thinking** 和 **Vision** 标题。提供商设置中的模型选择器也使用这些标题；窄屏继续使用逐行展示能力信息的布局。
+
 `/model` 立即打开列表，不等任何 Provider 回答。会话的模型排在第一行，附上已经知道的信息（它自己的设置、一次拒绝教会的、上一次列表、打开时的 models.dev、内置窗口；不为它发出任何请求），之后每个已启用的 Provider 各占一行，显示 `listing…`。每个 Provider 由单独的请求列出，一回答，它的模型就替换它那一行，顺序固定：Provider 按名字排列，每个 Provider 的模型按其列表的顺序。所以一个缓慢或无法访问的 Provider 不会拖住其他 Provider。列表下方的 `• Listing models… 3 of 6 Providers answered · 4s` 统计已经回答（列出或失败）的 Provider 数和列表已等待的时间；所有 Provider 都回答后这一行消失。没有启用任何 Provider 时，显示 `No Provider is enabled: /providers adds one.`。新到的行保留你在搜索中输入的内容、选中的行以及它在屏幕上的位置：移动的是它周围的行，而不是它。
 
 每个模型的一行显示它的 ID、它的 Provider，以及标题下的三列：
 
 ```text
-                                                     Context  Thinking  Vision
+  Model                               Provider       Context  Thinking  Vision
 › claude-sonnet-4-5 (current)            Anthropic      200K  yes       yes
   gpt-5.1                                OpenAI         272K  ?         ?
   meta-llama/llama-3.1-405b-instruct:f…  OpenRouter     131K  no        no
@@ -575,6 +577,8 @@ Enter 在会话的副本中编辑：会话在这条消息所在回合之前分�
 - 还没有发过消息时，第二次 Esc 显示 `No previous message to edit.`。Fullscreen 下只能浏览已加载的消息，向上滚动会加载更早的消息；Scrollback 下为恢复的会话最近 200 项中的消息。
 
 ## 思考过程 [#thinking]
+
+正在思考、压缩上下文和自动审核命令时，标题使用与 **Working** 相同的流动高亮。状态行中的 **Thinking** 在正在思考且启用动画时也会高亮；已完成的活动和累计思考时间保持静态显示。
 
 模型的每一段思考（一个推理条目）都是单独的条目，位于对话中发生的位置，与回答和工具调用按顺序排列：一个先思考、调用工具、再思考然后回答的步骤显示四个条目。模型思考时它显示为 `• Thinking 3.4s`，以十分之一秒计数；这段思考结束时，它在原处变为 `• Thought · 20.7s`（超过一分钟时为 `1m 05s`）。模型开始回答或调用工具时，这段思考最迟就此结束，即使 Provider 稍后才报告思考完成（Responses API 可能如此）；Provider 此后发送的这段思考内容不在这里显示，但会保存下来，恢复会话时可以看到。
 

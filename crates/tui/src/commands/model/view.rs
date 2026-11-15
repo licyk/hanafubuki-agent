@@ -257,7 +257,7 @@ impl Listing {
                 header,
                 is_searchable: true,
                 search_placeholder: Some("Type to search models".to_string()),
-                facts_header: Some(FACTS_HEADER.to_string()),
+                facts_header: Some(["Model".into(), "Provider".into(), FACTS_HEADER.into()]),
                 ..Default::default()
             },
             tx.clone(),

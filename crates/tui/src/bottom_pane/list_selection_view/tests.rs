@@ -379,7 +379,11 @@ fn facts_view() -> ListSelectionView {
             title: Some("Select Model".to_string()),
             items,
             is_searchable: true,
-            facts_header: Some("Context  Thinking  Vision".to_string()),
+            facts_header: Some([
+                "Model".into(),
+                "Provider".into(),
+                "Context  Thinking  Vision".into(),
+            ]),
             ..Default::default()
         },
         tx,
@@ -391,6 +395,11 @@ fn rows_with_facts_have_them_in_columns_under_a_header_or_under_their_names() {
     let view = facts_view();
     let rendered = [100, 80, 50]
         .map(|width| format!("--- {width} ---\n{}", render_lines_with_width(&view, width)))
+        .join("\n");
+    let rendered = rendered
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
         .join("\n");
     assert_snapshot!("list_selection_rows_with_facts", rendered);
 }
@@ -407,6 +416,31 @@ fn no_width_hides_a_row_or_its_facts() {
         let columns = rendered.contains("200K  yes       yes");
         assert_eq!(header, columns, "a header only over columns, at {width}");
     }
+}
+
+#[test]
+fn model_and_provider_headers_align_with_their_columns() {
+    let mut view = facts_view();
+    for width in [80, 100, 140] {
+        let rendered = render_lines_with_width(&view, width);
+        let header = rendered
+            .lines()
+            .find(|line| line.contains("Context  Thinking"))
+            .unwrap();
+        let model = rendered
+            .lines()
+            .find(|line| line.contains("meta-llama/"))
+            .unwrap();
+        let column = |line: &str, label: &str| line[..line.find(label).unwrap()].width();
+        assert_eq!(column(header, "Model"), column(model, "meta-llama/"));
+        assert_eq!(column(header, "Provider"), column(model, "OpenRouter"));
+    }
+    for item in &mut view.items {
+        if item.facts.is_some() {
+            item.description = Some("X".into());
+        }
+    }
+    assert!(render_lines_with_width(&view, 100).contains("Provider"));
 }
 
 #[test]

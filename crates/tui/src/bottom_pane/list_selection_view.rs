@@ -13,7 +13,7 @@ use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Widget;
 
-use super::selection_popup_common::facts_in_columns;
+use super::selection_popup_common::column_header;
 use super::selection_popup_common::render_menu_surface;
 use super::selection_popup_common::wrap_styled_line;
 use crate::app_event::AppEventSender;
@@ -61,9 +61,8 @@ pub(crate) struct SelectionViewParams {
     pub search_placeholder: Option<String>,
     pub header: Box<dyn Renderable>,
     pub initial_selected_idx: Option<usize>,
-    /// The fact columns' names, right-aligned over them while the rows
-    /// show them in columns.
-    pub facts_header: Option<String>,
+    /// Name, description and fact column labels, aligned with their rows.
+    pub facts_header: Option<[String; 3]>,
 }
 
 impl Default for SelectionViewParams {
@@ -97,7 +96,7 @@ pub(crate) struct ListSelectionView {
     last_selected_actual_idx: Option<usize>,
     header: Box<dyn Renderable>,
     initial_selected_idx: Option<usize>,
-    facts_header: Option<String>,
+    facts_header: Option<[String; 3]>,
 }
 
 impl ListSelectionView {
@@ -323,8 +322,13 @@ impl ListSelectionView {
     /// The header of the fact columns, when the rows show them at `width`.
     fn facts_header(&self, rows: &[GenericDisplayRow], width: u16) -> Option<Line<'static>> {
         let header = self.facts_header.as_ref()?;
-        facts_in_columns(rows, &self.state, MAX_POPUP_ROWS, Self::rows_width(width))
-            .then(|| Line::from(header.clone().dim()).right_aligned())
+        column_header(
+            rows,
+            &self.state,
+            MAX_POPUP_ROWS,
+            Self::rows_width(width),
+            header,
+        )
     }
 
     fn rows_width(total_width: u16) -> u16 {
