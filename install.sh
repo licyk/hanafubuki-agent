@@ -82,7 +82,7 @@ fail() { printf '%s\n' "$*" >&2; exit 1; }
 download() { curl -fsSL --retry 3 --connect-timeout 30 --max-time 600 "$1" -o "$2"; }
 
 add_path() {
-    local directory=$1 profile line shell=${SHELL:-sh}
+    local directory=$1 profile line existing found=false shell=${SHELL:-sh}
     case "${shell##*/}" in
         zsh) profile="${ZDOTDIR:-$HOME}/.zshrc" ;;
         bash)
@@ -92,7 +92,12 @@ add_path() {
     printf -v line 'export PATH=%q:' "$directory"
     line+="\"\$PATH\" # hanafubuki-agent"
     mkdir -p -- "$(dirname -- "$profile")"
-    if ! grep -Fqx -- "$line" "$profile" 2>/dev/null; then
+    if [[ -f $profile ]]; then
+        while IFS= read -r existing || [[ -n $existing ]]; do
+            if [[ $existing == "$line" ]]; then found=true; break; fi
+        done < "$profile"
+    fi
+    if ! $found; then
         printf '\n%s\n' "$line" >> "$profile"
     fi
     printf 'PATH configured in %s.\n' "$profile"

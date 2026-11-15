@@ -60,7 +60,11 @@ function Install-HanafubukiAgent {
         Save-AgentDownload $asset[0].browser_download_url $archive
         Save-AgentDownload $checksum[0].browser_download_url $hashFile
         $expected = ([IO.File]::ReadAllText($hashFile).Trim() -split '\s+')[0]
-        if ($expected -notmatch '^[a-fA-F0-9]{64}$' -or (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ine $expected) { throw 'Downloaded archive SHA-256 does not match.' }
+        $sha256 = [Security.Cryptography.SHA256]::Create()
+        $archiveStream = [IO.File]::OpenRead($archive)
+        try { $actual = [BitConverter]::ToString($sha256.ComputeHash($archiveStream)).Replace('-', '') }
+        finally { $archiveStream.Dispose(); $sha256.Dispose() }
+        if ($expected -notmatch '^[a-fA-F0-9]{64}$' -or $actual -ine $expected) { throw 'Downloaded archive SHA-256 does not match.' }
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         [IO.Compression.ZipFile]::ExtractToDirectory($archive, $staging)
         $unpacked = Join-Path $staging $directory

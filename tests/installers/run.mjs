@@ -107,7 +107,8 @@ try {
     await assert.rejects(readFile(profile), { code: 'ENOENT' });
     await run({ noPath: false });
     await run({ noPath: false });
-    assert.equal((await readFile(profile, 'utf8')).split('# hanafubuki-agent').length - 1, 1);
+    const profileText = await readFile(profile, 'utf8');
+    assert.equal(profileText.split('# hanafubuki-agent').length - 1, 1, profileText);
     const { stdout: resolved } = await exec('bash', ['-c', 'source "$1"; command -v hanafubuki-agent', 'test', profile]);
     assert.equal(resolved.trim(), installed);
   }
