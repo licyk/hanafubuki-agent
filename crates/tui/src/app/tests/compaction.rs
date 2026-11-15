@@ -159,7 +159,7 @@ fn compact_shows_one_cell_and_a_resumed_session_replays_it_once() {
 }
 
 #[test]
-fn a_compaction_that_fails_in_a_turn_shows_a_warning_and_compacts_reply_shows_once() {
+fn failed_compactions_each_keep_their_entry_and_automatic_failure_is_in_warnings() {
     const WARNING: &str = "Context compaction failed";
     // A summary that calls a tool is refused, so both compactions fail.
     let mut harness = Harness::start_configured(
@@ -186,14 +186,16 @@ fn a_compaction_that_fails_in_a_turn_shows_a_warning_and_compacts_reply_shows_on
 
     harness.type_and_submit("/compact");
     harness.pump_until_screen_shows("the conversation was not compacted");
-    assert!(!harness.transcript().contains(WARNING));
+    assert_eq!(harness.transcript().matches(WARNING).count(), 1);
 
     // Over the threshold, the next turn compacts first, and fails with it.
     harness.type_and_submit("Are you there?");
-    harness.pump_until_screen_shows(WARNING);
+    harness.pump_until("the automatic compaction failure", |harness| {
+        harness.transcript().matches(WARNING).count() == 2
+    });
     harness.pump_until_turn_ends();
     let transcript = harness.transcript();
-    assert_eq!(transcript.matches(WARNING).count(), 1, "{transcript}");
+    assert_eq!(transcript.matches(WARNING).count(), 2, "{transcript}");
     assert!(
         transcript.contains("local compaction returned a forbidden output item"),
         "{transcript}"

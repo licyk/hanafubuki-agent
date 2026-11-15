@@ -29,6 +29,8 @@ mod commands;
 mod edit;
 mod effort;
 mod events;
+mod work;
+pub(crate) use work::WorkSnapshot;
 mod goal;
 mod hooks;
 mod mcp;
@@ -172,12 +174,10 @@ pub(crate) enum TurnUpdate {
     ModeChanged(AgentSessionMode),
     /// The session's context was compacted: by `/compact`, automatically
     /// or in the background.
-    Compacted,
+    Work(WorkSnapshot),
     /// The hierarchical compression failed for a request: the turn goes on
     /// with the full history.
     CompressionFailed(String),
-    /// An automatic compaction failed, with its error.
-    CompactionFailed(String),
     /// The Provider refused a request as too long, and the session's model
     /// is taken to have a window of this many tokens from now on.
     ContextWindowLearned(u64),

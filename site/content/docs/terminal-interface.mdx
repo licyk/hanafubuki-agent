@@ -260,6 +260,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 - **`/permissions`** 列出 Codex 的[预设](/docs/permissions#presets)，每个都是一个权限模式加一个沙箱模式：Read only（手动，`read-only`）、Default（手动，`workspace-write`）、Auto-review（自动审查，`workspace-write`）和 Full access（完全访问，没有沙箱）。生效的预设被选中：会话自己的模式，否则是配置的模式；两者组成不了预设时，不选中任何一个。选择 Full access 时会先确认（默认选中 Cancel）。这台机器没有沙箱时，需要沙箱的预设不能选择。选中一个预设会为本会话同时设置两种模式。没有会话时，`/permissions` 会先创建一个。
 - **`/permissions read-only`** 或 **`/permissions default`** 直接设置这个预设。**`/permissions manual`**、**`/permissions auto-review`** 或 **`/permissions full-access`**（也可以写 `auto_review` 和 `full_access`）只直接设置权限模式，不再确认，沙箱保持不变：模式的名字不会被当作预设。
 - 这些模式只属于本会话，直到界面退出：`permissionMode` 和 `sandboxMode` 保持不变，其他会话和分叉出的会话仍使用配置的模式，已经在运行的回合保持它开始时的模式。见[单个会话的模式](/docs/permissions#session-mode)和[单个会话的沙箱](/docs/permissions#session-sandbox)。
+- **自动批准审核**的每次审核各有独立活动条目，显示操作与实时耗时。审核结果（批准、拒绝、超时、失败或中止）会停止计时，返回的理由在条目详情中展开查看，无需展开工具输出。后端没有提供审核文本流，因此界面不会模拟；已结束的审核从保存的审核记录恢复，保留原始耗时和理由。
 - **`/approve`** 列出本会话中被自动审查拒绝的操作，最新的在前：每个都有摘要和审查给出的理由，可以搜索。界面为每个会话保留从打开它起最近的十个，所以恢复的会话不会列出之前的拒绝。选中的操作会获得批准：模型从下一次请求起看到这次批准，重试仍要经过审查（[批准被拒绝的操作](/docs/permissions#approve-denied)）。没有被拒绝的操作时，会显示 `No denied actions to approve.`。回合进行中 Agent 会拒绝批准，对话中会说明原因。
 
 ## 工作目录和工作树 [#worktrees]
@@ -483,7 +484,7 @@ Scrollback 下，对话由终端保存：用终端滚动、选择和复制。最
 - 调整终端大小后，大小保持 75 ms 不变时，界面清除终端的滚动历史和屏幕，按新的宽度重新写入对话，每个条目保持写入时的样子（展开的仍然展开）；尾部保持不变。写入的行数大致是终端滚动历史保留的行数：最后 1,000 行（Windows Terminal 中 9,001 行，WezTerm 中 3,500 行，Alacritty 中 10,000 行），省略了更早的行时，上方显示 `Earlier messages are available — press ctrl + t to view the full transcript`；[对话记录](#transcript)中有全部内容。清除会带走底部区域上方的一切：界面启动前 shell 输出的内容、之前会话的行、另一个对话的行以及它们之间的分隔行。不响应这个序列（`CSI 3 J`）清除滚动历史的终端或终端复用器，会把旧的行保留在新的行上方。对话记录、设置中心或其他全屏视图打开时，重新写入要等它关闭后进行。
 - 调整大小时正在流式输出的回答此后按新的宽度继续，已提交的行保持原来的宽度；它结束后，对话会再重新写入一次，回答按新的宽度排版。
 
-会话的上下文每压缩一次，对话就在发生的位置显示 `• Context compacted`：`/compact` 之后，回合压缩上下文时（达到阈值、模型请求新上下文、Provider 报告上下文窗口错误之后），以及回合安装一个[在后台](/docs/config-reference#compaction)运行的压缩时。恢复的会话以同样的方式显示之前的压缩。回合运行的压缩失败时，对话显示一条警告 `⚠ Context compaction failed: …`，带着错误，[`/warnings`](#warnings) 会保留它；`/compact` 失败时改由它的回复说明（`the conversation was not compacted: …`）。被取消的压缩不显示任何内容。Provider 以请求过长为由拒绝、会话采用由此学到的窗口时（[上下文窗口与压缩](/docs/providers-models#compaction)），对话会在随后的压缩之前提示一次：`• The Provider refused the request as too long; this model's window is taken as 131072 from now on.`
+上下文压缩从 Agent 预留任务起就有独立活动条目，依次显示排队、压缩中、等待安装，以及完成（`Context compacted`）、失败或取消。耗时从 Agent 的开始时间戳计算，并在终态时间戳处停止。Agent 提供的摘要文本实时更新到条目详情中；默认收起，点击标题或按 F4 后 Enter 展开。更新始终替换同一条目，并保留展开状态。失败或取消会保留已收到的部分摘要；自动压缩失败也保留在 [`/warnings`](#warnings) 中，失败的 `/compact` 仍会说明错误。恢复会话时，保存的摘要可展开查看；旧历史没有耗时，不会编造。正在进行的压缩从会话快照恢复。Provider 以请求过长为由拒绝、会话采用由此学到的窗口时（[上下文窗口与压缩](/docs/providers-models#compaction)），对话会在随后的压缩之前提示一次：`• The Provider refused the request as too long; this model's window is taken as 131072 from now on.`
 
 ## 分层压缩 [#compression]
 

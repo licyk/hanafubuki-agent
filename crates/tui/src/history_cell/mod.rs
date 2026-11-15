@@ -15,6 +15,8 @@ mod reports;
 mod status;
 mod thinking;
 mod tool;
+mod work;
+pub(crate) use work::WorkCell;
 
 use std::any::Any;
 use std::sync::atomic::{AtomicU64, Ordering};

@@ -34,6 +34,7 @@ impl ChatWidget {
         }
         self.exploration = None;
         self.live_thinking.clear();
+        self.work_entries.clear();
         self.stream_controller = None;
         self.plan_stream_controller = None;
         self.bottom_pane.dismiss_all_requests();
@@ -59,8 +60,27 @@ impl ChatWidget {
                 None,
             ));
         }
+        for item in &opened.transcript {
+            if let ReplayedItem::PermissionReview(work) = item {
+                self.work_entries.insert(
+                    work.id.clone(),
+                    history_cell::LiveCell::new(history_cell::WorkCell::new(work.clone())),
+                );
+            }
+        }
         for cell in self.replayed_cells(opened.transcript) {
             self.add_boxed_history(cell);
+        }
+        if let Some(work) = opened.work {
+            if work.committed {
+                // The committed summary above already occupies its history position.
+                self.work_entries.insert(
+                    work.id.clone(),
+                    history_cell::LiveCell::new(history_cell::WorkCell::new(work)),
+                );
+            } else {
+                self.on_work(work);
+            }
         }
         self.needs_final_message_separator = false;
         if self.setup_needed {
@@ -142,10 +162,12 @@ impl ChatWidget {
                 ReplayedItem::BackgroundUpdates(summaries) => {
                     cells.push(Box::new(history_cell::new_background_updates(summaries)))
                 }
-                ReplayedItem::Compacted => cells.push(Box::new(history_cell::new_info_event(
-                    "Context compacted".to_string(),
-                    None,
-                ))),
+                ReplayedItem::PermissionReview(work) => {
+                    cells.push(Box::new(history_cell::WorkCell::new(work)))
+                }
+                ReplayedItem::Compacted { item_id, summary } => {
+                    cells.push(Box::new(history_cell::WorkCell::replayed(item_id, summary)))
+                }
             }
         }
         if let Some(cell) = exploration {

@@ -374,7 +374,13 @@ impl AgentBridge {
             .into_iter()
             .map(|item| (item.item_id.value(), item.content))
             .collect();
+        let work = opened.runtime.compaction.as_ref().and_then(|snapshot| {
+            super::WorkSnapshot::from_event(&hanafubuki_agent::AgentEventKind::CompactionUpdated {
+                compaction: snapshot.clone(),
+            })
+        });
         let session = OpenedSession {
+            work,
             session_id: Some(session_id),
             model: opened.runtime.model.clone(),
             mode: opened.runtime.mode,
@@ -446,6 +452,7 @@ pub(super) async fn no_session(agent: &AgentHandle, model: Option<String>) -> Op
             .unwrap_or_default(),
     };
     OpenedSession {
+        work: None,
         session_id: None,
         model,
         mode: AgentSessionMode::Default,

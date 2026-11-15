@@ -360,6 +360,7 @@ fn a_replayed_reasoning_item_is_a_completed_cell() {
     let (mut chat, events) = chat();
     drain(&events);
     chat.handle_turn_update(TurnUpdate::SessionOpened(OpenedSession {
+        work: None,
         session_id: Some(hanafubuki_agent::AgentSessionId::new(7)),
         model: "fixture-model".to_string(),
         mode: hanafubuki_agent::AgentSessionMode::Default,
@@ -491,6 +492,7 @@ fn a_replayed_run_of_exploring_calls_is_one_entry_as_it_was_live() {
         display: None,
     };
     chat.handle_turn_update(TurnUpdate::SessionOpened(OpenedSession {
+        work: None,
         session_id: Some(hanafubuki_agent::AgentSessionId::new(7)),
         model: "fixture-model".to_string(),
         mode: hanafubuki_agent::AgentSessionMode::Default,

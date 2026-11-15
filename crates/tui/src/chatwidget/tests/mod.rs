@@ -19,6 +19,7 @@ use hanafubuki_agent::{AgentRevision, AgentSessionId, AgentToolDisplay};
 
 mod entries;
 mod images;
+mod work;
 
 /// The chat in Scrollback.
 fn chat() -> (ChatWidget, Receiver<AppEvent>) {
@@ -171,6 +172,7 @@ fn an_opened_session_replays_its_transcript_after_its_header() {
     let (mut chat, events) = chat();
     drain(&events);
     chat.handle_turn_update(TurnUpdate::SessionOpened(OpenedSession {
+        work: None,
         session_id: Some(hanafubuki_agent::AgentSessionId::new(7)),
         model: "fixture-model".to_string(),
         mode: hanafubuki_agent::AgentSessionMode::Plan,
@@ -592,6 +594,7 @@ fn the_hooks_are_checked_once_a_run_and_waiting_ones_are_a_warning() {
     let (mut chat, events) = chat();
     drain(&events);
     let opened = |session_id| OpenedSession {
+        work: None,
         session_id,
         model: "fixture-model".to_string(),
         mode: hanafubuki_agent::AgentSessionMode::Default,
@@ -799,6 +802,7 @@ fn a_session_opened_drops_what_waited_for_the_previous_one() {
     chat.handle_turn_update(TurnUpdate::Started);
     chat.queue_user_message("for the old session".into());
     chat.handle_turn_update(TurnUpdate::SessionOpened(OpenedSession {
+        work: None,
         session_id: None,
         model: "fixture-model".to_string(),
         mode: hanafubuki_agent::AgentSessionMode::Default,

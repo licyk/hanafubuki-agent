@@ -18,6 +18,7 @@ use crate::app_event::{AppEvent, AppEventSender};
 #[derive(Debug)]
 pub(crate) struct OpenedSession {
     pub(crate) session_id: Option<AgentSessionId>,
+    pub(crate) work: Option<super::WorkSnapshot>,
     /// The session's model; with none yet, the one it will get.
     pub(crate) model: String,
     pub(crate) mode: AgentSessionMode,
@@ -75,7 +76,11 @@ pub(crate) enum ReplayedItem {
     },
     /// What the session's background work reported, one line per event.
     BackgroundUpdates(Vec<String>),
-    Compacted,
+    PermissionReview(super::WorkSnapshot),
+    Compacted {
+        item_id: u64,
+        summary: String,
+    },
 }
 
 /// The transcript items a person reads, oldest first, from a page of
@@ -168,7 +173,27 @@ pub(crate) fn transcript(
                     *display = shown.display;
                 }
             }
-            ConversationItem::CompactionSummary { .. } => transcript.push(ReplayedItem::Compacted),
+            ConversationItem::PermissionReview {
+                review_id,
+                action_summary,
+                status,
+                assessment,
+                started_at,
+                completed_at: Some(completed_at),
+                ..
+            } => {
+                transcript.push(ReplayedItem::PermissionReview(super::WorkSnapshot::review(
+                    review_id,
+                    action_summary,
+                    status,
+                    assessment.map(|value| value.rationale),
+                    started_at,
+                    Some(completed_at),
+                )));
+            }
+            ConversationItem::CompactionSummary { summary, .. } => {
+                transcript.push(ReplayedItem::Compacted { item_id, summary })
+            }
             ConversationItem::UserShellCommand {
                 call_id,
                 command,

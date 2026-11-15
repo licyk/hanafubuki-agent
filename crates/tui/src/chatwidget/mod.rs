@@ -24,6 +24,7 @@ mod shortcuts;
 mod streaming;
 mod turn;
 mod warnings;
+mod work;
 
 use std::cell::Cell;
 use std::collections::HashSet;
@@ -89,6 +90,7 @@ pub(crate) struct ChatWidget {
     /// The reasoning items the model is thinking in, in the order they
     /// started.
     live_thinking: Vec<(AgentReasoningId, Arc<LiveCell<ThinkingCell>>)>,
+    work_entries: std::collections::HashMap<String, Arc<LiveCell<history_cell::WorkCell>>>,
     stream_controller: Option<StreamController>,
     plan_stream_controller: Option<PlanStreamController>,
     /// How many queued rows the commit ticks commit.
@@ -157,6 +159,7 @@ impl ChatWidget {
             awaiting_display: Vec::new(),
             exploration: None,
             live_thinking: Vec::new(),
+            work_entries: std::collections::HashMap::new(),
             stream_controller: None,
             plan_stream_controller: None,
             adaptive_chunking: AdaptiveChunkingPolicy::default(),
@@ -443,7 +446,12 @@ impl ChatWidget {
     /// Whether a thinking or a tool call is still live, so its timer and
     /// spinner are drawn again.
     pub(crate) fn has_live_entries(&self) -> bool {
-        !self.live_thinking.is_empty() || !self.running_tools.is_empty()
+        !self.live_thinking.is_empty()
+            || !self.running_tools.is_empty()
+            || self
+                .work_entries
+                .values()
+                .any(|cell| !cell.cell().finished())
     }
 
     fn request_redraw(&self) {

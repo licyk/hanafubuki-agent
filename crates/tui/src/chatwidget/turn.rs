@@ -85,10 +85,7 @@ impl ChatWidget {
                 self.retry_status_header = Some(header.clone());
                 self.bottom_pane.update_status(header, None);
             }
-            TurnUpdate::Compacted => self.add_to_history(history_cell::new_info_event(
-                "Context compacted".to_string(),
-                None,
-            )),
+            TurnUpdate::Work(work) => self.on_work(work),
             TurnUpdate::CompressionFailed(message) => {
                 let warning = format!(
                     "Context compression failed; this turn goes on with the full history: {message}"
@@ -102,12 +99,6 @@ impl ChatWidget {
                     format!("The Provider refused the request as too long; this model's window is taken as {tokens} from now on."),
                     None,
                 ))
-            }
-            TurnUpdate::CompactionFailed(message) => {
-                let warning = format!("Context compaction failed: {message}");
-                self.add_to_history(history_cell::new_warning_event(warning.clone()));
-                self.warnings
-                    .push(Warning::new(WarningSource::Compaction, warning));
             }
             TurnUpdate::Ended(end) => self.on_turn_ended(end),
             TurnUpdate::Error(message) => {
@@ -336,9 +327,8 @@ fn adds_entry(update: &TurnUpdate) -> bool {
         TurnUpdate::ReasoningStarted(_)
             | TurnUpdate::ToolStarted { .. }
             | TurnUpdate::SteeringConsumed(_)
-            | TurnUpdate::Compacted
+            | TurnUpdate::Work(_)
             | TurnUpdate::CompressionFailed(_)
-            | TurnUpdate::CompactionFailed(_)
             | TurnUpdate::ContextWindowLearned(_)
             | TurnUpdate::BackgroundUpdates(_)
     )

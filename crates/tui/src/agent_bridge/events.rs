@@ -3,8 +3,8 @@
 //! slot's changes) into the app loop.
 
 use hanafubuki_agent::{
-    AgentCompactionStatus, AgentCompactionTrigger, AgentEvent, AgentEventKind, AgentEventSink,
-    AgentStatusEventSink, AgentToolProgressUpdate, AgentTurnAccepted, AgentTurnTerminalReason,
+    AgentEvent, AgentEventKind, AgentEventSink, AgentStatusEventSink, AgentToolProgressUpdate,
+    AgentTurnAccepted, AgentTurnTerminalReason,
 };
 
 use super::{AgentBridge, TurnEnd, TurnUpdate};
@@ -30,6 +30,10 @@ impl AgentBridge {
                 turn_id,
                 generation: event.generation,
             });
+        }
+        if let Some(work) = super::WorkSnapshot::from_event(&event.kind) {
+            self.send_session_status();
+            return Some(TurnUpdate::Work(work));
         }
         let update = match event.kind {
             AgentEventKind::TurnStarted { .. } => TurnUpdate::Started,
@@ -98,21 +102,6 @@ impl AgentBridge {
             AgentEventKind::SteeringConsumed {
                 through_sequence, ..
             } => TurnUpdate::SteeringConsumed(through_sequence.value()),
-            // Every install, `/compact`'s included, is shown from its event.
-            AgentEventKind::CompactionUpdated { compaction }
-                if compaction.status == AgentCompactionStatus::Completed =>
-            {
-                self.send_session_status();
-                TurnUpdate::Compacted
-            }
-            // `/compact`'s failure is its reply; a cancelled one is no failure.
-            AgentEventKind::CompactionUpdated { compaction }
-                if compaction.status == AgentCompactionStatus::Failed
-                    && compaction.trigger == AgentCompactionTrigger::Automatic =>
-            {
-                self.send_session_status();
-                TurnUpdate::CompactionFailed(compaction.last_error.unwrap_or_default())
-            }
             AgentEventKind::ContextCompressionFailed { message } => {
                 TurnUpdate::CompressionFailed(message)
             }
@@ -124,8 +113,7 @@ impl AgentBridge {
             // `HistoryCommitted` already refreshed the status line.
             AgentEventKind::ContextCompressed { .. } => return None,
             AgentEventKind::HistoryCommitted { .. }
-            | AgentEventKind::SessionTitleUpdated { .. }
-            | AgentEventKind::CompactionUpdated { .. } => return self.session_status(),
+            | AgentEventKind::SessionTitleUpdated { .. } => return self.session_status(),
             AgentEventKind::SessionGoalUpdated { goal } => return self.goal_updated(goal),
             AgentEventKind::ModelRetryScheduled {
                 current_retry,

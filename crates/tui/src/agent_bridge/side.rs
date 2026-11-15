@@ -71,6 +71,7 @@ impl AgentBridge {
                 .map(|snapshot| OpenedSide {
                     parent,
                     session: OpenedSession {
+                        work: None,
                         session_id: Some(snapshot.id),
                         model: snapshot.model,
                         mode: snapshot.mode,
