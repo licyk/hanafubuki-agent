@@ -384,7 +384,13 @@ async fn wait_for_cancellation(cancellation: CancellationToken) {
 fn fenced_block(text: &str) -> Option<&str> {
     let start = text.find("```")?;
     let after_fence = &text[start + 3..];
-    let content = &after_fence[after_fence.find('\n')? + 1..];
+    let content = after_fence[after_fence.find('\n')? + 1..].trim_start();
+    // A fence inside a JSON string is data, not the block's closing fence.
+    if content.starts_with('{') {
+        if let Some(object) = balanced_object(content) {
+            return Some(object);
+        }
+    }
     Some(&content[..content.find("```")?])
 }
 

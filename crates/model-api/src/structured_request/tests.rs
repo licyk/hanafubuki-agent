@@ -532,4 +532,15 @@ fn json_object_text_reads_a_fence_a_balanced_object_or_the_text() {
     // An object first is read from there, a fence inside its strings kept.
     let fenced_strings = "{\n  \"a\": \"```sh\\nls\",\n  \"b\": \"```\"\n}";
     assert_eq!(json_object_text(fenced_strings), fenced_strings);
+    assert_eq!(
+        json_object_text(&format!(
+            "Here it is:\n```json\n  {fenced_strings}\n```\nDone."
+        )),
+        fenced_strings
+    );
+    let escaped = r#"{"summary":"Fixed \"```json\" blocks with {braces}.","next_action":null}"#;
+    assert_eq!(
+        json_object_text(&format!("```json\n{escaped}\n```")),
+        escaped
+    );
 }

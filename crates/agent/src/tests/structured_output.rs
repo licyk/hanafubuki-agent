@@ -231,3 +231,29 @@ async fn a_recap_on_a_gateway_without_a_forced_tool_comes_through_text() {
     assert!(body(&requests[5])["text"]["format"].is_object());
     finish(service, paths);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_fenced_recap_preserves_code_fences_inside_its_summary() {
+    let summary = "Fixed parsing of ```json blocks; not deployed yet.";
+    let encoded = json!({"summary": summary, "next_action": null, "extra": true});
+    let fenced = format!("Here is the recap:\n```json\n{encoded}\n```");
+    let server = FakeServer::start(vec![
+        (assistant_events("Fixed the parser."), Duration::ZERO),
+        (assistant_events(&fenced), Duration::ZERO),
+    ])
+    .await;
+    let (service, paths, session_id) = service_with_a_turn("recap-nested-fence", &server).await;
+    assert_eq!(
+        service.recap_session(session_id).await.unwrap(),
+        AgentRecap {
+            summary: summary.to_string(),
+            next_action: None,
+        }
+    );
+    assert_eq!(
+        server.requests().len(),
+        2,
+        "the recap is parsed without retrying"
+    );
+    finish(service, paths);
+}
