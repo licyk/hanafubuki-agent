@@ -50,11 +50,11 @@ A relative path in either is taken from the current directory.
 
 Each file is created when it is first needed.
 
-## One Agent at a time [#lock]
+## Concurrent Agents [#lock]
 
-Only one Agent process uses a data directory at a time. A second one fails to start, saying the data directory is in use. The operating system holds the lock and releases it when the process ends, a crash included: there is no need to delete `.lock` by hand.
+Multiple Agent processes can share a data directory and run different sessions concurrently. Each session has one writer: to continue a session owned by another instance, close that instance first. Recovery skips live owners and retains recovery for interrupted runs. The operating system releases locks when a process exits, including after a crash; do not delete lock files by hand. An older Agent holding an exclusive directory lock must exit before updated instances can start.
 
-To run several Agents at once, give each its own data directory:
+To keep separate histories and memory stores, choose separate data directories:
 
 ```sh
 hanafubuki-agent --data-dir ~/agent-data/review exec "Review this change"

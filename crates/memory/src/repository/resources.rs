@@ -57,7 +57,7 @@ impl AgentMemoryRepository {
     /// reason: this is a context budget, and the whole memory is not worth
     /// losing to it.
     pub fn load_context(&self) -> Result<Option<AgentMemoryContext>, AgentMemoryError> {
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let generation = self.published_generation()?;
         let path = self.inner.paths.resource_path("memory_summary.md")?;
         let summary = match fs::read_to_string(path) {
@@ -81,7 +81,7 @@ impl AgentMemoryRepository {
     /// listed and read back truncated, because a memory the model cannot see is
     /// worse than a memory it sees the first part of.
     pub fn list_resources(&self) -> Result<Vec<AgentMemoryResource>, AgentMemoryError> {
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let mut resources = Vec::new();
         for id in ["MEMORY.md", "memory_summary.md"] {
             let path = self.inner.paths.resource_path(id)?;
@@ -118,7 +118,7 @@ impl AgentMemoryRepository {
         start_line: usize,
         maximum_lines: usize,
     ) -> Result<AgentMemoryReadResult, AgentMemoryError> {
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let generation = self.published_generation()?;
         if start_line == 0 || maximum_lines == 0 || maximum_lines > 500 {
             return Err(AgentMemoryError::InvalidInput(

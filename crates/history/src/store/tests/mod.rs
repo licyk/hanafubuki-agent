@@ -166,6 +166,7 @@ mod context_retention;
 mod kept_dependents;
 mod lifecycle;
 mod memory;
+mod multiprocess;
 mod paging;
 mod projection;
 mod quarantine;

@@ -307,8 +307,8 @@ fn a_running_agent_clears_its_start_attempt_once_it_settles() {
     assert_eq!(slot.status().availability, AgentAvailability::Running);
     assert_eq!(slot.status().generation, 1);
     assert_eq!(slot.agent().unwrap().generation(), 1);
-    // This start is recorded on top of the earlier unfinished one.
-    assert_eq!(marker.unfinished_starts(), 2);
+    // Repeated starts by this live owner are not mistaken for crashed processes.
+    assert_eq!(marker.unfinished_starts(), 0);
     let deadline = Instant::now() + TEST_WAIT;
     while marker.unfinished_starts() != 0 && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(10));

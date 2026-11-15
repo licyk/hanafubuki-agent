@@ -256,7 +256,7 @@ kardia-guest 和 pykardia 的访客 SDK（`pykardia/guest/` 以及导出时一�
 
 `hanafubuki-agent plugins dev 目录` 把插件安装为 `<名字>@local` 并启用，显示它的代码请求什么并授予（会先询问；`--grant` 不询问直接授予），然后打印访客的状态。之后它监视这个目录：一次改动（新的构建或导出）之后，文件安静片刻，它就重新安装插件，访客带着改动重新启动，授权和设置保持不变；请求更多权限的改动会再次询问。Ctrl+C 停止监视；插件仍保持安装（`plugins remove <名字>@local` 删除它）。
 
-`plugins dev` 运行着 Agent，它占用数据目录，所以期间不能在这个目录上运行其他 Agent：要在终端界面或 `exec` 中试用插件，先停止它，插件仍保持安装。一个临时主目录能让开发中的插件不进入你自己的配置和数据：用同一个 [`HANAFUBUKI_AGENT_HOME`](/docs/environment#read) 先运行 `plugins dev`，再运行终端界面。
+`plugins dev` 可以与同一数据目录下的终端界面或 `exec` 同时运行。每个 Agent 启动自己的插件进程；插件如有共享数据，需要自行协调写入。临时主目录能让开发中的插件不影响自己的配置和数据：开发和测试时使用同一个 [`HANAFUBUKI_AGENT_HOME`](/docs/environment#read)。
 
 ### 链接 [#link]
 

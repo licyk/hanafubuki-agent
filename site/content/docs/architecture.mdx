@@ -238,7 +238,7 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 - **记忆**（`hanafubuki-agent-memory`，移植自 Codex）分两阶段从会话历史中派生：阶段一用一个小模型提取每个空闲会话，阶段二由整合子 Agent 处理提取结果，发布 `MEMORY.md` 和 `memory_summary.md`。先判断资格再应用上限，两个阶段都有退避（30 秒翻倍到一天），发布先提交数据库再重命名文件。
 - **Skill**（`hanafubuki-agent-skills`）：仓库 Skill 来自每个工作区根目录及其祖先直到 Git 根目录中的 `.agents/skills`，每次读取目录时重新计算；然后是用户根目录和内置的 System Skills。Skill 的正文作为 `ConversationItem::SkillContext` 每个轮次每个 Skill 只交付一次。Skill 从不注册或限制工具。
 - **配置**（`hanafubuki-agent-config`）：三个 TOML 文件，各自一个修订域和一把锁（`config.toml`、`providers.toml`、`mcp.toml`，后两者只有所有者可读）。读取逐字段解码，无效值取默认值，未知键保留，需要修复的文件先复制到 `.recovery/`；写入用 `toml_edit` 编辑磁盘上的文档（注释、布局和未知键得以保留），再原子重命名。独立模式下设置是分层的（profile、受信任的项目文件、`-c`），但只有用户的文件会被修复或写入。终端界面的设置中心是[设置目录](#settings-catalog)的视图：它通过门面的调用写入，自己不做任何配置解析。详见[配置](/docs/configuration)。
-- **数据目录锁**：`<data_dir>/.lock`，因为历史索引、记忆存储和进程组台账都假定只有一个写进程。
+- **共享数据目录**：`<data_dir>/.lock` 允许多个实例并行。会话写锁阻止两个实例加载或修改同一会话，共享文件锁串行化修改，拥有者锁让恢复跳过活动的会话和进程。见[数据目录锁](/docs/embedding#the-data-directorys-lock)。
 - **持久化格式是不稳定的。** 规则是读取方容错解码，隔离它不能使用的东西，从不删除用户数据。
 
 ### 设置目录 [#settings-catalog]

@@ -389,11 +389,12 @@ A frontend that calls into its own code from a thread the Agent did not start (t
 
 ## The data directory's lock [#the-data-directorys-lock]
 
-`<data_dir>/.lock` is an advisory lock (`flock` on Unix, `LockFileEx` on Windows) held from the Agent's first start until its shutdown, embedded and standalone alike. The history's SQLite index, the memory store and the process-group ledger assume one writer process; two processes on one data directory would corrupt the history and kill each other's processes.
+`<data_dir>/.lock` is a shared advisory lock held from the Agent's first start until shutdown, embedded and standalone alike. Multiple Agents can use the same data directory and run different sessions concurrently.
 
-- A host does nothing for it: the start marker holds it.
-- While another process holds it, the start fails at construction with an error naming the directory; the host application runs on without its Agent.
-- Turning a host's Agent off (`AgentSlot::turn_off`) keeps the lock until the application quits, so a standalone Agent on that data directory is refused meanwhile.
+- A host does nothing for it: the start marker holds it. An older Agent holding an exclusive directory lock must exit before these instances can start.
+- Each loaded or modified session has one writer, protected by `history/writers/<id>.lock`. Another instance can list the history, but opening or modifying that session is refused until its owner shuts down. A new session can run immediately.
+- Startup recovery skips sessions and process groups owned by other live instances. Shared file mutations use separate locks; SQLite retains its transaction boundaries.
+- Global history repair and staging cleanup run only when no other store is active. Explicit history-index rebuilding requires the other Agents to stop first. Each instance retains the Agent's existing recovery and quarantine behavior.
 
 ## Start, on and off, shutdown [#start-on-and-off-shutdown]
 

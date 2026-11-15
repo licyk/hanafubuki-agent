@@ -256,7 +256,7 @@ With `--run` it then installs the plugin into a throwaway home (its own configur
 
 `hanafubuki-agent plugins dev DIR` installs the plugin as `<name>@local`, turns it on, shows what its code asks for and grants it (after asking; `--grant` grants without asking), and prints its guest's state. Then it watches the directory: when its files have been quiet for a moment after a change (a new build or export), it installs the plugin again and its guest starts anew with the change, keeping its grant and settings; a change that asks for more permissions asks again. Ctrl+C stops it; the plugin stays installed (`plugins remove <name>@local` removes it).
 
-`plugins dev` runs the Agent, which holds its data directory, so no other Agent runs on it meanwhile: stop it to try the plugin in the terminal interface or `exec`, where it stays installed. A scratch home keeps a plugin under development out of your own configuration and data: run `plugins dev` and then the terminal interface with the same [`HANAFUBUKI_AGENT_HOME`](/docs/environment#read).
+`plugins dev` can run alongside the terminal interface or `exec` on the same data directory. Each Agent starts its own plugin processes; plugins that store shared data must coordinate their own writes. A scratch home keeps a plugin under development out of your own configuration and data: use the same [`HANAFUBUKI_AGENT_HOME`](/docs/environment#read) for development and testing.
 
 ### Link it [#link]
 

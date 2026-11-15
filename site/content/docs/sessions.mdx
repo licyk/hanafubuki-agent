@@ -183,5 +183,5 @@ hanafubuki-agent resume          # 从列表中选择
 
 ## 注意 [#notes]
 
-- 除了 `resume`，`sessions` 的各个子命令也需要启动 Agent，因此要独占数据目录：另一个 Agent 进程正在运行时，它们会报错退出，见[故障排查](/docs/troubleshooting#data-directory-in-use)。
+- `sessions` 命令和 `resume` 可以与其他 Agent 同时启动。历史列表可共享查看；打开或修改其他实例拥有的会话时，需要先关闭拥有者。见[故障排查](/docs/troubleshooting#data-directory-in-use)。
 - 会话 ID 必须是数字，否则命令以退出码 2 退出。

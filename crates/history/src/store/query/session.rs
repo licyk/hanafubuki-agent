@@ -35,18 +35,11 @@ impl FileAgentHistoryStore {
         let connection = self.connection()?;
         let mut statement = connection
             .prepare(
-                "SELECT session_id, checkpoint_revision, runtime_json, revision FROM agent_sessions WHERE lifecycle = 'available' AND recovery_needed = 1 ORDER BY session_id",
+                "SELECT session_id FROM agent_sessions WHERE lifecycle = 'available' AND recovery_needed = 1 ORDER BY session_id",
             )
             .map_err(database_error)?;
         let rows = statement
-            .query_map([], |row| {
-                Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, i64>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, i64>(3)?,
-                ))
-            })
+            .query_map([], |row| row.get::<_, i64>(0))
             .map_err(database_error)?;
         let encoded = rows
             .collect::<Result<Vec<_>, _>>()
@@ -62,19 +55,14 @@ impl FileAgentHistoryStore {
             .map(|(session_id, lag)| (*session_id, lag.reason().to_string()))
             .collect::<HashMap<_, _>>();
         let mut recovered = Vec::with_capacity(encoded.len() + unavailable.len());
-        for (session_id, checkpoint_revision, runtime_json, revision) in encoded {
+        for session_id in encoded {
             let session_id = AgentSessionId::new(from_i64(session_id, "session id")?);
-            if unavailable.contains_key(&session_id) {
+            if unavailable.contains_key(&session_id) || !self.try_claim_session(session_id)? {
                 continue;
             }
             recovered.push(
-                self.load_recovery_candidate(
-                    session_id,
-                    checkpoint_revision,
-                    &runtime_json,
-                    revision,
-                )
-                .map_err(|error| AgentRecoveryLoadFailure { session_id, error }),
+                self.load_recovery_candidate(session_id)
+                    .map_err(|error| AgentRecoveryLoadFailure { session_id, error }),
             );
         }
         recovered.extend(unavailable.into_iter().map(|(session_id, reason)| {
@@ -89,20 +77,8 @@ impl FileAgentHistoryStore {
     fn load_recovery_candidate(
         &self,
         session_id: AgentSessionId,
-        checkpoint_revision: i64,
-        runtime_json: &str,
-        revision: i64,
     ) -> Result<AgentRecoveredSession, AgentHistoryStoreError> {
-        let mut runtime: hanafubuki_agent_kernel::PersistedAgentRuntimeState =
-            serde_json::from_str(runtime_json).map_err(json_error)?;
-        if runtime.revision.value() != from_i64(checkpoint_revision, "checkpoint revision")? {
-            return Err(AgentHistoryStoreError::CorruptHistory(
-                "projected runtime does not match its checkpoint revision".to_string(),
-            ));
-        }
-        // History-only commits can advance past the last runtime checkpoint.
-        // Its next repair must start at the head that the writer will accept.
-        runtime.revision = AgentRevision::new(from_i64(revision, "session revision")?);
+        let runtime = self.load_runtime_state_inner(session_id)?;
         let model_context = self.load_latest_model_context_inner(session_id)?;
         Ok(AgentRecoveredSession {
             runtime: self.with_compression(runtime)?,

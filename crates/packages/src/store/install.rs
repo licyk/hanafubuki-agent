@@ -60,7 +60,7 @@ impl PackageStore {
         let recorded = PackageSource::Local {
             path: resolved.native().to_path_buf(),
         };
-        let _change = self.changes();
+        let _change = self.changes()?;
         self.install(resolved.system(), id, None, recorded)
     }
 
@@ -76,7 +76,7 @@ impl PackageStore {
             .fallback
             .has_metadata
             .then_some(entry.fallback.contents.as_str());
-        let _change = self.changes();
+        let _change = self.changes()?;
         match &entry.source {
             PackageSource::Local { path } => {
                 self.install(path, &entry.id, fallback, entry.source.clone())

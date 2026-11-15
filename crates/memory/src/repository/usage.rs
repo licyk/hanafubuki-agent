@@ -21,7 +21,7 @@ impl AgentMemoryRepository {
                 "too many cited memory sources".into(),
             ));
         }
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)

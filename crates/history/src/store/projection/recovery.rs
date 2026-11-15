@@ -204,6 +204,9 @@ ON CONFLICT(session_id) DO UPDATE SET
         };
         for (raw_session_id, raw_path) in repairs {
             let session_id = AgentSessionId::new(from_i64(raw_session_id, "session id")?);
+            if !self.try_claim_session(session_id)? {
+                continue;
+            }
             let path = PathBuf::from(raw_path);
             let result = (|| {
                 ensure_scoped_path(&path, &self.inner.paths.root)?;

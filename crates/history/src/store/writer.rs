@@ -64,6 +64,7 @@ impl FileAgentHistoryStore {
         if !self.inner.accepting.load(Ordering::Acquire) {
             return Err(AgentHistoryStoreError::ShuttingDown);
         }
+        self.claim_session(session_id)?;
         let existing = self.inner.writers.lock().get(&session_id).cloned();
         if let Some(writer) = existing {
             if !writer.worker.has_exited() {
@@ -80,12 +81,16 @@ impl FileAgentHistoryStore {
         ensure_scoped_path(&path, &self.inner.paths.root)?;
         let (sender, receiver) = mpsc::sync_channel(WRITER_CHANNEL_CAPACITY);
         let store = self.clone();
+        let owner = self.inner.session_owners.lock()[&session_id].clone();
         let worker = self
             .inner
             .workers
             .spawn_observed(
                 format!("agent-history-writer-{session_id}"),
-                move |cancellation| run_writer(store, session_id, path, receiver, cancellation),
+                move |cancellation| {
+                    let _owner = owner;
+                    run_writer(store, session_id, path, receiver, cancellation);
+                },
             )
             .map_err(AgentHistoryStoreError::Io)?;
         let handle = WriterHandle {

@@ -1,12 +1,5 @@
-//! One Agent process per data directory.
-//!
-//! The history's SQLite index and its per-session writers, the memory store
-//! and the process-group ledger all assume a single writer process, and a
-//! start reaps the process groups the ledger lists: two processes on one
-//! data directory would corrupt the history and terminate each other's
-//! processes. The lock is advisory (`flock` on Unix, `LockFileEx` on
-//! Windows) and the operating system drops it when the process ends, so a
-//! crash leaves nothing to clean up.
+//! Shared use of a data directory. Individual stores coordinate their writes
+//! and maintenance; sessions and process records retain independent owners.
 //!
 //! Dropping the lock unlocks the file before closing it: closing alone does
 //! not release the lock while another descriptor of the same open file is
@@ -27,8 +20,8 @@ pub struct DataDirLock {
 }
 
 impl DataDirLock {
-    /// Takes the lock of `directory`, creating both if needed; fails at
-    /// once when another process holds it.
+    /// Shares `directory` with other Agents. An exclusive maintenance lock
+    /// (including an older Agent's directory lock) still refuses the open.
     pub fn acquire(directory: &Path) -> Result<Self, String> {
         let path = directory.join(DATA_DIR_LOCK_FILE);
         fs::create_dir_all(directory)
@@ -40,14 +33,14 @@ impl DataDirLock {
             .truncate(false)
             .open(&path)
             .map_err(|error| format!("open {}: {error}", path.display()))?;
-        match file.try_lock() {
+        match file.try_lock_shared() {
             Ok(()) => Ok(Self {
                 file,
                 directory: directory.to_path_buf(),
             }),
             Err(TryLockError::WouldBlock) => Err(format!(
-                "the Agent data directory {} is in use by another process (it holds {}); \
-                 only one Agent may use a data directory at a time",
+                "the Agent data directory {} is exclusively locked by another process ({}); \
+                 close that older Agent or wait for its maintenance to finish",
                 directory.display(),
                 path.display()
             )),

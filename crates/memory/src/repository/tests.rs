@@ -17,6 +17,32 @@ fn opened(name: &str) -> (tempfile::TempDir, AgentMemoryPaths) {
 }
 
 #[test]
+fn another_repository_keeps_live_staging_and_shares_updates() {
+    let (_temporary, paths) = opened("shared");
+    let first = AgentMemoryRepository::open(paths.clone()).unwrap();
+    let staging = paths.staging.join("generation-1");
+    std::fs::create_dir(&staging).unwrap();
+    std::fs::write(staging.join("MEMORY.md"), "work in progress").unwrap();
+    let second = AgentMemoryRepository::open(paths.clone()).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(staging.join("MEMORY.md")).unwrap(),
+        "work in progress"
+    );
+    second
+        .sync_source_state("other", AgentMemoryContributionMode::Enabled, 1, 10)
+        .unwrap();
+    assert_eq!(
+        first.contribution_mode("other").unwrap(),
+        (AgentMemoryContributionMode::Enabled, 1)
+    );
+    assert_ne!(first.new_token("same", 10), second.new_token("same", 10));
+    drop(second);
+    drop(first);
+    AgentMemoryRepository::open(paths).unwrap();
+    assert!(!staging.exists());
+}
+
+#[test]
 fn a_busy_database_fails_the_open_and_is_kept() {
     let (_temporary, paths) = opened("busy");
     let holder = Connection::open(&paths.database).unwrap();

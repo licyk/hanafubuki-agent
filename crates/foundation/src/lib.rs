@@ -10,6 +10,7 @@ pub mod background_worker;
 pub mod blocking;
 pub mod cancellation;
 pub mod environment;
+pub mod file_lock;
 pub mod json_normalization;
 pub mod module_faults;
 pub mod panic;

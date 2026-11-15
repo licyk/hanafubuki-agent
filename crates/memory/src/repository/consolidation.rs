@@ -10,7 +10,7 @@ impl AgentMemoryRepository {
     ) -> Result<Option<MemoryLease>, AgentMemoryError> {
         let token = self.new_token("global", now_millis);
         let expires = now_millis.saturating_add(lease_millis);
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         self.install_pending_artifacts()?;
         let mut connection = self.connection()?;
         let transaction = connection
@@ -63,7 +63,7 @@ impl AgentMemoryRepository {
         lease_millis: u64,
     ) -> Result<MemoryLease, AgentMemoryError> {
         let expires = now_millis.saturating_add(lease_millis);
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -112,7 +112,7 @@ impl AgentMemoryRepository {
         maximum: usize,
     ) -> Result<Vec<(String, u64, StageOneResult)>, AgentMemoryError> {
         let maximum = maximum.clamp(1, 4096);
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let connection = self.connection()?;
         let mut statement = connection
             .prepare(
@@ -151,7 +151,7 @@ impl AgentMemoryRepository {
     ) -> Result<usize, AgentMemoryError> {
         let cutoff = now_millis
             .saturating_sub(u64::from(maximum_unused_days).saturating_mul(24 * 60 * 60 * 1000));
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -178,7 +178,7 @@ impl AgentMemoryRepository {
         bounded_error: &str,
     ) -> Result<(), AgentMemoryError> {
         let error = bound_string(bounded_error, 1024);
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -223,7 +223,7 @@ impl AgentMemoryRepository {
         workspace: &MemoryConsolidationWorkspace,
         now_millis: u64,
     ) -> Result<u64, AgentMemoryError> {
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -311,7 +311,7 @@ impl AgentMemoryRepository {
                 "a changed memory workspace cannot use no-op completion".into(),
             ));
         }
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)

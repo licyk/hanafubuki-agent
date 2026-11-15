@@ -6,7 +6,7 @@ use std::fs;
 
 impl AgentMemoryRepository {
     pub(super) fn initialize(&self) -> Result<(), AgentMemoryError> {
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let connection = self.connection()?;
         connection
             .execute_batch(

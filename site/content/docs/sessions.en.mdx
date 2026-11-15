@@ -183,5 +183,5 @@ The interface replays the session's latest 200 items, and your next message cont
 
 ## Notes [#notes]
 
-- Like `resume`, every `sessions` command starts the Agent, so it needs the data directory to itself: while another Agent process runs, it fails, as [Troubleshooting](/docs/troubleshooting#data-directory-in-use) explains.
+- `sessions` commands and `resume` can start beside another Agent. Listing history is shared; opening or changing a session owned by another instance is refused until that owner shuts down. See [Troubleshooting](/docs/troubleshooting#data-directory-in-use).
 - A session id is a number; anything else exits with code 2.

@@ -7,6 +7,7 @@ use std::sync::{mpsc, Arc};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use hanafubuki_agent_foundation::background_worker::BackgroundWorkerGroup;
+use hanafubuki_agent_foundation::file_lock::FileLock;
 use hanafubuki_agent_foundation::persistence::discard_sqlite;
 use hanafubuki_agent_kernel::{
     AgentCompressionChain, AgentCompressionUpdate, AgentConversationCommit, AgentConversationDelta,
@@ -39,6 +40,8 @@ mod jsonl;
 mod kept_files;
 mod lifecycle;
 mod memory;
+mod open;
+mod ownership;
 mod projection;
 mod query;
 mod retention;
@@ -111,6 +114,8 @@ pub struct FileAgentHistoryStore {
 
 struct StoreInner {
     paths: AgentHistoryPaths,
+    lifetime: Mutex<Option<FileLock>>,
+    session_owners: Mutex<HashMap<AgentSessionId, Arc<FileLock>>>,
     workers: BackgroundWorkerGroup,
     writers: Mutex<HashMap<AgentSessionId, WriterHandle>>,
     writer_gates: Mutex<HashMap<AgentSessionId, Arc<Mutex<()>>>>,
@@ -207,93 +212,6 @@ impl FileAgentHistoryStore {
         Ok(states)
     }
 
-    /// [`Self::open`] with the SQLite index discarded first, so it is
-    /// rebuilt from the JSONL rollouts, which stay the durable history: the
-    /// user's repair when the index is wrong in a way open does not detect.
-    pub fn open_rebuilding_index(
-        paths: AgentHistoryPaths,
-        workers: BackgroundWorkerGroup,
-        refusals: Arc<dyn AgentHistoryRefusalSink>,
-    ) -> Result<Self, AgentHistoryStoreError> {
-        log::warn!(
-            "rebuilding the Agent history index from the rollouts path={}",
-            paths.sqlite_database.display()
-        );
-        discard_sqlite(&paths.sqlite_database).map_err(AgentHistoryStoreError::Io)?;
-        Self::open_reporting_refusals(paths, workers, refusals)
-    }
-
-    /// [`Self::open_reporting_refusals`] whose later refusals are only
-    /// logged.
-    pub fn open(
-        paths: AgentHistoryPaths,
-        workers: BackgroundWorkerGroup,
-    ) -> Result<Self, AgentHistoryStoreError> {
-        Self::open_reporting_refusals(paths, workers, Arc::new(crate::NoopAgentHistoryRefusalSink))
-    }
-
-    /// Opens the store; a session it refuses once open (the session list
-    /// cannot decode its row) is told to `refusals`. What open itself
-    /// refuses goes to recovery (`load_recovery_candidates`).
-    pub fn open_reporting_refusals(
-        paths: AgentHistoryPaths,
-        workers: BackgroundWorkerGroup,
-        refusals: Arc<dyn AgentHistoryRefusalSink>,
-    ) -> Result<Self, AgentHistoryStoreError> {
-        let database_existed = paths.sqlite_database.exists();
-        fs::create_dir_all(&paths.active_sessions).map_err(io_error)?;
-        fs::create_dir_all(&paths.archived_sessions).map_err(io_error)?;
-        fs::create_dir_all(&paths.trash).map_err(io_error)?;
-        fs::create_dir_all(&paths.attachments).map_err(io_error)?;
-        let store = Self {
-            inner: Arc::new(StoreInner {
-                paths,
-                workers,
-                writers: Mutex::new(HashMap::new()),
-                writer_gates: Mutex::new(HashMap::new()),
-                database_gate: Mutex::new(()),
-                projection_lag: Mutex::new(HashMap::new()),
-                quarantined_references: Mutex::new(None),
-                refusals,
-                accepting: AtomicBool::new(true),
-                #[cfg(test)]
-                panic_next_append: AtomicBool::new(false),
-            }),
-        };
-        store.cleanup_attachment_staging()?;
-        store.recover_delete_obligations()?;
-        let initialize = || -> Result<(), AgentHistoryStoreError> {
-            store.initialize_database()?;
-            if database_existed {
-                store.catch_up_pending_repairs()?;
-            } else {
-                store.catch_up_discovered_sessions()?;
-            }
-            store.reconcile_session_locations()?;
-            store.validate_committed_attachments()
-        };
-        if let Err(error) = initialize() {
-            if !database_existed {
-                return Err(error);
-            }
-            log::warn!(
-                "discarding incompatible Agent history index path={} error={error}",
-                store.inner.paths.sqlite_database.display()
-            );
-            discard_sqlite(&store.inner.paths.sqlite_database)
-                .map_err(AgentHistoryStoreError::Io)?;
-            // The rebuild judges every session again.
-            store.inner.projection_lag.lock().clear();
-            store.initialize_database()?;
-            store.catch_up_discovered_sessions()?;
-            store.reconcile_session_locations()?;
-            store.validate_committed_attachments()?;
-        }
-        store.record_quarantined_references();
-        store.cleanup_all_unreferenced_attachments()?;
-        Ok(store)
-    }
-
     pub fn paths(&self) -> &AgentHistoryPaths {
         &self.inner.paths
     }
@@ -357,6 +275,7 @@ impl AgentHistoryStore for FileAgentHistoryStore {
         before_turn_id: AgentTurnId,
         commit: AgentConversationCommit,
     ) -> Result<AgentHistoryBase, AgentHistoryStoreError> {
+        self.claim_session(source_session_id)?;
         self.create_fork_inner(source_session_id, before_turn_id, commit)
     }
 
@@ -366,6 +285,7 @@ impl AgentHistoryStore for FileAgentHistoryStore {
         source_revision: AgentRevision,
         commit: AgentConversationCommit,
     ) -> Result<AgentHistoryBase, AgentHistoryStoreError> {
+        self.claim_session(source_session_id)?;
         self.create_fork_at_head_inner(source_session_id, source_revision, commit)
     }
 
@@ -374,6 +294,7 @@ impl AgentHistoryStore for FileAgentHistoryStore {
         session_id: AgentSessionId,
         image: hanafubuki_agent_kernel::PreparedAgentImage,
     ) -> Result<hanafubuki_agent_kernel::AgentImageAttachmentRef, AgentHistoryStoreError> {
+        self.claim_session(session_id)?;
         self.stage_image_attachment_inner(session_id, image)
     }
 
@@ -397,6 +318,7 @@ impl AgentHistoryStore for FileAgentHistoryStore {
         &self,
         session_id: AgentSessionId,
     ) -> Result<(), AgentHistoryStoreError> {
+        self.claim_session(session_id)?;
         self.cleanup_unreferenced_attachments_for(session_id)
     }
 
@@ -422,6 +344,7 @@ impl AgentHistoryStore for FileAgentHistoryStore {
         session_id: AgentSessionId,
         store: &hanafubuki_agent_kernel::AgentContentStore,
     ) -> Result<(), AgentHistoryStoreError> {
+        self.claim_session(session_id)?;
         self.write_compression_store_inner(session_id, store)
     }
 
@@ -455,6 +378,7 @@ impl AgentHistoryStore for FileAgentHistoryStore {
         &self,
         session_id: AgentSessionId,
     ) -> Result<hanafubuki_agent_kernel::PersistedAgentRuntimeState, AgentHistoryStoreError> {
+        self.claim_session(session_id)?;
         self.with_compression(self.load_runtime_state_inner(session_id)?)
     }
 
@@ -499,6 +423,7 @@ impl AgentHistoryStore for FileAgentHistoryStore {
         session_id: AgentSessionId,
         expected_revision: AgentRevision,
     ) -> Result<(), AgentHistoryStoreError> {
+        self.claim_session(session_id)?;
         self.archive_session_inner(session_id, expected_revision)
     }
 
@@ -507,6 +432,7 @@ impl AgentHistoryStore for FileAgentHistoryStore {
         session_id: AgentSessionId,
         expected_revision: AgentRevision,
     ) -> Result<(), AgentHistoryStoreError> {
+        self.claim_session(session_id)?;
         self.restore_session_inner(session_id, expected_revision)
     }
 
@@ -514,6 +440,9 @@ impl AgentHistoryStore for FileAgentHistoryStore {
         &self,
         session_ids: &[AgentSessionId],
     ) -> Result<(), AgentHistoryStoreError> {
+        for session_id in session_ids {
+            self.claim_session(*session_id)?;
+        }
         self.check_sessions_deletable_inner(session_ids)
     }
 
@@ -521,6 +450,9 @@ impl AgentHistoryStore for FileAgentHistoryStore {
         &self,
         session_ids: &[AgentSessionId],
     ) -> Result<(), AgentHistoryStoreError> {
+        for session_id in session_ids {
+            self.claim_session(*session_id)?;
+        }
         self.delete_sessions_confirmed_inner(session_ids)
     }
 
@@ -528,11 +460,17 @@ impl AgentHistoryStore for FileAgentHistoryStore {
         &self,
         session_id: AgentSessionId,
     ) -> Result<(), AgentHistoryStoreError> {
+        self.claim_session(session_id)?;
         self.repair_session_projection_inner(session_id)
     }
 
     fn shutdown(&self, deadline: std::time::Instant) -> Vec<AgentHistoryStoreError> {
-        self.shutdown_inner(deadline)
+        let errors = self.shutdown_inner(deadline);
+        if errors.is_empty() {
+            self.inner.session_owners.lock().clear();
+            self.inner.lifetime.lock().take();
+        }
+        errors
     }
 }
 

@@ -5,6 +5,7 @@
 //! never edited, and a User Skill is the user's to change or remove. That is the
 //! whole authority model — there is no token to present and no receipt to match.
 
+use hanafubuki_agent_foundation::file_lock::FileLock;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -36,6 +37,8 @@ impl SkillService {
 
     fn set_enabled(&self, id: &SkillId, enabled: bool) -> Result<SkillCatalogSnapshot, SkillError> {
         let _mutation = self.inner.mutation.lock();
+        let _file = FileLock::exclusive(&self.inner.roots.state_file.with_extension("lock"))
+            .map_err(|error| SkillError::Io(error.to_string()))?;
         let current = self.reload()?;
         if current.entry(id).is_none() {
             return Err(SkillError::NotFound(id.to_string()));
@@ -73,6 +76,8 @@ impl SkillService {
     /// one, and making the user find the inner folder is a step with no purpose.
     pub fn install(&self, request: SkillInstallRequest) -> Result<SkillCatalogEntry, SkillError> {
         let _mutation = self.inner.mutation.lock();
+        let _file = FileLock::exclusive(&self.inner.roots.state_file.with_extension("lock"))
+            .map_err(|error| SkillError::Io(error.to_string()))?;
         let directory = skill_directory_of(&request.source_directory)?;
         let folder_name = source_folder_name(&directory)?;
         // Load it before anything is written: an unreadable source must fail
@@ -93,6 +98,8 @@ impl SkillService {
     /// Author a new Skill in the managed root from a name and a description.
     pub fn create(&self, request: SkillCreateRequest) -> Result<SkillCatalogEntry, SkillError> {
         let _mutation = self.inner.mutation.lock();
+        let _file = FileLock::exclusive(&self.inner.roots.state_file.with_extension("lock"))
+            .map_err(|error| SkillError::Io(error.to_string()))?;
         let name = validated_name(&request.name)?;
         let description = validated_description(&request.description)?;
         let folder_name = folder_name_for(&name)?;
@@ -116,6 +123,8 @@ impl SkillService {
     ) -> Result<SkillCatalogEntry, SkillError> {
         let source = self.loaded(&request.source)?;
         let _mutation = self.inner.mutation.lock();
+        let _file = FileLock::exclusive(&self.inner.roots.state_file.with_extension("lock"))
+            .map_err(|error| SkillError::Io(error.to_string()))?;
         let name = validated_name(&request.name)?;
         let folder_name = folder_name_for(&name)?;
         if self.managed_path(&folder_name)?.exists() {
@@ -142,6 +151,8 @@ impl SkillService {
     ) -> Result<SkillCatalogEntry, SkillError> {
         let directory = self.editable_directory(&request.id)?;
         let _mutation = self.inner.mutation.lock();
+        let _file = FileLock::exclusive(&self.inner.roots.state_file.with_extension("lock"))
+            .map_err(|error| SkillError::Io(error.to_string()))?;
         let path = normalize_relative(&request.path)?;
         if request.content.len() as u64 > MAX_SKILL_FILE_BYTES {
             return Err(SkillError::LimitExceeded(format!(
@@ -166,6 +177,8 @@ impl SkillService {
     ) -> Result<SkillCatalogEntry, SkillError> {
         let directory = self.editable_directory(&request.id)?;
         let _mutation = self.inner.mutation.lock();
+        let _file = FileLock::exclusive(&self.inner.roots.state_file.with_extension("lock"))
+            .map_err(|error| SkillError::Io(error.to_string()))?;
         let path = normalize_relative(&request.path)?;
         if path == SKILL_FILE {
             return Err(SkillError::InvalidPath(
@@ -189,6 +202,8 @@ impl SkillService {
     pub fn delete(&self, id: &SkillId) -> Result<SkillCatalogSnapshot, SkillError> {
         let directory = self.editable_directory(id)?;
         let _mutation = self.inner.mutation.lock();
+        let _file = FileLock::exclusive(&self.inner.roots.state_file.with_extension("lock"))
+            .map_err(|error| SkillError::Io(error.to_string()))?;
         fs::remove_dir_all(&directory)
             .map_err(|error| SkillError::Io(format!("delete the Skill: {error}")))?;
         sync_directory(&self.inner.roots.user)?;

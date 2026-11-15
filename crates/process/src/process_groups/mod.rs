@@ -16,10 +16,13 @@
 //! boot id and the leader's start time), written before the session is
 //! published and removed when its process ends. The next lifetime calls
 //! [`ProcessGroupRecord::reap_leftovers`] first: a recorded group whose leader
-//! still runs with the recorded identity is terminated (`SIGTERM`, a bounded
-//! grace, `SIGKILL`); one whose identity cannot be confirmed is left alone.
+//! has no live owner and still runs with the recorded identity is terminated
+//! (`SIGTERM`, a bounded grace, `SIGKILL`); one whose identity cannot be
+//! confirmed is left alone.
 //! Elsewhere nothing is recorded: Windows kills an Executor tree with its job
 //! object, and macOS has no identity this ledger reads yet.
+//! Each owner holds a file lock; ledger changes are serialized across
+//! processes, and a reaper skips the groups of other live owners.
 
 mod identity;
 
@@ -27,12 +30,14 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
+use hanafubuki_agent_foundation::file_lock::FileLock;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
 static NEXT_GROUP: AtomicU64 = AtomicU64::new(1);
+static NEXT_RECORD: AtomicU64 = AtomicU64::new(1);
 
 /// The capability over every Executor session started in one lifetime of
 /// its holder. Clones are the same group.
@@ -99,6 +104,14 @@ struct RecordedGroup {
     pgid: u32,
     /// What the leader must still be to be this group's (`identity`).
     leader_identity: String,
+    #[serde(default)]
+    owner: Option<RecordOwner>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+struct RecordOwner {
+    pid: u32,
+    id: u64,
 }
 
 /// What [`ProcessGroupRecord::reap_leftovers`] did.
@@ -125,6 +138,8 @@ struct RecordInner {
     file: PathBuf,
     /// Serializes the ledger's read-modify-write of its own file.
     gate: Mutex<()>,
+    owner: RecordOwner,
+    lease: OnceLock<Result<FileLock, String>>,
 }
 
 impl ProcessGroupRecord {
@@ -133,6 +148,11 @@ impl ProcessGroupRecord {
             inner: Arc::new(RecordInner {
                 file,
                 gate: Mutex::new(()),
+                owner: RecordOwner {
+                    pid: std::process::id(),
+                    id: NEXT_RECORD.fetch_add(1, Ordering::Relaxed),
+                },
+                lease: OnceLock::new(),
             }),
         }
     }
@@ -144,11 +164,20 @@ impl ProcessGroupRecord {
         let Some(leader_identity) = identity::leader_identity(pgid) else {
             return false;
         };
+        if let Err(error) = self.inner.lease.get_or_init(|| {
+            FileLock::try_exclusive(&self.owner_path(self.inner.owner))
+                .map_err(|error| error.to_string())?
+                .ok_or_else(|| "process record owner is already active".to_string())
+        }) {
+            log::warn!("process group {pgid} was not recorded: {error}");
+            return false;
+        }
         self.change(|document| {
             document.groups.retain(|group| group.pgid != pgid);
             document.groups.push(RecordedGroup {
                 pgid,
                 leader_identity,
+                owner: Some(self.inner.owner),
             });
         })
         .map_err(|error| log::warn!("process group {pgid} was not recorded: {error}"))
@@ -171,6 +200,13 @@ impl ProcessGroupRecord {
     pub fn reap_leftovers(&self) -> ProcessGroupReap {
         let _gate = self.inner.gate.lock();
         let mut reap = ProcessGroupReap::default();
+        let _file = match FileLock::exclusive(&self.inner.file.with_extension("lock")) {
+            Ok(lock) => lock,
+            Err(error) => {
+                reap.failed.push(error.to_string());
+                return reap;
+            }
+        };
         let document = match self.read() {
             Ok(document) => document,
             Err(error) => {
@@ -180,6 +216,21 @@ impl ProcessGroupRecord {
         };
         let mut kept = Vec::new();
         for group in document.groups {
+            let _owner = match group.owner.filter(|owner| *owner != self.inner.owner) {
+                Some(owner) => match FileLock::try_exclusive(&self.owner_path(owner)) {
+                    Ok(Some(lock)) => Some(lock),
+                    Ok(None) => {
+                        kept.push(group);
+                        continue;
+                    }
+                    Err(error) => {
+                        reap.failed.push(error.to_string());
+                        kept.push(group);
+                        continue;
+                    }
+                },
+                None => None,
+            };
             // A damaged or hand-edited ledger must never make the reap
             // signal init, the kernel's group or this process's own group.
             if is_protected_group(group.pgid) {
@@ -219,9 +270,18 @@ impl ProcessGroupRecord {
 
     fn change(&self, edit: impl FnOnce(&mut RecordDocument)) -> Result<(), String> {
         let _gate = self.inner.gate.lock();
+        let _file = FileLock::exclusive(&self.inner.file.with_extension("lock"))
+            .map_err(|error| error.to_string())?;
         let mut document = self.read()?;
         edit(&mut document);
         self.write(&document)
+    }
+
+    fn owner_path(&self, owner: RecordOwner) -> PathBuf {
+        self.inner
+            .file
+            .with_extension("owners")
+            .join(format!("{}-{}.lock", owner.pid, owner.id))
     }
 
     /// The recorded groups; a file that does not read records none, since

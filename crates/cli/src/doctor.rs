@@ -49,13 +49,16 @@ fn run_mode(global: &GlobalArgs, online: bool, owns_data: bool) -> Result<u8, Fa
         Err(error) => report.fail("keyring", &error),
     }
     let data_dir = &standalone.runtime.storage_paths().root;
-    let free = if owns_data {
-        report.ok("data", "owned by this running Agent");
+    let available = if owns_data {
+        report.ok("data", "shared by this running Agent");
         false
     } else {
         match DataDirLock::acquire(data_dir) {
             Ok(_lock) => {
-                report.ok("data", &format!("{} (not in use)", data_dir.display()));
+                report.ok(
+                    "data",
+                    &format!("{} (shared access available)", data_dir.display()),
+                );
                 true
             }
             Err(error) => {
@@ -69,8 +72,8 @@ fn run_mode(global: &GlobalArgs, online: bool, owns_data: bool) -> Result<u8, Fa
             "online",
             "the Provider and the MCP servers are reached with --online",
         );
-    } else if !free {
-        report.skip("online", "the data directory is in use");
+    } else if !available {
+        report.skip("online", "the data directory is unavailable");
     } else {
         reach(&mut report, &standalone, default_provider);
     }

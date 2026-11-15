@@ -30,7 +30,7 @@ skip  online    the Provider and the MCP servers are reached with --online
 | `mcp`       | MCP 服务器的数量和启用的数量                                                                                                                                                                                                                      |
 | `roles`     | 可用的角色（包括开启的已安装插件的角色），以及有几个不可用；然后每个读取或解析时的问题各占一行，插件的问题写明该插件（[角色](/docs/roles#issues)）。不可用的角色不算 `FAIL`                                                                       |
 | `keyring`   | 系统密钥环能否读取                                                                                                                                                                                                                                |
-| `data`      | 数据目录是否空闲；被另一个 Agent 进程占用为 `FAIL`                                                                                                                                                                                                |
+| `data`      | 数据目录能否共享访问；旧版 Agent 或维护操作持有独占锁时为 `FAIL`                                                                                                                                                                                                |
 | `online`    | 只在 `--online` 且数据目录空闲时运行：启动 Agent，列出默认 Provider 的模型（`provider` 行）及对每个模型所知道的信息（每个模型一行 `model`，如 `gpt-5.1: window 400000 (reported), vision yes (reported)`），连接每个启用的 MCP 服务器（`mcp` 行） |
 
 不带 `--online` 时，`doctor` 不启动 Agent，可以在另一个 Agent 进程运行时使用。
@@ -72,17 +72,9 @@ error: the turn failed (model_request_retries_exhausted): agent model request re
 
 ### 数据目录被占用 [#data-directory-in-use]
 
-```text
-error: the Agent is unavailable: its construction failed: the Agent data directory /home/me/.local/share/hanafubuki-agent is in use by another process (it holds /home/me/.local/share/hanafubuki-agent/.lock); only one Agent may use a data directory at a time
-```
+新版 Agent 可以共用数据目录。如果启动提示目录被 **exclusively locked**，说明旧版 Agent 或维护操作仍持有独占锁。关闭旧进程，或等待维护完成；可以用 `ps`、任务管理器等定位进程。原来的 `only one Agent may use a data directory at a time` 提示来自旧版本。
 
-一个数据目录同一时间只能被一个 Agent 进程使用：另一个终端中的界面、正在运行的 `exec`，或者嵌入了 Agent 的应用。
-
-- 结束另一个进程，或者等它完成。`doctor` 无法告诉你是哪个进程，可以用 `ps`、任务管理器等查找 `hanafubuki-agent`。
-- 锁由操作系统持有，进程结束（包括崩溃）后自动释放，**不要**手动删除 `.lock`。
-- 需要同时运行多个 Agent 时，用 `--data-dir` 为每个指定不同的数据目录，见[数据目录](/docs/data-directory#lock)。
-
-`config`、`providers list`、`mcp list` 和不带 `--online` 的 `doctor` 不需要数据目录，可以照常使用。
+`session … is in use by another Agent` 表示该会话已有拥有者：可以新建对话，或先关闭拥有该会话的实例，再继续它。共享历史列表仍可查看。进程结束或崩溃后由操作系统释放锁，不要手动删除锁文件。见[数据目录](/docs/data-directory#lock)。
 
 ### 密钥环不可用 [#keyring]
 

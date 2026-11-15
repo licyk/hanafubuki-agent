@@ -1,6 +1,6 @@
 //! The standalone runtime end to end: started on its own configuration and
 //! data directories with the host ports' defaults, it runs a turn in its
-//! working directory, holds its data directory against a second runtime, and
+//! working directory, shares its data directory with a second runtime, and
 //! shuts down cleanly.
 
 use std::path::{Path, PathBuf};
@@ -150,18 +150,29 @@ fn the_standalone_runtime_runs_a_turn_in_its_working_directory() {
         .join("skills/system/skill-creator/SKILL.md")
         .is_file());
 
-    // A second runtime on the same data directory does not start.
     let second = fixture.runtime().unwrap();
     second.start();
-    let refused = second.wait_until_started(TEST_WAIT).err().unwrap();
-    assert!(
-        refused.to_string().contains(&format!(
-            "the Agent data directory {} is in use by another process",
-            fixture.home.display()
-        )),
-        "{refused}"
-    );
+    let other = second.wait_until_started(TEST_WAIT).unwrap();
+    let other_session = other
+        .runtime()
+        .block_on({
+            let other = other.clone();
+            async move {
+                other
+                    .create_session(hanafubuki_agent_kernel::AgentSessionMode::Default, None)
+                    .await
+            }
+        })
+        .unwrap()
+        .unwrap();
+    assert_ne!(session.id, other_session.id);
+    assert!(other.snapshot(session.id).is_err());
+    drop(other);
     assert_eq!(second.shutdown(AGENT_SHUTDOWN_BUDGET), []);
+    assert_eq!(
+        agent.snapshot(session.id).unwrap().turn.unwrap().phase,
+        AgentTurnPhase::Completed
+    );
 
     drop(agent);
     let diagnostics = runtime.shutdown(AGENT_SHUTDOWN_BUDGET);

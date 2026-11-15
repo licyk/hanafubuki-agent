@@ -281,7 +281,7 @@ impl AgentMemoryRepository {
     }
 
     fn removal_reason(&self, session_id: &str) -> Result<&'static str, AgentMemoryError> {
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let connection = self.connection()?;
         let row: Option<(String, bool, bool)> = connection
             .query_row(
@@ -317,7 +317,7 @@ impl AgentMemoryRepository {
                 "memory workspace is not the exact staging generation".into(),
             ));
         }
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let metadata = match fs::symlink_metadata(&workspace.path) {
             Ok(metadata) => metadata,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),

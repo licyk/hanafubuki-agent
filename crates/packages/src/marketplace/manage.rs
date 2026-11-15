@@ -91,7 +91,7 @@ impl PackageStore {
                 "--sparse is only supported for git marketplace sources".to_string(),
             ));
         }
-        let _change = self.changes();
+        let _change = self.changes()?;
         if let Some(added) = self.already_added(&source, &request.sparse_paths, configured) {
             return Ok(added);
         }
@@ -235,7 +235,7 @@ impl PackageStore {
         if record.source_type == MarketplaceSourceType::Local {
             return Ok(MarketplaceUpgrade::UpToDate);
         }
-        let _change = self.changes();
+        let _change = self.changes()?;
         let destination = self.marketplace_checkout(name);
         let cwd = self.staging("ls-remote-")?;
         let remote = remote_revision(
@@ -276,7 +276,7 @@ impl PackageStore {
     ) -> Result<Option<PathBuf>, PackageError> {
         validate_marketplace_name(name)
             .map_err(|error| PackageError::Invalid(error.to_string()))?;
-        let _change = self.changes();
+        let _change = self.changes()?;
         let checkout = self.marketplace_checkout(name);
         let removed = remove_existing(&checkout)?;
         if !removed && record.is_none() {

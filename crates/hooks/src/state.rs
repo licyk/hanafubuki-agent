@@ -52,6 +52,10 @@ impl HookStateStore {
     /// Applies `change` to the state on disk.
     pub(crate) fn update(&self, change: impl FnOnce(&mut HookStates)) -> Result<(), String> {
         let _write = self.write.lock();
+        let _file = hanafubuki_agent_foundation::file_lock::FileLock::exclusive(
+            &self.path.with_extension("lock"),
+        )
+        .map_err(|error| error.to_string())?;
         let mut states = read(&self.path);
         change(&mut states);
         write(&self.path, &states)

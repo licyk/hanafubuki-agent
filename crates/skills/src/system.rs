@@ -41,6 +41,9 @@ pub(crate) fn synchronize_system_skills(root: &Path) -> Result<(), SkillError> {
         SkillError::InvalidPath("the System Skill root must have a parent".to_string())
     })?;
     ensure_directory(parent, "the System Skill parent")?;
+    let _publish =
+        hanafubuki_agent_foundation::file_lock::FileLock::exclusive(&parent.join(".system.lock"))
+            .map_err(|error| SkillError::Io(error.to_string()))?;
     if matches_embedded(root)? {
         return Ok(());
     }

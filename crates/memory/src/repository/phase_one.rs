@@ -11,7 +11,7 @@ impl AgentMemoryRepository {
         validate_id(session_id, "session id")?;
         let token = self.new_token(session_id, now_millis);
         let expires = now_millis.saturating_add(lease_millis);
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -81,7 +81,7 @@ impl AgentMemoryRepository {
         lease_millis: u64,
     ) -> Result<MemoryLease, AgentMemoryError> {
         let expires = now_millis.saturating_add(lease_millis);
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -141,7 +141,7 @@ impl AgentMemoryRepository {
             )?;
             validate_text(&result.rollout_slug, 80, "rollout slug")?;
         }
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -204,7 +204,7 @@ impl AgentMemoryRepository {
         bounded_error: &str,
     ) -> Result<(), AgentMemoryError> {
         let error = bound_string(bounded_error, 1024);
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)

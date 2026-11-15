@@ -33,29 +33,25 @@ fn second_process(directory: &Path) -> String {
 }
 
 #[test]
-fn a_second_process_is_refused_a_held_data_directory_until_it_is_released() {
+fn multiple_processes_share_a_data_directory_but_exclusive_maintenance_blocks_them() {
     let directory = tempfile::tempdir().unwrap();
     let data_dir = directory.path().join("data");
     let lock = DataDirLock::acquire(&data_dir).unwrap();
     assert_eq!(lock.directory(), data_dir);
-    assert!(data_dir.join(DATA_DIR_LOCK_FILE).is_file());
-
-    let refused = second_process(&data_dir);
-    assert!(refused.contains("CHILD-REFUSED"), "{refused}");
-    assert!(
-        refused.contains(&format!(
-            "the Agent data directory {} is in use by another process",
-            data_dir.display()
-        )),
-        "{refused}"
-    );
-    // Another handle in this process is refused as well.
-    assert!(DataDirLock::acquire(&data_dir).is_err());
-
+    assert!(second_process(&data_dir).contains("CHILD-LOCKED"));
+    let second = DataDirLock::acquire(&data_dir).unwrap();
+    drop(second);
     drop(lock);
-    let taken = second_process(&data_dir);
-    assert!(taken.contains("CHILD-LOCKED"), "{taken}");
-    DataDirLock::acquire(&data_dir).unwrap();
+    let maintenance = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(data_dir.join(DATA_DIR_LOCK_FILE))
+        .unwrap();
+    maintenance.lock().unwrap();
+    assert!(second_process(&data_dir).contains("CHILD-REFUSED"));
+    assert!(DataDirLock::acquire(&data_dir).is_err());
+    maintenance.unlock().unwrap();
+    assert!(second_process(&data_dir).contains("CHILD-LOCKED"));
 }
 
 #[test]
@@ -67,6 +63,7 @@ fn a_dropped_lock_is_released_while_a_copy_of_its_file_is_still_open() {
     let inherited = lock.file.try_clone().unwrap();
 
     drop(lock);
-    DataDirLock::acquire(directory.path()).unwrap();
+    inherited.try_lock().unwrap();
+    inherited.unlock().unwrap();
     drop(inherited);
 }

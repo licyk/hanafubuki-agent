@@ -30,7 +30,7 @@ impl AgentMemoryRepository {
             ));
         }
         let content = redact_memory_text(request.content.trim(), &[]);
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         reject_note_path_symlink(&self.inner.paths.ad_hoc_notes)?;
         let connection = self.connection()?;
         let (reset_epoch, enabled): (i64, bool) = connection
@@ -100,14 +100,14 @@ impl AgentMemoryRepository {
     }
 
     pub(super) fn active_ad_hoc_notes(&self) -> Result<Vec<AdHocMemoryNote>, AgentMemoryError> {
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         reject_note_path_symlink(&self.inner.paths.ad_hoc_notes)?;
         let connection = self.connection()?;
         active_ad_hoc_notes_from_connection(&connection, &self.inner.paths.ad_hoc_notes)
     }
 
     pub(super) fn recover_ad_hoc_notes(&self) -> Result<(), AgentMemoryError> {
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         reject_note_path_symlink(&self.inner.paths.ad_hoc_notes)?;
         let connection = self.connection()?;
         let (generation, dirty): (i64, bool) = connection

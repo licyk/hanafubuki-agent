@@ -133,6 +133,8 @@ icon: Microscope
 
 ### 写入线程 [#history-writers]
 
+存储在加载、恢复或修改会话前取得 `history/writers/<id>.lock`，持有到关闭。恢复跳过其他活动存储拥有的会话。启动清理和索引重建需要独占历史存储；第二个存储不会清扫活动暂存区或重建共享索引。
+
 写入经过每个会话一个的写入线程（`agent-history-writer-<id>`，队列容纳 64 条命令），它在追加和它的投影都写好之后确认这次追加。
 
 - `append_commit` 和 `append_delta` 等待确认。`enqueue_commit` 和 `enqueue_delta` 只找到或启动写入线程（没有运行时从索引读取会话的文件）并排队，持有会话闸门的时间不超过这些；写入线程的队列满了时，调用方要等到有空位。
@@ -296,15 +298,14 @@ Provider 的错误是否拒绝了请求的推理参数，由 `hanafubuki-agent-m
 ```json
 {
   "unfinishedStarts": 2,
-  "lastAttempt": {
-    "pid": 41237,
-    "atUnixMillis": 1793260800000
-  }
+  "pending": [
+    { "id": 1, "attempt": { "pid": 41237, "atUnixMillis": 1793260800000 } }
+  ]
 }
 ```
 
-- 启动在构造任何东西之前读取计数，加一，连同本进程的 `pid` 和时间一起写入。没有拿到数据目录锁的启动不记录尝试。
-- 在 Agent 已 `Running` 满 `AGENT_START_SETTLE`（60 秒）后、启动有序失败时、实例有序停止时（重启、故障后的停止、关闭模块）以及有序关闭时，写入 `{"unfinishedStarts": 0}`（没有 `lastAttempt`）来清除这次尝试。没有记录过尝试的运行（Agent 处于关闭状态）不清除它，所以崩溃循环导致的停止在有序退出后依然有效。
+- 启动在构造之前持有 `start-marker.owners/` 下自己的拥有者锁，并记录待完成的尝试。标记的修改由 `start-marker.lock` 串行化。拥有者锁仍被持有的尝试尚在运行，不计作失败；已失去拥有者的尝试折入 `unfinishedStarts`。没有拿到数据目录锁的启动不记录尝试。
+- 在 Agent 已 `Running` 满 `AGENT_START_SETTLE`（60 秒）后，或启动、实例有序停止时，删除自己的尝试并清空失败计数，保留其他活动尝试。没有记录过尝试的运行（Agent 处于关闭状态）不清除它，所以崩溃循环导致的停止在有序退出后依然有效。显式重置也保留其他活动尝试。
 - 如果崩溃记录属于同一进程且不早于最后一次尝试，就不计入最后一次尝试：致命的 panic 从不发生在 Agent 的线程上（Agent 的线程都被隔离），所以那次运行不是死于 Agent。崩溃记录（`crash-record.json`）在 `configure_crash_record` 指定它之后，由 panic hook 在致命 panic 中止进程之前写入：
 
 ```json

@@ -26,25 +26,16 @@
 //! the user restarts it or turns its module off and on.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
-use hanafubuki_agent_config::{write_atomic, FileAccess};
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
-use hanafubuki_agent_foundation::panic::{read_crash_record, CrashRecord};
 use hanafubuki_agent_history::{AgentHistoryRefusalSink, NoopAgentHistoryRefusalSink};
 use hanafubuki_agent_kernel::{AgentKernelFaultSink, NoopAgentKernelFaultSink};
 use hanafubuki_agent_process::executor::ExecutorManager;
 use hanafubuki_agent_process::process_groups::{ProcessGroupRecord, ProcessOwnerGroup};
-use parking_lot::Mutex;
-use serde::{Deserialize, Serialize};
 
-use super::{
-    AgentApplicationService, AgentDisabledReason, AgentHandle, AgentSlot, AgentStartOptions,
-    AgentStartStage,
-};
-use crate::data_dir_lock::DataDirLock;
+use super::{AgentApplicationService, AgentHandle, AgentSlot, AgentStartOptions, AgentStartStage};
 use crate::skill_watcher::SkillCatalogWatcher;
 use hanafubuki_agent_runtime::{ContainedRuntime, RuntimeTaskFailure, AGENT_RUNTIME_THREAD_NAME};
 
@@ -149,188 +140,6 @@ impl AgentLauncher {
 
     pub(crate) fn skill_watcher(&self) -> &SkillCatalogWatcher {
         &self.skill_watcher
-    }
-}
-
-#[derive(Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct StartMarkerDocument {
-    unfinished_starts: u32,
-    /// The run that recorded the last attempt, to pair it with a crash
-    /// record.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    last_attempt: Option<StartAttempt>,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-struct StartAttempt {
-    pid: u32,
-    at_unix_millis: u64,
-}
-
-/// The unfinished starts that count: the last one does not when its run
-/// ended in a fatal panic, which is never on an Agent thread (they are
-/// contained), so it was not the Agent's death.
-fn counted_starts(document: &StartMarkerDocument, crash: Option<&CrashRecord>) -> u32 {
-    match (&document.last_attempt, crash) {
-        (Some(attempt), Some(crash))
-            if crash.pid == attempt.pid && crash.at_unix_millis >= attempt.at_unix_millis =>
-        {
-            log::info!(
-                "the last Agent start is not counted: its run ended in a fatal panic on thread \
-                 '{}' at {}",
-                crash.thread,
-                crash.location
-            );
-            document.unfinished_starts.saturating_sub(1)
-        }
-        _ => document.unfinished_starts,
-    }
-}
-
-/// The crash-loop start-up marker under the Agent data directory, which
-/// also holds the data directory's lock: the directory the marker's file is
-/// in is the data directory (`AgentStoragePaths::start_marker_file`).
-#[derive(Clone)]
-pub struct AgentStartMarker {
-    file: PathBuf,
-    /// The crash record the panic hook writes (`configure_crash_record`).
-    crash_record: Option<PathBuf>,
-    /// Whether this run recorded an attempt that is not cleared yet.
-    recorded: Arc<AtomicBool>,
-    /// Taken by the first start and held across restarts until shutdown.
-    lock: Arc<Mutex<Option<DataDirLock>>>,
-}
-
-impl AgentStartMarker {
-    pub fn new(file: PathBuf) -> Self {
-        Self {
-            file,
-            crash_record: None,
-            recorded: Arc::new(AtomicBool::new(false)),
-            lock: Arc::new(Mutex::new(None)),
-        }
-    }
-
-    /// The marker, discounting a start whose run ended in the fatal panic
-    /// recorded at `crash_record`.
-    pub fn with_crash_record(self, crash_record: PathBuf) -> Self {
-        Self {
-            crash_record: Some(crash_record),
-            ..self
-        }
-    }
-
-    /// Starts recorded and never cleared, less one whose run ended in a
-    /// fatal panic. An unreadable marker counts none: it must not keep the
-    /// Agent off.
-    pub fn unfinished_starts(&self) -> u32 {
-        let document = match std::fs::read(&self.file) {
-            Ok(bytes) => serde_json::from_slice(&bytes).map_err(|error| error.to_string()),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                Ok(StartMarkerDocument::default())
-            }
-            Err(error) => Err(error.to_string()),
-        };
-        match document {
-            Ok(document) => {
-                let crash = self.crash_record.as_deref().and_then(read_crash_record);
-                counted_starts(&document, crash.as_ref())
-            }
-            Err(error) => {
-                log::warn!("the Agent start marker is unreadable and counts no starts: {error}");
-                0
-            }
-        }
-    }
-
-    /// Whether the Agent starts this run, its module being enabled or not,
-    /// and if not, why.
-    pub fn disabled_reason(&self, module_enabled: bool) -> Option<AgentDisabledReason> {
-        if !module_enabled {
-            log::info!("the agent module is turned off in Settings; the Agent is not built");
-            return Some(AgentDisabledReason::Setting);
-        }
-        let unfinished = self.unfinished_starts();
-        if unfinished >= CRASH_LOOP_STARTS {
-            log::warn!(
-                "the Agent starts off: its last {unfinished} starts did not finish; \
-                 restarting it or turning its module off and on clears this"
-            );
-            return Some(AgentDisabledReason::CrashLoop);
-        }
-        None
-    }
-
-    /// Takes the data directory's lock unless this run holds it already. A
-    /// start takes it before it touches the directory, since another
-    /// process using it would see its processes reaped and its history
-    /// written under it.
-    pub(crate) fn lock_data_dir(&self) -> Result<(), String> {
-        let mut lock = self.lock.lock();
-        if lock.is_none() {
-            let directory = self.file.parent().unwrap_or(&self.file);
-            *lock = Some(DataDirLock::acquire(directory)?);
-        }
-        Ok(())
-    }
-
-    /// Releases the data directory's lock, once the Agent has stopped.
-    pub(crate) fn release_data_dir(&self) {
-        self.lock.lock().take();
-    }
-
-    /// Records a start attempt before the Agent is constructed.
-    pub(crate) fn record_attempt(&self) -> Result<(), String> {
-        let unfinished = self.unfinished_starts().saturating_add(1);
-        let at_unix_millis = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|elapsed| u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX))
-            .unwrap_or(0);
-        self.write(&StartMarkerDocument {
-            unfinished_starts: unfinished,
-            last_attempt: Some(StartAttempt {
-                pid: std::process::id(),
-                at_unix_millis,
-            }),
-        })?;
-        self.recorded.store(true, Ordering::Release);
-        Ok(())
-    }
-
-    /// Clears this run's attempt: the start finished, the instance stopped
-    /// in order, or the application is leaving in order. Nothing to do when
-    /// this run recorded none (the Agent was off), so a crash-loop stop
-    /// survives an orderly exit.
-    pub fn finish(&self) {
-        if self.recorded.swap(false, Ordering::AcqRel) {
-            if let Err(error) = self.write(&StartMarkerDocument::default()) {
-                log::warn!("the Agent start marker was not cleared: {error}");
-            }
-        }
-    }
-
-    /// Forgets every recorded start: the user restarted the Agent or turned
-    /// it on.
-    pub fn reset(&self) -> Result<(), String> {
-        self.recorded.store(false, Ordering::Release);
-        self.write(&StartMarkerDocument::default())
-    }
-
-    #[cfg(test)]
-    pub(crate) fn file_exists_for_test(&self) -> bool {
-        self.file.exists()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn file_for_test(&self) -> &std::path::Path {
-        &self.file
-    }
-
-    fn write(&self, document: &StartMarkerDocument) -> Result<(), String> {
-        let bytes = serde_json::to_vec_pretty(document).map_err(|error| error.to_string())?;
-        write_atomic(&self.file, &bytes, FileAccess::Shared)
     }
 }
 
@@ -646,5 +455,5 @@ fn flatten<T>(result: Result<Result<T, String>, RuntimeTaskFailure>) -> Result<T
     result.unwrap_or_else(|failure| Err(failure.to_string()))
 }
 
-#[cfg(test)]
-mod tests;
+mod marker;
+pub use marker::AgentStartMarker;

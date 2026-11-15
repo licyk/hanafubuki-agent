@@ -6,6 +6,7 @@ use super::*;
 fn document(unfinished_starts: u32, attempt: Option<(u32, u64)>) -> StartMarkerDocument {
     StartMarkerDocument {
         unfinished_starts,
+        pending: Vec::new(),
         last_attempt: attempt.map(|(pid, at_unix_millis)| StartAttempt {
             pid,
             at_unix_millis,
@@ -21,6 +22,30 @@ fn crash(pid: u32, at_unix_millis: u64) -> CrashRecord {
         location: "src/somewhere.rs:1:1".to_string(),
         message: "not the Agent".to_string(),
     }
+}
+
+#[test]
+fn simultaneous_starts_do_not_count_as_crashes_or_clear_each_other() {
+    let directory = tempfile::tempdir().unwrap();
+    let file = directory.path().join("start-marker.json");
+    let markers = (0..4)
+        .map(|_| AgentStartMarker::new(file.clone()))
+        .collect::<Vec<_>>();
+    for marker in &markers {
+        marker.record_attempt().unwrap();
+    }
+    assert_eq!(markers[0].unfinished_starts(), 0);
+    markers[0].finish();
+    assert_eq!(markers[0].read_document().pending.len(), 3);
+    drop(markers);
+    let next = AgentStartMarker::new(file);
+    assert_eq!(next.unfinished_starts(), 3);
+    assert_eq!(
+        next.disabled_reason(true),
+        Some(AgentDisabledReason::CrashLoop)
+    );
+    next.reset().unwrap();
+    assert_eq!(next.unfinished_starts(), 0);
 }
 
 #[test]
@@ -52,7 +77,9 @@ fn the_marker_reads_the_crash_record_it_was_given() {
     let record = directory.path().join("crash-record.json");
     let marker = AgentStartMarker::new(marker_file.clone()).with_crash_record(record.clone());
     for _ in 0..CRASH_LOOP_STARTS {
-        marker.record_attempt().unwrap();
+        AgentStartMarker::new(marker_file.clone())
+            .record_attempt()
+            .unwrap();
     }
     assert_eq!(
         marker.disabled_reason(true),

@@ -15,6 +15,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
+use hanafubuki_agent_foundation::file_lock::FileLock;
 use hanafubuki_agent_process::executor::ExecutorManager;
 use parking_lot::Mutex;
 use sha2::{Digest, Sha256};
@@ -56,13 +57,14 @@ const STAGING_DIR: &str = ".staging";
 /// the cache: its `linked.json` record names the directory that is the
 /// package.
 ///
-/// One store per data directory: opening one sweeps the staging area, and
-/// its changes are serialized among themselves. A reader beside a running
-/// Agent lists the packages with [`PackageStore::read_installed`] instead.
+/// Stores share a data directory and serialize changes across processes.
+/// Only the first live store sweeps staging. Read-only callers can use
+/// [`PackageStore::read_installed`] without opening a store.
 pub struct PackageStore {
     root: PathBuf,
     executor: ExecutorManager,
     changes: Mutex<()>,
+    lifetime: Result<FileLock, String>,
 }
 
 /// A package in the cache, or linked.
@@ -104,19 +106,15 @@ impl PackageStore {
     /// The store at `root` (the data directory's `plugins/`), running `git`
     /// through `executor`.
     pub fn open(root: PathBuf, executor: ExecutorManager) -> Self {
-        let staging = root.join(STAGING_DIR);
-        if let Err(error) = fs::remove_dir_all(&staging) {
-            if error.kind() != ErrorKind::NotFound {
-                log::warn!(
-                    "the plugin staging area {} was not cleared: {error}",
-                    staging.display()
-                );
-            }
+        let lifetime = open_shared_store(&root);
+        if let Err(error) = &lifetime {
+            log::warn!("plugin store coordination failed: {error}");
         }
         Self {
             root,
             executor,
             changes: Mutex::new(()),
+            lifetime,
         }
     }
 
@@ -191,7 +189,7 @@ impl PackageStore {
         id: &PluginId,
         purge_data: bool,
     ) -> Result<UninstallOutcome, PackageError> {
-        let _change = self.changes.lock();
+        let _change = self.changes()?;
         let records = self.records();
         let linked = records.linked.get(id).map(|record| record.path.clone());
         let format = self
@@ -228,7 +226,7 @@ impl PackageStore {
         id: &PluginId,
         permissions: PackagePermissions,
     ) -> Result<(), PackageError> {
-        let _change = self.changes.lock();
+        let _change = self.changes()?;
         let cached = self.active_version(id).is_some();
         let mut found = false;
         self.update_records(|records| {
@@ -255,8 +253,17 @@ impl PackageStore {
         &self.executor
     }
 
-    pub(crate) fn changes(&self) -> parking_lot::MutexGuard<'_, ()> {
-        self.changes.lock()
+    pub(crate) fn changes(&self) -> Result<StoreChange<'_>, PackageError> {
+        self.lifetime
+            .as_ref()
+            .map_err(|error| PackageError::Io(error.clone()))?;
+        let local = self.changes.lock();
+        let file = FileLock::exclusive(&self.root.join(".write.lock"))
+            .map_err(|error| io_error("lock plugin store", error))?;
+        Ok(StoreChange {
+            _file: file,
+            _local: local,
+        })
     }
 
     /// A fresh directory in the staging area, removed when dropped.
@@ -435,4 +442,25 @@ pub(crate) fn io_error(context: &str, error: std::io::Error) -> PackageError {
 
 pub(crate) fn validate_name_of_source(name: &str) -> Result<(), PackageError> {
     validate_plugin_name(name).map_err(|error| PackageError::Invalid(error.to_string()))
+}
+
+pub(crate) struct StoreChange<'a> {
+    _file: FileLock,
+    _local: parking_lot::MutexGuard<'a, ()>,
+}
+
+fn open_shared_store(root: &Path) -> Result<FileLock, String> {
+    let _startup =
+        FileLock::exclusive(&root.join(".startup.lock")).map_err(|error| error.to_string())?;
+    let exclusive =
+        FileLock::try_exclusive(&root.join(".store.lock")).map_err(|error| error.to_string())?;
+    if exclusive.is_some() {
+        if let Err(error) = fs::remove_dir_all(root.join(STAGING_DIR)) {
+            if error.kind() != ErrorKind::NotFound {
+                log::warn!("plugin staging cleanup failed: {error}");
+            }
+        }
+    }
+    drop(exclusive);
+    FileLock::shared(&root.join(".store.lock")).map_err(|error| error.to_string())
 }

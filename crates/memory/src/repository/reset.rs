@@ -2,7 +2,7 @@ use super::*;
 
 impl AgentMemoryRepository {
     pub fn reset(&self, expected_generation: u64) -> Result<u64, AgentMemoryError> {
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -74,7 +74,7 @@ impl AgentMemoryRepository {
     }
 
     pub fn generation(&self) -> Result<u64, AgentMemoryError> {
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         self.published_generation()
     }
 
@@ -93,7 +93,7 @@ impl AgentMemoryRepository {
     }
 
     pub fn status(&self, enabled: bool) -> Result<AgentMemoryStatus, AgentMemoryError> {
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let connection = self.connection()?;
         let (generation, last_success, last_error): (i64, Option<i64>, Option<String>) = connection
             .query_row(
@@ -127,7 +127,7 @@ impl AgentMemoryRepository {
     }
 
     pub(super) fn new_token(&self, scope: &str, now_millis: u64) -> String {
-        let counter = self.inner.token_counter.fetch_add(1, Ordering::Relaxed);
-        hex_digest(format!("{scope}:{now_millis}:{counter}").as_bytes())
+        let counter = super::NEXT_TOKEN.fetch_add(1, Ordering::Relaxed);
+        hex_digest(format!("{scope}:{now_millis}:{}:{counter}", std::process::id()).as_bytes())
     }
 }

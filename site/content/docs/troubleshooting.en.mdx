@@ -30,7 +30,7 @@ Each check prints one line, `ok`, `FAIL` or `skip`, and any `FAIL` exits with co
 | `mcp`       | How many MCP servers, and how many are enabled                                                                                                                                                                                                                                                             |
 | `roles`     | The roles that can be used, the installed plugins' that are on among them, and how many cannot; then one line for each issue of reading or resolving them, a plugin's naming it ([Roles](/docs/roles#issues)). A role that cannot be used does not fail                                                    |
 | `keyring`   | Whether the operating system's keyring answers a read                                                                                                                                                                                                                                                      |
-| `data`      | Whether the data directory is free; held by another Agent process fails                                                                                                                                                                                                                                    |
+| `data`      | Whether the data directory permits shared access; an exclusive lock held by an older Agent or maintenance fails                                                                                                                                                                                                                                    |
 | `online`    | With `--online`, when the data directory is free: starts the Agent, lists the default Provider's models (the `provider` line) with what is known of each (a `model` line each, such as `gpt-5.1: window 400000 (reported), vision yes (reported)`), and connects each enabled MCP server (the `mcp` lines) |
 
 Without `--online`, `doctor` does not start the Agent, and works while another Agent process runs.
@@ -72,17 +72,9 @@ The other ways a turn fails (the `reason` of `turn_failed`) are in [exec --json 
 
 ### The data directory is in use [#data-directory-in-use]
 
-```text
-error: the Agent is unavailable: its construction failed: the Agent data directory /home/me/.local/share/hanafubuki-agent is in use by another process (it holds /home/me/.local/share/hanafubuki-agent/.lock); only one Agent may use a data directory at a time
-```
+Updated Agents can share a data directory. If startup reports that it is **exclusively locked**, an older Agent or maintenance operation still holds the exclusive lock. Close that older process or wait for maintenance to finish; use `ps` or Task Manager to locate it. The earlier message `only one Agent may use a data directory at a time` comes from older versions.
 
-Only one Agent process uses a data directory at a time: the interface in another terminal, an `exec` still running, or an application that embeds the Agent.
-
-- End the other process, or wait for it. `doctor` cannot say which process it is: look for `hanafubuki-agent` with `ps`, the Task Manager and the like.
-- The operating system holds the lock and releases it when the process ends, a crash included: do **not** delete `.lock` by hand.
-- To run several Agents at once, give each its own data directory with `--data-dir`; see [Data directory](/docs/data-directory#lock).
-
-`config`, `providers list`, `mcp list` and `doctor` without `--online` need no data directory, and work as usual.
+A `session … is in use by another Agent` error applies to that session: start a new conversation, or close the instance owning it before resuming it. You can still list shared history. Lock files are released by the operating system after exit or a crash; do **not** delete them by hand. See [Data directory](/docs/data-directory#lock).
 
 ### The keyring is not available [#keyring]
 

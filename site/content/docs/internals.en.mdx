@@ -141,6 +141,8 @@ A deletion that goes ahead first writes an obligation (`trash/delete-<millis>-<n
 
 ### Writers [#history-writers]
 
+A store claims `history/writers/<id>.lock` before loading, recovering or changing a session, and holds it until shutdown. Recovery skips a session owned by another live store. Startup cleanup and index rebuilding require sole access to the history store; a second store does not sweep active staging or discard the shared index.
+
 Writes go through one writer thread per session (`agent-history-writer-<id>`, a queue of 64 commands), which acknowledges each append once it and its projection are written.
 
 - `append_commit` and `append_delta` wait for the acknowledgement. `enqueue_commit` and `enqueue_delta` only find or start the writer (reading the index for the session's file when none runs) and queue, holding the session's gate no longer than that; a writer's queue that is full makes the caller wait for room.
@@ -304,15 +306,14 @@ A title, a title suggestion, a recap, a memory extraction and an automatic permi
 ```json
 {
   "unfinishedStarts": 2,
-  "lastAttempt": {
-    "pid": 41237,
-    "atUnixMillis": 1793260800000
-  }
+  "pending": [
+    { "id": 1, "attempt": { "pid": 41237, "atUnixMillis": 1793260800000 } }
+  ]
 }
 ```
 
-- A start reads the count, adds one and writes it with this process's `pid` and the time, before it constructs anything. A start refused the data directory's lock records no attempt.
-- The attempt is cleared, by writing `{"unfinishedStarts": 0}` (no `lastAttempt`), once the Agent has been `Running` for `AGENT_START_SETTLE` (60 s), when its start failed in an orderly way, when the instance stopped in order (a restart, a fault's stop, a turn off) and at an orderly shutdown. A run that recorded no attempt (the Agent was off) does not clear it, so a crash-loop stop survives orderly exits.
+- Before construction, a start holds its owner lock under `start-marker.owners/` and records a pending attempt. Changes to the marker use `start-marker.lock`. Pending attempts whose owner locks are held are still running and do not count as failed starts; abandoned attempts are folded into `unfinishedStarts`. A start refused the data directory's lock records no attempt.
+- Once the Agent has been `Running` for `AGENT_START_SETTLE` (60 s), or its start or instance stops in order, it removes its own attempt and clears failed starts, preserving other live attempts. A run that recorded no attempt (the Agent was off) does not clear it, so a crash-loop stop survives orderly exits. Explicit reset also preserves other live attempts.
 - The last attempt is not counted when the crash record is of the same process and not older than it: a fatal panic is never on an Agent thread (the Agent's are contained), so that run did not die of the Agent. The crash record (`crash-record.json`) is written by the panic hook before a fatal panic aborts, once `configure_crash_record` names it:
 
 ```json

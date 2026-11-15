@@ -446,10 +446,11 @@ fn the_modules_stop_turns_the_agent_off_and_waits_until_it_is_off() {
 #[test]
 fn an_agent_stopped_by_a_crash_loop_starts_when_its_module_is_turned_off_and_on() {
     let paths = test_paths("restart-crash-loop-on");
-    let marker = marker(&paths);
     for _ in 0..CRASH_LOOP_STARTS {
+        let marker = marker(&paths);
         marker.record_attempt().unwrap();
     }
+    let marker = marker(&paths);
     let slot = AgentSlot::new(
         marker.disabled_reason(true),
         Arc::new(NoopAgentStatusEventSink),

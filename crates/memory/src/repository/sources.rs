@@ -7,7 +7,7 @@ impl AgentMemoryRepository {
         source_revision: u64,
     ) -> Result<(), AgentMemoryError> {
         validate_id(session_id, "session id")?;
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let connection = self.connection()?;
         connection
             .execute(
@@ -31,7 +31,7 @@ impl AgentMemoryRepository {
         validate_id(session_id, "session id")?;
         let contribution_mode = mode.as_str();
         let revoke = !mode.contributes();
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let mut connection = self.connection()?;
         let existing: Option<(String, i64, i64)> = connection
             .query_row(
@@ -95,7 +95,7 @@ impl AgentMemoryRepository {
         &self,
         session_id: &str,
     ) -> Result<(AgentMemoryContributionMode, u64), AgentMemoryError> {
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let connection = self.connection()?;
         let row: Option<(String, i64)> = connection
             .query_row(
@@ -110,7 +110,7 @@ impl AgentMemoryRepository {
     }
 
     pub fn revoke_source(&self, session_id: &str) -> Result<(), AgentMemoryError> {
-        let _guard = self.inner.gate.lock();
+        let _guard = self.lock()?;
         let mut connection = self.connection()?;
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)

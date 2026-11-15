@@ -99,7 +99,13 @@ mod linux {
         assert!(record.add(pgid));
         assert!(file.exists());
 
-        // The next lifetime, with a ledger of its own over the same file.
+        // A live owner is skipped; after its lifetime ends its groups are reaped.
+        assert!(ProcessGroupRecord::new(file.clone())
+            .reap_leftovers()
+            .terminated
+            .is_empty());
+        assert!(!ended(&mut child));
+        drop(record);
         let reap = ProcessGroupRecord::new(file.clone()).reap_leftovers();
 
         assert_eq!(reap.terminated, vec![pgid]);
@@ -128,6 +134,7 @@ mod linux {
                 groups: vec![RecordedGroup {
                     pgid: 0,
                     leader_identity: "any".to_string(),
+                    owner: None,
                 }],
             })
             .unwrap(),
@@ -155,6 +162,7 @@ mod linux {
                 groups: vec![RecordedGroup {
                     pgid,
                     leader_identity: "another-boot:1".to_string(),
+                    owner: None,
                 }],
             })
             .unwrap(),

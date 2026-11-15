@@ -50,7 +50,7 @@ impl PackageStore {
                 loaded.manifest.name, id.plugin_name
             )));
         }
-        let _change = self.changes();
+        let _change = self.changes()?;
         if self.active_version(id).is_some() {
             return Err(PackageError::Invalid(format!(
                 "plugin `{id}` is installed; remove it before linking a directory as it"

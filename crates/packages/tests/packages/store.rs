@@ -605,19 +605,23 @@ fn uninstall_keeps_the_data_directory_unless_purged() {
 }
 
 #[test]
-fn opening_the_store_clears_what_an_interrupted_change_left() {
-    let fixture = fixture();
+fn opening_the_store_preserves_live_staging_and_clears_abandoned_staging() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().join("plugins");
+    let first = PackageStore::open(root.clone(), ExecutorManager::default());
     write(
-        &fixture
-            .plugins()
-            .join(".staging/install-x/package/1.0.0/plugin.json"),
+        &root.join(".staging/install-x/package/1.0.0/plugin.json"),
         "{}",
     );
-
-    PackageStore::open(fixture.plugins(), ExecutorManager::default());
-
-    assert!(!fixture.plugins().join(".staging").exists());
-    assert!(fixture.store.installed().is_empty());
+    let second = PackageStore::open(root.clone(), ExecutorManager::default());
+    assert!(root
+        .join(".staging/install-x/package/1.0.0/plugin.json")
+        .exists());
+    drop(first);
+    drop(second);
+    let reopened = PackageStore::open(root.clone(), ExecutorManager::default());
+    assert!(!root.join(".staging").exists());
+    assert!(reopened.installed().is_empty());
 }
 
 #[test]

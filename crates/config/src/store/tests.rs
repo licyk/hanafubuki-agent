@@ -284,11 +284,12 @@ fn mcp_settings_round_trip_through_toml_revision_gated_and_owner_only() {
     let reread = AgentConfig::new(directory.path()).mcp().clone();
     assert_eq!(reread.load().unwrap(), saved);
     assert!(reread.repairs().is_empty());
-    let names = fs::read_dir(directory.path())
+    let mut names = fs::read_dir(directory.path())
         .unwrap()
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
         .collect::<Vec<_>>();
-    assert_eq!(names, [AGENT_MCP_FILE]);
+    names.sort();
+    assert_eq!(names, [AGENT_MCP_FILE, "mcp.toml.lock"]);
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

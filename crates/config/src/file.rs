@@ -136,6 +136,10 @@ impl ConfigFile {
     /// written. A file with no document yet lists the keys in the order
     /// `value` declares them.
     pub(crate) fn write<T: Serialize>(&self, value: &T) -> Result<(), String> {
+        let _write = hanafubuki_agent_foundation::file_lock::FileLock::exclusive(
+            &self.path.with_extension("toml.lock"),
+        )
+        .map_err(|error| error.to_string())?;
         if let Some(reason) = self.read_only.lock().as_ref() {
             return Err(format!(
                 "{} is read-only until the Agent restarts: {reason}",
