@@ -291,6 +291,20 @@ pub(in crate::service) fn validate_persisted_message_state(
                 .rposition(|item| {
                     matches!(item, ConversationItem::TurnStart { turn_id } if *turn_id == turn.id)
                 })
+                .or_else(|| {
+                    // Mid-turn compaction removes the opening boundary;
+                    // its continuation still owns the final answer.
+                    (!history.iter().any(|item| {
+                        matches!(item, ConversationItem::TurnStart { .. })
+                    }) && history.iter().any(|item| {
+                        matches!(
+                            item,
+                            ConversationItem::CompactionSummary { .. }
+                                | ConversationItem::ProviderCompaction { .. }
+                        )
+                    }))
+                    .then_some(0)
+                })
                 .ok_or_else(|| {
                     AgentError::Persistence(format!(
                         "Agent session {} is missing its latest turn boundary",
@@ -344,6 +358,8 @@ fn validate_turn_boundary_refs(history: &[&ConversationItem]) -> Result<(), Agen
         .iter()
         .position(|item| matches!(**item, ConversationItem::TurnStart { .. }));
     if first_turn != Some(0) {
+        // A mid-turn install has no TurnStart until the next turn. Its
+        // continued reasoning, calls and results belong to this prefix too.
         let prefix_end = first_turn.unwrap_or(history.len());
         if prefix_end == 0
             || history[..prefix_end].iter().any(|item| {
@@ -354,6 +370,11 @@ fn validate_turn_boundary_refs(history: &[&ConversationItem]) -> Result<(), Agen
                         | ConversationItem::SkillContext { .. }
                         | ConversationItem::UserMessage { .. }
                         | ConversationItem::AssistantMessage { .. }
+                        | ConversationItem::Reasoning { .. }
+                        | ConversationItem::ToolCall { .. }
+                        | ConversationItem::ToolOutput { .. }
+                        | ConversationItem::ToolSelection { .. }
+                        | ConversationItem::PermissionReview { .. }
                         | ConversationItem::SteeringMessage { .. }
                         | ConversationItem::ContinuationContext { .. }
                         | ConversationItem::WakeEvents { .. }

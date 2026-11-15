@@ -20,7 +20,185 @@ use crate::transcript_mode::TranscriptMode;
 const COMPACTED: &str = "Context compacted";
 const FIRST_ANSWER: &str = "The first answer is long. ";
 
+/// Run explicitly against a local Hoshimi instance using its real provider.
+#[test]
+#[ignore = "requires HOSHIMI_COMPACTION_TEST_URL and a logged-in qodercli-cn provider"]
+fn live_hoshimi_compaction_continues_and_restarts() {
+    use ratatui::crossterm::event::KeyCode;
+
+    let url = std::env::var("HOSHIMI_COMPACTION_TEST_URL").unwrap();
+    let configure = |config: &hanafubuki_agent::AgentConfig| {
+        config
+            .set_user_value("permissionMode", "full_access")
+            .unwrap();
+        config
+            .mutate_providers(config.providers().unwrap().revision, |registry| {
+                registry.providers[0].base_url = url.clone();
+                registry.model_policy.model = "qodercli-cn/DeepSeek-Flash".into();
+                registry.model_policy.reasoning_effort =
+                    Some(hanafubuki_agent::ModelReasoningEffort::Low);
+                Ok(())
+            })
+            .unwrap();
+    };
+    let mut harness =
+        Harness::start_configured(Vec::new(), true, TranscriptMode::Terminal, configure);
+    harness.type_and_submit("This is a compaction integration test. First call exec_command with `echo before_compact_probe`. Then call new_context exactly once. After the context compaction, call exec_command with `echo after_compact_probe`, then reply exactly LIVE_COMPACTION_OK. You must actually call these tools, in this order, and finish the task after the compaction. Keep reasoning and replies short.");
+    harness.pump_until("the live compaction", |h| h.compacted_cells() > 0);
+    harness.pump_until_screen_shows("LIVE_COMPACTION_OK");
+    harness.pump_until_turn_ends();
+    assert_eq!(harness.compacted_cells(), 1, "{}", harness.transcript());
+    let transcript = harness.transcript();
+    assert!(
+        transcript.find(COMPACTED).unwrap() < transcript.rfind("after_compact_probe").unwrap(),
+        "{transcript}"
+    );
+    println!("Live compaction transcript:\n{transcript}");
+    harness.key(KeyCode::Esc);
+    let session = harness.app.bridge.session_id().unwrap();
+    let mut restarted = harness.restart_with_compacted_history();
+    restarted.type_and_submit(&format!("/resume {}", session.value()));
+    restarted.pump_until("the restarted session", |h| {
+        h.app.bridge.session_id() == Some(session)
+    });
+    restarted.exchange(
+        "The compaction test is complete. Reply with the words LIVE, RESTART, OK joined by underscores, without tools.",
+        "LIVE_RESTART_OK",
+    );
+    println!("Live restart transcript:\n{}", restarted.transcript());
+    assert!(!restarted.transcript().contains("recovery obligation"));
+    assert!(!restarted.transcript().contains("turn was not interrupted"));
+}
+
+#[test]
+fn mid_turn_compaction_continues_thinking_and_tools_and_restarts() {
+    use hanafubuki_agent::test_support::{reasoning_answer_events, reasoning_tool_events};
+    use ratatui::crossterm::event::KeyCode;
+
+    let mut harness = Harness::start_configured(
+        vec![
+            (
+                with_input_tokens(super::command_call("echo before-compact"), 90_000),
+                Duration::ZERO,
+            ),
+            (
+                assistant_events("The command ran. Continue the task."),
+                Duration::ZERO,
+            ),
+            (
+                reasoning_tool_events(
+                    "Continue after compaction.",
+                    "exec_command",
+                    &super::command_arguments("echo after-compact"),
+                ),
+                Duration::ZERO,
+            ),
+            (
+                reasoning_answer_events("Finished checking.", "Compaction continuation done."),
+                Duration::ZERO,
+            ),
+            (assistant_events("Restart continued."), Duration::ZERO),
+        ],
+        true,
+        TranscriptMode::Terminal,
+        |config| {
+            config
+                .set_user_value("permissionMode", "full_access")
+                .unwrap();
+            config
+                .mutate_providers(1, |registry| {
+                    registry.model_policy.context_window_tokens = Some(100_000);
+                    Ok(())
+                })
+                .unwrap();
+        },
+    );
+    let session = harness.exchange("Run the checks.", "Compaction continuation done.");
+    assert_eq!(harness.compacted_cells(), 1);
+    harness.key(KeyCode::Esc);
+    assert!(!harness.transcript().contains("turn was not interrupted"));
+    let mut restarted = harness.restart_with_compacted_history();
+    restarted.type_and_submit(&format!("/resume {}", session.value()));
+    restarted.pump_until("the restarted session", |h| {
+        h.app.bridge.session_id() == Some(session)
+    });
+    restarted.exchange("Continue after restart.", "Restart continued.");
+    assert!(!restarted.transcript().contains("recovery obligation"));
+}
+
+#[test]
+fn failure_immediately_after_mid_turn_compaction_ends_working_and_restarts() {
+    use hanafubuki_agent::test_support::http_error;
+
+    let mut harness = Harness::start_configured(
+        vec![
+            (
+                with_input_tokens(super::command_call("echo before-compact"), 90_000),
+                Duration::ZERO,
+            ),
+            (assistant_events("The command ran."), Duration::ZERO),
+            (
+                http_error(
+                    400,
+                    r#"{"error":{"message":"post-compaction request refused"}}"#,
+                ),
+                Duration::ZERO,
+            ),
+            (assistant_events("Recovered."), Duration::ZERO),
+        ],
+        true,
+        TranscriptMode::Terminal,
+        |config| {
+            config
+                .set_user_value("permissionMode", "full_access")
+                .unwrap();
+            config
+                .mutate_providers(1, |registry| {
+                    registry.model_policy.context_window_tokens = Some(100_000);
+                    Ok(())
+                })
+                .unwrap();
+        },
+    );
+    harness.type_and_submit("Run the checks.");
+    harness.pump_until("the post-compaction failure", |h| {
+        h.transcript().contains("post-compaction request refused")
+    });
+    harness.pump_until_turn_ends();
+    assert_eq!(harness.compacted_cells(), 1);
+    let session = harness.app.bridge.session_id().unwrap();
+    let mut restarted = harness.restart_with_compacted_history();
+    restarted.type_and_submit(&format!("/resume {}", session.value()));
+    restarted.pump_until("the restarted session", |h| {
+        h.app.bridge.session_id() == Some(session)
+    });
+    restarted.exchange("Try again.", "Recovered.");
+}
+
 impl Harness {
+    fn restart_with_compacted_history(mut self) -> Self {
+        // The Provider stays at the same URL while only the Agent restarts.
+        let model_runtime = std::mem::replace(
+            &mut self._model_runtime,
+            tokio::runtime::Runtime::new().unwrap(),
+        );
+        let placeholder = self
+            ._model_runtime
+            .block_on(hanafubuki_agent::test_support::FakeServer::start(Vec::new()));
+        let server = std::mem::replace(&mut self.server, placeholder);
+        let home = std::mem::replace(&mut self.home, tempfile::tempdir().unwrap());
+        drop(self);
+        Self::serving(
+            home,
+            model_runtime,
+            server,
+            false,
+            TranscriptMode::Terminal,
+            |_| {},
+            None,
+        )
+    }
+
     /// The `background` strategy over a window of 100,000 tokens. The
     /// first two responses are the exchanges [`Harness::two_long_exchanges`]
     /// has; the second reports 70,000 input tokens, between the background

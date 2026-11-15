@@ -145,11 +145,10 @@ impl Harness {
     ) -> Self {
         let cwd = home.path().join("project");
         std::fs::create_dir_all(cwd.join(".git")).unwrap();
-        std::fs::write(
-            home.path().join("config.toml"),
-            "disabledPlugins = [\"titles\"]\n",
-        )
-        .unwrap();
+        let settings_path = home.path().join("config.toml");
+        if !settings_path.exists() {
+            std::fs::write(settings_path, "disabledPlugins = [\"titles\"]\n").unwrap();
+        }
         let config = AgentConfig::new(home.path());
         if with_provider {
             configure_test_provider(&config, &server.base_url, None);

@@ -320,7 +320,7 @@ pub(super) fn append_history_item(
     item
 }
 
-/// Settle exactly one terminal turn onto its final durable display item.
+/// Settle a terminal turn onto its final remaining durable display item.
 ///
 /// The history item is the persistence authority for completed-loop timing:
 /// it survives restart and fork without carrying elapsed time into a later
@@ -339,15 +339,16 @@ pub(super) fn settle_turn_working_time(
         AgentError::Persistence("Agent turn working time exceeds the durable u64 range".to_string())
     })?;
     let durable = {
-        let durable = mutable_history(record)
+        let Some(durable) = mutable_history(record)
             .iter_mut()
             .rev()
             .find(|item| item.turn_id == Some(identity.turn_id))
-            .ok_or_else(|| {
-                AgentError::Persistence(
-                    "terminal Agent turn has no durable display history item".to_string(),
-                )
-            })?;
+        else {
+            // A mid-turn compaction can replace every item of this turn.
+            // Until another item commits, only its runtime checkpoint can
+            // carry the terminal timing; replacement items are model-only.
+            return Ok(());
+        };
         let durable = Arc::make_mut(durable);
         durable.item_revision = durable
             .item_revision

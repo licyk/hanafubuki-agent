@@ -1,5 +1,90 @@
 use super::*;
 
+#[tokio::test]
+async fn restart_repairs_a_turn_whose_items_were_all_compacted() {
+    use hanafubuki_agent_kernel::{
+        AgentConversationCommit, AgentHistoryMutation, AgentHistoryStore,
+        EphemeralAgentHistoryStore,
+    };
+
+    let store = Arc::new(EphemeralAgentHistoryStore::default());
+    let model = ScriptedModel::new([
+        tool_response_with_usage_and_commentary(12_000, Some("tool analysis ".repeat(1_000))),
+        response("compact", "summary", 20),
+        ScriptedResponse::WaitForCancellation,
+    ]);
+    let service = AgentService::with_history_store(
+        Arc::new(model.clone()),
+        FakeTools::new([FakeRegisteredExchange::success(
+            "list_instances",
+            json!({}),
+            json!({"instances": []}),
+        )])
+        .await
+        .registries(),
+        store.clone(),
+    );
+    let mut settings = config();
+    settings.context_window_tokens = Some(15_000);
+    settings.auto_compact_threshold_percent = 67;
+    let session = service.create_session(settings).unwrap();
+    let running = tokio::spawn({
+        let service = service.clone();
+        async move { service.start_turn(session.id, "list ".repeat(1_000)).await }
+    });
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while model.requests().len() < 3 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let interrupted = store.load_runtime_state(session.id).unwrap();
+    let (context, _) = service.test_history_backing(session.id).unwrap();
+    assert!(context
+        .iter()
+        .all(|item| item.turn_id != interrupted.turn.as_ref().map(|turn| turn.id)));
+    running.abort();
+    let _ = running.await;
+    // Use the actual checkpoint and model context from before the drop
+    // guard, as a process crash would leave them for startup recovery.
+    let store = Arc::new(EphemeralAgentHistoryStore::default());
+    store
+        .create_session(AgentConversationCommit {
+            runtime: interrupted,
+            history_mutations: context
+                .iter()
+                .map(|item| AgentHistoryMutation::AppendItem {
+                    item: item.as_ref().clone(),
+                })
+                .collect(),
+        })
+        .unwrap();
+    let resumed_model = Arc::new(ScriptedModel::new([response(
+        "resumed",
+        "Recovered after compaction.",
+        20,
+    )]));
+    let restarted = AgentService::with_history_store(
+        resumed_model.clone(),
+        FakeTools::new([]).await.registries(),
+        store,
+    );
+    let report = restarted
+        .recover_sessions_with_test_model(resumed_model)
+        .unwrap();
+    assert_eq!(report.restored, 1, "{report:?}");
+    assert_eq!(report.interrupted_turns, vec![session.id]);
+    assert_eq!(
+        restarted
+            .start_turn(session.id, "Continue.")
+            .await
+            .unwrap()
+            .final_answer,
+        "Recovered after compaction."
+    );
+}
+
 #[test]
 fn token_status_percentage_is_saturating_and_boundary_exact() {
     use hanafubuki_agent_kernel::AgentContextTokenStatus;
