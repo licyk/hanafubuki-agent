@@ -49,9 +49,19 @@ fn prepare(request: &crate::helper::HelperRequest) -> Result<(), String> {
         .collect::<Result<Vec<_>, _>>()?;
     for deny in &plan.denies {
         for &grant in &deny.grants {
-            acl::add_deny_write_ace(deny.path.system(), &capabilities[grant]).map_err(|error| {
-                format!("cannot keep {} read-only: {error}", deny.path.native_text())
-            })?;
+            // A path whose DACL is not ours to change keeps the access its own
+            // ACEs give, so the command is confined by them rather than
+            // refused: hiding a `.git` under a directory another user owns
+            // must not make every command in that root fail.
+            match acl::add_deny_write_ace(deny.path.system(), &capabilities[grant]) {
+                Ok(()) | Err(acl::AclError::NotWritable) => {}
+                Err(acl::AclError::Failed(error)) => {
+                    return Err(format!(
+                        "cannot keep {} read-only: {error}",
+                        deny.path.native_text()
+                    ));
+                }
+            }
         }
     }
     for (grant, sid) in plan.grants.iter().zip(&capabilities) {
