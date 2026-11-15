@@ -15,6 +15,11 @@ pub(super) fn decode_sse_event(
     }
     let value: Value = serde_json::from_slice(data)
         .map_err(|_| ModelError::Protocol("model SSE event is not valid JSON".into()))?;
+    // Compatible gateways can report an upstream failure in an HTTP-style
+    // error envelope after starting the SSE response.
+    if value.get("error").is_some_and(Value::is_object) {
+        return Err(response_failure(provider, &value, metadata));
+    }
     let event_type = value
         .get("type")
         .and_then(Value::as_str)
@@ -275,7 +280,7 @@ fn response_failure(
     let code = error
         .get("code")
         .and_then(value_to_string)
-        .map(|code| bounded_metadata(&code));
+        .map(|code| bounded_metadata(&provider.bound_diagnostic(&code)));
     crate::classify_remote_model_error(
         None,
         code,
