@@ -460,7 +460,7 @@ fn a_command_that_panics_is_turned_off_and_the_others_still_run() {
 
     chat.dispatch_command(&PANICS, String::new());
     assert_eq!(drain(&events), (Vec::new(), Vec::new()));
-    chat.dispatch_command(command("skills"), String::new());
+    chat.dispatch_command(command("skills"), "verbose".into());
     assert_eq!(drain(&events).1, vec![Op::Command(AgentCommand::Skills)]);
     chat.submit_user_message("Still here".into());
     assert_eq!(drain(&events).1, vec![Op::UserInput("Still here".into())]);

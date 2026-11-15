@@ -323,3 +323,26 @@ fn a_failed_call_with_a_display_has_a_red_bullet() {
     let header = cell.display_lines(60).remove(0);
     assert_eq!(header.spans[0].style.fg, Some(ratatui::style::Color::Red));
 }
+
+#[test]
+fn agent_interactions_and_waiting_have_collaboration_titles() {
+    for (name, running, finished) in [
+        ("spawn_agent", "Starting agent", "Started agent"),
+        ("send_message", "Interacting with", "Interacted with"),
+        ("followup_task", "Interacting with", "Interacted with"),
+        ("wait_agent", "Waiting for agents", "Finished waiting"),
+    ] {
+        let cell = new_tool_call("collaboration".into(), name.into(), Some("reviewer".into()));
+        assert!(render(&cell, 80).contains(running));
+        let cell = shown(
+            name,
+            Some("reviewer"),
+            AgentToolDisplay::Text {
+                text: "reviewer · Completed".into(),
+            },
+        );
+        let output = render(&cell, 80);
+        assert!(output.contains(finished), "{output}");
+        assert!(output.contains("Completed"), "{output}");
+    }
+}

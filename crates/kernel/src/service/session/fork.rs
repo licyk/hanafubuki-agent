@@ -214,6 +214,7 @@ impl AgentService {
                 .history
                 .iter()
                 .map(|item| item.as_ref().clone()),
+            false,
         );
         if let Some(material) = scan.finish_if_found()? {
             return Ok(material);
@@ -237,7 +238,7 @@ impl AgentService {
                     through_revision: Some(AgentRevision::new(source.status.revision)),
                 })
                 .map_err(history_store_error)?;
-            scan.extend(page.items);
+            scan.extend(page.items, true);
             if let Some(material) = scan.finish_if_found()? {
                 return Ok(material);
             }

@@ -86,6 +86,8 @@ icon: Microscope
 
 ## 历史存储的拒绝规则 [#history-refusals]
 
+旁路会话历史允许在压缩前缀后附加可信 continuation context。分叉扫描区分模型历史与转录页：仅供转录展示的压缩摘要会被跳过，当前检查点则安装其模型替换内容。这让跨越多次压缩的分叉仍满足严格的回合边界。
+
 `FileAgentHistoryStore`（`hanafubuki-agent-history`）：每个会话一份 JSONL rollout，它是权威的；SQLite 索引（`index.sqlite3`）是 rollout 的投影（[存储](/docs/architecture#storage)）。存储无法使用的东西只损失它自己的会话，从不损失整个存储，也从不损失文件。只有索引或布局（其 schema、SQL、目录 I/O）的问题会让存储打开失败，并因此让 Agent 的构造失败。
 
 ### 打开时无法接受的内容 [#history-open]

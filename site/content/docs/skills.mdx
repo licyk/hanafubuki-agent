@@ -61,7 +61,7 @@ hanafubuki-agent skills remove user:release-notes
 - `skills install 目录`：目录本身包含 `SKILL.md`，或者只有一个子目录包含它。Skill 必须能被正确解析。安装后的目录名取自源目录名。已经有同名的 Skill 时会失败，加上 `--overwrite` 替换它。
 - `skills remove ID` 删除一个安装的 Skill。仓库中的 Skill 随仓库一起管理。
 
-终端界面中输入 `/skills` 查看同样的列表。
+`/skills` 打开统一的 Skills 管理集合；`/skills verbose` 把目录写入对话记录。集合支持从本地目录安装、启停、查看 SKILL.md 和删除用户安装的 Skill。资源文件创作仍通过 facade 和文件编辑器进行。
 
 ## 在对话中使用 [#use]
 

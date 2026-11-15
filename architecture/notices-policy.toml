@@ -2037,3 +2037,7 @@ reason = "Agent compaction and permission-review activity presentation over its 
 [[original]]
 path = "crates/tui/src/history_cell/work/tests.rs"
 reason = "Agent compaction and permission-review activity presentation over its own event snapshots."
+
+[[original]]
+path = "crates/tui/src/maintenance.rs"
+reason = "Typed maintenance callback supplied by the standalone host; independent of Codex."

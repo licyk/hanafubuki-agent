@@ -101,8 +101,11 @@ async fn the_catalog_reads_every_owner_and_returns_no_secret() {
             "packages",
             "packageDefaults",
             "marketplaces",
+            "skills",
+            "sandboxMaintenance",
             "hooks",
-            "roles"
+            "roles",
+            "roleFiles"
         ],
         "a host's configuration has no profiles or projects"
     );

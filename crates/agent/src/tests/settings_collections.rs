@@ -851,3 +851,5 @@ async fn a_code_plugins_settings_are_a_section_written_on_their_own() {
     assert_eq!(settings(&config), None);
     done(service, paths);
 }
+
+mod management;

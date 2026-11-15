@@ -1,8 +1,8 @@
 ---
 source: crates/tui/src/appearance/tests.rs
-assertion_line: 119
 expression: "plain(&line).replace(\" · \", \"\\n\")"
 ---
+Main agent
 gpt-5
 gpt-5 high
 high

@@ -5,8 +5,7 @@
 //! whole, unless it is the one the Agent runs with.
 
 use hanafubuki_agent_config::{
-    config_sections, ConfigLayerSource, SettingChange, SettingSpec, SettingWriteOp, SettingsGroup,
-    SettingsWrite, UserEntry,
+    config_sections, ConfigLayerSource, SettingSpec, SettingsGroup, SettingsLayer, UserEntry,
 };
 use serde_json::{Map, Value};
 
@@ -22,8 +21,8 @@ const PROFILES: &str = "profiles";
 
 /// The settings of `config.toml`, without their defaults: a profile sets
 /// only what it names, and the rest comes from below it.
-fn fields(service: &AgentApplicationService) -> Vec<SettingSpec> {
-    config_sections()
+pub(super) async fn fields(service: &AgentApplicationService) -> Vec<SettingSpec> {
+    let mut fields = config_sections()
         .into_iter()
         .flat_map(|section| section.settings)
         .chain(
@@ -42,11 +41,13 @@ fn fields(service: &AgentApplicationService) -> Vec<SettingSpec> {
             default: None,
             ..spec
         })
-        .collect()
+        .collect();
+    super::layer_fields::extend(service, &mut fields).await;
+    fields
 }
 
 pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCollection {
-    let fields = fields(service);
+    let fields = fields(service).await;
     let collection =
         SettingsCollection::new(ID, "Profiles", SettingsGroup::Advanced, fields.clone())
             .with_actions(vec![
@@ -105,33 +106,17 @@ pub(super) async fn run(
     if request.values.is_empty() {
         return Err("a profile's save names the settings it writes".to_string());
     }
-    let fields = fields(service);
-    let mut changes = Vec::new();
-    for (key, value) in &request.values {
-        if !fields.iter().any(|spec| spec.key == *key) {
-            return Err(format!("`{key}` is not a setting of a profile"));
-        }
-        changes.push(SettingChange {
-            key: key.clone(),
-            op: if value.is_null() {
-                SettingWriteOp::Reset
-            } else {
-                SettingWriteOp::Set(value.clone())
-            },
-        });
-    }
-    let profile = name.clone();
-    let options = service.host.option_schemas();
-    hanafubuki_agent_foundation::blocking::run_blocking_operation(
-        service.blocking.as_ref(),
-        "agent profile write worker",
-        move || config.write_profile_values(&profile, &SettingsWrite { changes }, &options),
+    let fields = fields(service).await;
+    let message = super::layer_fields::write(
+        service,
+        SettingsLayer::Profile(name.clone()),
+        request.values,
+        fields,
     )
-    .await??;
-    service.apply_settings_to_plugins();
+    .await?;
     Ok(SettingsActionOutcome {
         record: (request.action == ADD).then_some(name),
-        message: None,
+        message: Some(message),
     })
 }
 

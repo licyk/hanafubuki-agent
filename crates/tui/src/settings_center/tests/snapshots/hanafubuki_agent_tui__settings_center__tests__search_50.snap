@@ -10,7 +10,7 @@ expression: "screen(&mut center, 50, 20)"
 
   Search › model
 
-  › Sandbox mode          (unset) ›             
+  › Sandbox mode          (unset) ›
     Model discovery       Automatic ›
     models.dev catalogue  [ ] Off
     Model                 gpt-test ›

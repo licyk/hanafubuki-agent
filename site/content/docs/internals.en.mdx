@@ -94,6 +94,8 @@ The background feed (`wake/feed.rs`) coalesces hinted session ids, maps them to 
 
 ## The history store's refusals [#history-refusals]
 
+Side-session history accepts trusted continuation context after a compacted prefix. Fork scans distinguish model history from transcript pages: transcript-only compaction summaries are skipped unless the current checkpoint installs its replacement. This preserves strict turn boundaries when forking across multiple compactions.
+
 `FileAgentHistoryStore` (`hanafubuki-agent-history`): one JSONL rollout per session is canonical, and the SQLite index (`index.sqlite3`) a projection of the rollouts ([Storage](/docs/architecture#storage)). What the store cannot use costs only its session, never the store and never a file. Only the index or the layout (its schema, SQL, directory I/O) fails the store's open, and with it the Agent's construction.
 
 ### What open cannot admit [#history-open]

@@ -13,11 +13,31 @@ use crate::app_event::AppEvent;
 
 /// The commands a second conversation (the side conversation, a subagent
 /// shown) runs: Codex's `available_in_side_conversation`, those this
-/// interface has, and `/side` itself to close it.
+/// interface has, plus `/close` and navigation through `/subagents`.
 pub(crate) const SECOND_CONVERSATION_COMMANDS: &[&str] = &[
-    "copy", "agents", "tasks", "export", "raw", "diff", "mention", "status", "warnings", "pwd",
-    "side",
+    "copy",
+    "agents",
+    "tasks",
+    "export",
+    "raw",
+    "diff",
+    "mention",
+    "status",
+    "warnings",
+    "pwd",
+    "close",
+    "subagents",
 ];
+
+pub(super) static CLOSE: CommandSpec = CommandSpec {
+    name: "close",
+    aliases: &[],
+    description: "close this side conversation or return from an agent to main",
+    inline_args: false,
+    during_task: true,
+    needs_session: false,
+    dispatch: |context, _| context.send(AppEvent::Workspace(WorkspaceEvent::CloseSide)),
+};
 
 pub(super) static SIDE: CommandSpec = CommandSpec {
     name: "side",

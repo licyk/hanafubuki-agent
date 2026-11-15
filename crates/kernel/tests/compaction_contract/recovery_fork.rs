@@ -250,3 +250,110 @@ async fn fork_before_turn_works_on_both_sides_of_a_compaction_checkpoint() {
         ]
     );
 }
+
+#[tokio::test]
+async fn side_conversation_inherits_compacted_history_and_accepts_its_policy() {
+    use hanafubuki_agent_kernel::{
+        AgentChildSessionBase, AgentChildSessionRequest, AgentContinuationHookGeneration,
+        AgentContinuationHookId, AgentContinuationHookProviderId, AgentSessionOrigin,
+        AgentSessionPersistence,
+    };
+    let model = ScriptedModel::new([
+        response("parent", "parent answer", 10),
+        response("compact", "compressed parent", 10),
+        response("child", "side answer", 10),
+    ]);
+    let service = AgentService::new(
+        Arc::new(model.clone()),
+        FakeTools::new([]).await.registries(),
+    );
+    let parent = service.create_session(config()).unwrap();
+    service
+        .start_turn(parent.id, "parent question")
+        .await
+        .unwrap();
+    let before = service.snapshot(parent.id).unwrap();
+    service
+        .compact_session(parent.id, before.generation, before.revision)
+        .await
+        .unwrap();
+    let policy = ConversationItem::ContinuationContext {
+        provider_id: AgentContinuationHookProviderId::parse("test".into()).unwrap(),
+        hook_id: AgentContinuationHookId::parse("side".into()).unwrap(),
+        generation: AgentContinuationHookGeneration([0; 32]),
+        content: "Answer the side question only.".into(),
+    };
+    let child = service
+        .create_child_session(AgentChildSessionRequest {
+            parent_session_id: parent.id,
+            origin: AgentSessionOrigin::Side,
+            persistence: AgentSessionPersistence::Ephemeral,
+            base: AgentChildSessionBase::ParentHead,
+            context: vec![policy.clone()],
+            scope: Default::default(),
+            role_instructions: None,
+        })
+        .unwrap();
+    assert_eq!(
+        service.test_model_context(child.id).unwrap().last(),
+        Some(&policy)
+    );
+    assert_eq!(
+        service
+            .start_turn(child.id, "side question")
+            .await
+            .unwrap()
+            .final_answer,
+        "side answer"
+    );
+    assert!(!service
+        .test_model_context(parent.id)
+        .unwrap()
+        .contains(&policy));
+}
+
+#[tokio::test]
+async fn a_fork_before_an_older_compacted_turn_ignores_transcript_only_summaries() {
+    let model = ScriptedModel::new([
+        response("first", "first answer", 10),
+        response("compact-one", "first summary", 10),
+        response("second", "second answer", 10),
+        response("compact-two", "second summary", 10),
+    ]);
+    let service = AgentService::new(Arc::new(model), FakeTools::new([]).await.registries());
+    let session = service.create_session(config()).unwrap();
+    service
+        .start_turn(session.id, "first prompt")
+        .await
+        .unwrap();
+    let before = service.snapshot(session.id).unwrap();
+    service
+        .compact_session(session.id, before.generation, before.revision)
+        .await
+        .unwrap();
+    service
+        .start_turn(session.id, "second prompt")
+        .await
+        .unwrap();
+    let before = service.snapshot(session.id).unwrap();
+    let turn = before.turn.unwrap().id;
+    service
+        .compact_session(session.id, before.generation, before.revision)
+        .await
+        .unwrap();
+    let source = service.snapshot(session.id).unwrap();
+    let fork = service
+        .fork_session_before_turn(hanafubuki_agent_kernel::AgentSessionForkRequest {
+            source_session_id: session.id,
+            source_generation: source.generation,
+            source_revision: source.revision,
+            before_turn_id: turn,
+        })
+        .unwrap();
+    assert_eq!(fork.restored_prompt, "second prompt");
+    let context = service.test_model_context(fork.session.id).unwrap();
+    assert!(context.iter().any(|item| matches!(item, ConversationItem::AssistantMessage {text, ..} if text == "first answer")));
+    assert!(!context
+        .iter()
+        .any(|item| matches!(item, ConversationItem::CompactionSummary { .. })));
+}

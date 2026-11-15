@@ -114,10 +114,10 @@ impl Workspace {
             }
             (Focus::Main, _) => "Main conversation".to_string(),
             (Focus::Second, Some(SecondKind::Side { .. })) if focused && split => {
-                "Side · Esc returns · /side close".to_string()
+                "Side · Ctrl-C or /close closes".to_string()
             }
             (Focus::Second, Some(SecondKind::Side { .. })) if focused => {
-                "Side conversation · Esc returns · /side close closes it".to_string()
+                "Side conversation · Ctrl-C or /close closes · Esc returns".to_string()
             }
             (Focus::Second, Some(SecondKind::Side { .. })) => {
                 format!("Side conversation · {}", hint(Action::FocusPaneRight))

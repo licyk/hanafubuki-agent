@@ -26,6 +26,10 @@ pub(super) fn record_of<T: Serialize>(
     let record = serde_json::to_value(record).unwrap_or(Value::Null);
     let mut values = BTreeMap::new();
     let mut secrets_set = Vec::new();
+    let mut issues = Vec::new();
+    if !record.is_object() && !record.is_null() {
+        issues.push("This record is not an object; its configured value is preserved".into());
+    }
     for spec in fields {
         let Some(value) = at(&record, &spec.key).filter(|value| !value.is_null()) else {
             continue;
@@ -34,6 +38,11 @@ pub(super) fn record_of<T: Serialize>(
             secrets_set.push(spec.key.clone());
         } else if let Ok(read) = spec.read(value) {
             values.insert(spec.key.clone(), read);
+        } else {
+            issues.push(format!(
+                "{} could not be read; its configured value is preserved",
+                spec.key
+            ));
         }
     }
     SettingsRecord {
@@ -41,7 +50,7 @@ pub(super) fn record_of<T: Serialize>(
         label: label.to_string(),
         summary: String::new(),
         state: None,
-        issue: None,
+        issue: (!issues.is_empty()).then(|| issues.join("; ")),
         read_only: None,
         values,
         secrets_set,
@@ -92,8 +101,7 @@ fn is_secret(spec: &SettingSpec) -> bool {
 
 /// The value at the dotted `key` of `value`.
 fn at<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
-    key.split('.')
-        .try_fold(value, |value, segment| value.get(segment))
+    hanafubuki_agent_config::setting_value_at(value, key)
 }
 
 /// Sets the dotted `key` of `value`, making the objects on the way.

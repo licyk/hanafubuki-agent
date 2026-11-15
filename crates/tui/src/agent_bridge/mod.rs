@@ -87,7 +87,7 @@ pub(crate) use side::OpenedSide;
 use start::Start;
 pub(crate) use status::{SessionStatus, UsageSummary};
 pub(crate) use steering::SteerOutcome;
-pub(crate) use subagents::{SubagentsCall, SubagentsReply};
+pub(crate) use subagents::{NavigationAgent, SubagentsCall, SubagentsReply};
 
 /// What the chat widget is told: the turn's progress, and what the
 /// commands it asked for found.

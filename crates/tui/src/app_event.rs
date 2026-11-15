@@ -71,6 +71,7 @@ pub(crate) enum AppEvent {
     RecentMessagesRead(Vec<String>),
     /// Ctrl+G: edit the composer's draft in the external editor.
     ExternalEditor,
+    Maintenance(crate::TuiMaintenanceAction),
     /// Ctrl+V: attach the clipboard's image to the composer's draft.
     PasteImage,
     /// `/diff`: run `git diff` in the workspace.

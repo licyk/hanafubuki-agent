@@ -169,9 +169,26 @@ impl Appearance {
 
     /// The status line under the composer; `None` with no item to show.
     pub(crate) fn status_line(&self) -> Option<Line<'static>> {
-        status_line(&self.status_line, self.status_line_colors, |item| {
+        let mut line = status_line(&self.status_line, self.status_line_colors, |item| {
             self.values.status_value(item)
         })
+        .unwrap_or_default();
+        if let Some(status) = &self.values.status {
+            let mut spans = vec![ratatui::text::Span::raw(
+                crate::text_formatting::strip_terminal_controls(&status.agent_label),
+            )];
+            if !line.spans.is_empty() {
+                spans.push(" · ".into());
+            }
+            if !self.status_line_colors {
+                for span in &mut spans {
+                    span.style = span.style.dim();
+                }
+            }
+            spans.append(&mut line.spans);
+            line.spans = spans;
+        }
+        (!line.spans.is_empty()).then_some(line)
     }
 
     /// The terminal's title at `now` (the spinner's frame); empty with no

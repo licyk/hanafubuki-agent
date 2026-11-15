@@ -195,7 +195,7 @@ pub(crate) fn insert(document: &mut Map<String, Value>, path: &[String], value: 
 }
 
 /// Removes `path` from `document`, when it is there.
-fn remove(document: &mut Map<String, Value>, path: &[String]) {
+pub(crate) fn remove(document: &mut Map<String, Value>, path: &[String]) {
     let Some((last, parents)) = path.split_last() else {
         return;
     };

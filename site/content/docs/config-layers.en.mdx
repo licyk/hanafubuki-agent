@@ -38,6 +38,8 @@ The terminal interface's [settings center](/docs/terminal-interface#config) edit
 
 Profiles also expose every built-in or host plugin's registered `pluginOptions.<plugin>.<option>`. They reuse the plugin's types, limits and secret controls, with no defaults filled into a new profile. A save validates all supplied values before writing them together; removing an option restores the value from the lower layer.
 
+The forms also expose role overrides and installed plugins' registered settings. **Configuration layers** edits the user's file or the current project's file; **Profiles** edits the named profile. Each target shows its save path and precedence, and saving reports higher layers that shadow the edited values. Invalid stored fields produce warnings while valid fields remain editable; unknown fields and unrelated invalid values are preserved.
+
 ## The project's file [#projects]
 
 The project is the Git root of the working directory (`-C`, or the current directory), or the working directory itself outside a repository. A project may have its own file, `<project>/.hanafubuki-agent/config.toml`, with the same settings as the user's.
@@ -58,7 +60,7 @@ hanafubuki-agent config set "projects.'$PWD'.trustLevel" trusted
 - The path is compared as a location, not as text: a symbolic link or another spelling of the same directory matches.
 - On Windows, write the path as a TOML literal string, whose backslashes need no escaping: `[projects.'C:\Users\me\src\my-project']`.
 - A `trustLevel` other than `"trusted"` (such as `"untrusted"`) does not trust the project; `config set … untrusted` takes the trust back.
-- The Agent never repairs or rewrites a project's file. A value in it that cannot be used is logged and skipped.
+- Reading never repairs or rewrites a project's file. A value that cannot be used is warned about and skipped. An explicit edit in **Configuration layers** can create or update the trusted current project's file; it validates the submitted fields and saves them atomically.
 - A project's file cannot hold `profiles` or `projects`.
 
 ## -c overrides [#overrides]

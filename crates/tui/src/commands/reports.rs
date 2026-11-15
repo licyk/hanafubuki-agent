@@ -10,11 +10,17 @@ use crate::app_event::AgentCommand;
 pub(super) static SKILLS: CommandSpec = CommandSpec {
     name: "skills",
     aliases: &[],
-    description: "list the Skills the Agent can use",
-    inline_args: false,
+    description: "manage Skills, install from a directory, and inspect their source",
+    inline_args: true,
     during_task: true,
     needs_session: false,
-    dispatch: |context, _args| context.agent_command(AgentCommand::Skills),
+    dispatch: |context, args| {
+        if args.trim() == "verbose" {
+            context.agent_command(AgentCommand::Skills);
+        } else {
+            super::open_settings(context, "skills");
+        }
+    },
 };
 
 pub(super) static STATUS: CommandSpec = CommandSpec {

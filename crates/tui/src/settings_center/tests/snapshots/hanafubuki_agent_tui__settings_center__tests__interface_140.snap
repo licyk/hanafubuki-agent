@@ -6,7 +6,7 @@ expression: "screen(&mut center, 140, 25)"
   Settings
   Changes save automatically
 
-   General   Model   Tools   Memory (1)   Context   Network   Interface   Plugins 
+   General   Model   Tools   Memory (1)   Context   Network   Interface   Plugins   Advanced
 
   Terminal interface
   › Fullscreen               [x] On                        The interface draws the conversation itself; off, it goes into the terminal'...

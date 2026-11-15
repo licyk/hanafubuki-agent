@@ -67,6 +67,7 @@ fn goal(objective: &str) -> AgentGoal {
 /// A session with every value known.
 fn status() -> SessionStatus {
     SessionStatus {
+        agent_label: "Main agent".to_string(),
         session_id: AgentSessionId::new(7),
         title: Some("Fix the build".to_string()),
         model: "gpt-5".to_string(),
@@ -172,7 +173,7 @@ fn the_status_line_takes_the_themes_colours_or_is_dimmed() {
     });
     assert_eq!(
         styled(&appearance.status_line().unwrap()),
-        "[gpt-5 high]~[ · ]~[main]~[ · ]~[Context 25% used]~"
+        "[Main agent]~[ · ]~[gpt-5 high]~[ · ]~[main]~[ · ]~[Context 25% used]~"
     );
 }
 

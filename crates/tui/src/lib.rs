@@ -27,6 +27,8 @@ mod get_git_diff;
 mod history_cell;
 mod insert_history;
 mod interface;
+mod maintenance;
+pub use maintenance::{TuiMaintenance, TuiMaintenanceAction};
 mod key_hint;
 mod keymap;
 mod markdown;

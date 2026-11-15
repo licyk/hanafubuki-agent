@@ -22,7 +22,7 @@ use std::time::Duration;
 
 use hanafubuki_agent::{
     AgentError, AgentEventKind, AgentEventSequence, AgentHandle, AgentSessionId,
-    AgentSubagentStatus, AgentTurnAccepted, AgentTurnId,
+    AgentSubagentState, AgentSubagentStatus, AgentTurnAccepted, AgentTurnId, ModelReasoningEffort,
 };
 
 use super::{AgentBridge, AgentReply, TurnUpdate};
@@ -43,9 +43,9 @@ pub(crate) enum SubagentsCall {
 #[derive(Debug)]
 pub(crate) enum SubagentsReply {
     /// `/subagents`: the session's subagents, oldest first.
-    Listed(Vec<AgentSubagentStatus>),
+    Listed(Vec<NavigationAgent>),
     /// The Agent said they changed, and they were read again.
-    Changed(Vec<AgentSubagentStatus>),
+    Changed(Vec<NavigationAgent>),
     Failed(String),
 }
 
@@ -66,7 +66,7 @@ impl AgentBridge {
                     return Some(reply(SubagentsReply::Listed(Vec::new())));
                 };
                 self.spawn(move |agent| async move {
-                    let listed = match agent.subagents(parent).await {
+                    let listed = match navigation_agents(&agent, parent).await {
                         Ok(statuses) => SubagentsReply::Listed(statuses),
                         Err(error) => SubagentsReply::Failed(subagents_error(error)),
                     };
@@ -83,12 +83,12 @@ impl AgentBridge {
         let agent = self.agent.clone();
         let app_event_tx = self.app_event_tx.clone();
         self.agent.runtime().handle().spawn(async move {
-            let listed = agent
-                .subagents(parent)
+            let listed = navigation_agents(&agent, parent)
                 .await
                 .map(|statuses| {
                     statuses
                         .into_iter()
+                        .filter(|status| status.session_id != parent)
                         .map(|status| status.session_id)
                         .collect()
                 })
@@ -104,16 +104,18 @@ impl AgentBridge {
     /// The shown session's tree changed: what it waits on is sent again,
     /// and its subagents are read again for the open list.
     pub(super) fn tree_changed(&mut self, root: AgentSessionId) {
-        if Some(root) != self.session_id {
+        let Some(session) = self.session_id else {
+            return;
+        };
+        if navigation_root(&self.agent, session).ok() != Some(root) {
             return;
         }
         self.send_session_status();
         self.spawn(move |agent| async move {
-            let read = agent
-                .background_tasks(root)
+            let read = navigation_agents(&agent, root)
                 .await
                 .map_err(|error| format!("the subagents were not read: {error}"))?;
-            let changed = reply(SubagentsReply::Changed(read.agents));
+            let changed = reply(SubagentsReply::Changed(read));
             Ok(Some(AgentReply::Update(Box::new(changed))))
         });
     }
@@ -182,4 +184,72 @@ fn run_follow(
         }
         std::thread::sleep(FOLLOW_INTERVAL);
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct NavigationAgent {
+    pub(crate) session_id: AgentSessionId,
+    pub(crate) title: String,
+    pub(crate) status: AgentSubagentState,
+    pub(crate) model: String,
+    pub(crate) reasoning_effort: Option<ModelReasoningEffort>,
+    pub(crate) last_answer: Option<String>,
+}
+
+impl From<AgentSubagentStatus> for NavigationAgent {
+    fn from(agent: AgentSubagentStatus) -> Self {
+        Self {
+            session_id: agent.session_id,
+            title: agent.title,
+            status: agent.status,
+            model: agent.model,
+            reasoning_effort: agent.reasoning_effort,
+            last_answer: agent.last_answer,
+        }
+    }
+}
+
+fn navigation_root(
+    agent: &AgentHandle,
+    mut session: AgentSessionId,
+) -> Result<AgentSessionId, AgentError> {
+    while let Some(parent) = agent.snapshot(session)?.parent_session_id {
+        session = parent;
+    }
+    Ok(session)
+}
+
+async fn navigation_agents(
+    agent: &AgentHandle,
+    session: AgentSessionId,
+) -> Result<Vec<NavigationAgent>, AgentError> {
+    let root = navigation_root(agent, session)?;
+    let snapshot = agent.snapshot(root)?;
+    let mut agents = vec![NavigationAgent {
+        session_id: root,
+        title: snapshot.title.map_or_else(
+            || "Main agent".into(),
+            |title| format!("Main agent · {}", title.value),
+        ),
+        status: match snapshot.turn.as_ref().map(|turn| turn.phase) {
+            Some(hanafubuki_agent::AgentTurnPhase::WaitingForUserInput) => {
+                AgentSubagentState::Waiting
+            }
+            Some(hanafubuki_agent::AgentTurnPhase::Failed) => AgentSubagentState::Failed,
+            Some(phase) if !phase.is_terminal() => AgentSubagentState::Running,
+            _ => AgentSubagentState::Idle,
+        },
+        model: snapshot.model,
+        reasoning_effort: snapshot.reasoning_effort,
+        last_answer: None,
+    }];
+    agents.extend(
+        agent
+            .background_tasks(root)
+            .await?
+            .agents
+            .into_iter()
+            .map(NavigationAgent::from),
+    );
+    Ok(agents)
 }

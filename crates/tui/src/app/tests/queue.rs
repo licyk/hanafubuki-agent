@@ -420,6 +420,7 @@ fn a_subagent_shown_queues_its_own_messages_for_its_turns() {
     };
     harness.type_and_submit("/subagents");
     harness.pump_until_screen_shows("Enter shows one in place of this conversation");
+    harness.key(KeyCode::Down);
     harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("Subagent counter");
     assert_eq!(harness.app.bridge.session_id(), Some(child));

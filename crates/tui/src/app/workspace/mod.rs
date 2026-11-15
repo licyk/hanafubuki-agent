@@ -38,7 +38,7 @@ use std::time::Instant;
 
 use hanafubuki_agent::AgentSessionId;
 use ratatui::backend::Backend;
-use ratatui::crossterm::event::{KeyEvent, KeyEventKind};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::text::Line;
 
 use super::{new_view, App};
@@ -279,6 +279,7 @@ impl App {
         let focus = self.workspace.second.as_ref().map(|second| second.focus);
         match event {
             AppEvent::Workspace(event) => Route::Workspace(event),
+            AppEvent::Exit if owner == Focus::Second => Route::Workspace(WorkspaceEvent::CloseSide),
             // Both conversations hear of the Agent's state, and both may
             // stream.
             AppEvent::AgentStatusChanged | AppEvent::CommitTick if focus.is_some() => {
@@ -483,6 +484,9 @@ impl App {
         tui: &mut Tui<B>,
         child: AgentSessionId,
     ) {
+        if self.main_session_id() == Some(child) {
+            return self.return_to_main(tui);
+        }
         match self.workspace.second.as_ref().map(|second| &second.kind) {
             Some(SecondKind::Child { session, .. }) if *session == child => {
                 return self.set_focus(tui, Focus::Second);
@@ -490,9 +494,9 @@ impl App {
             Some(SecondKind::Child { .. }) => self.leave_second(tui),
             Some(SecondKind::Side { .. }) => {
                 self.set_focus(tui, Focus::Main);
-                return self.chat_widget.add_error_message(
-                    "Close the side conversation first: /side close.".to_string(),
-                );
+                return self
+                    .chat_widget
+                    .add_error_message("Close the side conversation first: /close.".to_string());
             }
             None => {}
         }
@@ -647,6 +651,15 @@ impl App {
     ) -> bool {
         if self.overlay.is_some() {
             return false;
+        }
+        if self.workspace.second_focused()
+            && key.kind == KeyEventKind::Press
+            && key.code == KeyCode::Char('c')
+            && key.modifiers == KeyModifiers::CONTROL
+            && self.chat_widget.no_modal_or_popup_active()
+        {
+            self.close_second(tui);
+            return true;
         }
         if let Some(action) = PaneAction::of(&key) {
             self.pane_action(tui, action);

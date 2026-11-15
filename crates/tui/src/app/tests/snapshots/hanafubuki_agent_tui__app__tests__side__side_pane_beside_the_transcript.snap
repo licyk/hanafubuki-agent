@@ -2,7 +2,7 @@
 source: crates/tui/src/app/tests/side.rs
 expression: harness.redacted_screen()
 ---
- Main conversation                                             │ Side · Esc returns · /side close
+ Main conversation                                             │ Side · Ctrl-C or /close closes
 ╭──────────────────────────────╮                               │╭──────────────────────────────╮
 │ >_ hanafubuki-agent (vXXXXX) │                               ││ >_ hanafubuki-agent (vXXXXX) │
 │                              │                               ││                              │
@@ -40,5 +40,5 @@ expression: harness.redacted_screen()
                                                                │
 › Ask the Agent to do anything                                 │› Ask the Agent to do anything
                                                                │
-  fixture-model · /project · Hello.                            │  fixture-model · /project · Hello.
+  Main agent · fixture-model · /project · Hello.               │  Side conversation · fixture-model
   ? for shortcuts                                              │  ← for agents · ? for shortcuts

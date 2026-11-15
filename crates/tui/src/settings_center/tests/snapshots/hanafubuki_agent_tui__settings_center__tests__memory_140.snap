@@ -6,10 +6,10 @@ expression: "screen(&mut center, 140, 22)"
   Settings
   Changes save automatically
 
-   General   Model   Tools   Memory (1)   Context   Network   Interface   Plugins 
+   General   Model   Tools   Memory (1)   Context   Network   Interface   Plugins   Advanced
 
   Memory
-  › Memory                     [ ] Off               Whether memory is on                                                                 
+  › Memory                     [ ] Off               Whether memory is on
     Use memories               [x] On                Whether the model may use the memories
     Generate memories          [x] On                Whether new memories are extracted from sessions
     Exclude external context   [ ] Off               A session stops contributing once it has used a web or MCP tool's output

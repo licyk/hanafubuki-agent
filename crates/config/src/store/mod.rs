@@ -624,6 +624,10 @@ pub(crate) fn object<T: Serialize>(value: &T) -> Result<Map<String, Value>, Stri
     }
 }
 
+mod hooks;
+mod layer_write;
+mod role_files;
+pub use layer_write::{patch_setting_values, setting_value_at, SettingsLayer};
 #[cfg(test)]
 mod tests;
 mod write;

@@ -82,6 +82,7 @@ pub struct TuiOptions {
     pub no_alt_screen: bool,
     /// A newer release an earlier check found, shown from the first frame.
     pub update_notice: Option<TuiUpdateNotice>,
+    pub maintenance: Option<crate::TuiMaintenance>,
 }
 
 /// Which session `hanafubuki-agent resume` reopens.
@@ -166,6 +167,7 @@ pub fn run(
         render_mode,
         tui_state,
     );
+    app.maintenance = options.maintenance;
     if mode.is_owned() {
         app.enter_owned_screen(&mut tui)
             .map_err(|error| format!("the terminal's alternate screen: {error}"))?;

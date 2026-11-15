@@ -27,13 +27,14 @@ pub(super) const ID: &str = "roles";
 const AGENTS: &str = "agents";
 const REASONING_EFFORT: &str = "reasoningEffort";
 
-fn fields() -> Vec<SettingSpec> {
+pub(super) fn fields() -> Vec<SettingSpec> {
     let text = SettingKind::Text {
         maximum_chars: None,
         secret: false,
         nullable: true,
     };
     vec![
+        SettingSpec::new("configFile", "Role source file", text.clone()),
         SettingSpec::new("description", "Description", text.clone()),
         SettingSpec::new("extends", "Extends role", text.clone()),
         SettingSpec {
@@ -95,6 +96,8 @@ pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCol
         .with_actions(vec![
             SettingsAction::collection(ADD, "Add a role").named("Role name"),
             SettingsAction::record(SAVE, "Save"),
+            SettingsAction::record("copy", "Copy to a user role"),
+            SettingsAction::record("source", "Inspect source and instructions"),
             SettingsAction::record(DELETE, "Delete").confirmed(),
         ]);
     let entries = match user_table(service, AGENTS).await {
@@ -158,6 +161,50 @@ pub(super) async fn run(
         .role(&name)
         .map(|role| &role.source)
         .or_else(|| catalog.unusable_role(&name).map(|role| &role.source));
+    if request.action == "source" {
+        let role = catalog
+            .role(&name)
+            .ok_or("Role is unusable; inspect its reported source")?;
+        return Ok(SettingsActionOutcome {
+            record: None,
+            message: Some(format!(
+                "{}\n\n{}",
+                role.source,
+                role.instructions.as_deref().unwrap_or("No instructions")
+            )),
+        });
+    }
+    if request.action == "copy" {
+        let source = catalog
+            .role(&name)
+            .ok_or("Only a usable role can be copied")?;
+        let stem = name.replace([':', '/', '\\'], "_");
+        let mut copy = format!("copy_{stem}");
+        let mut index = 2;
+        while catalog.role(&copy).is_some() || catalog.unusable_role(&copy).is_some() {
+            copy = format!("copy_{stem}_{index}");
+            index += 1;
+        }
+        let values = Map::from_iter([
+            ("extends".into(), Value::String(name)),
+            (
+                "description".into(),
+                Value::String(source.description.clone()),
+            ),
+        ]);
+        service
+            .config
+            .write_entry_values(UserEntry::Role(&copy), &values)?;
+        service
+            .roles
+            .rebuild(&service.config, || service.packages.loaded().roles());
+        return Ok(SettingsActionOutcome {
+            record: Some(copy.clone()),
+            message: Some(format!(
+                "Created user role {copy}, inheriting the original instructions and restrictions"
+            )),
+        });
+    }
     match (request.action.as_str(), source) {
         (ADD, Some(source)) if is_users(source) => {
             return Err(format!("the role `{name}` exists"));
@@ -204,7 +251,7 @@ pub(super) async fn run(
 
 /// The values a write takes, each checked by its field's spec (a
 /// reasoning effort as a level), `null` removing the key.
-fn checked(values: &Map<String, Value>) -> Result<Map<String, Value>, String> {
+pub(super) fn checked(values: &Map<String, Value>) -> Result<Map<String, Value>, String> {
     let fields = fields();
     values
         .iter()
@@ -231,10 +278,7 @@ fn is_users(source: &AgentRoleSource) -> bool {
         source,
         AgentRoleSource::Configured {
             layer: RoleLayer::User,
-            origin: RoleOrigin::Table {
-                config_file: None,
-                ..
-            },
+            origin: RoleOrigin::Table { .. },
         }
     )
 }

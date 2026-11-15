@@ -223,7 +223,13 @@ fn screen(center: &mut SettingsCenter, width: u16, height: u16) -> String {
         center.render(area, frame.buffer_mut());
     }
     terminal.flush().unwrap();
-    terminal.backend().to_string()
+    terminal
+        .backend()
+        .to_string()
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 #[test]
@@ -235,7 +241,7 @@ fn the_memory_tab_at_140_and_50_columns() {
     show_tab(&mut center, "Interface");
     let narrow = screen(&mut center, 50, 26);
     assert!(
-        narrow.contains(" Interface "),
+        narrow.contains(" Interface"),
         "the selected tab shows:\n{narrow}"
     );
 }

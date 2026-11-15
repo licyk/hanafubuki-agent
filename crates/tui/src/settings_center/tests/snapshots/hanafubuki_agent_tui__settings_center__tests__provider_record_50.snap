@@ -9,7 +9,7 @@ expression: "screen(&mut center, 50, 24)"
   responses · https://main.example.test/v1
 
 
-  › Name              Main                      
+  › Name              Main
     Enabled           [x] On
     Base URL          https://main.example.te...
     API token         ••••

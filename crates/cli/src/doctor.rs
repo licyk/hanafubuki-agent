@@ -16,6 +16,14 @@ use crate::exit::{Failure, FAILURE, SUCCESS};
 use crate::mcp::phase;
 
 pub(crate) fn run(global: &GlobalArgs, online: bool) -> Result<u8, Failure> {
+    run_mode(global, online, false)
+}
+
+pub(crate) fn run_in_tui(global: &GlobalArgs) -> Result<u8, Failure> {
+    run_mode(global, false, true)
+}
+
+fn run_mode(global: &GlobalArgs, online: bool, owns_data: bool) -> Result<u8, Failure> {
     let mut report = Report::default();
     let standalone = match Standalone::open(global, AgentRuntimeHost::default()) {
         Ok(standalone) => standalone,
@@ -41,14 +49,19 @@ pub(crate) fn run(global: &GlobalArgs, online: bool) -> Result<u8, Failure> {
         Err(error) => report.fail("keyring", &error),
     }
     let data_dir = &standalone.runtime.storage_paths().root;
-    let free = match DataDirLock::acquire(data_dir) {
-        Ok(_lock) => {
-            report.ok("data", &format!("{} (not in use)", data_dir.display()));
-            true
-        }
-        Err(error) => {
-            report.fail("data", &error);
-            false
+    let free = if owns_data {
+        report.ok("data", "owned by this running Agent");
+        false
+    } else {
+        match DataDirLock::acquire(data_dir) {
+            Ok(_lock) => {
+                report.ok("data", &format!("{} (not in use)", data_dir.display()));
+                true
+            }
+            Err(error) => {
+                report.fail("data", &error);
+                false
+            }
         }
     };
     if !online {

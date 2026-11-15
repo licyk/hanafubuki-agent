@@ -189,6 +189,8 @@ The issues and the unusable roles, with why, show in `hanafubuki-agent roles lis
 
 ## Seeing the roles [#inspect]
 
+In `/config`, **Roles** edits user table definitions and `configFile` associations. **Role source files** edits typed fields in files under the user agents directory. Source inspection and copying to a user role are available for read-only roles; copying inherits the original role so capability restrictions remain intact.
+
 ```sh
 hanafubuki-agent roles list
 hanafubuki-agent roles show reader

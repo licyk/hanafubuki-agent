@@ -348,3 +348,24 @@ fn inline_value(value: &Value) -> toml_edit::Value {
 
 #[cfg(test)]
 mod tests;
+
+/// Resolve a configuration destination, including directories a first save creates.
+pub(crate) fn resolve_destination(
+    path: &Path,
+) -> Result<hanafubuki_agent_foundation::paths::ResolvedPath, String> {
+    use hanafubuki_agent_foundation::paths::{PathError, ResolvedPath};
+    match ResolvedPath::resolve(path) {
+        Ok(path) => Ok(path),
+        Err(PathError::NotFound(_)) => {
+            let name = path
+                .file_name()
+                .ok_or("Configuration destination has no file name")?;
+            let parent = path
+                .parent()
+                .ok_or("Configuration destination has no parent")?;
+            ResolvedPath::resolve_child(&resolve_destination(parent)?, name)
+                .map_err(|error| error.to_string())
+        }
+        Err(error) => Err(error.to_string()),
+    }
+}

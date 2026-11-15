@@ -1,12 +1,11 @@
 //! `/subagents`' status cell and picker, `/side`'s and `/agents`' dispatch,
 //! and the commands a second conversation runs.
 
-use hanafubuki_agent::{
-    AgentSessionId, AgentSubagentState, AgentSubagentStatus, ModelReasoningEffort,
-};
+use hanafubuki_agent::{AgentSessionId, AgentSubagentState, ModelReasoningEffort};
 use ratatui::crossterm::event::KeyCode;
 
 use super::*;
+use crate::agent_bridge::NavigationAgent;
 use crate::agent_bridge::TurnUpdate;
 use crate::app::WorkspaceEvent;
 use crate::app_event::{AppEvent, AppEventSender, Op};
@@ -18,26 +17,21 @@ fn status(
     title: &str,
     state: AgentSubagentState,
     answer: Option<&str>,
-) -> AgentSubagentStatus {
-    AgentSubagentStatus {
-        parent_session_id: AgentSessionId::new(1),
-        depth: 1,
+) -> NavigationAgent {
+    NavigationAgent {
         session_id: AgentSessionId::new(id),
         title: title.to_string(),
         status: state,
-        provider_id: "provider-1".to_string(),
         model: "fixture-model".to_string(),
         reasoning_effort: Some(ModelReasoningEffort::High),
         last_answer: answer.map(str::to_string),
-        state_since: None,
     }
 }
 
 /// `counter` on the parent's pair with an effort; `writer` on another
 /// Provider's long model id with the Provider's default effort.
-fn statuses() -> Vec<AgentSubagentStatus> {
-    let writer = AgentSubagentStatus {
-        provider_id: "provider-2".to_string(),
+fn statuses() -> Vec<NavigationAgent> {
+    let writer = NavigationAgent {
         model: "qwen3-coder-480b-a35b-instruct".to_string(),
         reasoning_effort: None,
         ..status(3, "writer", AgentSubagentState::Running, None)

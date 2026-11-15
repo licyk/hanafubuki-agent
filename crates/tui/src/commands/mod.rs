@@ -26,6 +26,7 @@ pub(crate) mod hooks;
 mod init;
 mod keymap;
 mod leave;
+mod maintenance;
 pub(crate) mod mcp;
 mod memories;
 mod mode;
@@ -60,7 +61,7 @@ mod worktree;
 
 use std::fmt;
 
-use hanafubuki_agent::{AgentSessionMode, AgentSubagentStatus, AgentTuiPreferences};
+use hanafubuki_agent::{AgentSessionMode, AgentTuiPreferences};
 
 use crate::agent_bridge::model_list::ModelListUpdate;
 use crate::agent_bridge::{
@@ -90,7 +91,7 @@ pub(crate) use subagents::SUBAGENTS;
 pub(crate) use warnings::{show_warnings, WARNINGS};
 
 /// Every command, in presentation order: the most used first.
-pub(crate) static COMMANDS: [&CommandSpec; 51] = [
+pub(crate) static COMMANDS: [&CommandSpec; 53] = [
     &model::MODEL,
     &effort::EFFORT,
     &providers::PROVIDERS,
@@ -113,6 +114,8 @@ pub(crate) static COMMANDS: [&CommandSpec; 51] = [
     &recap::RECAP,
     &review::REVIEW,
     &side::SIDE,
+    &side::CLOSE,
+    &maintenance::MAINTENANCE,
     &subagents::SUBAGENTS,
     &tasks::TASKS,
     &agents::AGENTS,
@@ -212,7 +215,7 @@ pub(crate) fn has_prefix(name: &str, disabled: &[&str]) -> bool {
 
 /// The settings center's pages that are commands' views, each declared
 /// beside its command.
-pub(crate) static SETTINGS_PAGES: [&PageOverride; 11] = [
+pub(crate) static SETTINGS_PAGES: [&PageOverride; 12] = [
     &theme::PAGE,
     &statusline::PAGE,
     &title::PAGE,
@@ -224,6 +227,7 @@ pub(crate) static SETTINGS_PAGES: [&PageOverride; 11] = [
     &providers::MODEL_PAGE,
     &providers::MODEL_SETTING_PAGE,
     &mcp::LOGIN_PAGE,
+    &maintenance::PAGE,
 ];
 
 /// Opens the settings center at `target` (a tab, a section, a collection
@@ -272,7 +276,7 @@ pub(crate) enum CommandReply {
     Plugins(PluginsReply),
     Settings(SettingsReply),
     /// The subagents' statuses, read again while they run.
-    Subagents(Vec<AgentSubagentStatus>),
+    Subagents(Vec<crate::agent_bridge::NavigationAgent>),
 }
 
 /// What the memory store's page asked; `/warnings`' answer goes through

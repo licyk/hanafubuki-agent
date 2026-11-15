@@ -189,6 +189,8 @@ Codex 的角色文件放进 `agents/` 无需修改即可使用：它的 `develop
 
 ## 查看角色 [#inspect]
 
+在 `/config` 中，**Roles** 编辑用户表格定义和 `configFile` 关联，**Role source files** 编辑用户 agents 目录中文件的类型化字段。只读角色支持查看来源和复制到用户角色；副本继承原角色，保留能力限制。
+
 ```sh
 hanafubuki-agent roles list
 hanafubuki-agent roles show reader

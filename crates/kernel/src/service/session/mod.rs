@@ -75,7 +75,7 @@ impl ForkScan {
         }
     }
 
-    fn extend(&mut self, items: impl IntoIterator<Item = AgentHistoryItem>) {
+    fn extend(&mut self, items: impl IntoIterator<Item = AgentHistoryItem>, transcript: bool) {
         for item in items {
             if self.restored.is_some() {
                 break;
@@ -101,6 +101,11 @@ impl ForkScan {
             {
                 self.history = self.checkpoint_replacement.clone();
                 self.history_overflowed = self.history.len() > self.maximum_history_items;
+                continue;
+            }
+            // Transcript summaries mark completed compactions for display. The
+            // model replacement is installed only by the checkpoint above.
+            if transcript && matches!(item.content, ConversationItem::CompactionSummary { .. }) {
                 continue;
             }
             if self.history.len() < self.maximum_history_items {

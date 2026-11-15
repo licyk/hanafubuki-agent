@@ -36,6 +36,8 @@ hanafubuki-agent -p offline exec "整理这个目录下的笔记"
 
 设置中心的配置档也提供所有内置插件和宿主插件注册的 `pluginOptions.<插件>.<选项>`，复用插件声明的类型、范围和密钥编辑方式，不给新配置档填入默认值。保存时先校验整批值，再一起写入；删除某个选项就恢复使用下一层的值。
 
+表单还提供角色覆盖和已安装插件注册的设置。**Configuration layers** 编辑用户文件或当前项目文件，**Profiles** 编辑指定配置档。每个目标显示保存位置和优先级，保存后提示更高层的覆盖。已有字段损坏时显示警告，其余有效字段仍可编辑；未知字段及无关的损坏值予以保留。
+
 终端界面的[设置中心](/docs/terminal-interface#config)编辑配置档（Advanced 标签页中的 Profiles）：`a` 添加一个，每个键改动时即保存，`r` 把它从配置档中删除，Delete 删除整个配置档，但 Agent 当前使用的那个除外。
 
 ## 项目配置 [#projects]
@@ -58,7 +60,7 @@ hanafubuki-agent config set "projects.'$PWD'.trustLevel" trusted
 - 路径按实际位置比较，而不是按文本比较：符号链接或同一目录的不同写法都能匹配。
 - Windows 上用 TOML 的字面字符串书写路径，反斜杠不需要转义：`[projects.'C:\Users\me\src\my-project']`。
 - `trustLevel` 不是 `"trusted"` 的值（例如 `"untrusted"`）都表示不信任；`config set ... untrusted` 可以撤销信任。
-- Agent 从不修复或改写项目配置。其中无法使用的值会被记录到日志并跳过。
+- 读取时不会修复或改写项目配置，其中无法使用的值会告警并跳过。在 **Configuration layers** 中显式编辑时，可以创建或更新受信任的当前项目配置；提交的字段经校验后原子保存。
 - 项目配置中不能写 `profiles` 和 `projects`。
 
 ## -c 覆盖 [#overrides]

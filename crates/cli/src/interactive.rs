@@ -79,10 +79,30 @@ pub(crate) fn run(
             resume,
             no_alt_screen: global.no_alt_screen,
             update_notice,
+            maintenance: Some(maintenance(global.clone())),
         };
         hanafubuki_agent_tui::run(events, &standalone.runtime, &agent, options)
             .map_err(Failure::new)
     });
     standalone.shutdown();
     result.map(|()| SUCCESS)
+}
+
+fn maintenance(global: crate::cli::GlobalArgs) -> hanafubuki_agent_tui::TuiMaintenance {
+    hanafubuki_agent_tui::TuiMaintenance(std::sync::Arc::new(move |action| {
+        use hanafubuki_agent_tui::TuiMaintenanceAction;
+        let code = match action {
+            TuiMaintenanceAction::CheckUpdates => crate::update::run(&global, true, false),
+            TuiMaintenanceAction::Update => crate::update::run(&global, false, false),
+            TuiMaintenanceAction::Doctor => crate::doctor::run_in_tui(&global),
+        }
+        .map_err(|failure| failure.message)?;
+        if code == 0 {
+            Ok(())
+        } else {
+            Err(format!(
+                "Maintenance finished with exit code {code}; see the report above"
+            ))
+        }
+    }))
 }

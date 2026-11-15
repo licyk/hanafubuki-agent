@@ -355,6 +355,7 @@ fn validate_turn_boundary_refs(history: &[&ConversationItem]) -> Result<(), Agen
                         | ConversationItem::UserMessage { .. }
                         | ConversationItem::AssistantMessage { .. }
                         | ConversationItem::SteeringMessage { .. }
+                        | ConversationItem::ContinuationContext { .. }
                         | ConversationItem::WakeEvents { .. }
                         | ConversationItem::CompactionSummary { .. }
                         | ConversationItem::ProviderCompaction { .. }

@@ -98,6 +98,7 @@ fn a_message_with_images_a_model_does_not_read_stays_in_the_composer() {
     let directory = tempfile::tempdir().unwrap();
     let (mut chat, events) = chat();
     chat.handle_turn_update(TurnUpdate::SessionStatus(Box::new(SessionStatus {
+        agent_label: "Main agent".to_string(),
         session_id: AgentSessionId::new(1),
         title: None,
         model: "text-only".to_string(),

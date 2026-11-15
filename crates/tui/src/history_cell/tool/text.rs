@@ -16,6 +16,9 @@ use crate::history_cell::ActivityDisclosure;
 /// `Running` and the command (its clock follows, see `frame`), or the
 /// tool and its subject.
 pub(super) fn running(call: &ToolCall) -> View {
+    if let Some(title) = collaboration_title(call, true) {
+        return View::title(title, false);
+    }
     let mut title = vec!["Running".bold(), " ".into()];
     if call.name == EXEC_COMMAND && call.subject.is_some() {
         title.push(call.subject_or("").into());
@@ -72,6 +75,11 @@ pub(super) fn view(call: &ToolCall, failed: bool, lines: Vec<String>, extent: Ex
 }
 
 fn called_title(call: &ToolCall, failed: bool) -> Vec<Span<'static>> {
+    if !failed {
+        if let Some(title) = collaboration_title(call, false) {
+            return title;
+        }
+    }
     let mut title = vec![if failed { "Failed" } else { "Called" }.bold(), " ".into()];
     title.extend(named(call));
     title
@@ -85,4 +93,25 @@ fn named(call: &ToolCall) -> Vec<Span<'static>> {
         spans.push(call.subject_or("").into());
     }
     spans
+}
+
+fn collaboration_title(call: &ToolCall, running: bool) -> Option<Vec<Span<'static>>> {
+    let verb = match (call.name.as_str(), running) {
+        ("spawn_agent", true) => "Starting agent",
+        ("spawn_agent", false) => "Started agent",
+        ("send_message" | "followup_task", true) => "Interacting with",
+        ("send_message" | "followup_task", false) => "Interacted with",
+        ("interrupt_agent", true) => "Interrupting agent",
+        ("interrupt_agent", false) => "Interrupted agent",
+        ("wait_agent", true) => "Waiting for agents",
+        ("wait_agent", false) => "Finished waiting",
+        ("list_agents", true) => "Listing agents",
+        ("list_agents", false) => "Agents",
+        _ => return None,
+    };
+    let mut title = vec![verb.bold()];
+    if call.subject.is_some() {
+        title.extend([" ".into(), call.subject_or("").cyan()]);
+    }
+    Some(title)
 }

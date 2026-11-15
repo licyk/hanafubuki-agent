@@ -5,13 +5,11 @@
 //! in its file, never here. Read through the `hooks` row, so while it is
 //! not running the collection says why and lists none.
 
-use std::collections::BTreeMap;
-
 use hanafubuki_agent_config::{SettingKind, SettingSpec, SettingValue, SettingsGroup};
 
 use super::{
     name_of, SettingsAction, SettingsActionOutcome, SettingsActionRequest, SettingsCollection,
-    SettingsRecord, SAVE,
+    SettingsRecord, ADD, DELETE, SAVE,
 };
 use crate::service::{AgentApplicationService, AgentHook, AgentHookHandler};
 use hanafubuki_agent_hooks::HookSource;
@@ -21,13 +19,17 @@ const TRUST: &str = "trust";
 const ENABLED: &str = "enabled";
 
 fn fields() -> Vec<SettingSpec> {
-    vec![SettingSpec::new(ENABLED, "Enabled", SettingKind::Boolean)]
+    let mut fields = vec![SettingSpec::new(ENABLED, "Enabled", SettingKind::Boolean)];
+    fields.extend(super::hook_definitions::fields());
+    fields
 }
 
 pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCollection {
     let collection = SettingsCollection::new(ID, "Hooks", SettingsGroup::Tools, fields())
         .with_actions(vec![
+            SettingsAction::collection(ADD, "Add a user hook"),
             SettingsAction::record(SAVE, "Save"),
+            SettingsAction::record(DELETE, "Delete user hook").confirmed(),
             SettingsAction::record(TRUST, "Trust").confirmed(),
         ]);
     let hooks = match service.hooks_list().await {
@@ -39,6 +41,14 @@ pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCol
         .iter()
         .map(|hook| {
             let event = name_of(&hook.event);
+            let mut values = super::record::record_of(
+                &hook.key,
+                "",
+                &super::hook_definitions::values(hook),
+                &fields(),
+            )
+            .values;
+            values.insert(ENABLED.into(), SettingValue::Boolean(hook.enabled));
             SettingsRecord {
                 id: hook.key.clone(),
                 label: match &hook.matcher {
@@ -49,10 +59,7 @@ pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCol
                 state: Some(name_of(&hook.trust)),
                 issue: None,
                 read_only: None,
-                values: BTreeMap::from([(
-                    ENABLED.to_string(),
-                    SettingValue::Boolean(hook.enabled),
-                )]),
+                values,
                 secrets_set: Vec::new(),
             }
         })
@@ -68,7 +75,24 @@ pub(super) async fn run(
     service: &AgentApplicationService,
     request: SettingsActionRequest,
 ) -> Result<SettingsActionOutcome, String> {
+    if request.action == ADD {
+        return super::hook_definitions::run(service, &request, None).await;
+    }
     let key = request.record_id()?.to_string();
+    let catalog = service
+        .hooks_list()
+        .await
+        .map_err(|error| error.to_string())?;
+    let hook = catalog
+        .hooks
+        .iter()
+        .find(|hook| hook.key == key)
+        .ok_or("Hook no longer exists")?;
+    if request.action == DELETE
+        || (request.action == SAVE && request.values.keys().any(|key| key != ENABLED))
+    {
+        return super::hook_definitions::run(service, &request, Some(hook)).await;
+    }
     match request.action.as_str() {
         SAVE => {
             for (field, value) in &request.values {

@@ -6,10 +6,10 @@ expression: "screen(&mut center, 50, 26)"
   Settings
   Changes save automatically
 
-   General   Model   Tools   Memory (1) 
+   General   Model   Tools   Memory (1)
 
   Memory
-  › Memory                   [ ] Off            
+  › Memory                   [ ] Off
     Use memories             [x] On
     Generate memories        [x] On
     Exclude external con...  [ ] Off

@@ -81,6 +81,8 @@ pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCol
             SettingsAction::record(DELETE, "Delete").confirmed(),
             SettingsAction::record(SET_DEFAULT, "Make default"),
             SettingsAction::record(LIST_MODELS, "List models"),
+            SettingsAction::record("test", "Test connection"),
+            SettingsAction::record("forget", "Clear learned model facts").confirmed(),
         ]);
     let registry = match service.provider_registry_snapshot().await {
         Ok(registry) => registry,
@@ -119,6 +121,39 @@ pub(super) async fn run(
     request: SettingsActionRequest,
 ) -> Result<SettingsActionOutcome, String> {
     match request.action.as_str() {
+        "test" => {
+            let registry = service.provider_registry_snapshot().await?;
+            let provider = registry
+                .providers
+                .iter()
+                .find(|provider| Some(provider.id.as_str()) == request.record.as_deref())
+                .ok_or("Provider no longer exists")?;
+            let models = service
+                .test_provider_draft(AgentProviderDraft {
+                    display_name: provider.display_name.clone(),
+                    enabled: provider.enabled,
+                    protocol: provider.protocol,
+                    base_url: provider.base_url.clone(),
+                    api_token: provider.api_token.clone(),
+                    request_headers: provider.request_headers.clone(),
+                })
+                .await?;
+            Ok(SettingsActionOutcome {
+                record: None,
+                message: Some(format!("Connection succeeded: {} models", models.len())),
+            })
+        }
+        "forget" => {
+            let count = service
+                .forget_learned_model_facts(request.record_id()?, None)
+                .await?;
+            Ok(SettingsActionOutcome {
+                record: None,
+                message: Some(format!(
+                    "Cleared {count} learned facts; manual overrides retained"
+                )),
+            })
+        }
         ADD => add(service, &request).await,
         SAVE => {
             let id = request.record_id()?;

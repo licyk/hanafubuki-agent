@@ -66,6 +66,7 @@ fn subagents_lists_them_and_shows_one_beside_its_parent() {
     });
     assert!(harness.transcript().contains("Twelve files."));
 
+    harness.key(KeyCode::Down);
     harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("Subagent counter · from Delegate the count.");
     assert_eq!(harness.app.bridge.session_id(), Some(child));
@@ -81,7 +82,12 @@ fn subagents_lists_them_and_shows_one_beside_its_parent() {
         Some(AgentSessionOrigin::Subagent)
     );
 
-    harness.key(KeyCode::Esc);
+    assert!(harness.screen().contains("Agent counter"));
+    harness.type_and_submit("/subagent");
+    harness.pump_until("agent picker on child", |harness| {
+        harness.app.chat_widget.has_command_view("subagents")
+    });
+    harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("Main conversation");
     assert_eq!(harness.app.bridge.session_id(), Some(parent));
 }
@@ -177,6 +183,7 @@ fn a_running_subagent_shown_follows_its_turn_and_takes_its_approval() {
     });
     harness.type_and_submit("/subagents");
     harness.pump_until_screen_shows("running");
+    harness.key(KeyCode::Down);
     harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("Subagent counter");
     // Its call arrives once shown: the approval is asked here.

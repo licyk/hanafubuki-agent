@@ -69,6 +69,16 @@ A write changes that one key and keeps the file's comments and everything else. 
 
 The terminal interface's [`/config`](/docs/terminal-interface#config) is the settings center: every setting of the Agent's [settings catalog](/docs/architecture#settings-catalog) in tabs, each value checked as `config set` checks it and saved as it is changed, into the user's `config.toml` (the Providers, the model policy and the model overrides into `providers.toml`, the MCP servers into `mcp.toml`). Each row names the layer above your file that sets its value, and a save says when a profile, the project's file or `-c` replaces what it wrote. Beside the settings are the collections (the Providers, the MCP servers, the plugins, the hooks, the roles, the profiles, the projects…) and the pages [`/theme`](/docs/terminal-interface#highlighting), [`/statusline` and `/title`](/docs/terminal-interface#status-line), [`/keymap`](/docs/terminal-interface#keymap), [`/presets`](/docs/terminal-interface#presets), `/plugins`, `/hooks` and `/memories` open; [`/tui`](/docs/terminal-interface#modes) opens its `[tui]` settings, and `/raw` writes `tui.rawOutput` the same way. Custom highlighting themes are not in the configuration directory: they are `.tmTheme` files in the data directory's `themes/`.
 
+The settings center also provides these management operations:
+
+- **Skills** (also `/skills`): inspect source and instructions, enable/disable, install from a local directory with an explicit overwrite choice, and remove user-installed Skills. Protected sources remain protected.
+- **Hooks**: add, edit and delete user definitions (event, matcher, command, timeout and status message). Edited definitions require trust again; project and plugin definitions are not written. **Hook review** still handles trust and enablement for all sources.
+- **Roles / Role source files**: associate `configFile`, inspect sources, create and edit files under the user's `agents/`, or copy a role into a new user role that inherits its instructions and restrictions. Built-in, plugin, project and external source files remain read-only here.
+- **Profiles / Configuration layers**: select the profile, user or trusted current project explicitly. Forms include role overrides and registered installed-plugin settings, mask secrets, preserve unknown stored fields, and report the save path and precedence. A bad stored field is warned about without hiding valid fields; invalid submitted edits are refused as a whole.
+- **Providers / Model overrides**: test connectivity and clear learned model facts per Provider or model override; manual overrides remain.
+- **Sandbox status and repair**: show availability or its failure reason; on Windows, explicitly run elevated setup/repair. UAC runs asynchronously and settings are saved only on success.
+- **Updates and diagnostics** (also `/maintenance`): show the current version, check for updates, install the latest version, or run doctor. The standalone CLI owns these operations; press Enter after the terminal report to return to the TUI. Restart the Agent after updating.
+
 ## Editing the file [#edit]
 
 ```sh

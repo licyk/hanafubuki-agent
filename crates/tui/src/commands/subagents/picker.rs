@@ -5,7 +5,7 @@
 //! answer, kept current while the watch reads new statuses; Enter shows
 //! the one selected.
 
-use hanafubuki_agent::AgentSubagentStatus;
+use crate::agent_bridge::NavigationAgent;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
@@ -29,7 +29,7 @@ pub(super) struct SubagentsPicker {
 }
 
 impl SubagentsPicker {
-    pub(super) fn new(statuses: Vec<AgentSubagentStatus>, app_event_tx: AppEventSender) -> Self {
+    pub(super) fn new(statuses: Vec<NavigationAgent>, app_event_tx: AppEventSender) -> Self {
         Self {
             list: list(&statuses, None, &app_event_tx),
             app_event_tx,
@@ -38,7 +38,7 @@ impl SubagentsPicker {
 }
 
 fn list(
-    statuses: &[AgentSubagentStatus],
+    statuses: &[NavigationAgent],
     selected: Option<usize>,
     app_event_tx: &AppEventSender,
 ) -> ListSelectionView {

@@ -83,7 +83,7 @@ fn a_side_conversation_takes_its_own_messages_and_esc_returns_to_the_main_one() 
     assert_eq!(harness.origin(side), Some(AgentSessionOrigin::Side));
     assert!(harness
         .screen()
-        .contains("Side conversation · Esc returns · /side close closes it"));
+        .contains("Side conversation · Ctrl-C or /close closes · Esc returns"));
     let request = String::from_utf8(harness.server.requests()[1].body.clone()).unwrap();
     assert!(request.contains("What is 2 + 2?"));
     assert!(
@@ -106,7 +106,7 @@ fn a_side_conversation_takes_its_own_messages_and_esc_returns_to_the_main_one() 
     harness.pump_until_turn_ends();
     assert_eq!(harness.session(), side);
 
-    harness.type_and_submit("/side close");
+    harness.type_and_submit("/close");
     harness.pump_until_screen_shows("Side conversation closed.");
     assert_eq!(harness.session(), parent);
     assert_eq!(harness.origin(side), None, "the side session is gone");
@@ -146,7 +146,7 @@ fn in_fullscreen_the_side_conversation_is_a_pane_the_leader_and_pointer_focus() 
     // Both conversations are on the screen, each under its title.
     assert!(screen.contains("Main conversation"), "{screen}");
     assert!(
-        screen.contains("Side · Esc returns · /side close"),
+        screen.contains("Side · Ctrl-C or /close closes"),
         "{screen}"
     );
     assert!(screen.contains("Hi."), "{screen}");
@@ -196,4 +196,22 @@ fn in_fullscreen_the_side_conversation_is_a_pane_the_leader_and_pointer_focus() 
     harness.pump_until_screen_shows("Side conversation closed.");
     assert_eq!(harness.session(), parent);
     assert!(!harness.screen().contains("Main conversation"));
+}
+
+#[test]
+fn control_c_closes_only_the_side_view_and_the_main_agent_can_continue() {
+    let mut harness = Harness::start(vec![
+        assistant_events("Main answer."),
+        assistant_events("Side answer."),
+        assistant_events("Main continued."),
+    ]);
+    let parent = harness.answered("Main question", "Main answer.");
+    harness.type_and_submit("/btw Side question");
+    harness.pump_until_screen_shows("Side answer.");
+    harness.pump_until_turn_ends();
+    assert_ne!(harness.session(), parent);
+    harness.key_with(KeyCode::Char('c'), KeyModifiers::CONTROL);
+    harness.pump_until_screen_shows("Side conversation closed.");
+    assert_eq!(harness.session(), parent);
+    assert_eq!(harness.answered("Continue main", "Main continued."), parent);
 }

@@ -74,6 +74,7 @@ pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCol
             SettingsAction::collection(ADD, "Add a model")
                 .named("Provider and model (PROVIDER/MODEL)"),
             SettingsAction::record(SAVE, "Save"),
+            SettingsAction::record("forget", "Clear learned facts").confirmed(),
             SettingsAction::record(DELETE, "Delete").confirmed(),
         ]);
     let registry = match service.provider_registry_snapshot().await {
@@ -106,6 +107,17 @@ pub(super) async fn run(
     request: SettingsActionRequest,
 ) -> Result<SettingsActionOutcome, String> {
     let (provider_id, model) = parse(request.record_id()?)?;
+    if request.action == "forget" {
+        let count = service
+            .forget_learned_model_facts(&provider_id, Some(&model))
+            .await?;
+        return Ok(SettingsActionOutcome {
+            record: None,
+            message: Some(format!(
+                "Cleared {count} learned facts; manual overrides retained"
+            )),
+        });
+    }
     let registry = service.provider_registry_snapshot().await?;
     let provider = registry
         .providers

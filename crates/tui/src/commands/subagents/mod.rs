@@ -11,11 +11,12 @@
 
 mod picker;
 
-use hanafubuki_agent::{AgentSubagentState, AgentSubagentStatus, ModelReasoningEffort};
+use hanafubuki_agent::{AgentSubagentState, ModelReasoningEffort};
 use ratatui::style::Stylize;
 use ratatui::text::Line;
 
 use super::{CommandContext, CommandReply, CommandSpec};
+use crate::agent_bridge::NavigationAgent;
 use crate::agent_bridge::{SubagentsCall, SubagentsReply};
 use crate::app_event::AgentCommand;
 use crate::history_cell::{self, PlainHistoryCell};
@@ -27,8 +28,8 @@ const ANSWER_PREVIEW_CHARS: usize = 160;
 
 pub(crate) static SUBAGENTS: CommandSpec = CommandSpec {
     name: "subagents",
-    aliases: &[],
-    description: "show the subagents' status and switch to one",
+    aliases: &["subagent"],
+    description: "show all agents, including main, and switch to one",
     inline_args: false,
     during_task: true,
     needs_session: false,
@@ -59,7 +60,7 @@ pub(crate) fn on_reply(context: &mut CommandContext<'_>, reply: SubagentsReply) 
 
 /// The status feed: each subagent's title, status, model and reasoning
 /// effort, and the start of its latest answer.
-pub(crate) fn status_cell(statuses: &[AgentSubagentStatus]) -> PlainHistoryCell {
+pub(crate) fn status_cell(statuses: &[NavigationAgent]) -> PlainHistoryCell {
     let mut lines: Vec<Line<'static>> = vec![
         "/subagents".magenta().into(),
         "Subagents".bold().into(),
@@ -100,7 +101,7 @@ pub(crate) fn state_name(state: AgentSubagentState) -> &'static str {
 
 /// The model a subagent runs on and its reasoning effort, `default` for
 /// the Provider's.
-pub(crate) fn runs_on(status: &AgentSubagentStatus) -> String {
+pub(crate) fn runs_on(status: &NavigationAgent) -> String {
     let effort = status
         .reasoning_effort
         .as_ref()

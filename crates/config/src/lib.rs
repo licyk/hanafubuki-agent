@@ -76,9 +76,10 @@ pub use standalone::{
     AgentLogLevel, AgentNetworkSettings, AgentStandaloneSettings, AgentStandaloneSettingsPatch,
 };
 pub use store::{
-    read_mcp_document, read_providers_document, read_settings_document, AgentConfig, SettingChange,
-    SettingWriteOp, SettingsWrite, SettingsWriteOutcome, UserEntry, AGENT_CREDENTIAL_FILES,
-    AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
+    patch_setting_values, read_mcp_document, read_providers_document, read_settings_document,
+    setting_value_at, AgentConfig, SettingChange, SettingWriteOp, SettingsLayer, SettingsWrite,
+    SettingsWriteOutcome, UserEntry, AGENT_CREDENTIAL_FILES, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE,
+    AGENT_SETTINGS_FILE,
 };
 pub use tui::{
     AgentAgentsGrouping, AgentAlternateScreen, AgentScrollbackMouse, AgentTuiPreferences,

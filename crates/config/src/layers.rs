@@ -5,8 +5,8 @@
 //!
 //! Each layer is decoded over the one below it, field by field: a key a
 //! layer leaves out, or sets to a value that cannot be used, keeps the value
-//! below. Only the user's file is ever written, and only by the Agent's
-//! settings writes; the layers above it are read.
+//! below. Ordinary settings writes target the user's file; explicit layer
+//! edits may also write a profile or the trusted current project's file.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};

@@ -12,7 +12,10 @@
 //!
 //! [`AgentConfig::settings_sections`]: hanafubuki_agent_config::AgentConfig::settings_sections
 
+mod config_layers;
+mod hook_definitions;
 mod hooks;
+mod layer_fields;
 mod marketplaces;
 mod mcp;
 mod mcp_secrets;
@@ -27,7 +30,10 @@ mod projects;
 mod provider_models;
 mod providers;
 mod record;
+mod role_files;
 mod roles;
+mod sandbox;
+mod skills;
 
 use std::collections::BTreeMap;
 
@@ -191,11 +197,15 @@ impl AgentApplicationService {
             packages::collection(self).await,
             package_defaults::collection(self).await,
             marketplaces::collection(self).await,
+            skills::collection(self),
+            sandbox::collection(self),
             hooks::collection(self).await,
             roles::collection(self).await,
+            role_files::collection(self),
         ];
         if self.config.is_layered() {
             collections.push(profiles::collection(self).await);
+            collections.push(config_layers::collection(self).await);
             collections.push(projects::collection(self).await);
         }
         Ok(SettingsCatalog {
@@ -249,8 +259,14 @@ impl AgentApplicationService {
             packages::ID => packages::run(self, request).await,
             package_defaults::ID => package_defaults::run(self, request).await,
             marketplaces::ID => marketplaces::run(self, request).await,
+            skills::ID => skills::run(self, request),
+            sandbox::ID => sandbox::run(self, request).await,
             hooks::ID => hooks::run(self, request).await,
             roles::ID => roles::run(self, request).await,
+            role_files::ID => role_files::run(self, request).await,
+            config_layers::ID if self.config.is_layered() => {
+                config_layers::run(self, request).await
+            }
             profiles::ID if self.config.is_layered() => profiles::run(self, request).await,
             projects::ID if self.config.is_layered() => projects::run(self, request).await,
             other => Err(format!("there is no settings collection `{other}`")),
