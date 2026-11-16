@@ -31,6 +31,7 @@ pub(crate) fn resolve_existing(
 pub(crate) fn resolve_missing(
     policy: &WorkspaceFsPolicy,
     requested: &str,
+    create_parents: bool,
 ) -> Result<MissingPathPlan, WorkspaceFsError> {
     let target = policy.requested_path(requested)?;
     if fs::symlink_metadata(&target).is_ok() {
@@ -39,18 +40,39 @@ pub(crate) fn resolve_missing(
             target.display()
         )));
     }
-    let parent_path = target.parent().ok_or_else(|| {
+    let mut parent_path = target.parent().ok_or_else(|| {
         WorkspaceFsError::Resolution("target has no parent directory".to_string())
     })?;
-    let parent_text = utf8_path(parent_path)?;
-    let parent = resolve_existing(policy, &parent_text, Some(WorkspacePathKind::Directory))?;
     let file_name = target
         .file_name()
         .ok_or_else(|| WorkspaceFsError::InvalidRequest("target has no file name".to_string()))?;
-    // Built from the resolved parent, so the child inherits the parent's system
-    // form for I/O and its native form for display without a second lookup.
-    let target =
-        ResolvedPath::resolve_child(&parent.resolved, file_name).map_err(resolution_error)?;
+    let mut names = vec![file_name];
+    let parent = loop {
+        match resolve_existing(
+            policy,
+            &utf8_path(parent_path)?,
+            Some(WorkspacePathKind::Directory),
+        ) {
+            Ok(parent) => break parent,
+            Err(WorkspaceFsError::PathMissing(_)) if create_parents => {
+                // A dangling symlink is not a missing directory we can create.
+                if fs::symlink_metadata(parent_path).is_ok() {
+                    return Err(WorkspaceFsError::PathChanged);
+                }
+                names.push(parent_path.file_name().ok_or_else(|| {
+                    WorkspaceFsError::Resolution("target has no existing ancestor".to_string())
+                })?);
+                parent_path = parent_path.parent().ok_or_else(|| {
+                    WorkspaceFsError::Resolution("target has no existing ancestor".to_string())
+                })?;
+            }
+            Err(error) => return Err(error),
+        }
+    };
+    let mut target = parent.resolved.clone();
+    for name in names.into_iter().rev() {
+        target = ResolvedPath::resolve_child(&target, name).map_err(resolution_error)?;
+    }
     policy.ensure_unprotected(&target)?;
     Ok(MissingPathPlan { target, parent })
 }
@@ -58,11 +80,12 @@ pub(crate) fn resolve_missing(
 pub(super) fn resolve_target(
     policy: &WorkspaceFsPolicy,
     requested: &str,
+    create_parents: bool,
 ) -> Result<TargetPlan, WorkspaceFsError> {
     match resolve_existing(policy, requested, None) {
         Ok(path) => Ok(TargetPlan::Existing(path)),
         Err(WorkspaceFsError::PathMissing(_)) => {
-            resolve_missing(policy, requested).map(TargetPlan::Missing)
+            resolve_missing(policy, requested, create_parents).map(TargetPlan::Missing)
         }
         Err(error) => Err(error),
     }

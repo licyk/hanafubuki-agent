@@ -20,7 +20,7 @@ pub(super) fn prepare_patch_changes(
         match hunk {
             PatchHunk::Add { path, content } => {
                 validate_content(&content)?;
-                let target = resolve_target(policy, &patch_path_text(&path)?)?;
+                let target = resolve_target(policy, &patch_path_text(&path)?, true)?;
                 ensure_patch_file_target(&target)?;
                 claim_patch_path(&mut claimed_paths, target_resolved(&target))?;
                 note_external_path(policy, &path, target_resolved(&target), &mut external_paths);
@@ -67,7 +67,7 @@ pub(super) fn prepare_patch_changes(
                 validate_content(&updated)?;
                 let destination = move_to
                     .map(|path| {
-                        let target = resolve_target(policy, &patch_path_text(&path)?)?;
+                        let target = resolve_target(policy, &patch_path_text(&path)?, true)?;
                         ensure_patch_file_target(&target)?;
                         claim_patch_path(&mut claimed_paths, target_resolved(&target))?;
                         note_external_path(

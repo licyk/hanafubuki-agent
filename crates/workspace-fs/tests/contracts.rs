@@ -534,7 +534,7 @@ fn codex_patch_applies_add_update_move_and_delete_under_one_approval() {
     fs::write(temp.path().join("tree/delete.txt"), "obsolete\n").unwrap();
     let service = WorkspaceFsService::new(policy(temp.path()));
     let request = WorkspaceFsRequest::ApplyPatch(ApplyPatchRequest {
-        patch: "*** Begin Patch\n*** Add File: tree/added.txt\n+added\n*** Update File: tree/update.txt\n@@ heading\n-old\n+new\n*** Update File: tree/move.txt\n*** Move to: tree/moved.txt\n@@\n-move me\n+moved\n*** Delete File: tree/delete.txt\n*** End Patch".to_string(),
+        patch: "*** Begin Patch\n*** Add File: tree/added.txt\n+added\n*** Update File: tree/update.txt\n@@ heading\n-old\n+new\n*** Update File: tree/move.txt\n*** Move to: tree/new/nested/moved.txt\n@@\n-move me\n+moved\n*** Delete File: tree/delete.txt\n*** End Patch".to_string(),
     });
 
     let WorkspaceFsResult::PatchApplied(result) = run(&service, &request).unwrap() else {
@@ -548,7 +548,7 @@ fn codex_patch_applies_add_update_move_and_delete_under_one_approval() {
         "heading\nnew\n"
     );
     assert_eq!(
-        fs::read_to_string(temp.path().join("tree/moved.txt")).unwrap(),
+        fs::read_to_string(temp.path().join("tree/new/nested/moved.txt")).unwrap(),
         "moved\n"
     );
     assert!(!temp.path().join("tree/move.txt").exists());
@@ -562,13 +562,14 @@ fn patch_preimage_failure_happens_before_any_file_is_written() {
     fs::write(temp.path().join("two.txt"), "two\n").unwrap();
     let service = WorkspaceFsService::new(policy(temp.path()));
     let request = WorkspaceFsRequest::ApplyPatch(ApplyPatchRequest {
-        patch: "*** Begin Patch\n*** Update File: one.txt\n@@\n-one\n+changed\n*** Update File: two.txt\n@@\n-missing\n+changed\n*** End Patch".to_string(),
+        patch: "*** Begin Patch\n*** Add File: new/nested/file.txt\n+new\n*** Update File: one.txt\n@@\n-one\n+changed\n*** Update File: two.txt\n@@\n-missing\n+changed\n*** End Patch".to_string(),
     });
 
     assert!(matches!(
         service.prepare(&request),
         Err(WorkspaceFsError::PreimageMismatch(_))
     ));
+    assert!(!temp.path().join("new").exists());
     assert_eq!(
         fs::read_to_string(temp.path().join("one.txt")).unwrap(),
         "one\n"
@@ -604,14 +605,13 @@ fn protected_application_paths_are_rejected_before_approval() {
 #[test]
 fn apply_patch_creates_files_including_an_empty_one() {
     let temp = TempDir::new().unwrap();
-    fs::create_dir_all(temp.path().join("pkg")).unwrap();
     let service = WorkspaceFsService::new(policy(temp.path()));
 
     let create = WorkspaceFsRequest::ApplyPatch(ApplyPatchRequest {
         patch: concat!(
             "*** Begin Patch\n",
-            "*** Add File: pkg/__init__.py\n",
-            "*** Add File: pkg/main.py\n",
+            "*** Add File: pkg/new/nested/__init__.py\n",
+            "*** Add File: pkg/new/nested/main.py\n",
             "+print(\"run\")\n",
             "*** End Patch"
         )
@@ -622,18 +622,18 @@ fn apply_patch_creates_files_including_an_empty_one() {
     };
     assert_eq!(result.added.len(), 2);
 
-    let empty = temp.path().join("pkg/__init__.py");
+    let empty = temp.path().join("pkg/new/nested/__init__.py");
     assert!(empty.exists());
     assert_eq!(fs::read(&empty).unwrap(), Vec::<u8>::new());
     assert_eq!(
-        fs::read_to_string(temp.path().join("pkg/main.py")).unwrap(),
+        fs::read_to_string(temp.path().join("pkg/new/nested/main.py")).unwrap(),
         "print(\"run\")\n"
     );
 
     // Add File over an existing path replaces it, which is what the removed
     // `write_file(overwrite: true)` did.
     let replace = WorkspaceFsRequest::ApplyPatch(ApplyPatchRequest {
-        patch: "*** Begin Patch\n*** Add File: pkg/main.py\n+print(\"replaced\")\n*** End Patch"
+        patch: "*** Begin Patch\n*** Add File: pkg/new/nested/main.py\n+print(\"replaced\")\n*** End Patch"
             .to_string(),
     });
     assert!(matches!(
@@ -641,23 +641,117 @@ fn apply_patch_creates_files_including_an_empty_one() {
         WorkspaceFsResult::PatchApplied(_)
     ));
     assert_eq!(
-        fs::read_to_string(temp.path().join("pkg/main.py")).unwrap(),
+        fs::read_to_string(temp.path().join("pkg/new/nested/main.py")).unwrap(),
         "print(\"replaced\")\n"
     );
 
     // And an empty file can be emptied again rather than only created.
-    fs::write(temp.path().join("pkg/notes.txt"), "stale").unwrap();
+    fs::write(temp.path().join("pkg/new/nested/notes.txt"), "stale").unwrap();
     let truncate = WorkspaceFsRequest::ApplyPatch(ApplyPatchRequest {
-        patch: "*** Begin Patch\n*** Add File: pkg/notes.txt\n*** End Patch".to_string(),
+        patch: "*** Begin Patch\n*** Add File: pkg/new/nested/notes.txt\n*** End Patch".to_string(),
     });
     assert!(matches!(
         run(&service, &truncate).unwrap(),
         WorkspaceFsResult::PatchApplied(_)
     ));
     assert_eq!(
-        fs::read(temp.path().join("pkg/notes.txt")).unwrap(),
+        fs::read(temp.path().join("pkg/new/nested/notes.txt")).unwrap(),
         Vec::<u8>::new()
     );
+}
+
+#[test]
+fn patch_parent_directories_are_created_only_after_approval() {
+    let temp = TempDir::new().unwrap();
+    let service = WorkspaceFsService::new(policy(temp.path()));
+    let request = WorkspaceFsRequest::ApplyPatch(ApplyPatchRequest {
+        patch: "*** Begin Patch\n*** Add File: new/deep/file.txt\n+content\n*** End Patch"
+            .to_string(),
+    });
+    let approval = approved(&service, &request);
+    assert!(!temp.path().join("new").exists());
+    assert!(matches!(
+        service.execute(&request, None, &CancellationToken::default()),
+        Err(WorkspaceFsError::ApprovalRequired)
+    ));
+    assert!(!temp.path().join("new").exists());
+    let cancellation = CancellationToken::default();
+    cancellation.cancel();
+    assert!(matches!(
+        service.execute(&request, Some(&approval), &cancellation),
+        Err(WorkspaceFsError::Cancelled)
+    ));
+    assert!(!temp.path().join("new").exists());
+    service
+        .execute(&request, Some(&approval), &CancellationToken::default())
+        .unwrap();
+    assert_eq!(
+        fs::read_to_string(temp.path().join("new/deep/file.txt")).unwrap(),
+        "content\n"
+    );
+}
+
+#[test]
+fn patch_creates_sibling_directory_trees_in_one_approval() {
+    let temp = TempDir::new().unwrap();
+    let service = WorkspaceFsService::new(policy(temp.path()));
+    let request = WorkspaceFsRequest::ApplyPatch(ApplyPatchRequest {
+        patch: "*** Begin Patch\n*** Add File: new/a/one.txt\n+one\n*** Add File: new/b/two.txt\n+two\n*** Add File: new/a/three.txt\n+three\n*** End Patch".to_string(),
+    });
+    run(&service, &request).unwrap();
+    for (path, text) in [
+        ("a/one.txt", "one\n"),
+        ("b/two.txt", "two\n"),
+        ("a/three.txt", "three\n"),
+    ] {
+        assert_eq!(
+            fs::read_to_string(temp.path().join("new").join(path)).unwrap(),
+            text
+        );
+    }
+}
+
+#[test]
+fn patch_directory_creation_respects_protected_paths_and_existing_files() {
+    let temp = TempDir::new().unwrap();
+    let protected = temp.path().join("protected");
+    fs::create_dir(&protected).unwrap();
+    fs::write(temp.path().join("file"), "keep").unwrap();
+    let service =
+        WorkspaceFsService::new(WorkspaceFsPolicy::rooted_at(temp.path(), [protected]).unwrap());
+    for path in ["protected/new/deep/file.txt", "file/new/deep/file.txt"] {
+        let request = WorkspaceFsRequest::ApplyPatch(ApplyPatchRequest {
+            patch: format!("*** Begin Patch\n*** Add File: new/first.txt\n+first\n*** Add File: {path}\n+blocked\n*** End Patch"),
+        });
+        assert!(service.prepare(&request).is_err());
+        assert!(!temp.path().join("new").exists());
+        assert!(!temp.path().join("protected/new").exists());
+        assert_eq!(
+            fs::read_to_string(temp.path().join("file")).unwrap(),
+            "keep"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn patch_rechecks_an_ancestor_replaced_by_a_symlink_after_approval() {
+    let temp = TempDir::new().unwrap();
+    let outside = TempDir::new().unwrap();
+    fs::create_dir(temp.path().join("parent")).unwrap();
+    let service = WorkspaceFsService::new(policy(temp.path()));
+    let request = WorkspaceFsRequest::ApplyPatch(ApplyPatchRequest {
+        patch: "*** Begin Patch\n*** Add File: parent/new/deep/file.txt\n+content\n*** End Patch"
+            .to_string(),
+    });
+    let approval = approved(&service, &request);
+    fs::remove_dir(temp.path().join("parent")).unwrap();
+    std::os::unix::fs::symlink(outside.path(), temp.path().join("parent")).unwrap();
+    assert!(matches!(
+        service.execute(&request, Some(&approval), &CancellationToken::default()),
+        Err(WorkspaceFsError::ApprovalMismatch)
+    ));
+    assert!(!outside.path().join("new").exists());
 }
 
 /// Writing outside the workspace is a larger request than editing inside it:
@@ -669,7 +763,7 @@ fn writing_outside_the_workspace_is_approved_as_an_elevated_patch() {
     let workspace = TempDir::new().unwrap();
     let outside = TempDir::new().unwrap();
     let service = WorkspaceFsService::new(policy(workspace.path()));
-    let target = outside.path().join("external.txt");
+    let target = outside.path().join("new/nested/external.txt");
 
     let request = WorkspaceFsRequest::ApplyPatch(ApplyPatchRequest {
         patch: format!(

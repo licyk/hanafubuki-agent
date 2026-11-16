@@ -48,6 +48,7 @@ pub(crate) struct ExistingPathPlan {
 #[derive(Clone, Debug)]
 pub(crate) struct MissingPathPlan {
     pub target: ResolvedPath,
+    /// The nearest existing ancestor; patches may create the intervening directories.
     pub parent: ExistingPathPlan,
 }
 

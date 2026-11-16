@@ -245,7 +245,7 @@
       "type": "function"
     },
     {
-      "description": "Use this tool to edit files with a Codex patch. This is a FREEFORM tool, so provide the patch directly without JSON.",
+      "description": "Use this tool to edit files with a Codex patch. Add File and Move to automatically create missing parent directories. This is a FREEFORM tool, so provide the patch directly without JSON.",
       "format": {
         "definition": "start: begin_patch hunk+ end_patch\nbegin_patch: \"*** Begin Patch\" LF\nend_patch: \"*** End Patch\" LF?\n\nhunk: add_hunk | delete_hunk | update_hunk\nadd_hunk: \"*** Add File: \" filename LF add_line*\ndelete_hunk: \"*** Delete File: \" filename LF\nupdate_hunk: \"*** Update File: \" filename LF change_move? change\n\nfilename: /(.+)/\nadd_line: \"+\" /(.*)/ LF\nchange_move: \"*** Move to: \" filename LF\nchange: (change_context | change_line)+ eof_line?\nchange_context: (\"@@\" | \"@@ \" /(.+)/) LF\nchange_line: (\"+\" | \"-\" | \" \") /(.*)/ LF\neof_line: \"*** End of File\" LF\n\n%import common.LF\n",
         "syntax": "lark",

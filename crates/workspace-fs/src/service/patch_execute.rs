@@ -20,6 +20,7 @@ impl WorkspaceFsService {
                     content_sha256,
                 } => {
                     let path = target_resolved(&target).native_text().to_string();
+                    let target = create_patch_parents(target, cancellation)?;
                     self.write_file(target, content, content_sha256, true, true, cancellation)?;
                     added.push(path);
                     hunk_starts.push(Vec::new());
@@ -43,8 +44,9 @@ impl WorkspaceFsService {
                         .map(|target| target_resolved(target).native_text().to_string())
                         .unwrap_or_else(|| source.identity.path.clone());
                     if let Some(destination) = destination {
+                        let destination = create_patch_parents(*destination, cancellation)?;
                         self.write_file(
-                            *destination,
+                            destination,
                             content,
                             content_sha256,
                             true,
@@ -109,4 +111,42 @@ impl WorkspaceFsService {
         }
         Ok(())
     }
+}
+
+fn create_patch_parents(
+    target: TargetPlan,
+    cancellation: &CancellationToken,
+) -> Result<TargetPlan, WorkspaceFsError> {
+    let TargetPlan::Missing(mut path) = target else {
+        return Ok(target);
+    };
+    revalidate_missing_after_staging(&path)?;
+    let relative = path
+        .target
+        .native()
+        .strip_prefix(path.parent.resolved.native())
+        .map_err(|_| WorkspaceFsError::PathChanged)?;
+    let mut components = relative.components();
+    components.next_back();
+    let mut parent = path.parent.resolved.clone();
+    for component in components {
+        check_cancel(cancellation)?;
+        let expected = ResolvedPath::resolve_child(&parent, component.as_os_str())
+            .map_err(|error| WorkspaceFsError::Resolution(error.to_string()))?;
+        match fs::create_dir(expected.system()) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(WorkspaceFsError::Io(error.to_string())),
+        }
+        parent =
+            ResolvedPath::resolve(expected.native()).map_err(|_| WorkspaceFsError::PathChanged)?;
+        if parent != expected || !parent.system().is_dir() {
+            return Err(WorkspaceFsError::PathChanged);
+        }
+    }
+    path.parent = ExistingPathPlan {
+        identity: crate::resolver::identity(&parent)?,
+        resolved: parent,
+    };
+    Ok(TargetPlan::Missing(path))
 }

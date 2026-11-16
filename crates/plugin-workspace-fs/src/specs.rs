@@ -45,7 +45,7 @@ pub(crate) fn spec(kind: FsToolKind) -> FsToolSpec {
             &["path", "offset", "maxBytes"],
         ),
         FsToolKind::ApplyPatch => object(
-            "Create, rewrite, rename, and delete files. This is the only tool that writes files; prefer it over shell commands that would write. The patch must use the *** Begin Patch / *** End Patch envelope and Add File, Delete File, or Update File sections. Add File with no '+' lines creates an empty file. Paths may be relative to the workspace or absolute; a path outside the workspace is written through the same approval flow as every other mutation.",
+            "Create, rewrite, rename, and delete files. This is the only tool that writes files; prefer it over shell commands that would write. The patch must use the *** Begin Patch / *** End Patch envelope and Add File, Delete File, or Update File sections. Add File with no '+' lines creates an empty file. Add File and Move to automatically create missing parent directories. Paths may be relative to the workspace or absolute; a path outside the workspace is written through the same approval flow as every other mutation.",
             json!({
                 "patch": { "type": "string", "minLength": 1, "maxLength": 262144 }
             }),
@@ -74,7 +74,7 @@ pub(crate) fn spec(kind: FsToolKind) -> FsToolSpec {
 pub(crate) fn apply_patch_freeform() -> Result<FreeformToolSpec, ToolContractError> {
     Ok(FreeformToolSpec {
         name: ToolName::parse("apply_patch")?,
-        description: "Use this tool to edit files with a Codex patch. This is a FREEFORM tool, so provide the patch directly without JSON.".to_string(),
+        description: "Use this tool to edit files with a Codex patch. Add File and Move to automatically create missing parent directories. This is a FREEFORM tool, so provide the patch directly without JSON.".to_string(),
         format: FreeformToolFormat {
             format_type: "grammar".to_string(),
             syntax: "lark".to_string(),

@@ -117,7 +117,7 @@ pub(crate) fn prepare_operation(
         }
         WorkspaceFsRequest::WriteFile(request) => {
             validate_content(&request.content)?;
-            let target = resolve_target(policy, &request.path)?;
+            let target = resolve_target(policy, &request.path, false)?;
             if matches!(target, TargetPlan::Existing(_)) && !request.overwrite {
                 return Err(WorkspaceFsError::InvalidRequest(
                     "target exists and overwrite is false".to_string(),
@@ -205,7 +205,7 @@ pub(crate) fn prepare_operation(
         }
         WorkspaceFsRequest::MovePath(request) => {
             let source = resolve_existing(policy, &request.source, None)?;
-            let destination = resolve_missing(policy, &request.destination)?;
+            let destination = resolve_missing(policy, &request.destination, false)?;
             let destination_digest = sha256_hex(&destination.target.key().digest_bytes());
             let canonical = serialize_action(&CanonicalFileAction::MovePath {
                 source: &source.identity,
