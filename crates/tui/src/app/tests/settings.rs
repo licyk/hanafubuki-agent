@@ -619,6 +619,8 @@ fn the_global_model_field_lists_facts_and_accepts_a_manual_id() {
         harness.pump_until("the global model is saved", |h| {
             h.registry().model_policy.model == "first-model"
         });
+        // The write reaches the registry before the UI receives its completion reply.
+        harness.pump_until_screen_shows("Saved");
         harness.pump_until_screen_shows("Default Provider");
         harness.select_setting("Model");
         harness.key(KeyCode::Enter);

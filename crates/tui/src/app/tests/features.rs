@@ -157,6 +157,7 @@ fn esc_keeps_a_review_holding_messages_and_ctrl_c_cancels_it_into_the_composer()
 fn goal_sets_replaces_after_asking_and_pauses_the_sessions_goal() {
     let mut harness = Harness::start(Vec::new());
     harness.type_and_submit("/statusline goal --no-colors");
+    harness.pump_until_screen_shows("Updated for this session; it is not saved.");
     harness.type_and_submit("/goal --tokens 50k Ship the release");
     harness.pump_until_screen_shows("Goal set: Ship the release");
     let session_id = harness.app.bridge.session_id().unwrap();

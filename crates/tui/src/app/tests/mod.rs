@@ -321,11 +321,17 @@ impl Harness {
                 self.screen(),
                 self.transcript()
             );
-            if let Ok(event) = self
+            // Coalesce queued frame requests as the app loop does; painting the
+            // welcome animation for every typed character can starve replies.
+            while let Ok(event) = self
                 .events
                 .recv_timeout(wait.min(Duration::from_millis(100)))
             {
+                let frame_request = matches!(event, AppEvent::Redraw | AppEvent::ScheduleFrame(_));
                 assert!(self.app.handle_event(&mut self.tui, event));
+                if !frame_request {
+                    break;
+                }
             }
         }
     }
