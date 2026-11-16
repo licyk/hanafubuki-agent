@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/agents_center/tests.rs
+expression: screen
+---
+  Agent command center  Group: Status  g
+   All 3    Needs you 1    Working 1    Ready 0    Inactive 1    Archived
+  ────────────────────────────────────────────────────────────────────────────────────────────────
+  Task shortcuts
+
+  Navigate             Tasks                   View
+  ↑       Up           n       New             tab/shift+tab  Filter
+  ↓       Down         w       New worktree    f3             Search
+  enter   Open         o       Resume          g              Group
+  pgup    Page up      f       Fork            c              Children
+  pgdn    Page down    r       Rename
+  ctrl+c  Quit         x       Stop
+                       a       Archive
+                       h       Hide
+                       delete  Delete
+                       p       Pin/unpin
+
+
+
+
+
+
+
+  esc back

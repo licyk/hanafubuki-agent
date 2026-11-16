@@ -481,7 +481,11 @@ fn an_at_token_searches_files_and_enter_inserts_the_mention() {
     terminal
         .draw(|f| composer.render(f.area(), f.buffer_mut()))
         .expect("draw composer");
-    insta::assert_snapshot!("file_popup_matches", terminal.backend());
+    // The secondary root is joined with the platform's native path separator.
+    insta::assert_snapshot!(
+        "file_popup_matches",
+        terminal.backend().to_string().replace('\\', "/")
+    );
 
     assert_eq!(enter(&mut composer), InputResult::None);
     assert_eq!(composer.textarea.text(), "look at src/main.rs ");

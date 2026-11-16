@@ -24,6 +24,14 @@ use crate::tui_state::AgentsMarks;
 const MINUTE: u128 = 60_000;
 const NOW: u128 = 1_000 * MINUTE;
 
+fn assert_help_snapshot(name: &str, screen: String) {
+    let mut settings = insta::Settings::clone_current();
+    if cfg!(target_os = "macos") {
+        settings.set_snapshot_suffix("macos");
+    }
+    settings.bind(|| assert_snapshot!(name, screen));
+}
+
 #[test]
 fn queued_updates_are_visible_without_a_running_turn() {
     let mut center = center(
@@ -529,7 +537,7 @@ fn the_center_with_its_headings_and_columns() {
     assert_snapshot!("center_wide", screen(&mut center, 100, 16));
     assert_snapshot!("center_narrow", screen(&mut center, 50, 16));
     key(&mut center, KeyCode::Char('?'));
-    assert_snapshot!("center_help", screen(&mut center, 100, 24));
+    assert_help_snapshot("center_help", screen(&mut center, 100, 24));
     key(&mut center, KeyCode::Esc);
     key(&mut center, KeyCode::Backspace);
     assert_snapshot!("center_confirm", screen(&mut center, 100, 16));
@@ -806,8 +814,8 @@ fn the_details_of_the_selected_session() {
 fn help_flows_into_two_or_one_column_and_scrolls_in_short_windows() {
     let mut center = center(Vec::new(), Vec::new());
     key(&mut center, KeyCode::Char('?'));
-    assert_snapshot!("center_help_two_columns", screen(&mut center, 50, 26));
-    assert_snapshot!("center_help_one_column", screen(&mut center, 30, 38));
+    assert_help_snapshot("center_help_two_columns", screen(&mut center, 50, 26));
+    assert_help_snapshot("center_help_one_column", screen(&mut center, 30, 38));
     let top = screen(&mut center, 30, 12);
     assert!(top.contains("Task shortcuts"));
     assert!(!top.contains("Pin/unpin"));
@@ -855,5 +863,5 @@ fn help_tracks_rebound_chord_and_unbound_actions() {
     assert!(shown.contains("ctrl+y") && shown.contains("leader r"));
     assert!(!shown.contains("Fork") && !shown.contains("tab/shift+tab"));
     assert!(!shown.contains("↑       Up"));
-    assert_snapshot!("center_help_custom", shown);
+    assert_help_snapshot("center_help_custom", shown);
 }
