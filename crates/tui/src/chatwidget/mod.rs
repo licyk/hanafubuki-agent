@@ -24,6 +24,7 @@ mod shortcuts;
 mod streaming;
 mod turn;
 mod warnings;
+mod welcome;
 mod work;
 
 use std::cell::Cell;
@@ -126,6 +127,7 @@ pub(crate) struct ChatWidget {
     input_queue: input_queue::InputQueue,
     /// A `!command` was sent and its turn has not ended.
     user_shell: bool,
+    welcome: crate::welcome::Welcome,
 }
 
 impl ChatWidget {
@@ -148,6 +150,7 @@ impl ChatWidget {
             placeholder_text: "Ask the Agent to do anything".to_string(),
         });
         Self {
+            welcome: crate::welcome::Welcome::new(true),
             app_event_tx,
             frame_requester,
             bottom_pane,

@@ -136,6 +136,7 @@ impl ChatWidget {
     }
 
     fn on_task_started(&mut self) {
+        self.welcome.dismiss();
         self.bottom_pane.clear_quit_shortcut_hint();
         self.quit_shortcut_expires_at = None;
         self.quit_shortcut_key = None;

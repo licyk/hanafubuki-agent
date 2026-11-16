@@ -259,6 +259,16 @@ fn paint_pane(buf: &mut Buffer, area: Rect, pane: PanePaint<'_>) -> Painted {
     );
     let chat_area = Rect::new(area.x, area.bottom() - chat_height, width, chat_height);
     chat_widget.render(chat_area, buf);
+    chat_widget.render_welcome(
+        Rect::new(
+            area.x,
+            area.y,
+            width,
+            transcript.height.saturating_add(1).min(area.height),
+        ),
+        buf,
+        view.is_following() && !view.is_detailed() && !view.has_active_interaction(),
+    );
     // The chat's first row is the blank above the composer.
     let gap = (chat_height > 1 && chat_widget.no_modal_or_popup_active())
         .then(|| Rect::new(area.x, chat_area.y, width, 1));

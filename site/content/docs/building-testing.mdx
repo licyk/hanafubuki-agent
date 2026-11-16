@@ -116,6 +116,25 @@ cargo test -p hanafubuki-agent --lib live_hoshimi_discovers -- --ignored --nocap
 
 安装 `cargo-insta` 后，从仓库根目录执行 `INSTA_PENDING_DIR=target/insta cargo insta review --include-ignored --include-hidden` 逐个审查（PowerShell 先设置 `$env:INSTA_PENDING_DIR = 'target/insta'`，再执行相同的 `cargo insta review` 命令）。接受后会写回源码目录中的基准。也可以用 `INSTA_UPDATE=always cargo test -p hanafubuki-agent-tui` 直接更新基准，然后审查 diff；只接受有意的变化。不再需要未审核结果时，可以删除临时目录，其中不存放测试基准。
 
+### 欢迎形象素材 [#welcome-mascot-assets]
+
+欢迎形象内嵌的 `crates/tui/assets/welcome/atlas.png` 和 `atlas.json` 是生成文件，不应手工修改。先准备包含 imagegen 底图 `base.png`、眨眼关键帧 `blink.png`（均为 1254×1254）和 `prompts.json` 的审计目录，然后运行：
+
+```sh
+cargo xtask welcome-assets --source /path/to/audit
+# 可选：--output /path/to/atlas（默认：crates/tui/assets/welcome）
+```
+
+原生 Rust 生成器（`xtask/src/welcome/`）无需 Python 或外部图片工具。它在审计目录保留全部 96 张彩色帧、八秒循环的 `loop.gif`、关键帧对照图、图集副本及输入和输出文件哈希（`conversion.json`）。仅替换眼睛区域可避免眨眼关键帧改变其他部位；归一化变形网格固定放平的手臂，并带动身体、头发和猫耳。眼睛坐标和裁剪区域针对当前 Hana 姿势；更换构图时需要更新 `animation.rs` 中的这些参数。运行时通过 Lanczos 滤波将带透明度的 256 色图集采样成彩色 2×4 盲文点阵，因此缩放不依赖某种终端字体的像素大小。素材是位图，并非 SVG 描摹。
+
+运行 TUI 的 `welcome` 测试时，可将 `HANAFUBUKI_AGENT_WELCOME_PREVIEW` 或 `HANAFUBUKI_AGENT_WELCOME_TUI_PREVIEW` 设为输出 JSON 路径，分别导出渲染器的字符格或完整界面。将任一种导出转换为可缩放的彩色 SVG 进行视觉审核：
+
+```sh
+cargo xtask welcome-preview --input /path/to/cells.json --output /path/to/preview.svg
+```
+
+预览使用实际盲文点位和 RGB 颜色绘制，普通文字使用查看器的等宽字体。这是终端字符格的重建图，并非桌面截图。
+
 ## 文档站点 [#the-documentation-site]
 
 站点在 `site/`：TanStack Start 上的 Fumadocs，预渲染为静态文件，为 GitHub Pages 构建在 `/hanafubuki-agent/` 下。

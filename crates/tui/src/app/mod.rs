@@ -533,6 +533,9 @@ impl App {
     /// Adds `cell` to the transcript, where a `live` one goes on changing;
     /// in terminal mode, to the tail too.
     fn insert_history_cell(&mut self, cell: Arc<dyn HistoryCell>, live: bool) {
+        if live {
+            self.chat_widget.finish_welcome();
+        }
         // The transcript overlay shows the focused conversation.
         if let (Some(Overlay::Transcript(transcript)), false) =
             (&mut self.overlay, self.workspace.handling_parked())

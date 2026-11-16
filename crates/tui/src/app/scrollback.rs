@@ -283,13 +283,16 @@ impl App {
         } else {
             self.tail.floor = 0;
         }
+        if self.chat_widget.welcome_needs_space() && size.width >= 64 && size.height >= 30 {
+            height = size.height.saturating_sub(1);
+        }
         let capture = self.tail_mouse.setting == AgentScrollbackMouse::Tail
             && !self.tail_mouse.released
             && entries.iter().any(|entry| entry.control);
         let _ = tui.set_inline_mouse_capture(capture);
         let cells = self.tail.cells();
         let view = &mut self.transcript_view;
-        let chat_widget = &self.chat_widget;
+        let chat_widget = &mut self.chat_widget;
         tui.draw(height, |frame| {
             let area = frame.area();
             let chat_height = chat_height.min(area.height);
@@ -300,6 +303,16 @@ impl App {
             let chat_area = Rect::new(area.x, tail_area.bottom(), area.width, chat_height);
             view.render_tail(tail_area, frame.buffer_mut(), cells);
             chat_widget.render(chat_area, frame.buffer_mut());
+            chat_widget.render_welcome(
+                Rect::new(
+                    area.x,
+                    area.y,
+                    area.width,
+                    tail_area.height.saturating_add(1).min(area.height),
+                ),
+                frame.buffer_mut(),
+                true,
+            );
             if let Some((x, y)) = chat_widget.cursor_pos(chat_area) {
                 frame.set_cursor_position((x, y));
             }
@@ -346,6 +359,8 @@ impl App {
         if self.mode.is_owned() || self.alt_screen_open() {
             return Ok(());
         }
+        self.chat_widget.finish_welcome();
+        self.draw_scrollback(tui)?;
         let width = tui.terminal.size()?.width;
         let (lines, _) = self.tail.take(&mut self.transcript_view, width, None);
         if lines.is_empty() {

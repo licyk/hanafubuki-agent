@@ -340,6 +340,8 @@ The TUI workspace keeps the selected agent and the side conversation independent
 
 ### What the port of the terminal interface changed [#what-the-port-of-the-terminal-interface-changed]
 
+The fresh-conversation decoration follows Codex's empty-state behavior with original Hana artwork and rendering code (`welcome`). Each chat owns its eligibility latch and fade clock; starting a turn dismisses it until a new empty conversation. The owned and scrollback painters place it only in unused space above the composer. It never becomes a history cell. Scrollback removes it before flushing the tail at exit, and its temporary height does not enter the running turn's viewport floor. A generated color atlas supplies the looping poses; normalized source deformation and Lanczos sampling preserve the resting hand and handle different terminal sizes. See [welcome assets](/docs/building-testing#welcome-mascot-assets).
+
 Every file in `crates/tui` derived from Codex carries a marker line saying so ([Licence](/docs/contributing#licence)). The port changed Codex's terminal interface as follows:
 
 - **Upstream ratatui and crossterm.** Codex patches ratatui and crossterm with git forks, which crates.io cannot take; the port uses upstream ratatui 0.30 (its `scrolling-regions` feature grows the viewport) with crossterm 0.29 through ratatui's re-export, and drops the terminal palette query for the fixed theme Codex falls back to without it.

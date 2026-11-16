@@ -116,6 +116,25 @@ A mismatch still fails the test. `.cargo/config.toml` sets `INSTA_PENDING_DIR` t
 
 After `cargo install cargo-insta`, review from the repository root with `INSTA_PENDING_DIR=target/insta cargo insta review --include-ignored --include-hidden` (PowerShell: set `$env:INSTA_PENDING_DIR = 'target/insta'` first, then run the same `cargo insta review` command). Acceptance writes the baseline back to its source directory. Alternatively, `INSTA_UPDATE=always cargo test -p hanafubuki-agent-tui` updates baselines directly; review the diff and accept only intended changes. The pending directory can be deleted when its unreviewed results are no longer needed; it contains no baselines.
 
+### Welcome mascot assets [#welcome-mascot-assets]
+
+The welcome mascot's embedded `crates/tui/assets/welcome/atlas.png` and `atlas.json` are generated, not hand-edited. Prepare an audit directory containing the imagegen `base.png`, `blink.png` (both 1254×1254), and `prompts.json`, then run:
+
+```sh
+cargo xtask welcome-assets --source /path/to/audit
+# Optional: --output /path/to/atlas (default: crates/tui/assets/welcome)
+```
+
+The native Rust generator (`xtask/src/welcome/`) needs no Python or external image tools. It keeps all 96 full-color frames, an eight-second `loop.gif`, a contact sheet, a copy of the atlas and source/output hashes (`conversion.json`) in the audit directory. Eye-only compositing prevents changes elsewhere in the blink frame; a normalized deformation mesh anchors the resting arm while moving the body, hair and ears. The eye landmarks and crop are specific to the current Hana pose: a different composition requires updating them in `animation.rs`. The runtime samples the 256-color RGBA atlas with Lanczos filtering into colored 2×4 Braille cells, so scaling does not depend on a particular terminal font's pixel size. It is raster artwork, not an SVG tracing.
+
+Set `HANAFUBUKI_AGENT_WELCOME_PREVIEW` or `HANAFUBUKI_AGENT_WELCOME_TUI_PREVIEW` to an output JSON path when running the TUI's `welcome` tests to capture the renderer's cells or the complete interface. Convert either export into a scalable colored SVG for visual review:
+
+```sh
+cargo xtask welcome-preview --input /path/to/cells.json --output /path/to/preview.svg
+```
+
+The preview draws the actual Braille dot masks and RGB values; ordinary text uses the viewer's monospace font. It is a reconstruction of the terminal cells, not a desktop screenshot.
+
 ## The documentation site [#the-documentation-site]
 
 The site is `site/`: Fumadocs on TanStack Start, prerendered to static files and built for GitHub Pages under `/hanafubuki-agent/`.

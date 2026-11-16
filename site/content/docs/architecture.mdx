@@ -332,6 +332,8 @@ TUI 工作区分别保存选中的 agent 和旁路对话（`app/workspace/child.
 
 ### 终端界面的移植改动 [#what-the-port-of-the-terminal-interface-changed]
 
+新会话的装饰参照 Codex 空状态的行为，使用原创 Hana 素材与渲染代码（`welcome`）。每个聊天组件持有自己的显示资格和淡入淡出时钟，开始回合后禁用，直到打开新的空对话。Fullscreen 和 Scrollback 的绘制器只使用输入框上方的空白区域，装饰不会成为历史单元格。Scrollback 在退出时先移除它，再写出尾部；装饰临时占用的高度也不会计入运行中回合的视口高度下限。循环姿势来自生成的彩色图集，源图的归一化变形与 Lanczos 采样保持放平的手不动，并适应不同终端大小。见[欢迎形象素材](/docs/building-testing#welcome-mascot-assets)。
+
 `crates/tui` 中派生自 Codex 的文件都带有说明这一点的标记行（[许可证](/docs/contributing#licence)）。移植对 Codex 的终端界面做了这些改动：
 
 - **上游的 ratatui 与 crossterm。** Codex 用 git 分支给 ratatui 和 crossterm 打补丁，crates.io 不接受；移植使用上游的 ratatui 0.30（它的 `scrolling-regions` 特性让视口增长），通过 ratatui 的重新导出使用 crossterm 0.29，并去掉了终端调色板查询，改用 Codex 在没有它时回退到的固定主题。

@@ -2045,3 +2045,23 @@ reason = "Agent compaction and permission-review activity presentation over its 
 [[original]]
 path = "crates/tui/src/maintenance.rs"
 reason = "Typed maintenance callback supplied by the standalone host; independent of Codex."
+
+[[original]]
+path = "crates/tui/src/welcome/mod.rs"
+reason = "Original mascot fade and animation timing for generated Hana artwork; Codex's empty-state behavior is a reference, not copied implementation."
+
+[[original]]
+path = "crates/tui/src/welcome/renderer.rs"
+reason = "Original colored Braille sprite-atlas sampling and compositor placement for generated Hana artwork."
+
+[[original]]
+path = "crates/tui/src/welcome/tests.rs"
+reason = "Tests of the original Hana mascot renderer, fade lifecycle and embedded atlas."
+
+[[original]]
+path = "crates/tui/src/chatwidget/welcome.rs"
+reason = "Agent-specific composer and frame scheduling integration for the Hana welcome mascot."
+
+[[original]]
+path = "crates/tui/src/app/tests/welcome.rs"
+reason = "Agent-specific end-to-end tests of mascot visibility in both transcript modes."

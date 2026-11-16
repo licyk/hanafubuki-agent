@@ -17,6 +17,8 @@ impl ChatWidget {
     /// running is gone with it, and so is what waited for it: a call
     /// waiting for its display will have none.
     pub(super) fn on_session_opened(&mut self, opened: OpenedSession) {
+        self.welcome =
+            crate::welcome::Welcome::new(opened.transcript.is_empty() && opened.older.is_none());
         self.input_queue = super::input_queue::InputQueue::default();
         self.user_shell = false;
         self.sync_pending_input();

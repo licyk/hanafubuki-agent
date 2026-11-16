@@ -49,6 +49,7 @@ impl ChatWidget {
             return None;
         }
         self.user_shell = true;
+        self.welcome.dismiss();
         self.session_open = true;
         self.app_event_tx
             .send(AppEvent::Op(Op::UserShellCommand(command.to_string())));

@@ -62,6 +62,7 @@ mod ui_consts;
 mod update_notice;
 mod update_prompt;
 mod user_message;
+mod welcome;
 mod wrapping;
 
 pub use interface::{run, TuiEvents, TuiOptions, TuiResume};

@@ -13,6 +13,7 @@ mod source_layout;
 mod strict_decoding;
 mod tag;
 mod version;
+mod welcome;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -33,6 +34,10 @@ Commands:
   check-notices                        Check the third-party attribution of derived files and NOTICE
   check-config-reference               Check that every setting has its row in the configuration reference
   module-size-report [--top N]         Print the largest files and functions
+  welcome-assets --source DIR         Generate welcome animation frames and audit artifacts
+                 [--output DIR]      Atlas destination (default: crates/tui/assets/welcome)
+  welcome-preview --input JSON        Render exported terminal cells as a colored SVG
+                  --output SVG
   version <patch|minor|major>          Bump the workspace version everywhere it is named
           [--dry-run]
   tag [--version X.Y.Z | --name NAME]  Create an annotated tag on HEAD (default: v<workspace version>)
@@ -110,6 +115,8 @@ fn run(root: &Path, args: &[String]) -> Result<(), String> {
             Ok(())
         }
         "version" => version::run(root, &version::Options::parse(rest)?),
+        "welcome-assets" => welcome::generate(root, rest),
+        "welcome-preview" => welcome::preview(rest),
         "tag" => tag::run(root, &tag::Options::parse(rest)?),
         "help" | "--help" | "-h" => {
             println!("{USAGE}");

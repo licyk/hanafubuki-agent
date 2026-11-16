@@ -912,4 +912,5 @@ mod tools;
 mod update_notice;
 mod update_prompt;
 mod wake;
+mod welcome;
 mod workspace_commands;

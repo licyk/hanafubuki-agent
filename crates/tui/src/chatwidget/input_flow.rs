@@ -74,6 +74,7 @@ impl ChatWidget {
     }
 
     fn start_turn(&mut self, message: UserMessage) {
+        self.welcome.dismiss();
         self.add_to_history(history_cell::new_user_prompt(&message));
         self.app_event_tx.send(AppEvent::Op(Op::UserInput(message)));
     }

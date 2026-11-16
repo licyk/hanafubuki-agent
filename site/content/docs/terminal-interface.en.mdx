@@ -13,6 +13,8 @@ hanafubuki-agent "Find the modules in this project that no test covers"
 
 The interface starts with no session: your first message creates it, as does a command that needs one (`/model`, `/effort`, `/mode`, `/compact`, `/status`, `/context`). Starting and quitting leaves no empty session behind. With no default Provider or no model chosen, the interface opens the [setup](#setup) instead of letting the first message fail. When the session cannot be created for another reason, the conversation says why in red and the interface stays open; the next message tries again.
 
+An empty new conversation shows Hana, the catgirl mascot, as a colored dot animation when the pane is at least 64 columns wide and has 18 free rows above the composer. It is horizontally centered with her resting hand on the composer's upper edge, below any header or notice. She fades in, then gently sways, blinks and twitches her ears in an eight-second loop. Typing fades her out; clearing the draft brings her back. Sending a message or starting a turn dismisses her for that conversation, including after `/clear`; `/new` can show her again. Small windows, setup and overlays take priority. Both Fullscreen and Scrollback support the decoration; it is never saved in conversation history or sent to the model.
+
 The interface needs a terminal on both standard input and standard output; in a pipe or a redirection it points you to [exec](/docs/exec) and exits with code 2. `-m`, `-C`, `--add-dir`, `--permission-mode` and the other [global flags](/docs/cli-reference#global-flags) apply as usual.
 
 ## Fullscreen and Scrollback [#modes]

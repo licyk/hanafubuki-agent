@@ -7024,11 +7024,16 @@ checksum = "ea6fc2961e4ef194dcbfe56bb845534d0dc8098940c7e5c012a258bfec6701bd"
 name = "xtask"
 version = "0.0.0"
 dependencies = [
+ "color_quant",
+ "image",
+ "png",
  "proc-macro2",
  "quote",
  "serde",
  "serde_json",
+ "sha2 0.11.1",
  "syn 3.0.9",
+ "tempfile",
  "toml",
  "toml_edit",
 ]
