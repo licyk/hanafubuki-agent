@@ -253,23 +253,6 @@ impl AgentTurnBudgetLedger {
         self.cumulative_model_input_tokens = 0;
         self.cumulative_model_output_tokens = 0;
     }
-
-    pub fn proactive_model_usage_limit_reached(
-        &self,
-        policy: AgentTurnBudgetPolicy,
-        threshold_percent: u8,
-    ) -> bool {
-        let input_limit = percentage_of(
-            policy.maximum_cumulative_model_input_tokens,
-            threshold_percent,
-        );
-        let output_limit = percentage_of(
-            policy.maximum_cumulative_model_output_tokens,
-            threshold_percent,
-        );
-        self.cumulative_model_input_tokens >= input_limit
-            || self.cumulative_model_output_tokens >= output_limit
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -342,10 +325,6 @@ fn enforce(resource: &'static str, value: u64, limit: u64) -> Result<(), AgentBu
         return Err(AgentBudgetError::Exhausted { resource, limit });
     }
     Ok(())
-}
-
-fn percentage_of(limit: u64, percent: u8) -> u64 {
-    u64::try_from((u128::from(limit) * u128::from(percent)) / 100).unwrap_or(u64::MAX)
 }
 
 #[cfg(test)]

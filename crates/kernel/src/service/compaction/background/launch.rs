@@ -202,7 +202,7 @@ impl AgentService {
 
 /// The attempt to launch for the turn `identity` now, if any: the session's
 /// strategy is `background` with automatic compaction on, the turn runs, is
-/// not cancelled and is under no budget pressure, its context is in the
+/// not cancelled, its context is in the
 /// background band, a turn completed before it, and the session has no
 /// usable result or run already and did not try these inputs.
 fn launch_attempt(
@@ -226,13 +226,7 @@ fn launch_attempt(
         return Ok(None);
     }
     let turn = exact_turn_identity(record, identity)?;
-    if turn.phase.is_terminal()
-        || turn.cancellation.is_cancelled()
-        || turn.budget_ledger.proactive_model_usage_limit_reached(
-            record.settings.budget_policy,
-            config.auto_compact_threshold_percent,
-        )
-    {
+    if turn.phase.is_terminal() || turn.cancellation.is_cancelled() {
         return Ok(None);
     }
     let Some(threshold) = turn

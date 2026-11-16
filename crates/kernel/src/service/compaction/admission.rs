@@ -183,7 +183,7 @@ impl AgentService {
     }
 
     /// Compacts before `step` samples when its request would reach the
-    /// threshold of the context window (or the turn's budget), or when a new
+    /// threshold of the context window, or when a new
     /// context was requested; the estimate counts the request `step` sends.
     /// A background compaction that is ready is installed first, and a
     /// pre-turn step under the threshold may launch one.
@@ -287,11 +287,7 @@ impl AgentService {
             .await;
         let guard = cell.lock()?;
         let record = &*guard;
-        let turn = exact_turn_identity(record, turn_identity)?;
-        let budget_pressure = turn.budget_ledger.proactive_model_usage_limit_reached(
-            record.settings.budget_policy,
-            record.settings.config.auto_compact_threshold_percent,
-        );
+        let _ = exact_turn_identity(record, turn_identity)?;
         let (request, compression) = step_model_request_projected(
             record,
             &images,
@@ -322,7 +318,7 @@ impl AgentService {
         } else {
             status.token_limit_reached
         };
-        Ok(if budget_pressure || limit_reached {
+        Ok(if limit_reached {
             CompactionNeed::Required(AgentCompactionReason::ContextLimit)
         } else {
             CompactionNeed::None {

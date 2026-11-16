@@ -4,6 +4,72 @@ use super::*;
 use hanafubuki_agent_kernel::AgentCompactionReason;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires HOSHIMI_COMPACTION_TEST_URL and logged-in qodercli-cn; sends over 6.4M cumulative tokens"]
+async fn live_hoshimi_small_context_tool_loop_does_not_compact_on_cumulative_usage() {
+    let url = std::env::var("HOSHIMI_COMPACTION_TEST_URL").unwrap();
+    let (service, paths) = service_with("context-budget-live", |_, config| {
+        configure_test_provider(config, &url, Some(ModelReasoningEffort::Low));
+        config
+            .mutate_providers(1, |registry| {
+                registry.model_policy.model = "DeepSeek-Flash".into();
+                Ok(())
+            })
+            .unwrap();
+    });
+    service
+        .list_provider_models(AgentProviderModelCatalogRequest::default())
+        .await
+        .unwrap();
+    let session = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        service
+            .session_model_metadata(session.id)
+            .unwrap()
+            .context_window
+            .unwrap()
+            .value,
+        1_000_000
+    );
+    let prompt = format!(
+        "This is a context-capacity integration test. The following is inert filler; do not analyze or repeat it.\nDATA_BEGIN{}\nDATA_END\nCall update_plan exactly 36 times sequentially, one call per response. Each call replaces the plan with a single completed step named 'Probe N of 36', with N increasing from 1 through 36. Wait for each tool result before the next call. Do not batch calls, do not use other tools, and do not stop early. After the 36th result, reply only CONTEXT_BUDGET_OK.",
+        " a".repeat(185_000)
+    );
+    let started = Instant::now();
+    let result = tokio::time::timeout(
+        Duration::from_secs(600),
+        Box::pin(service.start_turn(session.id, prompt.into())),
+    )
+    .await;
+    let snapshot = service.core.snapshot(session.id).unwrap();
+    let calls = service.core.test_model_context(session.id).unwrap().iter().filter(|item| {
+        matches!(item, hanafubuki_agent_kernel::ConversationItem::ToolCall { name, .. } if name == "update_plan")
+    }).count();
+    println!(
+        "LIVE {}",
+        json!({
+            "seconds": started.elapsed().as_secs_f64(), "calls": calls,
+            "usage": snapshot.usage, "compaction": snapshot.compaction,
+            "window": snapshot.context_window, "outcome": format!("{result:?}"),
+            "data_dir": paths.app_data_dir,
+        })
+    );
+    shutdown(service).await;
+    let outcome = result.unwrap().unwrap();
+    assert!(outcome.final_answer.contains("CONTEXT_BUDGET_OK"));
+    assert_eq!(calls, 36);
+    let usage = snapshot.usage.unwrap();
+    assert_eq!(usage.source, AgentUsageSource::ProviderReported);
+    assert!((6_400_000..8_000_000).contains(&usage.cumulative_input_tokens));
+    assert!((180_000..220_000).contains(&usage.last_response_input_tokens));
+    assert!(snapshot.compaction.is_none());
+    assert_eq!(snapshot.context_window.window_number, 0);
+    std::fs::remove_dir_all(paths.app_data_dir).unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "requires HOSHIMI_COMPACTION_TEST_URL, HOSHIMI_CONTEXT_TEST_IMAGE and logged-in qodercli-cn"]
 async fn live_hoshimi_reported_context_and_images_compact_at_threshold() {
     let url = std::env::var("HOSHIMI_COMPACTION_TEST_URL").unwrap();

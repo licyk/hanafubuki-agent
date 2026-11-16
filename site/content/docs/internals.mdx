@@ -385,7 +385,7 @@ Provider 的错误是否拒绝了请求的推理参数，由 `hanafubuki-agent-m
 
 **被中断的轮次。** 用户中断一个 `hierarchical` 轮次时，`stage_terminal` 记下它最后一个请求投影时的 token 数（`CompressionRuntime`，从不持久化）。之后的每次投影，一旦计数超过它，就用 `NudgeState::absorb_aborted_turn_growth` 把它记入提醒（billion-context 的 #5415）：增长基准向前移动，从第二次中断起，跳过的增长作为欠账偿还。重启后它被遗忘。
 
-**此策略下的压缩。** 在 `Hierarchical` 下，自动检查（`maybe_auto_compact`）不看阈值：它像以前一样在轮次有预算压力时压缩，或者在投影报告最终出口时压缩（该 crate 统计的、超过紧急阈值且已没有可折叠或可截短内容的请求数达到三），并且只在 `autoCompactionEnabled` 开启时。标准压缩的来源是对有效块的投影（`project_compaction_source`：去掉被覆盖的条目，摘要作为文本，没有标签）。安装时，`after_standard_compaction` 在 `hierarchical` 下重新开始最终出口的计数，块所覆盖的条目已离开窗口，这些块在下一次投影时失效；已切换走的会话丢弃它的状态。
+**此策略下的压缩。** 在 `Hierarchical` 下，自动检查（`maybe_auto_compact`）不看阈值：它在投影报告最终出口时压缩（该 crate 统计的、超过紧急阈值且已没有可折叠或可截短内容的请求数达到三），并且只在 `autoCompactionEnabled` 开启时。标准压缩的来源是对有效块的投影（`project_compaction_source`：去掉被覆盖的条目，摘要作为文本，没有标签）。安装时，`after_standard_compaction` 在 `hierarchical` 下重新开始最终出口的计数，块所覆盖的条目已离开窗口，这些块在下一次投影时失效；已切换走的会话丢弃它的状态。
 
 **Panic。** 对该 crate 的每次调用都在 `catch_panic` 下运行。请求投影中的 panic 让这个请求带完整历史发送，并设置轮次的 `compression_fallback`：轮次之后的步骤按 `standard` 运行（没有提示、工具和提醒，阈值恢复），这一步在它的 `ReasoningUpdated` 之后记录带 panic 消息（限制在 4 KiB 之内）的 `ContextCompressionFailed`，并记录一条警告日志，下一轮次再尝试。投影压缩来源时的 panic 让压缩读取完整历史。工具中的 panic 是这次调用的错误 `[Compression FAILED: … (internal error)]`，状态保持原样。
 

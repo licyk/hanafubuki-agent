@@ -110,31 +110,3 @@ fn reset_cumulative_model_usage_clears_only_the_cumulative_token_counters() {
         }
     );
 }
-
-#[test]
-fn proactive_model_usage_limit_tracks_the_threshold_percentage_of_each_limit() {
-    let policy = AgentTurnBudgetPolicy {
-        maximum_cumulative_model_input_tokens: 100,
-        maximum_cumulative_model_output_tokens: 50,
-        ..AgentTurnBudgetPolicy::default()
-    };
-    let mut ledger = AgentTurnBudgetLedger::default();
-    assert!(!ledger.proactive_model_usage_limit_reached(policy, 80));
-    ledger.record_model_usage(79, 0, policy).unwrap();
-    assert!(!ledger.proactive_model_usage_limit_reached(policy, 80));
-    ledger.record_model_usage(1, 0, policy).unwrap();
-    assert!(ledger.proactive_model_usage_limit_reached(policy, 80));
-
-    let mut output_ledger = AgentTurnBudgetLedger::default();
-    output_ledger.record_model_usage(0, 40, policy).unwrap();
-    assert!(output_ledger.proactive_model_usage_limit_reached(policy, 80));
-    assert!(!output_ledger.proactive_model_usage_limit_reached(policy, 90));
-}
-
-#[test]
-fn percentage_of_threshold_computes_without_overflow() {
-    assert_eq!(percentage_of(1_000, 0), 0);
-    assert_eq!(percentage_of(1_000, 80), 800);
-    assert_eq!(percentage_of(1_000, 100), 1_000);
-    assert_eq!(percentage_of(u64::MAX, 80), 14_757_395_258_967_641_292);
-}

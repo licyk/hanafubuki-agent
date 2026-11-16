@@ -46,9 +46,7 @@ async fn cumulative_model_budget_rejects_response_commit_atomically() {
     )])
     .await;
     let service = AgentService::new(Arc::new(model), tools.registries());
-    let mut settings = config();
-    settings.auto_compaction_enabled = false;
-    let session = service.create_session(settings).unwrap();
+    let session = service.create_session(config()).unwrap();
     service
         .set_session_turn_budget_policy(
             session.id,

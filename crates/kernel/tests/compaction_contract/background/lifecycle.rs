@@ -1,5 +1,33 @@
 use super::*;
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn cumulative_budget_pressure_does_not_block_window_driven_background_compaction() {
+    let model = BackgroundModel::local(
+        seed_then([]),
+        [compaction(Answer::Summary("the first turn"))],
+    );
+    let service = AgentService::new(
+        Arc::new(model.clone()),
+        FakeTools::new([]).await.registries(),
+    );
+    let session = service
+        .create_session(background_config(ModelCompactionCapability::LocalSummary))
+        .unwrap();
+    service
+        .set_session_turn_budget_policy(
+            session.id,
+            AgentTurnBudgetPolicy {
+                maximum_cumulative_model_input_tokens: 6_000,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    seed(&service, session.id).await;
+    background_ready(&service, session.id).await;
+    assert_eq!(model.compaction_requests.lock().unwrap().len(), 1);
+    assert!(service.snapshot(session.id).unwrap().compaction.is_none());
+}
+
 /// Its usage is the session's, recorded once whether the result is
 /// installed or discarded, and no turn's budget counts it.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

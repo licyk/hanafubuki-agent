@@ -434,58 +434,6 @@ async fn automatic_compaction_that_does_not_reduce_context_fails_without_opening
 }
 
 #[tokio::test]
-async fn budget_pressure_without_a_window_hint_compacts_mid_turn_and_restores_headroom() {
-    let model = ScriptedModel::new([
-        tool_response_with_usage_and_commentary(90, Some("transient tool analysis ".repeat(1_000))),
-        response("compact", "The tool analysis was summarized.", 20),
-        response(
-            "answer",
-            "Budget headroom was restored after compaction.",
-            30,
-        ),
-    ]);
-    let tools = FakeTools::new([FakeRegisteredExchange::success(
-        "list_instances",
-        json!({}),
-        json!({"instances": []}),
-    )])
-    .await;
-    let service = AgentService::new(Arc::new(model.clone()), tools.registries());
-    let session = service.create_session(config()).unwrap();
-    service
-        .set_session_turn_budget_policy(
-            session.id,
-            AgentTurnBudgetPolicy {
-                maximum_cumulative_model_input_tokens: 100,
-                ..AgentTurnBudgetPolicy::default()
-            },
-        )
-        .unwrap();
-
-    assert_eq!(
-        service
-            .start_turn(session.id, "run the tool loop".to_string())
-            .await
-            .unwrap()
-            .final_answer,
-        "Budget headroom was restored after compaction."
-    );
-    let snapshot = test_session_view(&service, session.id).unwrap();
-    let compaction = snapshot.runtime.compaction.as_ref().unwrap();
-    assert_eq!(compaction.trigger, AgentCompactionTrigger::Automatic);
-    assert_eq!(
-        compaction.reason,
-        hanafubuki_agent_kernel::AgentCompactionReason::ContextLimit
-    );
-    assert_eq!(
-        compaction.phase,
-        hanafubuki_agent_kernel::AgentCompactionPhase::MidTurn
-    );
-    assert_eq!(snapshot.context_window.window_number, 1);
-    assert_eq!(model.requests().len(), 3);
-}
-
-#[tokio::test]
 async fn auto_compaction_does_not_run_below_threshold_or_without_usage() {
     let model = ScriptedModel::new([
         response("one", "first answer", 100),
