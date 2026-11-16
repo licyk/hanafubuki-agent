@@ -196,16 +196,16 @@ A message that starts with `/` is a command. Typing `/` opens a popup of them, n
 
 ## The model list [#model-list]
 
-The table labels all columns: **Model**, **Provider**, **Context**, **Thinking** and **Vision**, aligned with their values. The provider's settings picker uses the same labels; narrow screens keep the stacked facts layout.
+The table labels all columns: **Model**, **Provider**, **Context**, **Thinking** and **Vision**, aligned with their values. Provider names are right-aligned beside Context and use the same normal text color as the other values. The provider's settings picker uses the same labels; narrow screens keep the stacked facts layout.
 
 `/model` opens its list at once, before any Provider has answered. The session's model comes first, with what is already known of it (its own settings, what a refusal taught, the last listing, models.dev when it is on, the built-in window; nothing is requested for it), then one row per enabled Provider saying `listing…`. Each Provider is listed by a request of its own, and its models take its row's place as soon as it answers, in a fixed order: the Providers by name, each one's models in its listing's order. So a slow or unreachable Provider holds up no other. Under the list, `• Listing models… 3 of 6 Providers answered · 4s` counts the Providers that have answered, listed or failed, and how long the list has waited; it goes once every Provider has answered. With no Provider enabled it says `No Provider is enabled: /providers adds one.` Rows that arrive keep what you typed in the search, the selected row and its line on the screen: the rows around it move, it does not.
 
 Each model's row shows its id, its Provider and three columns under a header:
 
 ```text
-  Model                               Provider       Context  Thinking  Vision
-› claude-sonnet-4-5 (current)            Anthropic      200K  yes       yes
-  gpt-5.1                                OpenAI         272K  ?         ?
+  Model                                    Provider  Context  Thinking  Vision
+› claude-sonnet-4-5 (current)             Anthropic     200K  yes       yes
+  gpt-5.1                                    OpenAI     272K  ?         ?
   meta-llama/llama-3.1-405b-instruct:f…  OpenRouter     131K  no        no
   Team gateway                           listing…
   Work proxy                             not listed: 401 Unauthorized

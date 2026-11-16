@@ -8,8 +8,8 @@ expression: at_widths(&view)
   Switch the model of this session.
 
   Type to search models
-  Model                        Provider                                  Context  Thinking  Vision
-› claude-sonnet-4-5 (current)  Anthropic                                    200K  yes       yes
+  Model                                                        Provider  Context  Thinking  Vision
+› claude-sonnet-4-5 (current)                                 Anthropic     200K  yes       yes
   Anthropic                    listing…
   Local                        listing…
   OpenAI                       listing…
@@ -27,8 +27,8 @@ expression: at_widths(&view)
   Switch the model of this session.
 
   Type to search models
-  Model                        Provider              Context  Thinking  Vision
-› claude-sonnet-4-5 (current)  Anthropic                200K  yes       yes
+  Model                                    Provider  Context  Thinking  Vision
+› claude-sonnet-4-5 (current)             Anthropic     200K  yes       yes
   Anthropic                    listing…
   Local                        listing…
   OpenAI                       listing…

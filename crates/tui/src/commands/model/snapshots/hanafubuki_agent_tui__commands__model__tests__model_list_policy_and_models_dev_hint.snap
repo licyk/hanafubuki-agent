@@ -8,10 +8,10 @@ expression: at_widths(&view)
   Switch the model of this session. The model policy never sends images.
 
   Type to search models
-  Model                        Provider                                  Context  Thinking  Vision
-› claude-sonnet-4-5 (current)  Anthropic                                    200K  yes       yes
-  gpt-4.1                      OpenAI                                      1.05M  ?         ?
-  gpt-5.1                      OpenAI                                       272K  ?         ?
+  Model                                                        Provider  Context  Thinking  Vision
+› claude-sonnet-4-5 (current)                                 Anthropic     200K  yes       yes
+  gpt-4.1                                                        OpenAI    1.05M  ?         ?
+  gpt-5.1                                                        OpenAI     272K  ?         ?
 
   claude-sonnet-4-5 · Anthropic: context 200K (reported) · max output 64K (reported) · thinking low,
   medium, high (reported) · vision yes (reported)
@@ -22,10 +22,10 @@ expression: at_widths(&view)
   Switch the model of this session. The model policy never sends images.
 
   Type to search models
-  Model                        Provider              Context  Thinking  Vision
-› claude-sonnet-4-5 (current)  Anthropic                200K  yes       yes
-  gpt-4.1                      OpenAI                  1.05M  ?         ?
-  gpt-5.1                      OpenAI                   272K  ?         ?
+  Model                                    Provider  Context  Thinking  Vision
+› claude-sonnet-4-5 (current)             Anthropic     200K  yes       yes
+  gpt-4.1                                    OpenAI    1.05M  ?         ?
+  gpt-5.1                                    OpenAI     272K  ?         ?
 
   claude-sonnet-4-5 · Anthropic: context 200K (reported) · max output 64K
   (reported) · thinking low, medium, high (reported) · vision yes (reported)

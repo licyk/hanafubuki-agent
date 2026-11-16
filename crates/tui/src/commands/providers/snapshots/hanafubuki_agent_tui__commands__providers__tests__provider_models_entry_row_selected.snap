@@ -7,10 +7,10 @@ expression: entry
   Anthropic becomes the default; new sessions run this model.
 
   Type to search models
-  Model                       Provider               Context  Thinking  Vision
-  claude-sonnet-4-5           Anthropic                 200K  yes       yes
-  claude-haiku-4-5 (current)  Anthropic                 200K  yes       yes
-  claude-2.1                  Anthropic                    ?  no        ?
+  Model                                    Provider  Context  Thinking  Vision
+  claude-sonnet-4-5                       Anthropic     200K  yes       yes
+  claude-haiku-4-5 (current)              Anthropic     200K  yes       yes
+  claude-2.1                              Anthropic        ?  no        ?
 › Enter a model id…           one the Provider does not list
 
   enter choose · esc back · ? not known · models.dev can fill these: /config

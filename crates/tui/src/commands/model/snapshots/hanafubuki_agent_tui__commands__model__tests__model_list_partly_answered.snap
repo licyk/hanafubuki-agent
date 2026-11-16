@@ -8,12 +8,12 @@ expression: at_widths(&view)
   Switch the model of this session.
 
   Type to search models
-  Model                        Provider                                  Context  Thinking  Vision
-› claude-sonnet-4-5 (current)  Anthropic                                    200K  yes       yes
-  claude-haiku-4-5             Anthropic                                    200K  yes       yes
+  Model                                                        Provider  Context  Thinking  Vision
+› claude-sonnet-4-5 (current)                                 Anthropic     200K  yes       yes
+  claude-haiku-4-5                                            Anthropic     200K  yes       yes
   Local                        listing…
-  gpt-4.1                      OpenAI                                      1.05M  ?         ?
-  gpt-5.1                      OpenAI                                       272K  ?         ?
+  gpt-4.1                                                        OpenAI    1.05M  ?         ?
+  gpt-5.1                                                        OpenAI     272K  ?         ?
   OpenRouter                   listing…
   Team gateway                 listing…
   Work proxy                   not listed: 401 Unauthorized
@@ -28,12 +28,12 @@ expression: at_widths(&view)
   Switch the model of this session.
 
   Type to search models
-  Model                        Provider              Context  Thinking  Vision
-› claude-sonnet-4-5 (current)  Anthropic                200K  yes       yes
-  claude-haiku-4-5             Anthropic                200K  yes       yes
+  Model                                    Provider  Context  Thinking  Vision
+› claude-sonnet-4-5 (current)             Anthropic     200K  yes       yes
+  claude-haiku-4-5                        Anthropic     200K  yes       yes
   Local                        listing…
-  gpt-4.1                      OpenAI                  1.05M  ?         ?
-  gpt-5.1                      OpenAI                   272K  ?         ?
+  gpt-4.1                                    OpenAI    1.05M  ?         ?
+  gpt-5.1                                    OpenAI     272K  ?         ?
   OpenRouter                   listing…
   Team gateway                 listing…
   Work proxy                   not listed: 401 Unauthorized

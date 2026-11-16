@@ -7,9 +7,9 @@ expression: rendered
   Select Model
 
 
-  Model                                    Provider                      Context  Thinking  Vision
-› claude-sonnet-4-5 (current)              Anthropic                        200K  yes       yes
-  meta-llama/llama-3.1-405b-instruct:free  OpenRouter                       131K  no        no
+  Model                                                        Provider  Context  Thinking  Vision
+› claude-sonnet-4-5 (current)                                 Anthropic     200K  yes       yes
+  meta-llama/llama-3.1-405b-instruct:free                    OpenRouter     131K  no        no
   Team gateway                             listing…
 
 --- 80 ---
@@ -17,8 +17,8 @@ expression: rendered
   Select Model
 
 
-  Model                                  Provider    Context  Thinking  Vision
-› claude-sonnet-4-5 (current)            Anthropic      200K  yes       yes
+  Model                                    Provider  Context  Thinking  Vision
+› claude-sonnet-4-5 (current)             Anthropic     200K  yes       yes
   meta-llama/llama-3.1-405b-instruct:f…  OpenRouter     131K  no        no
   Team gateway                           listing…
 

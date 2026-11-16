@@ -8,11 +8,11 @@ expression: rendered
   Switch the model of this session.
 
   Type to search models
-  Model                                                       Provider   Context  Thinking  Vision
+  Model                                                        Provider  Context  Thinking  Vision
   claude-sonnet-4-5 (current)                                 Anthropic     200K  yes       yes
   Anthropic                                                   listing…
-  通义千问-编程-最新版本                                      本地模型     32.8K  yes       ?
-› org/very-long-model-name-very-long-model-name-very-long-m…  本地模型        2M  ?         yes
+  通义千问-编程-最新版本                                       本地模型    32.8K  yes       ?
+› org/very-long-model-name-very-long-model-name-very-long-m…   本地模型       2M  ?         yes
 
   • Listing models… 1 of 2 Providers answered
   org/very-long-model-name-very-long-model-name-very-long-model-name-very-long-model-name-very-long-
@@ -25,11 +25,11 @@ expression: rendered
   Switch the model of this session.
 
   Type to search models
-  Model                                   Provider   Context  Thinking  Vision
+  Model                                    Provider  Context  Thinking  Vision
   claude-sonnet-4-5 (current)             Anthropic     200K  yes       yes
   Anthropic                               listing…
-  通义千问-编程-最新版本                  本地模型     32.8K  yes       ?
-› org/very-long-model-name-very-long-mo…  本地模型        2M  ?         yes
+  通义千问-编程-最新版本                   本地模型    32.8K  yes       ?
+› org/very-long-model-name-very-long-mo…   本地模型       2M  ?         yes
 
   • Listing models… 1 of 2 Providers answered
   org/very-long-model-name-very-long-model-name-very-long-model-name-very-long-

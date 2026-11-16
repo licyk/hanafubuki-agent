@@ -257,13 +257,14 @@ fn tabular_line(
     let name_text = cut(&row.name, name);
     let mut used = name_text.width();
     let mut spans: Vec<Span<'static>> = vec![name_text.into()];
+    let facts_at = (width as usize).saturating_sub(facts.columns.width());
     if let Some(text) = row.description.as_deref().filter(|_| description > 0) {
         let text = cut(text, description);
-        spans.push(" ".repeat(name + 2 - used).into());
-        used = name + 2 + text.width();
-        spans.push(text.dim());
+        let description_at = facts_at.saturating_sub(text.width() + 2);
+        spans.push(" ".repeat(description_at.saturating_sub(used)).into());
+        used = description_at + text.width();
+        spans.push(text.into());
     }
-    let facts_at = (width as usize).saturating_sub(facts.columns.width());
     spans.push(" ".repeat(facts_at.saturating_sub(used)).into());
     spans.push(facts.columns.clone().into());
     Line::from(spans)
@@ -280,7 +281,7 @@ fn stacked_lines(row: &GenericDisplayRow, facts: &RowFacts, width: u16) -> Vec<L
         .filter(|text| row.name.width() + 2 + text.width() <= width)
     {
         first.push("  ".into());
-        first.push(text.to_string().dim());
+        first.push(text.to_string().into());
     }
     let indent = " ".repeat(STACKED_INDENT);
     let stacked = cut(&facts.stacked, width.saturating_sub(STACKED_INDENT));

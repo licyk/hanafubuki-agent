@@ -433,7 +433,10 @@ fn model_and_provider_headers_align_with_their_columns() {
             .unwrap();
         let column = |line: &str, label: &str| line[..line.find(label).unwrap()].width();
         assert_eq!(column(header, "Model"), column(model, "meta-llama/"));
-        assert_eq!(column(header, "Provider"), column(model, "OpenRouter"));
+        assert_eq!(
+            column(header, "Provider") + "Provider".width(),
+            column(model, "OpenRouter") + "OpenRouter".width()
+        );
     }
     for item in &mut view.items {
         if item.facts.is_some() {
