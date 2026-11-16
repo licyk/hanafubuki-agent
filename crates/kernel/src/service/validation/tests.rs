@@ -65,6 +65,62 @@ fn prompt_projection_inserts_an_output_for_an_unmatched_call() {
 }
 
 #[test]
+fn prompt_projection_keeps_parallel_results_together_without_rewriting_history() {
+    let call = |id, name| {
+        item(json!({
+            "type": "tool_call", "callId": id, "name": name,
+            "catalogRevision": vec![0; 32], "providerId": "builtin",
+            "toolId": name, "toolGeneration": vec![0; 32], "arguments": {}
+        }))
+    };
+    let output = |id| {
+        item(json!({
+            "type": "tool_output", "callId": id,
+            "output": {"content": [{"type": "text", "text": "done"}], "isError": false}
+        }))
+    };
+    let skill = item(json!({
+        "type": "skill_context", "skill": "user:workflow", "name": "Workflow",
+        "content": "<skill>\nworkflow instructions\n</skill>"
+    }));
+    let user = item(json!({"type": "user_message", "text": "continue"}));
+    let history = vec![
+        call("skill", "skills_read"),
+        call("plan", "update_plan"),
+        call("other", "read_file"),
+        output("skill"),
+        skill.clone(),
+        output("plan"),
+        user.clone(),
+        output("other"),
+        call("next", "exec_command"),
+        output("next"),
+    ];
+    let original = history.clone();
+    let projected = normalized_tool_pairs_for_model(&history).unwrap();
+    assert_eq!(
+        projected,
+        vec![
+            history[0].clone(),
+            history[1].clone(),
+            history[2].clone(),
+            history[3].clone(),
+            history[5].clone(),
+            history[7].clone(),
+            skill,
+            user,
+            history[8].clone(),
+            history[9].clone(),
+        ]
+    );
+    assert_eq!(history, original);
+    assert_eq!(
+        normalized_tool_pairs_for_model(&projected).unwrap(),
+        projected
+    );
+}
+
+#[test]
 fn freeform_calls_and_outputs_replay_as_custom_responses_items() {
     let patch = "*** Begin Patch\n*** Add File: note.txt\n+hello\n*** End Patch";
     let call = item(json!({

@@ -3,6 +3,9 @@ use sha2::{Digest, Sha256};
 
 use super::*;
 
+#[cfg(test)]
+mod tests;
+
 /// What a compaction reads from the session under its lock: the history it
 /// replaces, the windows it moves between, and the request that compacts it.
 pub(super) struct CompactionSource {
@@ -207,7 +210,8 @@ fn build_compaction_input(
 ) -> Result<(Vec<ModelInputItem>, Vec<usize>), AgentError> {
     let mut input = Vec::new();
     let mut trim_prefix_ends = Vec::new();
-    for item in source {
+    let normalized = normalized_tool_pairs_for_model(source)?;
+    for item in &normalized {
         if matches!(item, ConversationItem::TurnStart { .. }) && !input.is_empty() {
             trim_prefix_ends.push(input.len());
         }

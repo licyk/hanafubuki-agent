@@ -573,19 +573,27 @@ async fn disabled_skill_is_absent_from_a_fresh_turn_catalog() {
 
 /// The plugin path end to end: the turn's frozen catalog reaches the
 /// registered `skills_read`, and reading `SKILL.md` adopts the Skill as
-/// context the next request carries right after the tool output.
+/// context after all parallel tool results, including after reopening history.
 #[cfg(unix)]
 #[tokio::test]
-async fn reading_a_skill_in_a_turn_adopts_it_after_the_tool_output() {
-    let server = FakeServer::start(vec![
+async fn reading_a_skill_in_parallel_keeps_results_together_after_reopening() {
+    let events = crate::test_support::tool_calls_events(&[
         (
-            tool_events("skills_read", "{\"skill\":\"system:diagnostics\"}"),
-            Duration::ZERO,
+            "skill-call",
+            "skills_read",
+            "{\"skill\":\"system:diagnostics\"}",
         ),
+        ("plan-call", "update_plan", "{\"plan\":[]}"),
+    ]);
+    let server = FakeServer::start(vec![
+        (events, Duration::ZERO),
         (assistant_events("adopted"), Duration::ZERO),
+        (assistant_events("resumed"), Duration::ZERO),
     ])
     .await;
-    let (service, paths) = configured_service("skills-read-turn", &server.base_url);
+    let (service, paths, config) = service_with_config("skills-read-turn", |_, config| {
+        configure_test_provider(config, &server.base_url, None);
+    });
     let package = paths.data_dir.join("agent-test/skills-bundled/diagnostics");
     std::fs::create_dir_all(&package).unwrap();
     std::fs::write(
@@ -616,12 +624,52 @@ async fn reading_a_skill_in_a_turn_adopts_it_after_the_tool_output() {
     assert!(!input[output]["output"]
         .to_string()
         .contains("Use list_instances before explaining state."));
-    let adopted = &input[output + 1];
+    assert_eq!(input[output]["call_id"], "skill-call");
+    assert_eq!(input[output + 1]["type"], "function_call_output");
+    assert_eq!(input[output + 1]["call_id"], "plan-call");
+    let adopted = &input[output + 2];
     assert!(adopted["content"][0]["text"]
         .as_str()
         .is_some_and(|text| text.contains("<skill>\n<name>")
             && text.contains("Use list_instances before explaining state.")));
     assert_eq!(body_deliveries(input, "Use list_instances before"), 1);
+    let history = service.core.test_model_context(session.id).unwrap();
+    let skill_index = history
+        .iter()
+        .position(|item| {
+            matches!(
+                item,
+                hanafubuki_agent_kernel::ConversationItem::SkillContext { .. }
+            )
+        })
+        .unwrap();
+    assert!(matches!(&history[skill_index - 1],
+        hanafubuki_agent_kernel::ConversationItem::ToolOutput { call_id, .. } if call_id == "skill-call"));
+    assert!(matches!(&history[skill_index + 1],
+        hanafubuki_agent_kernel::ConversationItem::ToolOutput { call_id, .. } if call_id == "plan-call"));
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
+    drop(service);
+    let service = crate::test_support::reopen_service(config, test_host(&paths), &paths);
+    let outcome = service
+        .start_turn(session.id, "continue".into())
+        .await
+        .unwrap();
+    assert_eq!(outcome.final_answer, "resumed");
+    let request: Value = serde_json::from_slice(&server.requests()[2].body).unwrap();
+    let input = request["input"].as_array().unwrap();
+    let output = input
+        .iter()
+        .position(|item| item["type"] == "function_call_output")
+        .unwrap();
+    assert_eq!(input[output]["call_id"], "skill-call");
+    assert_eq!(input[output + 1]["call_id"], "plan-call");
+    assert!(input[output + 2]["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("<skill>"));
     assert_eq!(
         service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
         []

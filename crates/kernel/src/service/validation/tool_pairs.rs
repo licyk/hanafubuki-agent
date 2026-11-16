@@ -198,7 +198,28 @@ pub(in crate::service) fn normalized_tool_pairs_for_model(
     for (index, output) in missing {
         normalized.insert(index.saturating_add(1), output);
     }
-    Ok(normalized)
+    // A tool can commit context immediately after its own result, while
+    // other calls from the same response still await results. Providers
+    // require the whole result run before any user/context message.
+    let mut grouped = Vec::with_capacity(normalized.len());
+    let mut deferred = Vec::new();
+    let mut pending_count = 0;
+    for item in normalized {
+        match &item {
+            ConversationItem::ToolCall { .. } => pending_count += 1,
+            ConversationItem::ToolOutput { .. } => pending_count -= 1,
+            _ if pending_count > 0 => {
+                deferred.push(item);
+                continue;
+            }
+            _ => {}
+        }
+        grouped.push(item);
+        if pending_count == 0 {
+            grouped.append(&mut deferred);
+        }
+    }
+    Ok(grouped)
 }
 
 pub(super) fn interrupted_tool_output(
