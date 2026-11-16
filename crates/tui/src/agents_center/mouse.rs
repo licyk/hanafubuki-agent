@@ -2,7 +2,7 @@
 //! the wheel moves the selection, a click on a tab shows that filter, a
 //! click on a session or on a child in the details pane selects it, and a
 //! click on the one selected opens it. A search, a rename, a confirmation
-//! and the keys' help leave it be.
+//! leave it be; in shortcut help the wheel scrolls the help text.
 
 use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Position;
@@ -14,6 +14,18 @@ const WHEEL_ROWS: usize = 3;
 
 impl AgentsCenter {
     pub(crate) fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<CenterAction> {
+        if self.mode == Mode::Help {
+            match mouse.kind {
+                MouseEventKind::ScrollUp => {
+                    self.help_scroll = self.help_scroll.saturating_sub(WHEEL_ROWS)
+                }
+                MouseEventKind::ScrollDown => {
+                    self.help_scroll = self.help_scroll.saturating_add(WHEEL_ROWS)
+                }
+                _ => {}
+            }
+            return None;
+        }
         if self.mode != Mode::Browse {
             return None;
         }

@@ -170,6 +170,10 @@ impl App {
                 self.close_agents_center(tui);
                 return;
             }
+            CenterAction::Resume => {
+                self.open_resume_picker(tui, false);
+                return;
+            }
             CenterAction::Open(summary) => {
                 let root = summary.parent_session_id.unwrap_or(summary.session_id);
                 match self.open_listed(tui, *summary) {

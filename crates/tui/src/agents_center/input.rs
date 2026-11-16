@@ -2,7 +2,7 @@
 
 //! The center's keys (Codex's `agents_overview_view.rs` `handle_key_event`
 //! and `agent_center/input.rs`): the session actions are the keymap's
-//! `agents` context (`n`, `w`, `f`, `r`, `x`, `p`, `h`, `a`, Backspace, `g`,
+//! `agents` context (`n`, `w`, `o`, `f`, `r`, `x`, `p`, `h`, `a`, Backspace, `g`,
 //! `c`, `/` and F3 by default); Tab and Shift-Tab, or `1`–`6`, change the
 //! filter; the arrows move, wrapping at the ends, and Enter or Right opens;
 //! `?` shows the keys. A search or a rename takes the typed text, a
@@ -33,6 +33,8 @@ impl AgentsCenter {
             Mode::Help => {
                 if matches!(key.code, KeyCode::Esc | KeyCode::Char('?' | 'q')) || ctrl_c(&key) {
                     self.mode = Mode::Browse;
+                } else {
+                    self.help_key(key);
                 }
                 None
             }
@@ -67,7 +69,10 @@ impl AgentsCenter {
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') => return Some(CenterAction::Close),
             _ if ctrl_c(&key) => return Some(CenterAction::Close),
-            KeyCode::Char('?') if plain => self.mode = Mode::Help,
+            KeyCode::Char('?') if plain => {
+                self.help_scroll = 0;
+                self.mode = Mode::Help;
+            }
             KeyCode::BackTab => self.set_filter(self.filter.step(false)),
             KeyCode::Tab if plain => {
                 let forward = !key.modifiers.contains(KeyModifiers::SHIFT);
@@ -96,6 +101,7 @@ impl AgentsCenter {
                 None
             }
             (Action::AgentsNewTask, _) => Some(CenterAction::New),
+            (Action::AgentsResume, _) => Some(CenterAction::Resume),
             (Action::AgentsNewWorktree, _) => Some(CenterAction::NewWorktree),
             (Action::AgentsToggleGrouping, _) => {
                 self.grouping = grouping::next(self.grouping);
@@ -384,9 +390,10 @@ impl AgentsCenter {
     }
 }
 
-/// The session actions of the keymap's `agents` context, as `?` lists them.
-pub(super) const SESSION_ACTIONS: [Action; 12] = [
+/// The session actions of the keymap's `agents` context.
+pub(super) const SESSION_ACTIONS: [Action; 13] = [
     Action::AgentsNewTask,
+    Action::AgentsResume,
     Action::AgentsNewWorktree,
     Action::AgentsFork,
     Action::AgentsRename,

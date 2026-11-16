@@ -404,6 +404,8 @@ The view refreshes when background work changes, not on every output line. Reope
 
 ## The command center [#agents]
 
+The command center shortcut help uses three aligned columns when they fit, then two or one as the pane narrows. Keys reflect the current keymap; unbound actions are omitted. Up/Down, Page Up/Down, Home/End and the mouse wheel scroll help in short windows. Esc or `?` returns to the list. The project-specific `c` / Children shortcut remains under View.
+
 `/agents`, Left on an empty composer (the footer then says `← for agents`) or `global.open_agents` (no default key) opens the command center over the whole screen (the alternate screen in Scrollback). Left opens it while the composer has the keys and is empty, no popup is open, `/agents` runs in that conversation, and Left is still `editor.move_left`'s key; otherwise Left moves the cursor as before.
 
 It lists the sessions without a parent, as the resume picker does, each with a status that is the most urgent of its own and its children's (subagents and reviews):
@@ -433,6 +435,7 @@ From 90 columns, a details pane beside the list says more of the session selecte
 | `/`, F3                       | Searches the titles: what you type narrows the list, Enter opens the session selected, Esc ends the search                                |
 | `n`                           | Leaves the session shown: the next message starts a new one                                                                               |
 | `w`                           | Moves into a new worktree, as `/worktree`'s "Start a new conversation": the next message starts a session there ([worktrees](#worktrees)) |
+| `o`                           | Opens the resume picker (`agents.resume`), as `/resume` does                                                                              |
 | `f`                           | Forks the session at its head and continues in the copy                                                                                   |
 | `r`                           | Renames the session: its title is edited in place, Enter saves it, Esc cancels                                                            |
 | `x`                           | Interrupts the session's turn                                                                                                             |
@@ -442,7 +445,7 @@ From 90 columns, a details pane beside the list says more of the session selecte
 | `a`                           | Asks, then archives the session with its children; under Archived, restores it                                                            |
 | Backspace                     | Asks, then deletes the session with its children                                                                                          |
 | `g`                           | The next grouping: project, directory, status, model. It is saved in `tui.agentsGrouping`                                                 |
-| `?`                           | Shows the keys                                                                                                                            |
+| `?`                           | Shows Task shortcuts in Navigate, Tasks and View groups                                                                                   |
 | Click, wheel                  | A click on a tab shows that filter, on a session or a child selects it, and on the one selected opens it; the wheel moves three rows      |
 | Esc, `q`                      | Closes the command center                                                                                                                 |
 

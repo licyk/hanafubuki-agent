@@ -1,0 +1,30 @@
+---
+source: crates/tui/src/agents_center/tests.rs
+expression: "screen(&mut center, 50, 26)"
+---
+  Agent command center  Group: Status  g
+   All 0    Needs you 0    Working 0    Ready 0
+  ──────────────────────────────────────────────
+  Task shortcuts
+
+  Navigate             Tasks
+  ↑       Up           n          New
+  ↓       Down         w          New worktree
+  enter   Open         o          Resume
+  pgup    Page up      f          Fork
+  pgdn    Page down    r          Rename
+  ctrl+c  Quit         x          Stop
+                       a          Archive
+                       h          Hide
+                       backspace  Delete
+                       p          Pin/unpin
+
+                       View
+                       tab/shift+tab  Filter
+                       f3             Search
+                       g              Group
+                       c              Children
+
+
+
+  esc back

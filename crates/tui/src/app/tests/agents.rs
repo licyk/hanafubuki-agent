@@ -361,3 +361,14 @@ fn the_pointer_selects_and_opens_a_session_in_both_presentations() {
         });
     }
 }
+
+#[test]
+fn the_command_center_resume_shortcut_opens_the_existing_picker() {
+    let mut harness = Harness::owned(Vec::new());
+    harness.type_and_submit("/agents");
+    harness.pump_until_screen_shows(TITLE);
+    harness.key(KeyCode::Char('o'));
+    harness.pump_until("the resume picker", |h| h.app.resume_picker.is_some());
+    harness.key(KeyCode::Esc);
+    harness.pump_until_screen_shows(TITLE);
+}

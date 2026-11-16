@@ -25,6 +25,7 @@
 
 mod details;
 mod grouping;
+mod help;
 mod input;
 mod loading;
 mod mouse;
@@ -52,6 +53,7 @@ pub(crate) enum CenterAction {
     /// parent).
     Open(Box<AgentSessionSummary>),
     New,
+    Resume,
     /// A new session in a new worktree, as `/worktree` starts one.
     NewWorktree,
     Fork(AgentSessionId),
@@ -138,6 +140,7 @@ pub(crate) struct AgentsCenter {
     /// The child selected in the details pane, which then has the keys.
     child_selected: Option<AgentSessionId>,
     scroll_top: usize,
+    help_scroll: usize,
     view_rows: Option<usize>,
     layout: ScreenLayout,
     /// The session the interface shows.
@@ -166,6 +169,7 @@ impl AgentsCenter {
             selected: current,
             child_selected: None,
             scroll_top: 0,
+            help_scroll: 0,
             view_rows: None,
             layout: ScreenLayout::default(),
             current,

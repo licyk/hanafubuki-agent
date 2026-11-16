@@ -26,7 +26,7 @@ macro_rules! action {
 }
 
 /// Every action, in [`Action`]'s order.
-pub(crate) static ACTIONS: [ActionSpec; 76] = [
+pub(crate) static ACTIONS: [ActionSpec; 77] = [
     action!(
         Leader,
         Global,
@@ -476,6 +476,7 @@ pub(crate) static ACTIONS: [ActionSpec; 76] = [
         "Start a new session in a new worktree",
         ["w"]
     ),
+    action!(AgentsResume, Agents, "resume", "Open the resume picker", ["o"]),
     action!(AgentsFork, Agents, "fork", "Fork the session", ["f"]),
     action!(AgentsRename, Agents, "rename", "Rename the session", ["r"]),
     action!(

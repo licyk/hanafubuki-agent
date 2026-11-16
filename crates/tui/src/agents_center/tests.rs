@@ -801,3 +801,59 @@ fn the_details_of_the_selected_session() {
     key(&mut center, KeyCode::Char('c'));
     assert_snapshot!("center_children_narrow", screen(&mut center, 60, 40));
 }
+
+#[test]
+fn help_flows_into_two_or_one_column_and_scrolls_in_short_windows() {
+    let mut center = center(Vec::new(), Vec::new());
+    key(&mut center, KeyCode::Char('?'));
+    assert_snapshot!("center_help_two_columns", screen(&mut center, 50, 26));
+    assert_snapshot!("center_help_one_column", screen(&mut center, 30, 38));
+    let top = screen(&mut center, 30, 12);
+    assert!(top.contains("Task shortcuts"));
+    assert!(!top.contains("Pin/unpin"));
+    key(&mut center, KeyCode::End);
+    let bottom = screen(&mut center, 30, 12);
+    assert!(bottom.contains("Pin/unpin") && bottom.contains("Search"));
+    key(&mut center, KeyCode::Home);
+    assert_eq!(screen(&mut center, 30, 12), top);
+    center.handle_mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: 5,
+        row: 5,
+        modifiers: KeyModifiers::NONE,
+    });
+    assert_ne!(screen(&mut center, 30, 12), top);
+    key(&mut center, KeyCode::Esc);
+    assert!(!screen(&mut center, 80, 24).contains("Task shortcuts"));
+    assert_eq!(
+        key(&mut center, KeyCode::Char('o')),
+        Some(CenterAction::Resume)
+    );
+}
+
+#[test]
+fn help_tracks_rebound_chord_and_unbound_actions() {
+    use crate::keymap::{self, Keymap};
+    let mut preferences = hanafubuki_agent::AgentTuiPreferences::default();
+    preferences.keymap.insert(
+        "agents".into(),
+        std::collections::BTreeMap::from([
+            ("new_task".into(), vec!["ctrl-y".into()]),
+            ("resume".into(), vec!["leader r".into()]),
+            ("fork".into(), vec![]),
+            ("rename".into(), vec!["up".into()]),
+            ("search".into(), vec!["tab".into()]),
+        ]),
+    );
+    let (map, warnings) = Keymap::resolve(&preferences.keymap);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    keymap::install(map);
+    let mut center = center(Vec::new(), Vec::new());
+    key(&mut center, KeyCode::Char('?'));
+    let shown = screen(&mut center, 100, 26);
+    keymap::install(Keymap::default());
+    assert!(shown.contains("ctrl+y") && shown.contains("leader r"));
+    assert!(!shown.contains("Fork") && !shown.contains("tab/shift+tab"));
+    assert!(!shown.contains("↑       Up"));
+    assert_snapshot!("center_help_custom", shown);
+}

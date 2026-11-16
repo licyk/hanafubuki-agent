@@ -132,6 +132,7 @@ pub(crate) enum Action {
     AgentsSearch,
     AgentsNewTask,
     AgentsNewWorktree,
+    AgentsResume,
     AgentsFork,
     AgentsRename,
     AgentsStop,

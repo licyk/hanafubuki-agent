@@ -22,7 +22,6 @@ use ratatui::widgets::{Block, Borders, Clear, Paragraph, Widget, Wrap};
 
 use super::details::{DETAILS_FROM, DETAILS_WIDTH};
 use super::grouping::{self, HeadingKey};
-use super::input::SESSION_ACTIONS;
 use super::status::{Filter, Group, Status};
 use super::{AgentsCenter, Confirm, Mode, Row};
 use crate::key_hint::{self, KeyBinding};
@@ -65,7 +64,7 @@ impl AgentsCenter {
         self.edit_line().render(edit, buf);
         self.footer_line().render(footer, buf);
         if self.mode == Mode::Help {
-            Paragraph::new(help_lines()).render(body, buf);
+            self.render_help(body, buf);
             return;
         }
         if body.width >= DETAILS_FROM {
@@ -435,50 +434,6 @@ fn render_confirm(confirm: &Confirm, area: Rect, buf: &mut Buffer) {
 
 /// Every key of the center: the fixed ones, then the keymap's `agents`
 /// actions as configured.
-fn help_lines() -> Vec<Line<'static>> {
-    let keymap = keymap::current();
-    let mut entries: Vec<(String, &str)> = vec![
-        (
-            "up, down, k, j".to_string(),
-            "Move; past an end, to the other end",
-        ),
-        (
-            "page-up, page-down, home, end".to_string(),
-            "Move a page, or to the first or last",
-        ),
-        (
-            "enter, right".to_string(),
-            "Open the session (restore it under Archived)",
-        ),
-        (
-            "tab, shift-tab, 1–6".to_string(),
-            "Filter: All, Needs you, Working, Ready, Inactive, Archived",
-        ),
-        (
-            "click, wheel".to_string(),
-            "Select a session, child or tab; on the one selected, open it",
-        ),
-        ("esc, q".to_string(), "Back"),
-    ];
-    entries.extend(
-        SESSION_ACTIONS
-            .into_iter()
-            .map(|action| (keymap.label(action), action.spec().description)),
-    );
-    let width = entries
-        .iter()
-        .map(|(keys, _)| keys.chars().count())
-        .max()
-        .unwrap_or(0);
-    let mut lines = vec![Line::from("Keys".bold()), Line::default()];
-    lines.extend(
-        entries
-            .into_iter()
-            .map(|(keys, does)| Line::from(vec![format!("{keys:<width$}  ").cyan(), does.into()])),
-    );
-    lines
-}
-
 pub(super) fn title_of(summary: &AgentSessionSummary) -> String {
     summary
         .title
