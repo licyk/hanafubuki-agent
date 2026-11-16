@@ -77,6 +77,12 @@ async fn closing_a_waiting_parent_stops_its_child_and_both_terminals_then_accept
         assert!(Instant::now() < deadline, "tree did not wait: {tasks:?}");
         tokio::time::sleep(Duration::from_millis(10)).await;
     };
+    // The terminal is registered before its tool result reaches the model.
+    // Close with the leaf held in its second request, as the counts below expect.
+    wait_until("the leaf's second model request arrives", || {
+        leaf_model.requests().len() >= 2
+    })
+    .await;
     service.close_subagent(branch).await.unwrap();
     queued(&service, root, 1).await;
     let tasks = service.background_tasks(root).await.unwrap();
