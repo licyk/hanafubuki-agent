@@ -203,6 +203,7 @@ pub fn build_permission_review_evidence(
             | ConversationItem::Reasoning { .. }
             | ConversationItem::TurnStart { .. }
             | ConversationItem::WorldStateUpdate { .. }
+            | ConversationItem::PromptContext { .. }
             | ConversationItem::SkillContext { .. }
             | ConversationItem::ToolSelection { .. }
             | ConversationItem::PermissionReview { .. }

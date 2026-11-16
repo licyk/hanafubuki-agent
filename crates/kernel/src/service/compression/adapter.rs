@@ -188,6 +188,7 @@ fn item_message(
         ConversationItem::CanonicalInitialContext { .. }
         | ConversationItem::TurnStart { .. }
         | ConversationItem::WorldStateUpdate { .. }
+        | ConversationItem::PromptContext { .. }
         | ConversationItem::SkillContext { .. }
         | ConversationItem::Reasoning { .. }
         | ConversationItem::ToolSelection { .. }

@@ -56,6 +56,7 @@ fn models_part(request: &Value) -> Option<String> {
         .as_array()
         .unwrap()
         .iter()
+        .rev()
         .filter_map(|item| item["content"][0]["text"].as_str())
         .find(|text| text.contains("<subagents>"))?;
     let start = guidance

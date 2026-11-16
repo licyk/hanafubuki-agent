@@ -27,6 +27,6 @@ pub(crate) fn host_context_fragment(content: &str) -> ModelInputItem {
     ModelInputItem::ContextFragment {
         role: ModelContextRole::User,
         kind: HOST_LOCATION.as_str().to_string(),
-        content: format!("[Host location.]\n{content}"),
+        content: format!("[This snapshot replaces any earlier section of kind host_location.]\n[Host location.]\n{content}"),
     }
 }

@@ -629,7 +629,7 @@ async fn prompt_fragments_are_rendered_again_in_a_window_compacted_mid_turn() {
         request.input.iter().any(|item| {
             matches!(
                 item,
-                ModelInputItem::ContextFragment { content, .. } if content == "fixed prompt fragment"
+                ModelInputItem::ContextFragment { content, .. } if content.ends_with("fixed prompt fragment")
             )
         })
     };
@@ -641,11 +641,9 @@ async fn prompt_fragments_are_rendered_again_in_a_window_compacted_mid_turn() {
         item,
         ModelInputItem::ContextFragment { kind, .. } if kind == "canonical_initial_context"
     )));
-    assert!(matches!(
-        &requests[2].input[0],
-        ModelInputItem::ContextFragment { content, .. } if content == "fixed prompt fragment"
-    ));
+    assert!(has_fragment(&requests[2]));
     assert!(has_fragment(&requests[3]));
+    assert!(requests[3].input.starts_with(&requests[2].input));
 }
 
 /// What [`SteppedMemoryPrompt`] prepared for one sampling step.
@@ -753,37 +751,31 @@ async fn the_memory_context_is_prepared_per_step_and_follows_the_fragments_after
         .await
         .unwrap();
 
-    let memory = |content: String| ModelInputItem::ContextFragment {
-        role: ModelContextRole::Developer,
-        kind: "memory".to_string(),
-        content,
+    let has_memory = |item: &ModelInputItem, expected: &str| {
+        matches!(item,
+        ModelInputItem::ContextFragment { role: ModelContextRole::Developer, kind, content }
+        if kind == "memory" && content.ends_with(expected))
     };
     let is_memory = |item: &ModelInputItem| matches!(item, ModelInputItem::ContextFragment { kind, .. } if kind == "memory");
     let is_fixed = |item: &ModelInputItem| {
         matches!(
             item,
-            ModelInputItem::ContextFragment { content, .. } if content == "fixed prompt fragment"
+            ModelInputItem::ContextFragment { content, .. } if content.ends_with("fixed prompt fragment")
         )
     };
     let requests = model.requests();
     assert_eq!(requests.len(), 4);
-    assert!(is_fixed(&requests[0].input[0]));
-    assert_eq!(
-        requests[0].input[1],
-        memory(format!(
-            "memory prepared for step 1 of turn {}",
-            first.turn_id
-        ))
-    );
+    let fixed = requests[0].input.iter().position(is_fixed).unwrap();
+    assert!(has_memory(
+        &requests[0].input[fixed + 1],
+        &format!("memory prepared for step 1 of turn {}", first.turn_id)
+    ));
     assert!(!requests[1].input.iter().any(is_memory));
-    assert!(is_fixed(&requests[2].input[0]));
-    assert_eq!(
-        requests[2].input[1],
-        memory(format!(
-            "memory prepared for step 2 of turn {}",
-            first.turn_id
-        ))
-    );
+    let fixed = requests[2].input.iter().position(is_fixed).unwrap();
+    assert!(has_memory(
+        &requests[2].input[fixed + 1],
+        &format!("memory prepared for step 2 of turn {}", first.turn_id)
+    ));
     assert_eq!(
         requests[2]
             .input
@@ -792,14 +784,11 @@ async fn the_memory_context_is_prepared_per_step_and_follows_the_fragments_after
             .count(),
         1
     );
-    assert!(is_fixed(&requests[3].input[0]));
-    assert_eq!(
-        requests[3].input[1],
-        memory(format!(
-            "memory prepared for step 1 of turn {}",
-            second.turn_id
-        ))
-    );
+    assert!(requests[3].input.starts_with(&requests[2].input));
+    assert!(has_memory(
+        requests[3].input.last().unwrap(),
+        &format!("memory prepared for step 1 of turn {}", second.turn_id)
+    ));
 }
 
 /// Adds a large memory context after the first turn.

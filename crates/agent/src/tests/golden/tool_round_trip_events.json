@@ -1,6 +1,7 @@
 [
   "turn_started",
   "history_committed",
+  "history_committed",
   "sampling_started",
   "reasoning_updated",
   "response_started",

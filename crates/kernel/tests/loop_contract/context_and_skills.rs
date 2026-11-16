@@ -278,7 +278,7 @@ impl PromptContributor for NotePrompt {
 }
 
 #[tokio::test]
-async fn prompt_fragments_render_each_turns_frozen_extensions_before_the_conversation() {
+async fn prompt_fragments_append_each_turns_frozen_extensions_without_rewriting_history() {
     let model = RecordingAssistantModel::default();
     let tools = FakeTools::new([]).await;
     tools
@@ -311,15 +311,15 @@ async fn prompt_fragments_render_each_turns_frozen_extensions_before_the_convers
 
     let requests = model.requests();
     assert_eq!(requests.len(), 3);
-    for (request, note) in requests.iter().zip(["first-turn note", "second-turn note"]) {
-        assert_eq!(
-            request.input[0],
-            ModelInputItem::ContextFragment {
-                role: ModelContextRole::Developer,
-                kind: "note".to_string(),
-                content: note.to_string(),
-            }
-        );
+    for (index, (request, note)) in requests
+        .iter()
+        .zip(["first-turn note", "second-turn note"])
+        .enumerate()
+    {
+        assert!(matches!(request.input.last().unwrap(),
+            ModelInputItem::ContextFragment { role: ModelContextRole::Developer, kind, content }
+            if kind == "note" && content.ends_with(note)
+        ));
         assert_eq!(
             request
                 .input
@@ -329,14 +329,17 @@ async fn prompt_fragments_render_each_turns_frozen_extensions_before_the_convers
                     ModelInputItem::ContextFragment { kind, .. } if kind == "note"
                 ))
                 .count(),
-            1
+            index + 1
         );
     }
-    // A turn whose extensions lack the note gets no fragment.
-    assert!(!requests[2].input.iter().any(|item| matches!(
-        item,
-        ModelInputItem::ContextFragment { kind, .. } if kind == "note"
-    )));
+    for pair in requests.windows(2) {
+        assert!(pair[1].input.starts_with(&pair[0].input));
+    }
+    // Missing extensions withdraw the note without deleting its history.
+    assert!(matches!(requests[2].input.last().unwrap(),
+        ModelInputItem::ContextFragment { kind, content, .. }
+        if kind == "note" && content.contains("no longer active")
+    ));
 }
 
 /// A section is shown only by its kind's renderer: a fragment whose kind has

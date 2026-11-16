@@ -175,9 +175,76 @@ pub(super) enum PlacedInput {
 }
 
 impl RequestContext {
-    /// The prompt fragments as sections, every one of them in every request:
-    /// a compacted context window re-renders them from the registry rather
-    /// than carrying them in its initial context.
+    pub(super) fn updates(&self, record: &SessionRecord) -> Vec<ConversationItem> {
+        let mut current = ordered_input(self.fragments());
+        if let Some(plan) = &record.runtime.task_plan {
+            current.push(task_plan_model_input(plan));
+        }
+        Self::snapshot_updates(
+            record.conversation.history.iter().map(|item| &item.content),
+            current,
+        )
+    }
+
+    fn snapshot_updates<'a>(
+        history: impl Iterator<Item = &'a ConversationItem>,
+        current: Vec<ModelInputItem>,
+    ) -> Vec<ConversationItem> {
+        let mut previous = BTreeMap::new();
+        for item in history {
+            if let ConversationItem::PromptContext {
+                kind,
+                role,
+                content,
+            } = item
+            {
+                previous.insert(kind.clone(), (*role, content.clone()));
+            }
+        }
+        // A renderer owns a kind, but a contributor may emit several
+        // fragments of it. Keep their stable order as one snapshot.
+        let mut snapshots: Vec<(String, ModelContextRole, String)> = Vec::new();
+        for item in current {
+            let ModelInputItem::ContextFragment {
+                kind,
+                role,
+                content,
+            } = item
+            else {
+                continue;
+            };
+            if let Some((_, _, existing)) = snapshots.iter_mut().find(|(key, _, _)| *key == kind) {
+                existing.push_str("\n\n");
+                existing.push_str(&content);
+            } else {
+                snapshots.push((kind, role, content));
+            }
+        }
+        let mut updates = Vec::new();
+        for (kind, role, content) in snapshots {
+            let content = Some(content);
+            if previous.remove(&kind) != Some((role, content.clone())) {
+                updates.push(ConversationItem::PromptContext {
+                    kind,
+                    role,
+                    content,
+                });
+            }
+        }
+        for (kind, (role, content)) in previous {
+            if content.is_some() {
+                updates.push(ConversationItem::PromptContext {
+                    kind,
+                    role,
+                    content: None,
+                });
+            }
+        }
+        updates
+    }
+
+    /// The step's current prompt snapshots. `updates` commits only changes;
+    /// compaction drops old snapshots and the next step establishes them anew.
     pub(super) fn fragments(&self) -> Vec<PlacedInput> {
         self.fragments
             .iter()
@@ -203,7 +270,8 @@ impl RequestContext {
             log::debug!("Agent context section {kind} left out: no renderer is registered");
             return None;
         };
-        let mut text = String::from(renderer.preamble);
+        let mut text = format!("[This snapshot replaces any earlier section of kind {kind}.]\n");
+        text.push_str(renderer.preamble);
         if renderer.versioned {
             text.push_str("<agent_world_state kind=\"");
             text.push_str(kind.as_str());
@@ -260,3 +328,6 @@ fn flush_sections(
     run.sort_by(|(left, _), (right, _)| left.cmp(right));
     input.extend(run.drain(..).map(|(_, item)| item));
 }
+
+#[cfg(test)]
+mod tests;

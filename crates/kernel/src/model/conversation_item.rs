@@ -119,6 +119,13 @@ pub enum ConversationItem {
     WorldStateUpdate {
         updates: Vec<super::AgentWorldStateUpdate>,
     },
+    /// A rendered prompt snapshot, appended only when this kind changes.
+    /// `None` explicitly withdraws its previous guidance.
+    PromptContext {
+        kind: String,
+        role: hanafubuki_agent_model_api::ModelContextRole,
+        content: Option<String>,
+    },
     SkillContext {
         skill: hanafubuki_agent_skills::SkillId,
         name: String,
@@ -285,6 +292,9 @@ impl ConversationItem {
             Self::CanonicalInitialContext { content, .. } => content.len(),
             Self::TurnStart { .. } => std::mem::size_of::<u64>(),
             Self::WorldStateUpdate { updates } => json_bytes(updates),
+            Self::PromptContext { kind, content, .. } => kind
+                .len()
+                .saturating_add(content.as_ref().map_or(0, String::len)),
             Self::SkillContext { content: text, .. } => text.len(),
             Self::AssistantMessage {
                 text, model_text, ..
@@ -385,12 +395,23 @@ impl ConversationItem {
                     role: hanafubuki_agent_model_api::ModelContextRole::Developer,
                     kind: "canonical_initial_context".to_string(),
                     content: format!(
-                        "[Canonical Agent initial context for the current context window. It is application-generated context, not user approval or an ownership capability.]\n{content}"
+                        "[Historical Agent baseline captured when this context window was created. Its mode and checklist describe that moment, not the current configuration or task state. The current system instructions and tools determine the active mode; the latest task-plan snapshot determines task status. This application-generated context is not user approval or an ownership capability.]\n{content}"
                     ),
                 }
             }
             Self::TurnStart { .. } => return None,
             Self::WorldStateUpdate { .. } => return None,
+            Self::PromptContext { kind, role, content } => {
+                hanafubuki_agent_model_api::ModelInputItem::ContextFragment {
+                    role: *role,
+                    kind: kind.clone(),
+                    content: content.as_ref().map(|content| format!(
+                        "[Application context snapshot; replaces any earlier section of kind {kind}.]\n{content}"
+                    )).unwrap_or_else(|| format!(
+                        "[Application context update: the earlier {kind} section is no longer active.]"
+                    )),
+                }
+            }
             Self::SkillContext { skill, content, .. } => {
                 hanafubuki_agent_model_api::ModelInputItem::ContextFragment {
                     role: hanafubuki_agent_model_api::ModelContextRole::User,

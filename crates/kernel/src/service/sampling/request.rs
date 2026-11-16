@@ -174,16 +174,19 @@ impl AgentService {
                 tool_plan.revision,
                 tool_plan.omissions(),
             )?;
-            let history_event = if let Some(item) = omission_update {
-                validate_history_append(record, std::slice::from_ref(&item), self.inner.limits)?;
+            let mut context_updates = prompt.updates(record);
+            context_updates.extend(omission_update);
+            let history_event = if !context_updates.is_empty() {
+                validate_history_append(record, &context_updates, self.inner.limits)?;
                 let start_index = record.conversation.history.len();
-                append_history(record, &[item]);
+                let item_count = context_updates.len();
+                append_history(record, &context_updates);
                 Some(record_event(
                     record,
                     identity,
                     AgentEventKind::HistoryCommitted {
                         start_index,
-                        item_count: 1,
+                        item_count,
                         usage: None,
                     },
                     self.inner.limits,

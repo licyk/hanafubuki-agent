@@ -159,9 +159,13 @@ async fn an_idle_session_is_woken_and_reads_its_events_once() {
     // The wake turn opens with the events and the world state, and no user
     // message.
     let items = transcript(&service, session_id);
+    let visible = items
+        .iter()
+        .filter(|item| !matches!(item, ConversationItem::PromptContext { .. }))
+        .collect::<Vec<_>>();
     assert!(
         matches!(
-            &items[..],
+            &visible[..],
             [
                 ConversationItem::TurnStart { .. },
                 ConversationItem::WorldStateUpdate { .. },

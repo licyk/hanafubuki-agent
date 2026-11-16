@@ -181,55 +181,11 @@ fn regular_model_request(
     context: &RequestContext,
     maximum_tool_output_bytes: usize,
 ) -> Result<(ModelRequest, RequestCompression), AgentError> {
-    let latest_inline_context = record.conversation.history.iter().rposition(|item| {
-        matches!(
-            &item.content,
-            ConversationItem::CanonicalInitialContext { .. }
-        )
-    });
-    let latest_turn_start = record
-        .conversation
-        .history
-        .iter()
-        .rposition(|item| matches!(&item.content, ConversationItem::TurnStart { .. }));
-    let use_inline_initial_context = latest_inline_context
-        .is_some_and(|context| latest_turn_start.is_none_or(|turn| context > turn));
-    // A compacted context window carries its own initial context (the mode
-    // and the task checklist) until the next turn starts.
-    let mut placed = context.fragments();
-    let visible_items = record
-        .conversation
-        .history
-        .iter()
-        .filter(|item| {
-            use_inline_initial_context
-                || !matches!(
-                    &item.content,
-                    ConversationItem::CanonicalInitialContext { .. }
-                )
-        })
-        .cloned()
-        .collect::<Vec<_>>();
+    let mut placed = Vec::new();
+    let visible_items = record.conversation.history.clone();
     let (visible_history, trailing, compression, compression_instructions) =
         projected_history(record, &visible_items);
     let normalized_history = normalized_tool_pairs_for_model(&visible_history)?;
-    let latest_world_state_updates = normalized_history
-        .iter()
-        .enumerate()
-        .filter_map(|(index, item)| match item {
-            ConversationItem::WorldStateUpdate { updates } => {
-                Some(updates.iter().map(move |update| {
-                    let kind = match update {
-                        AgentWorldStateUpdate::Replace { kind, .. }
-                        | AgentWorldStateUpdate::Remove { kind, .. } => kind.clone(),
-                    };
-                    (kind, index)
-                }))
-            }
-            _ => None,
-        })
-        .flatten()
-        .collect::<BTreeMap<_, _>>();
     // A turn's reasoning blocks go back within it (after its `TurnStart`);
     // those that outlive their turn go back from every turn.
     let turn_start = normalized_history
@@ -243,16 +199,21 @@ fn regular_model_request(
         }
         if let ConversationItem::WorldStateUpdate { updates } = item {
             for update in updates {
-                let AgentWorldStateUpdate::Replace {
-                    kind,
-                    version,
-                    content,
-                } = update
-                else {
-                    continue;
-                };
-                if latest_world_state_updates.get(kind) == Some(&index) {
-                    placed.extend(context.section(kind, Some(&hex_digest(version)), content));
+                match update {
+                    AgentWorldStateUpdate::Replace {
+                        kind,
+                        version,
+                        content,
+                    } => {
+                        placed.extend(context.section(kind, Some(&hex_digest(version)), content));
+                    }
+                    AgentWorldStateUpdate::Remove { kind, .. } => {
+                        placed.push(PlacedInput::Item(ModelInputItem::ContextFragment {
+                            role: ModelContextRole::Developer,
+                            kind: kind.as_str().to_owned(),
+                            content: format!("[Application context update: the earlier {kind} section is no longer active.]"),
+                        }));
+                    }
                 }
             }
             continue;
@@ -261,10 +222,8 @@ fn regular_model_request(
             placed.push(PlacedInput::Item(item));
         }
     }
-    if !use_inline_initial_context {
-        if let Some(task_plan) = record.runtime.task_plan.as_ref() {
-            placed.push(PlacedInput::Item(task_plan_model_input(task_plan)));
-        }
+    for update in context.updates(record) {
+        placed.extend(update.as_model_input().map(PlacedInput::Item));
     }
     let mut input = ordered_input(placed);
     project_model_tool_outputs(
@@ -360,29 +319,13 @@ fn project_model_tool_outputs(
     let Some(context_window_tokens) = context_window_tokens else {
         return Ok(());
     };
-    let output_count = input
-        .iter()
-        .filter(|item| {
-            matches!(
-                item,
-                ModelInputItem::ToolOutput { .. } | ModelInputItem::CustomToolOutput { .. }
-            )
-        })
-        .count();
-    if output_count == 0 {
-        return Ok(());
-    }
-    // Reserve at most one quarter of the context window for all historical
-    // tool results. At the conservative four-bytes-per-token estimate this is
-    // one context-token byte per output set, divided fairly across results.
-    let token_derived_total_bytes = usize::try_from(context_window_tokens).unwrap_or(usize::MAX);
-    let per_output_bytes = token_derived_total_bytes
-        .checked_div(output_count)
-        .unwrap_or(0)
-        .clamp(
-            crate::tool_output::MINIMUM_CANONICAL_TOOL_OUTPUT_BYTES,
-            maximum_tool_output_bytes,
-        );
+    // Bound each result independently. A growing history must never shrink
+    // a result already sent; admission and compaction bound the total.
+    let token_derived_bytes = usize::try_from(context_window_tokens).unwrap_or(usize::MAX);
+    let per_output_bytes = token_derived_bytes.clamp(
+        crate::tool_output::MINIMUM_CANONICAL_TOOL_OUTPUT_BYTES,
+        maximum_tool_output_bytes,
+    );
     for item in input {
         let output = match item {
             ModelInputItem::ToolOutput { output, .. }

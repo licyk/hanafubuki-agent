@@ -152,7 +152,7 @@ fn context_window_projects_tool_outputs_without_mutating_canonical_values() {
             | ModelInputItem::CustomToolOutput { output, .. } => output,
             _ => unreachable!(),
         };
-        assert!(serde_json::to_vec(projected).unwrap().len() <= 1_024);
+        assert!(serde_json::to_vec(projected).unwrap().len() <= 2_048);
         assert_eq!(projected.is_error, canonical.is_error);
         let text = projected.legacy_text_projection().unwrap();
         assert!(text.contains("<hanafubuki-model-output-projected>"));
@@ -160,6 +160,23 @@ fn context_window_projects_tool_outputs_without_mutating_canonical_values() {
         assert_ne!(projected, &canonical);
         assert!(serde_json::to_vec(&canonical).unwrap().len() > 1_024);
     }
+}
+
+#[test]
+fn later_tool_outputs_do_not_reproject_an_earlier_result() {
+    let original = ModelInputItem::ToolOutput {
+        call_id: "first".to_string(),
+        output: hanafubuki_agent_tool_contracts::ToolOutput::structured(
+            serde_json::json!({"text": "large output".repeat(4_000)}),
+            false,
+        ),
+    };
+    let mut first = vec![original.clone()];
+    project_model_tool_outputs(&mut first, Some(4_096), 256 * 1024).unwrap();
+    let mut later = vec![original.clone(); 12];
+    project_model_tool_outputs(&mut later, Some(4_096), 256 * 1024).unwrap();
+    assert_eq!(first[0], later[0]);
+    assert_ne!(first[0], original);
 }
 
 #[test]

@@ -124,6 +124,7 @@ pub(in crate::service) fn validate_persisted_history(
             }
             ConversationItem::TurnStart { .. }
             | ConversationItem::WorldStateUpdate { .. }
+            | ConversationItem::PromptContext { .. }
             | ConversationItem::SkillContext { .. }
             | ConversationItem::UserMessage { .. }
             | ConversationItem::Reasoning { .. }
@@ -367,6 +368,7 @@ fn validate_turn_boundary_refs(history: &[&ConversationItem]) -> Result<(), Agen
                     **item,
                     ConversationItem::CanonicalInitialContext { .. }
                         | ConversationItem::WorldStateUpdate { .. }
+                        | ConversationItem::PromptContext { .. }
                         | ConversationItem::SkillContext { .. }
                         | ConversationItem::UserMessage { .. }
                         | ConversationItem::AssistantMessage { .. }

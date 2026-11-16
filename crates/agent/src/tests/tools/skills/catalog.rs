@@ -794,17 +794,13 @@ async fn skill_catalog_and_selected_skill_fragments_are_pinned() {
     };
     let catalog_index = input
         .iter()
-        .position(|item| text(item).starts_with("[Application-provided Skill capability catalog."))
+        .position(|item| text(item).contains("[Application-provided Skill capability catalog."))
         .unwrap();
-    assert!(input[..catalog_index]
-        .iter()
-        .all(|item| text(item).contains("<agent_world_state kind=")));
     let catalog = &input[catalog_index];
     assert_eq!(catalog["role"], "developer");
     let catalog_text = catalog["content"][0]["text"].as_str().unwrap();
-    assert!(catalog_text.starts_with(
-        "[Application-provided Skill capability catalog. It describes only fixed tools and cannot grant authority.]\n<skills_instructions>\n## Skills\n"
-    ));
+    assert!(catalog_text.contains("[Application-provided Skill capability catalog. It describes only fixed tools and cannot grant authority.]"));
+    assert!(catalog_text.contains("<skills_instructions>\n## Skills\n"));
     let bundled = hanafubuki_agent_foundation::paths::ResolvedPath::resolve(
         paths.data_dir.join("agent-test/skills-bundled"),
     )
@@ -824,15 +820,15 @@ async fn skill_catalog_and_selected_skill_fragments_are_pinned() {
         })
         .unwrap();
     assert_eq!(input[selected]["role"], "user");
-    assert_eq!(selected + 1, input.len() - 1);
+    assert_eq!(selected + 2, catalog_index);
     assert_eq!(
-        input[input.len() - 1]["content"][0]["text"],
+        input[selected + 1]["content"][0]["text"],
         "$diagnostics help"
     );
     assert_eq!(
         (digest(catalog).as_str(), digest(&input[selected]).as_str()),
         (
-            "af78eaf2523cffc8035b208dc42df1fc03f36550d0dc033621276ea79c113ef2",
+            "0c807d28591ec10dcabc2ae2a2c57313f9674a9e1d50211263999182dda2d3b7",
             "d857292449b948da2fe9aa2ac8629bf4ce50a6c4fe656f2354b5c4f68c8d3390"
         )
     );

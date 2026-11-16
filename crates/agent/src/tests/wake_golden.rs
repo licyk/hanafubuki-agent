@@ -110,6 +110,8 @@ const REWORDED: [&str; 3] = ["spawn_agent", "send_message", "wait_agent"];
 /// one before wakes (`default_mode_request_before_wake.json`, kept as it
 /// was, never regenerated), byte for byte, but for the reworded
 /// descriptions of three tools and the later catalog changes normalized below.
+/// Context snapshots now carry replacement semantics and follow the opener;
+/// their current wire ordering is covered by the current request goldens.
 #[tokio::test(flavor = "multi_thread")]
 async fn with_the_wake_off_a_request_is_the_one_before_wakes() {
     let off = first_request_with(
@@ -187,9 +189,23 @@ fn without_reworded(mut request: Value) -> Value {
                     "At most 8 sub-agents work at once in this conversation, counting the ones they spawn; a sub-agent you spawn can spawn sub-agents of its own, which cannot spawn further.",
                     "At most 3 sub-agents run at once, and a sub-agent cannot spawn sub-agents of its own.",
                 );
+                let text = text
+                    .lines()
+                    .filter(|line| {
+                        !line.starts_with(
+                            "[Application context snapshot; replaces any earlier section of kind ",
+                        ) && !line
+                            .starts_with("[This snapshot replaces any earlier section of kind ")
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
                 part["text"] = Value::String(text);
             }
         }
     }
+    request["input"]
+        .as_array_mut()
+        .unwrap()
+        .sort_by_key(|item| serde_json::to_string(item).unwrap());
     request
 }

@@ -253,16 +253,17 @@ async fn the_memory_context_item_is_pinned_right_after_the_capability_fragments(
     let text = |item: &Value| item["content"][0]["text"].as_str().unwrap().to_string();
     let catalog = input
         .iter()
-        .position(|item| text(item).starts_with("[Application-provided Skill capability catalog."))
+        .position(|item| text(item).contains("[Application-provided Skill capability catalog."))
         .unwrap();
     assert!(catalog > 0);
-    assert!(input[..catalog]
+    assert!(input[..catalog - 1]
         .iter()
         .all(|item| text(item).contains("<agent_world_state kind=")));
+    assert_eq!(text(&input[catalog - 1]), "How should I run validation?");
     assert!(text(&input[catalog + 1])
-        .starts_with("[Application-provided guidance for the sub-agent tools."));
+        .contains("[Application-provided guidance for the sub-agent tools."));
     assert!(text(&input[catalog + 2])
-        .starts_with("[Application-provided guidance for the command execution tools."));
+        .contains("[Application-provided guidance for the command execution tools."));
     let memory_item = &input[catalog + 3];
     assert_eq!(memory_item["role"], "developer");
     assert!(text(memory_item).ends_with(
@@ -270,7 +271,7 @@ async fn the_memory_context_item_is_pinned_right_after_the_capability_fragments(
     ));
     assert_eq!(
         hex::encode(Sha256::digest(memory_item.to_string().as_bytes())),
-        "2fa46ae001946652e89ef8da6c7da386bf0ae0352fff546842669cae5769110f"
+        "6886ea73503b3eb9a7b255ea9f1e26ff3a273af68f804f73711e06010c83a763"
     );
     assert_eq!(
         service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
@@ -457,9 +458,14 @@ async fn turning_the_memory_plugin_off_removes_memory_from_the_next_request() {
         .await
         .unwrap();
     let body = request_body(1);
-    assert!(!body.contains("MEMORY_SUMMARY BEGINS"));
-    assert!(!body.contains("Validation preferences: MEMORY.md"));
-    assert!(!body.contains("list_agent_memories"));
+    assert!(body.contains("MEMORY_SUMMARY BEGINS"));
+    assert!(body.contains("the earlier agent_memory section is no longer active"));
+    let request: Value = serde_json::from_str(&body).unwrap();
+    assert!(!request["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|tool| tool["name"] == "list_agent_memories"));
 
     service
         .set_plugin_enabled("memory".into(), true)

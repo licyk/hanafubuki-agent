@@ -528,6 +528,7 @@ fn conversation_item_type(item: &ConversationItem) -> &'static str {
         ConversationItem::CanonicalInitialContext { .. } => "canonical_initial_context",
         ConversationItem::TurnStart { .. } => "turn_start",
         ConversationItem::WorldStateUpdate { .. } => "world_state_update",
+        ConversationItem::PromptContext { .. } => "prompt_context",
         ConversationItem::SkillContext { .. } => "skill_context",
         ConversationItem::UserMessage { .. } => "user_message",
         ConversationItem::AssistantMessage { .. } => "assistant_message",

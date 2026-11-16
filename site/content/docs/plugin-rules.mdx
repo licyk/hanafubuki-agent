@@ -178,7 +178,7 @@ Kardia 0.3 的恢复策略保持默认的 `Manual`，包括已安装 Guest 的 l
 - 渲染器是数据：`ContextSlot`、它在槽位内的 `order`、`ContextRole`、`preamble`（这段是什么、它**没有**什么权威）、`epilogue` 和 `versioned`（把内容放进 `<agent_world_state kind=".." version="..">` 元素）。类型的包装文字在拥有它的插件里，从不在 `hanafubuki-agent-model-api` 里，后者原样发送片段的角色和渲染后的文本，不匹配任何段类型。没有自己框架的段使用 `WORLD_STATE_PREAMBLE`。
 - 内核在构建注册表时注册它自己写的类型（`tool_catalog_omissions`）的渲染器；`workspace-context`、`permission-mode`、`skills`、`memory`、`goal`、`subagents`、`review`、`hooks`、`plugins` 插件、访客宿主和宿主的插件随它们的贡献者注册各自的渲染器。内核不知道任何宿主类型。
 - 内核为每个模型请求取一次渲染器快照。类型没有渲染器的段（插件已停止）不出现在那个请求中；世界状态段留在历史里，下一次准入在没有贡献者产生它时移除它。
-- 顺序：请求中每一串相邻的段按槽位（`Instructions`、`WorldState`、`Capabilities`、`Memory`），再按渲染器的 `order`，再按类型名排序；其他条目保持位置。注册顺序和挂载顺序从不体现出来：重新启动的插件（故障、重新配置、关闭再打开）的段仍显示在原来的位置，所以提供方缓存的前缀不受影响，清单中的行也可以只为挂载的原因添加或移动。提示片段加入对话开头的那一串。之后变化的世界状态段显示在它变化的位置。只显示每种类型的最新版本，所以不存在“替换先前提供的内容”的通知，也没有段变化事件：持久化的 `WorldStateUpdate` 就是变化记录。
+- 顺序：每一串相邻段按槽位（`Instructions`、`WorldState`、`Capabilities`、`Memory`）、渲染器 order、kind 排序，其他历史条目保留位置；挂载顺序不对模型可见。提示贡献者仍逐步 prepare/contribute，但内核只将变化后的渲染快照（含明确撤销）持久化为 `PromptContext`，不在每个请求重建开头的提示串。同 kind 的多个片段按原有顺序合成一个快照，角色由渲染器提供，不新增拒绝规则。世界状态替换和移除也保留历史位置，并明确取代或撤销旧段。相同输入应产生确定的贡献内容，除非上下文确实变化，不要加入时间戳或偶然的遍历顺序。[前缀契约](/docs/architecture#stable-request-prefixes) 不保证真实渲染器、配置或能力变化后的缓存命中。
 - 顺序值按所有者分段；渲染器在其所有者的区段中选一个空闲的值，放在它的段应在的位置，同一槽位有两个渲染器的插件给每个渲染器各自的值。区段是约定，注册时不检查。
 
 | `order` | 渲染器                                                                                                                                                                                                                                                                              |

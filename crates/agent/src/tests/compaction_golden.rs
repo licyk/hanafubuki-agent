@@ -211,7 +211,7 @@ async fn a_window_compacted_mid_turn_keeps_the_skill_catalog() {
     assert!(!has_text(&input(1), "<skills_instructions>"));
     let after = input(2);
     assert!(has_text(&after, "<skills_instructions>"));
-    assert!(has_text(&after, "Mode: default"));
+    assert!(has_text(&after, "Window-start mode: default"));
     assert!(has_text(&after, "The user asked for a fresh context."));
     assert_eq!(
         service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),

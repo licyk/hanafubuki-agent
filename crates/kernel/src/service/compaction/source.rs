@@ -212,6 +212,11 @@ fn build_compaction_input(
     let mut trim_prefix_ends = Vec::new();
     let normalized = normalized_tool_pairs_for_model(source)?;
     for item in &normalized {
+        // Capability snapshots are refreshed for the new window; the
+        // summarizer reads conversation evidence, not superseded guidance.
+        if matches!(item, ConversationItem::PromptContext { .. }) {
+            continue;
+        }
         if matches!(item, ConversationItem::TurnStart { .. }) && !input.is_empty() {
             trim_prefix_ends.push(input.len());
         }
@@ -227,14 +232,14 @@ fn build_compaction_input(
 
 fn canonical_initial_context(record: &SessionRecord) -> ConversationItem {
     let mut content = String::new();
-    content.push_str("Mode: ");
+    content.push_str("Window-start mode: ");
     content.push_str(match record.settings.config.mode {
         crate::AgentSessionMode::Default => "default",
         crate::AgentSessionMode::Plan => "plan",
     });
     content.push('\n');
     if let Some(task_plan) = record.runtime.task_plan.as_ref() {
-        content.push_str("\nCurrent task checklist:\n");
+        content.push_str("\nWindow-start task checklist:\n");
         if let Ok(encoded) = serde_json::to_string(task_plan) {
             content.push_str(&encoded);
         }

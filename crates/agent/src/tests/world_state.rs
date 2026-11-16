@@ -34,7 +34,11 @@ async fn workspace_instruction_changes_refresh_on_the_next_turn_without_a_new_se
     assert!(first.contains("workspace rule one"));
     assert!(!first.contains("workspace rule two"));
     assert!(second.contains("workspace rule two"));
-    assert!(!second.contains("workspace rule one"));
+    assert!(second.contains("workspace rule one"));
+    assert!(
+        second.find("workspace rule one").unwrap() < second.find("workspace rule two").unwrap()
+    );
+    assert!(second.contains("replaces any earlier section of kind workspace_instructions"));
 
     let history = service
         .open_session(session.id, 100)

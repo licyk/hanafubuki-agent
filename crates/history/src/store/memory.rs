@@ -323,6 +323,7 @@ fn memory_evidence_text(item: &ConversationItem) -> Option<EvidenceText> {
         | ConversationItem::Reasoning { .. }
         | ConversationItem::TurnStart { .. }
         | ConversationItem::WorldStateUpdate { .. }
+        | ConversationItem::PromptContext { .. }
         | ConversationItem::SkillContext { .. }
         | ConversationItem::ToolSelection { .. }
         | ConversationItem::PermissionReview { .. }

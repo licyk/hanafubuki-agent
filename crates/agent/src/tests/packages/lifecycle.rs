@@ -118,7 +118,9 @@ async fn a_claude_code_plugins_skill_and_hook_work_once_on_and_stop_once_off() {
         .await
         .unwrap();
     assert_eq!(outcome.final_answer, "Listed.");
-    assert!(!request_text(&server, 4).contains("plugins_instructions"));
+    assert!(request_text(&server, 4).contains("plugins_instructions"));
+    assert!(request_text(&server, 4)
+        .contains("the earlier available_plugins section is no longer active"));
     assert_eq!(denials(&request_text(&server, 5)), 1);
     finish(service, paths).await;
 }

@@ -3,7 +3,7 @@
     {
       "content": [
         {
-          "text": "[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n<agent_world_state kind=\"workspace_roots\" version=\"<DIGEST>\">\n{\"roots\":[\"<APP_DATA>/instances\"]}\n</agent_world_state>",
+          "text": "[This snapshot replaces any earlier section of kind workspace_roots.]\n[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n<agent_world_state kind=\"workspace_roots\" version=\"<DIGEST>\">\n{\"roots\":[\"<APP_DATA>/instances\"]}\n</agent_world_state>",
           "type": "input_text"
         }
       ],
@@ -12,7 +12,7 @@
     {
       "content": [
         {
-          "text": "[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n<agent_world_state kind=\"environment\" version=\"<DIGEST>\">\n{\"application\":\"hanafubuki-agent\",\"architecture\":\"<ARCH>\",\"platform\":\"linux\",\"workspaceInstructionWarnings\":[]}\n</agent_world_state>",
+          "text": "[This snapshot replaces any earlier section of kind environment.]\n[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n<agent_world_state kind=\"environment\" version=\"<DIGEST>\">\n{\"application\":\"hanafubuki-agent\",\"architecture\":\"<ARCH>\",\"platform\":\"linux\",\"workspaceInstructionWarnings\":[]}\n</agent_world_state>",
           "type": "input_text"
         }
       ],
@@ -21,7 +21,7 @@
     {
       "content": [
         {
-          "text": "[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n<agent_world_state kind=\"permission_mode\" version=\"<DIGEST>\">\n{\"mode\":\"manual\"}\n</agent_world_state>",
+          "text": "[This snapshot replaces any earlier section of kind permission_mode.]\n[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n<agent_world_state kind=\"permission_mode\" version=\"<DIGEST>\">\n{\"mode\":\"manual\"}\n</agent_world_state>",
           "type": "input_text"
         }
       ],
@@ -30,7 +30,7 @@
     {
       "content": [
         {
-          "text": "[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n<agent_world_state kind=\"sandbox\" version=\"<DIGEST>\">\n{\"escalation\":\"There is no sandbox: commands run with the user's rights. Do not set sandbox_permissions.\",\"mode\":\"full-access\",\"networkAccess\":true}\n</agent_world_state>",
+          "text": "[This snapshot replaces any earlier section of kind sandbox.]\n[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n<agent_world_state kind=\"sandbox\" version=\"<DIGEST>\">\n{\"escalation\":\"There is no sandbox: commands run with the user's rights. Do not set sandbox_permissions.\",\"mode\":\"full-access\",\"networkAccess\":true}\n</agent_world_state>",
           "type": "input_text"
         }
       ],

@@ -132,6 +132,7 @@ pub(in crate::service) fn interrupted_tool_outputs(
             ConversationItem::TurnStart { .. }
             | ConversationItem::CanonicalInitialContext { .. }
             | ConversationItem::WorldStateUpdate { .. }
+            | ConversationItem::PromptContext { .. }
             | ConversationItem::SkillContext { .. }
             | ConversationItem::UserMessage { .. }
             | ConversationItem::AssistantMessage { .. }
