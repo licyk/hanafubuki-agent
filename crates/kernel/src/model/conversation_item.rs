@@ -1,4 +1,3 @@
-use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -56,6 +55,10 @@ pub struct AgentImageAttachmentRef {
     pub height: u32,
     pub display_name: String,
     pub detail: AgentImageDetail,
+    /// An inline tool content slot whose data is held by this attachment.
+    /// These provider images retain their original encoding; dimensions are unknown (zero).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_output_index: Option<usize>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -525,61 +528,6 @@ impl ConversationItem {
         })
     }
 
-    /// The model input of this item with its image attachments' bytes from
-    /// `image` (`image_attachments` names the ones it asks for).
-    pub(crate) fn as_model_input_resolved<E>(
-        &self,
-        mut image: impl FnMut(&AgentImageAttachmentRef) -> Result<Vec<u8>, E>,
-    ) -> Result<Option<hanafubuki_agent_model_api::ModelInputItem>, E> {
-        match self {
-            Self::UserMessage { text, images } | Self::SteeringMessage { text, images, .. } => {
-                let mut content = Vec::with_capacity(images.len().saturating_add(1));
-                if !text.is_empty() {
-                    content.push(hanafubuki_agent_model_api::ModelUserContent::InputText {
-                        text: text.clone(),
-                    });
-                }
-                for attachment in images {
-                    content.push(hanafubuki_agent_model_api::ModelUserContent::InputImage {
-                        mime_type: attachment.mime_type.clone(),
-                        data: image(attachment)?,
-                        detail: model_image_detail(attachment.detail),
-                    });
-                }
-                Ok(Some(
-                    hanafubuki_agent_model_api::ModelInputItem::UserMessage { content },
-                ))
-            }
-            Self::ToolOutput {
-                call_id,
-                origin: hanafubuki_agent_model_api::ModelToolCallOrigin::Function,
-                output,
-                images,
-                ..
-            } if !images.is_empty() => {
-                let mut output = output.clone();
-                output.content.reserve(images.len());
-                for attachment in images {
-                    let bytes = image(attachment)?;
-                    output.content.push(
-                        hanafubuki_agent_tool_contracts::ToolOutputContent::Image {
-                            mime_type: attachment.mime_type.clone(),
-                            data: base64::engine::general_purpose::STANDARD.encode(bytes),
-                            detail: Some(attachment.detail.into()),
-                        },
-                    );
-                }
-                Ok(Some(
-                    hanafubuki_agent_model_api::ModelInputItem::ToolOutput {
-                        call_id: call_id.clone(),
-                        output,
-                    },
-                ))
-            }
-            _ => Ok(self.as_model_input()),
-        }
-    }
-
     /// The reasoning block this item sends back, as model input: one the
     /// Provider takes back from every turn always, one it takes back within
     /// its turn only when the item is `in_current_turn`.
@@ -605,11 +553,7 @@ impl ConversationItem {
     pub(crate) fn image_attachments(&self) -> &[AgentImageAttachmentRef] {
         match self {
             Self::UserMessage { images, .. } | Self::SteeringMessage { images, .. } => images,
-            Self::ToolOutput {
-                origin: hanafubuki_agent_model_api::ModelToolCallOrigin::Function,
-                images,
-                ..
-            } => images,
+            Self::ToolOutput { images, .. } => images,
             _ => &[],
         }
     }

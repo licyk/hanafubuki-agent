@@ -10,6 +10,7 @@ fn attachment(id: &str) -> AgentImageAttachmentRef {
         height: 1,
         display_name: format!("{id}.png"),
         detail: crate::AgentImageDetail::High,
+        tool_output_index: None,
     }
 }
 

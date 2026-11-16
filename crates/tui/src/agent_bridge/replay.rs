@@ -148,17 +148,20 @@ pub(crate) fn transcript(
                 call_id,
                 output,
                 display_metadata,
+                images,
                 ..
             } => {
                 let Some((namespace, name, arguments)) = calls.get(&call_id) else {
                     continue;
                 };
-                let shown = agent.present_tool_call(
-                    namespace.as_deref(),
-                    name,
-                    arguments,
-                    Some((&output, &display_metadata)),
-                );
+                let shown = agent
+                    .present_tool_call(
+                        namespace.as_deref(),
+                        name,
+                        arguments,
+                        Some((&output, &display_metadata)),
+                    )
+                    .with_image_attachments(&images);
                 let entry = transcript.iter_mut().rev().find_map(|entry| match entry {
                     ReplayedItem::Tool {
                         call_id: id,

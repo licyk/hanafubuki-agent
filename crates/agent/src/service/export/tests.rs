@@ -133,6 +133,7 @@ fn images_are_labelled_and_a_conversation_without_content_has_none() {
         height: 1,
         display_name: "shot.png".to_string(),
         detail: AgentImageDetail::default(),
+        tool_output_index: None,
     };
     let items = [ConversationItem::UserMessage {
         text: "Look.".to_string(),

@@ -132,17 +132,7 @@ impl AgentService {
     /// Adds a recovered session and moves the turn and compaction id
     /// counters past every id it used.
     fn register_recovered(&self, record: SessionRecord) -> Result<Arc<SessionCell>, AgentError> {
-        let turn_ids = record.runtime.turn.iter().map(|turn| turn.id).chain(
-            record
-                .conversation
-                .history
-                .iter()
-                .filter_map(|item| match &item.content {
-                    ConversationItem::TurnStart { turn_id } => Some(*turn_id),
-                    _ => None,
-                }),
-        );
-        for turn_id in turn_ids {
+        for turn_id in recorded_turn_ids(&record) {
             self.inner.next_turn_id.fetch_max(
                 turn_id
                     .value()

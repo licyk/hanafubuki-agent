@@ -126,6 +126,8 @@ Kardia 0.3 的恢复策略保持默认的 `Manual`，包括已安装 Guest 的 l
 - 内核自己的工具（`AgentCoreTool`：`new_context`、`update_plan`、`request_user_input`，以及压缩工具 `compress`、`decompress`、`search_context`、`acp_status`、`acp_cache`、`absorb`、`acp_retrieve`、`acp_rule`）作用于轮次或会话的压缩状态，不是插件；压缩工具只在会话的压缩策略为 `hierarchical` 时被规划，计划模式下也是，最后三个还要求各自的功能开启。`tool_search` 和 `tool_list`（计划对延迟工具的发现工具）也不是插件。它们的十三个名字是 `RESERVED_TOOL_NAMES`：插件不能用其中任何一个注册工具。
 - 活动动作是开放的标识符（`AgentActivityAction`）；界面为认识的名字加标签，否则显示通用的工具标签，所以新工具不需要前端改动。
 
+工具仍可返回内嵌图片。内核在完成输出限额处理后将图片正文存入历史附件并持久化引用，保留内容顺序和资源元数据；Provider 仍会收到图片正文。宿主的历史存储通过 `stage_tool_image_attachment` 保存这些已校验、未经再次规范化的工具图片。读取转录并调用 `present_tool_call` 的界面再以已提交条目的图片引用调用 `with_image_attachments`，即可显示原始媒体大小而无需读取图片文件；`tool_display` 会自动完成这一步。
+
 ### 工具名 [#tool-names]
 
 - 每条工具路径都使用共享名称接口：注册名称使用 `ToolName::parse` / `ToolName::namespaced` 和 `flattened_alias()`；返回或持久化的调用转换成文本时使用 `flattened_tool_call_name(namespace, name)`。范围包括审查证据、记忆与压缩、导出、CLI/TUI 显示、诊断和拒绝提示。该函数位于 model-api，由内核和门面重新导出；使用方不手工拼接 `namespace__name`，也不丢弃命名空间。持久化保留原始二元组，执行匹配和进度身份也区分该二元组与扁平别名；不通过去前缀或拆分扁平名称猜测另一个工具。

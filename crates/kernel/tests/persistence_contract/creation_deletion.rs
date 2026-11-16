@@ -40,6 +40,7 @@ async fn image_only_turn_is_durable_and_unsupported_capability_fails_before_admi
         height: 1,
         display_name: "pixel.png".to_string(),
         detail: hanafubuki_agent_kernel::AgentImageDetail::Auto,
+        tool_output_index: None,
     };
     assert!(matches!(
         service

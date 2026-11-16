@@ -5,6 +5,7 @@ mod context;
 mod fixed;
 mod handler;
 mod hooks;
+mod images;
 mod list;
 mod plan;
 mod rejection;

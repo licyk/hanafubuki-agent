@@ -9,23 +9,26 @@ impl AgentService {
         compression: Option<crate::AgentCoreTool>,
         event_sink: &dyn AgentEventSink,
     ) -> Result<(), AgentError> {
-        let (output, truncation) = crate::tool_output::canonicalize_agent_tool_output(
+        let (mut output, truncation) = crate::tool_output::canonicalize_agent_tool_output(
             output,
             self.inner.limits.maximum_tool_output_bytes,
         );
         trace_tool_result(identity, &output);
         let is_error = output.is_error();
         let skill_context = output.skill_context;
-        let images = output
-            .prepared_images
-            .into_iter()
-            .map(|image| {
-                self.inner
-                    .history_store
-                    .stage_image_attachment(identity.session_id, image)
-                    .map_err(history_store_error)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut images = self.stage_tool_output_images(identity.session_id, &mut output.output)?;
+        images.extend(
+            output
+                .prepared_images
+                .into_iter()
+                .map(|image| {
+                    self.inner
+                        .history_store
+                        .stage_image_attachment(identity.session_id, image)
+                        .map_err(history_store_error)
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        );
         // A bounded output is no longer the text its display metadata
         // describes.
         let display_metadata = if truncation.is_none() {

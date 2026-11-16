@@ -136,6 +136,16 @@ impl AgentHistoryStore for SessionStores {
             .stage_image_attachment(session_id, image)
     }
 
+    fn stage_tool_image_attachment(
+        &self,
+        session_id: AgentSessionId,
+        bytes: Vec<u8>,
+        mime_type: String,
+    ) -> Result<AgentImageAttachmentRef, AgentHistoryStoreError> {
+        self.store(session_id)
+            .stage_tool_image_attachment(session_id, bytes, mime_type)
+    }
+
     fn load_image_attachment(
         &self,
         attachment: &AgentImageAttachmentRef,

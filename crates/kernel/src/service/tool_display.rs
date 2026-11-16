@@ -22,6 +22,29 @@ pub struct AgentToolCallDisplay {
     pub display: Option<AgentToolDisplay>,
 }
 
+impl AgentToolCallDisplay {
+    /// Restore media sizes from references without reading image files for display.
+    pub fn with_image_attachments(mut self, images: &[crate::AgentImageAttachmentRef]) -> Self {
+        if let Some(AgentToolDisplay::Content { blocks }) = self.display.as_mut() {
+            for image in images {
+                let Some(index) = image.tool_output_index else {
+                    continue;
+                };
+                match blocks.get_mut(index) {
+                    Some(hanafubuki_agent_contracts::AgentOutputBlock::Image { bytes, .. }) => {
+                        *bytes = image.byte_length
+                    }
+                    Some(hanafubuki_agent_contracts::AgentOutputBlock::Resource {
+                        bytes, ..
+                    }) => *bytes = Some(image.byte_length),
+                    _ => {}
+                }
+            }
+        }
+        self
+    }
+}
+
 impl AgentService {
     /// How the call `call_id` of the session's history is shown, read back
     /// from the session's latest items; `None` when the history has no
@@ -32,6 +55,7 @@ impl AgentService {
         call_id: &str,
     ) -> Result<Option<AgentToolCallDisplay>, AgentError> {
         let mut output = None;
+        let mut images = Vec::new();
         let mut request = AgentTranscriptPageRequest {
             session_id,
             page_size: TOOL_DISPLAY_PAGE,
@@ -50,8 +74,12 @@ impl AgentService {
                         call_id: id,
                         output: committed,
                         display_metadata,
+                        images: committed_images,
                         ..
-                    } if id == call_id => output = Some((committed, display_metadata)),
+                    } if id == call_id => {
+                        output = Some((committed, display_metadata));
+                        images = committed_images;
+                    }
                     ConversationItem::ToolCall {
                         call_id: id,
                         namespace,
@@ -59,12 +87,15 @@ impl AgentService {
                         arguments,
                         ..
                     } if id == call_id => {
-                        return Ok(Some(self.present_tool_call(
-                            namespace.as_deref(),
-                            &name,
-                            &arguments,
-                            output.as_ref().map(|(output, metadata)| (output, metadata)),
-                        )));
+                        return Ok(Some(
+                            self.present_tool_call(
+                                namespace.as_deref(),
+                                &name,
+                                &arguments,
+                                output.as_ref().map(|(output, metadata)| (output, metadata)),
+                            )
+                            .with_image_attachments(&images),
+                        ));
                     }
                     _ => {}
                 }

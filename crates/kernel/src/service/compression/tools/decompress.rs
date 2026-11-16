@@ -495,8 +495,12 @@ fn exported(file_name: String, header: String, body: String) -> CompressionToolR
 fn with_images(
     output: ToolOutput,
     state: Option<AgentCompressionState>,
-    images: Vec<AgentImageAttachmentRef>,
+    mut images: Vec<AgentImageAttachmentRef>,
 ) -> CompressionToolRun {
+    // Restored images are appended to a new tool result, not their original content slots.
+    for image in &mut images {
+        image.tool_output_index = None;
+    }
     CompressionToolRun {
         images,
         ..output_run(output, state)

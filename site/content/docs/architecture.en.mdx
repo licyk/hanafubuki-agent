@@ -189,6 +189,8 @@ Automatic and background compaction use the Provider's last reported prompt tota
 
 The default retained-history byte limit is **16 MiB**, independent of the model's token window. It bounds the active history's retained content, not the total history database or image files. Crossing it still refuses the append; a larger model window does not disable this resource bound.
 
+Image bytes belong to the history store's content-addressed attachments, not repeated inline in the rollout or SQLite projection. User attachments and prepared tool images already use references; inline tool images (including MCP image resources) are extracted after the tool-output bound is applied, with their original encoding unchanged. The stored content keeps its order and metadata, with empty image data and a reference naming the content slot. A model request restores that slot's bytes. Identical bytes in one session share a blob, and forks keep references to their source's blobs. Ephemeral sessions use the same SHA-256 identity in memory, so equal-length images remain distinct. Existing inline records remain readable and are not rewritten.
+
 ### Model metadata [#model-metadata]
 
 What the Agent knows about each model it reaches is the kernel's `ModelMetadataRegistry`, one per Agent, keyed by route (`ModelRouteKey`: the protocol, the canonical base URL and the model id, so two Providers serving one model id are kept apart). Each fact (context window, largest output, reasoning and its efforts, image input, the structured-output rung) is optional and carries its source and when it was observed (`ModelMetadata`). The registry keeps two sources per route, one copy of models.dev's catalogue looked up by model id, and resolves each fact on its own, in this order:

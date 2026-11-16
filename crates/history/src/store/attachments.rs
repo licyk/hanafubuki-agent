@@ -184,6 +184,14 @@ ORDER BY session_id, first_item_order
             image.height,
             "prepared image",
         )?;
+        self.store_image_attachment(session_id, image)
+    }
+
+    pub(in crate::store) fn store_image_attachment(
+        &self,
+        session_id: AgentSessionId,
+        image: hanafubuki_agent_kernel::PreparedAgentImage,
+    ) -> Result<hanafubuki_agent_kernel::AgentImageAttachmentRef, AgentHistoryStoreError> {
         {
             let _database = self.inner.database_gate.lock();
             let connection = self.connection()?;
@@ -242,6 +250,7 @@ ORDER BY session_id, first_item_order
             height: image.height,
             display_name: image.display_name,
             detail: image.detail,
+            tool_output_index: None,
         })
     }
 
@@ -279,13 +288,15 @@ ORDER BY session_id, first_item_order
                 attachment.attachment_id.as_str()
             )));
         }
-        validate_image_metadata(
-            &bytes,
-            &attachment.mime_type,
-            attachment.width,
-            attachment.height,
-            "stored image attachment",
-        )?;
+        if attachment.width != 0 || attachment.height != 0 {
+            validate_image_metadata(
+                &bytes,
+                &attachment.mime_type,
+                attachment.width,
+                attachment.height,
+                "stored image attachment",
+            )?;
+        }
         Ok(bytes)
     }
 }

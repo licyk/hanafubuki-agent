@@ -2,6 +2,7 @@ mod activity;
 mod compression;
 mod configured_facts;
 mod context_composition;
+mod conversation_images;
 mod conversation_item;
 mod error;
 mod event;

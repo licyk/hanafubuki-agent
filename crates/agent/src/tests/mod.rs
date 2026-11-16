@@ -37,6 +37,7 @@ mod goal;
 mod golden;
 #[cfg(unix)]
 mod hooks;
+mod image_storage;
 mod memory;
 mod model_discovery;
 mod model_list;

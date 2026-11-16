@@ -1,4 +1,5 @@
 use super::*;
+use sha2::{Digest, Sha256};
 
 #[derive(Default)]
 pub struct EphemeralAgentHistoryStore {
@@ -158,7 +159,10 @@ impl AgentHistoryStore for EphemeralAgentHistoryStore {
         if !self.sessions.lock().contains_key(&session_id) {
             return Err(AgentHistoryStoreError::NotFound { session_id });
         }
-        let digest = format!("{:064x}", image.bytes.len());
+        let digest = Sha256::digest(&image.bytes)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
         let attachment_id = crate::AgentAttachmentId::from_sha256(digest);
         let byte_length = u64::try_from(image.bytes.len()).map_err(|_| {
             AgentHistoryStoreError::Io("attachment byte length exceeds u64".to_string())
@@ -175,6 +179,7 @@ impl AgentHistoryStore for EphemeralAgentHistoryStore {
             height: image.height,
             display_name: image.display_name,
             detail: image.detail,
+            tool_output_index: None,
         })
     }
 

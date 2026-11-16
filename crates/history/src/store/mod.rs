@@ -298,6 +298,26 @@ impl AgentHistoryStore for FileAgentHistoryStore {
         self.stage_image_attachment_inner(session_id, image)
     }
 
+    fn stage_tool_image_attachment(
+        &self,
+        session_id: AgentSessionId,
+        bytes: Vec<u8>,
+        mime_type: String,
+    ) -> Result<hanafubuki_agent_kernel::AgentImageAttachmentRef, AgentHistoryStoreError> {
+        self.claim_session(session_id)?;
+        self.store_image_attachment(
+            session_id,
+            hanafubuki_agent_kernel::PreparedAgentImage {
+                bytes,
+                mime_type,
+                width: 0,
+                height: 0,
+                display_name: "tool image".into(),
+                detail: hanafubuki_agent_kernel::AgentImageDetail::Auto,
+            },
+        )
+    }
+
     fn load_image_attachment(
         &self,
         attachment: &hanafubuki_agent_kernel::AgentImageAttachmentRef,
