@@ -57,6 +57,8 @@ icon: Rocket
 
 `publish` 和 `github-release` 只在标签上运行。
 
+TUI crate 包含生成后的开屏动画图集。`crates/tui/assets/welcome/sources/` 中的高分辨率原始素材保留在 Git 中供重新生成使用，不打入发布的 crate，以免压缩包超过 crates.io 的大小限制。
+
 ## 资产名称是契约 [#asset-contract]
 
 从带有 `hanafubuki-agent update` 的版本起，发布的二进制会从最新 release 的归档更新自己，所以 `binaries` 和 `github-release` 产出的东西不只由正在发布的版本读取，也由每个已经安装的版本读取：
