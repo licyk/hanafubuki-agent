@@ -136,19 +136,19 @@ async fn a_malformed_tool_search_is_a_field_named_error() {
     for (arguments, expected) in [
         (
             json!([1, 2]),
-            "invalid tool_search arguments: the arguments must be a JSON object with a `query` string",
+            "invalid tool search arguments: the arguments must be a JSON object with a `query` string",
         ),
         (
             json!({ "limit": 3 }),
-            "invalid tool_search arguments: `query` is required",
+            "invalid tool search arguments: `query` is required",
         ),
         (
             json!({ "query": 7 }),
-            "invalid tool_search arguments: `query` must be a string",
+            "invalid tool search arguments: `query` must be a string",
         ),
     ] {
         let output = rejected_call_output(
-            call_events(call("tool_search", arguments)),
+            call_events(call("search_tools", arguments)),
             hanafubuki_agent_kernel::AgentSessionMode::Default,
         )
         .await;

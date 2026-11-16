@@ -35,7 +35,7 @@ impl ToolGroup {
             }
             name if name.starts_with("mcp__") => Some(Self::Mcp),
             // Native Responses search keeps its private name in replayed history.
-            "tool_search" | "tool_list" | "__hanafubuki_native_tool_search" => {
+            "search_tools" | "tool_search" | "tool_list" | "__hanafubuki_native_tool_search" => {
                 Some(Self::Discovery)
             }
             "web_search" | "advanced_search" | "multi_search" | "fetch_web_page"
@@ -175,7 +175,7 @@ fn verb(name: &str) -> String {
         "list_mcp_resources" => "List resources",
         "list_mcp_resource_templates" => "List resource templates",
         "read_mcp_resource" => "Read resource",
-        "tool_search" | "__hanafubuki_native_tool_search" => "Search tools",
+        "search_tools" | "tool_search" | "__hanafubuki_native_tool_search" => "Search tools",
         "tool_list" => "List tools",
         "web_search" => "Search",
         "advanced_search" => "Advanced search",

@@ -185,7 +185,7 @@ impl AgentToolHandler for AppInfoTool {
 | `name`            | `ToolName::parse`：命名空间段与本地名；扁平形式 `namespace__name` 必须唯一，内核的工具名是保留的                         |
 | `description`     | 模型读到的说明                                                                                                           |
 | `input_schema`    | JSON Schema，`additionalProperties: false`；内核按完整 schema 校验参数                                                   |
-| `exposure`        | `Direct`、`Deferred`（通过 `tool_search` 找到）、`DirectModelOnly` 或 `Hidden`                                           |
+| `exposure`        | `Direct`、`Deferred`（通过 `search_tools` 找到）、`DirectModelOnly` 或 `Hidden`                                           |
 | `execution_class` | `ConcurrentRead`（与其他读取同时运行）或 `Exclusive`                                                                     |
 | `effect`          | `ReadOnly`（计划模式只提供这类工具）或 `Mutating`                                                                        |
 | `action`          | 活动动作，界面用它给工具活动加标签；未知的动作显示通用标签                                                               |

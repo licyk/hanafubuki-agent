@@ -207,6 +207,13 @@ async fn native_tool_search_hides_deferred_specs_until_exact_search_selection() 
     assert!(plan
         .resolve(None, hanafubuki_agent_model_api::FALLBACK_TOOL_SEARCH_NAME)
         .is_ok());
+    assert!(plan.resolve(None, "tool_search").is_err());
+    assert!(plan.model_specs().iter().any(|specification| {
+        matches!(specification, ToolSpec::Function(function) if function.name.local_name() == "search_tools")
+    }));
+    assert!(!plan.model_specs().iter().any(|specification| {
+        matches!(specification, ToolSpec::Function(function) if function.name.local_name() == "tool_search")
+    }));
     let matched = plan.search_deferred("calendar", 8);
     assert_eq!(matched.len(), 1);
     context
@@ -448,6 +455,7 @@ async fn sourced_collisions_are_renamed_and_invalid_tools_omitted() {
     let mut invalid = dynamic_registration("optional_invalid", ToolExposure::Direct);
     invalid.model_spec.input_schema = json!(null);
     let reserved = dynamic_registration("tool_search", ToolExposure::Direct);
+    let ordinary_search = dynamic_registration("search_tools", ToolExposure::Direct);
     let required = plan_sourced(
         SourcedTool {
             trust: ToolSourceTrust::Required,
@@ -458,7 +466,7 @@ async fn sourced_collisions_are_renamed_and_invalid_tools_omitted() {
     let plan = AgentToolPlanner::new(vec![
         Arc::new(CoreAgentToolContributor),
         Arc::new(DynamicContributor {
-            registrations: vec![conflicting, invalid, reserved, required],
+            registrations: vec![conflicting, invalid, reserved, ordinary_search, required],
         }),
     ])
     .build(
@@ -483,7 +491,7 @@ async fn sourced_collisions_are_renamed_and_invalid_tools_omitted() {
             .map(|name| name.local_name().to_string())
             .unwrap()
     };
-    for name in ["update_plan", "tool_search", "new_context"] {
+    for name in ["update_plan", "tool_search", "search_tools", "new_context"] {
         let wire = renamed(name);
         assert!(wire.starts_with(&format!("{name}_")), "{wire}");
         assert_eq!(wire.len(), name.len() + 13);
@@ -494,13 +502,13 @@ async fn sourced_collisions_are_renamed_and_invalid_tools_omitted() {
         .iter()
         .map(|omission| omission.reason.as_str())
         .collect::<Vec<_>>();
-    assert_eq!(reasons.len(), 4, "{reasons:?}");
+    assert_eq!(reasons.len(), 5, "{reasons:?}");
     assert_eq!(
         reasons
             .iter()
             .filter(|reason| reason.starts_with("renamed to `"))
             .count(),
-        3
+        4
     );
     assert!(reasons
         .iter()
@@ -554,7 +562,7 @@ async fn oversized_sourced_catalog_is_deferred_by_stable_name_order() {
     assert_eq!(direct.len(), MAX_AGENT_DIRECT_TOOL_ENTRIES + 2);
     assert_eq!(direct.first().map(String::as_str), Some("dynamic_000"));
     assert_eq!(direct[MAX_AGENT_DIRECT_TOOL_ENTRIES - 1], "dynamic_127");
-    assert_eq!(direct.last().map(String::as_str), Some("tool_search"));
+    assert_eq!(direct.last().map(String::as_str), Some("tool_list"));
     assert_eq!(
         deferred,
         (MAX_AGENT_DIRECT_TOOL_ENTRIES..MAX_AGENT_DIRECT_TOOL_ENTRIES + 12)

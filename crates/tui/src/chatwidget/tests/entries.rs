@@ -625,7 +625,7 @@ fn categorized_tool_runs_match_replay_in_fullscreen_and_scrollback() {
             ("image-1", "view_image", "first.png"),
             ("image-2", "view_image", "second.png"),
             ("list", "tool_list", "mcp.docs"),
-            ("search", "tool_search", "mcp__docs__lookup"),
+            ("search", "search_tools", "mcp__docs__lookup"),
             ("web", "web_search", "ratatui"),
             ("page", "fetch_web_page", "https://ratatui.rs"),
             ("get", "get_goal", "ship"),

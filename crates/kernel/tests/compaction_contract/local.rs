@@ -108,13 +108,13 @@ async fn compaction_then_new_turn_does_not_reinstall_an_old_skill() {
         .any(|item| matches!(item, ConversationItem::SkillContext { .. })));
 }
 
-/// A `tool_search` that selects the deferred `configure_instance`.
+/// A `search_tools` that selects the deferred `configure_instance`.
 fn tool_search_response() -> ScriptedResponse {
     let call = ModelToolCall {
         item_id: "search-item".to_string(),
         call_id: "search-call".to_string(),
         namespace: None,
-        name: "tool_search".to_string(),
+        name: "search_tools".to_string(),
         arguments: json!({ "query": "configure instance" }),
         argument_error: None,
     };
@@ -194,7 +194,7 @@ async fn a_tool_search_selection_lasts_until_the_next_compaction() {
     assert!(offers(&requests[1], "configure_instance"));
     assert!(offers(&requests[2], "configure_instance"));
     assert!(!offers(&requests[4], "configure_instance"));
-    assert!(offers(&requests[4], "tool_search"));
+    assert!(offers(&requests[4], "search_tools"));
 }
 
 #[tokio::test]

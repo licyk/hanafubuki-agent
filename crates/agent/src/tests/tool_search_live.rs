@@ -76,7 +76,7 @@ async fn live_hoshimi_discovers_and_calls_default_mcp_tools() {
             .await
             .unwrap();
         let prompt = format!(
-            "Test MCP discovery. First use tool_list with source mcp.filesystem to list tool names. Then use the ordinary function tool_search with the exact listed name of read_text_file and limit 1 to obtain its schema. Finally call that MCP tool to read {} and reply with the exact file contents. Do not use exec_command, shell, or other filesystem tools. If discovery is unavailable or fails, report the failure and stop; do not retry more than twice.",
+            "Test MCP discovery. First use tool_list with source mcp.filesystem to list tool names. Then use the ordinary function search_tools with the exact listed name of read_text_file and limit 1 to obtain its schema. Finally call that MCP tool to read {} and reply with the exact file contents. Do not use exec_command, shell, or other filesystem tools. If discovery is unavailable or fails, report the failure and stop; do not retry more than twice.",
             fixture.display()
         );
         let outcome = tokio::time::timeout(Duration::from_secs(180), async {
@@ -147,6 +147,6 @@ async fn live_hoshimi_discovers_and_calls_default_mcp_tools() {
             "{protocol:?}: discovery/read failed"
         );
         assert!(calls.iter().any(|call| call["name"] == "tool_list"));
-        assert!(calls.iter().any(|call| call["name"] == "tool_search"));
+        assert!(calls.iter().any(|call| call["name"] == "search_tools"));
     }
 }

@@ -105,7 +105,7 @@ async fn an_unselected_deferred_tool_returns_recovery_output_without_dispatch() 
     }));
     assert!(requests[0].tools.iter().any(|tool| {
         tool.name()
-            .is_some_and(|name| name.flattened_alias() == "tool_search")
+            .is_some_and(|name| name.flattened_alias() == "search_tools")
     }));
     assert!(requests[1].input.iter().any(|item| matches!(
         item,
@@ -115,7 +115,7 @@ async fn an_unselected_deferred_tool_returns_recovery_output_without_dispatch() 
                 && output.structured_content.as_ref().is_some_and(|content| {
                     content["error"] == "tool requires discovery before use"
                         && content["tool"] == "configure_instance"
-                        && content["recovery"]["tool"] == "tool_search"
+                        && content["recovery"]["tool"] == "search_tools"
                 })
     )));
     let history = test_session_view(&service, session.id)
@@ -163,7 +163,7 @@ async fn native_search_protocol_also_recovers_an_unselected_deferred_tool() {
         ModelInputItem::ToolOutput { output, .. }
             if output.is_error
                 && output.structured_content.as_ref().is_some_and(|content| {
-                    content["recovery"]["tool"] == "tool_search"
+                    content["recovery"]["tool"] == "search_tools"
                 })
     )));
 }

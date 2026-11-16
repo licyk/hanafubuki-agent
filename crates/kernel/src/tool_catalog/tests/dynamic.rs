@@ -28,8 +28,8 @@ async fn planner_freezes_visibility_and_deferred_index_from_one_contribution() {
         vec![
             ("direct".into(), false),
             ("model_only".into(), false),
+            ("search_tools".into(), false),
             ("tool_list".into(), false),
-            ("tool_search".into(), false),
         ]
     );
     assert_eq!(

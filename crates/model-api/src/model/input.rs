@@ -62,7 +62,7 @@ impl ModelInputCapabilityPolicy {
 }
 
 pub const NATIVE_TOOL_SEARCH_NAME: &str = "__hanafubuki_native_tool_search";
-pub const FALLBACK_TOOL_SEARCH_NAME: &str = "tool_search";
+pub const FALLBACK_TOOL_SEARCH_NAME: &str = "search_tools";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

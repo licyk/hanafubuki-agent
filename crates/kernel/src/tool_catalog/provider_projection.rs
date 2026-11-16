@@ -116,7 +116,7 @@ pub(super) fn plan_list_registration() -> Result<AgentPlannedTool, AgentToolCata
             .map_err(|_| AgentToolCatalogError::InvalidToolName)?,
         ModelToolSpec {
             name: "tool_list".to_string(),
-            description: "List deferred tool names without descriptions or schemas, without enabling them. Use source to filter by an exact source id from tool_search's Available sources. Results are sorted by name; offset defaults to 0 and limit to 50 (maximum 50). Follow next_offset to browse more, then use tool_search with a name to obtain its definition before calling it. The list reflects the current step's catalog.".to_string(),
+            description: "List deferred tool names without descriptions or schemas, without enabling them. Use source to filter by an exact source id from search_tools's Available sources. Results are sorted by name; offset defaults to 0 and limit to 50 (maximum 50). Follow next_offset to browse more, then use search_tools with a name to obtain its definition before calling it. The list reflects the current step's catalog.".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -166,7 +166,7 @@ pub(super) fn tool_search_description(tools: &[AgentPlannedTool]) -> String {
         listing.push_str("- None currently enabled.\n");
     }
     format!(
-        "# Tool discovery\n\nSearch deferred tools by exact listed name or BM25 metadata search. The ordinary `tool_search` function returns matching tool definitions, including input schemas, and enables the tools for the next model call on every API protocol. Prefer it when using a name from `tool_list`. The default result limit is {DEFAULT_AGENT_TOOL_SEARCH_RESULTS}.\n\nAvailable sources:\n{listing}\nSome tools are not provided upfront. Use `tool_list` to browse tool names without schemas or enabling tools, then `tool_search` with a name or task description to obtain the definitions needed to call them. For MCP tool discovery, use these tools instead of `list_mcp_resources` or `list_mcp_resource_templates`."
+        "# Tool discovery\n\nSearch deferred tools by exact listed name or BM25 metadata search. The ordinary `search_tools` function returns matching tool definitions, including input schemas, and enables the tools for the next model call on every API protocol. Prefer it when using a name from `tool_list`. The default result limit is {DEFAULT_AGENT_TOOL_SEARCH_RESULTS}.\n\nAvailable sources:\n{listing}\nSome tools are not provided upfront. Use `tool_list` to browse tool names without schemas or enabling tools, then `search_tools` with a name or task description to obtain the definitions needed to call them. For MCP tool discovery, use these tools instead of `list_mcp_resources` or `list_mcp_resource_templates`."
     )
 }
 

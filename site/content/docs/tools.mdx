@@ -18,13 +18,13 @@ icon: Wrench
 | `goal`         | `get_goal`、`create_goal`、`update_goal`                                                                      |
 | `subagents`    | `spawn_agent`、`send_message`、`followup_task`、`wait_agent`、`list_agents`、`interrupt_agent`                |
 
-另外有几个总是存在的工具：`update_plan`（更新任务计划）、`request_user_input`（向你提问）、`new_context`（开始新的上下文窗口），以及在有延迟提供的工具时出现的 `tool_search` 和 `tool_list`。
+另外有几个总是存在的工具：`update_plan`（更新任务计划）、`request_user_input`（向你提问）、`new_context`（开始新的上下文窗口），以及在有延迟提供的工具时出现的 `search_tools` 和 `tool_list`。
 
 ## 工具发现 [#tool-discovery]
 
 `tool_list` 让模型浏览延迟工具的名称，不加载它们的说明或 schema，也不启用它们。它按名称排序，分页返回当前步骤可用的延迟工具。隐藏或不允许使用的工具不会列出。
 
-所有参数均可省略：`source` 是精确的提供者 ID（例如 `mcp.rea`；可用来源列在 `tool_search` 的说明中），`offset` 默认为 0，`limit` 默认为 50，超出 1–50 的值会收敛到这个范围。省略 `source` 时跨提供者列举。例如，模型可以用以下参数调用 `tool_list`：
+所有参数均可省略：`source` 是精确的提供者 ID（例如 `mcp.rea`；可用来源列在 `search_tools` 的说明中），`offset` 默认为 0，`limit` 默认为 50，超出 1–50 的值会收敛到这个范围。省略 `source` 时跨提供者列举。例如，模型可以用以下参数调用 `tool_list`：
 
 ```json
 { "source": "mcp.rea", "offset": 0, "limit": 50 }
@@ -32,7 +32,7 @@ icon: Wrench
 
 结果包含 `tools`（只有名称）、`total`（匹配的工具总数）和 `next_offset`（下一页偏移量，末页为 `null`）。未知来源或超出末尾的偏移量返回空页。分页反映当前步骤的目录；连接或禁用服务器会改变目录。
 
-找到名称后，模型用精确名称调用普通函数 `tool_search`，只获取该工具的定义（含输入 schema），并在下一次请求中启用它。其他查询使用 BM25 搜索元数据。三种协议都提供这个普通函数，Responses 还保留原生搜索。之后模型即可调用所选工具。仅列举不会授予调用权限。Responses、Chat Completions 和 Anthropic Messages 均支持此流程；MCP 的资源列举工具列出的是资源，不是工具。
+找到名称后，模型用精确名称调用普通函数 `search_tools`，只获取该工具的定义（含输入 schema），并在下一次请求中启用它。其他查询使用 BM25 搜索元数据。三种协议都提供这个普通函数，Responses 还保留原生 `tool_search`，使用不同名称以避免工具声明重名。之后模型即可调用所选工具。仅列举不会授予调用权限。Responses、Chat Completions 和 Anthropic Messages 均支持此流程；MCP 的资源列举工具列出的是资源，不是工具。
 
 ## 命令和终端 [#commands]
 

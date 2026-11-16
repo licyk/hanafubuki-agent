@@ -135,7 +135,7 @@ impl SkillToolKind {
         }
     }
 
-    /// Changing which Skills are on is found through `tool_search` and is
+    /// Changing which Skills are on is found through `search_tools` and is
     /// unavailable in Plan mode; reading the turn's catalog is neither.
     const fn manages_skills(self) -> bool {
         matches!(self, Self::EnableSkill | Self::DisableSkill)

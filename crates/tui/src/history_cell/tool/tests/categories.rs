@@ -9,7 +9,7 @@ const CATEGORIES: [(&str, &str, &str, &str); 8] = [
     ("mcp__docs__lookup", "MCP docs", "Calling MCP", "Called MCP"),
     ("skills_read", "user:rust", "Using skills", "Used skills"),
     (
-        "tool_search",
+        "search_tools",
         "mcp__docs__lookup",
         "Discovering tools",
         "Discovered tools",
@@ -146,7 +146,7 @@ fn discovery_aliases_and_web_goal_operations_stay_in_their_categories() {
         (
             &[
                 "tool_list",
-                "tool_search",
+                "search_tools",
                 "__hanafubuki_native_tool_search",
             ][..],
             ToolGroup::Discovery,

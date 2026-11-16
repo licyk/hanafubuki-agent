@@ -79,7 +79,7 @@ impl ProviderToolTable {
 /// Writes every planned tool's wire name into its provider spec: its native
 /// namespace and local name where the protocol takes namespaces, its
 /// flattened name otherwise, fitted to the protocol's name limit. Names are
-/// unique over their flattened form, with `tool_search` and `tool_list` kept
+/// unique over their flattened form, with `tool_search`, `search_tools` and `tool_list` kept
 /// for the plan's discovery tools. In planning order (trust, then name, provider and tool id)
 /// the first tool keeps its name; one that collides with an earlier one, or
 /// is too long, ends with a hash of its identity instead, so it keeps its
@@ -93,6 +93,7 @@ pub(super) fn assign_provider_names(
     let mut order = (0..tools.len()).collect::<Vec<_>>();
     order.sort_by(|&left, &right| planning_order(&tools[left], &tools[right]));
     let mut taken = HashSet::from([
+        "tool_search".to_string(),
         hanafubuki_agent_model_api::FALLBACK_TOOL_SEARCH_NAME.to_string(),
         "tool_list".to_string(),
     ]);

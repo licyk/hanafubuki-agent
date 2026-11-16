@@ -1246,6 +1246,31 @@
         "type": "function"
       },
       {
+        "description": "# Tool discovery\n\nSearch deferred tools by exact listed name or BM25 metadata search. The ordinary `search_tools` function returns matching tool definitions, including input schemas, and enables the tools for the next model call on every API protocol. Prefer it when using a name from `tool_list`. The default result limit is 8.\n\nAvailable sources:\n- builtin\n\nSome tools are not provided upfront. Use `tool_list` to browse tool names without schemas or enabling tools, then `search_tools` with a name or task description to obtain the definitions needed to call them. For MCP tool discovery, use these tools instead of `list_mcp_resources` or `list_mcp_resource_templates`.",
+        "name": "search_tools",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "query": {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "type": "object"
+        },
+        "strict": false,
+        "type": "function"
+      },
+      {
         "description": "Send a message to an existing agent, or, with `target` `parent`, to the agent that spawned you. An agent that is running reads it promptly, at its next message boundary; an idle sub-agent reads it with its next follow-up task, and an idle parent is resumed to read it. Does not give a sub-agent a new turn.",
         "name": "send_message",
         "parameters": {
@@ -1385,7 +1410,7 @@
         "type": "function"
       },
       {
-        "description": "List deferred tool names without descriptions or schemas, without enabling them. Use source to filter by an exact source id from tool_search's Available sources. Results are sorted by name; offset defaults to 0 and limit to 50 (maximum 50). Follow next_offset to browse more, then use tool_search with a name to obtain its definition before calling it. The list reflects the current step's catalog.",
+        "description": "List deferred tool names without descriptions or schemas, without enabling them. Use source to filter by an exact source id from search_tools's Available sources. Results are sorted by name; offset defaults to 0 and limit to 50 (maximum 50). Follow next_offset to browse more, then use search_tools with a name to obtain its definition before calling it. The list reflects the current step's catalog.",
         "name": "tool_list",
         "parameters": {
           "additionalProperties": false,
@@ -1412,31 +1437,6 @@
               ]
             }
           },
-          "type": "object"
-        },
-        "strict": false,
-        "type": "function"
-      },
-      {
-        "description": "# Tool discovery\n\nSearch deferred tools by exact listed name or BM25 metadata search. The ordinary `tool_search` function returns matching tool definitions, including input schemas, and enables the tools for the next model call on every API protocol. Prefer it when using a name from `tool_list`. The default result limit is 8.\n\nAvailable sources:\n- builtin\n\nSome tools are not provided upfront. Use `tool_list` to browse tool names without schemas or enabling tools, then `tool_search` with a name or task description to obtain the definitions needed to call them. For MCP tool discovery, use these tools instead of `list_mcp_resources` or `list_mcp_resource_templates`.",
-        "name": "tool_search",
-        "parameters": {
-          "additionalProperties": false,
-          "properties": {
-            "limit": {
-              "maximum": 20,
-              "minimum": 1,
-              "type": "integer"
-            },
-            "query": {
-              "maxLength": 512,
-              "minLength": 1,
-              "type": "string"
-            }
-          },
-          "required": [
-            "query"
-          ],
           "type": "object"
         },
         "strict": false,
@@ -1834,7 +1834,7 @@
         "type": "function"
       },
       {
-        "description": "# Tool discovery\n\nSearch deferred tools by exact listed name or BM25 metadata search. The ordinary `tool_search` function returns matching tool definitions, including input schemas, and enables the tools for the next model call on every API protocol. Prefer it when using a name from `tool_list`. The default result limit is 8.\n\nAvailable sources:\n- builtin\n\nSome tools are not provided upfront. Use `tool_list` to browse tool names without schemas or enabling tools, then `tool_search` with a name or task description to obtain the definitions needed to call them. For MCP tool discovery, use these tools instead of `list_mcp_resources` or `list_mcp_resource_templates`.",
+        "description": "# Tool discovery\n\nSearch deferred tools by exact listed name or BM25 metadata search. The ordinary `search_tools` function returns matching tool definitions, including input schemas, and enables the tools for the next model call on every API protocol. Prefer it when using a name from `tool_list`. The default result limit is 8.\n\nAvailable sources:\n- builtin\n\nSome tools are not provided upfront. Use `tool_list` to browse tool names without schemas or enabling tools, then `search_tools` with a name or task description to obtain the definitions needed to call them. For MCP tool discovery, use these tools instead of `list_mcp_resources` or `list_mcp_resource_templates`.",
         "execution": "client",
         "parameters": {
           "additionalProperties": false,
@@ -3178,6 +3178,31 @@
         "type": "function"
       },
       {
+        "description": "# Tool discovery\n\nSearch deferred tools by exact listed name or BM25 metadata search. The ordinary `search_tools` function returns matching tool definitions, including input schemas, and enables the tools for the next model call on every API protocol. Prefer it when using a name from `tool_list`. The default result limit is 8.\n\nAvailable sources:\n- builtin\n\nSome tools are not provided upfront. Use `tool_list` to browse tool names without schemas or enabling tools, then `search_tools` with a name or task description to obtain the definitions needed to call them. For MCP tool discovery, use these tools instead of `list_mcp_resources` or `list_mcp_resource_templates`.",
+        "name": "search_tools",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "query": {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "type": "object"
+        },
+        "strict": false,
+        "type": "function"
+      },
+      {
         "description": "Send a message to an existing agent, or, with `target` `parent`, to the agent that spawned you. An agent that is running reads it promptly, at its next message boundary; an idle sub-agent reads it with its next follow-up task, and an idle parent is resumed to read it. Does not give a sub-agent a new turn.",
         "name": "send_message",
         "parameters": {
@@ -3317,7 +3342,7 @@
         "type": "function"
       },
       {
-        "description": "List deferred tool names without descriptions or schemas, without enabling them. Use source to filter by an exact source id from tool_search's Available sources. Results are sorted by name; offset defaults to 0 and limit to 50 (maximum 50). Follow next_offset to browse more, then use tool_search with a name to obtain its definition before calling it. The list reflects the current step's catalog.",
+        "description": "List deferred tool names without descriptions or schemas, without enabling them. Use source to filter by an exact source id from search_tools's Available sources. Results are sorted by name; offset defaults to 0 and limit to 50 (maximum 50). Follow next_offset to browse more, then use search_tools with a name to obtain its definition before calling it. The list reflects the current step's catalog.",
         "name": "tool_list",
         "parameters": {
           "additionalProperties": false,
@@ -3344,31 +3369,6 @@
               ]
             }
           },
-          "type": "object"
-        },
-        "strict": false,
-        "type": "function"
-      },
-      {
-        "description": "# Tool discovery\n\nSearch deferred tools by exact listed name or BM25 metadata search. The ordinary `tool_search` function returns matching tool definitions, including input schemas, and enables the tools for the next model call on every API protocol. Prefer it when using a name from `tool_list`. The default result limit is 8.\n\nAvailable sources:\n- builtin\n\nSome tools are not provided upfront. Use `tool_list` to browse tool names without schemas or enabling tools, then `tool_search` with a name or task description to obtain the definitions needed to call them. For MCP tool discovery, use these tools instead of `list_mcp_resources` or `list_mcp_resource_templates`.",
-        "name": "tool_search",
-        "parameters": {
-          "additionalProperties": false,
-          "properties": {
-            "limit": {
-              "maximum": 20,
-              "minimum": 1,
-              "type": "integer"
-            },
-            "query": {
-              "maxLength": 512,
-              "minLength": 1,
-              "type": "string"
-            }
-          },
-          "required": [
-            "query"
-          ],
           "type": "object"
         },
         "strict": false,
@@ -3766,7 +3766,7 @@
         "type": "function"
       },
       {
-        "description": "# Tool discovery\n\nSearch deferred tools by exact listed name or BM25 metadata search. The ordinary `tool_search` function returns matching tool definitions, including input schemas, and enables the tools for the next model call on every API protocol. Prefer it when using a name from `tool_list`. The default result limit is 8.\n\nAvailable sources:\n- builtin\n\nSome tools are not provided upfront. Use `tool_list` to browse tool names without schemas or enabling tools, then `tool_search` with a name or task description to obtain the definitions needed to call them. For MCP tool discovery, use these tools instead of `list_mcp_resources` or `list_mcp_resource_templates`.",
+        "description": "# Tool discovery\n\nSearch deferred tools by exact listed name or BM25 metadata search. The ordinary `search_tools` function returns matching tool definitions, including input schemas, and enables the tools for the next model call on every API protocol. Prefer it when using a name from `tool_list`. The default result limit is 8.\n\nAvailable sources:\n- builtin\n\nSome tools are not provided upfront. Use `tool_list` to browse tool names without schemas or enabling tools, then `search_tools` with a name or task description to obtain the definitions needed to call them. For MCP tool discovery, use these tools instead of `list_mcp_resources` or `list_mcp_resource_templates`.",
         "execution": "client",
         "parameters": {
           "additionalProperties": false,

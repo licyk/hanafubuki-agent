@@ -108,7 +108,7 @@ fn undiscovered_tool_output(name: &str) -> AgentToolOutput {
         "error": "tool requires discovery before use",
         "tool": name,
         "recovery": {
-            "tool": "tool_search",
+            "tool": "search_tools",
             "query": name,
             "retry": "after the tool search result"
         }

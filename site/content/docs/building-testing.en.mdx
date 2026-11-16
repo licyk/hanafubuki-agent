@@ -98,7 +98,7 @@ The update rules:
 - The fixtures are Linux-only.
 - Hanafubuki keeps goldens of its own and the same history corpus in `hanafubuki-agent-integration` ([the twins](/docs/contributing#twins-shared-with-hanafubuki)): a model-visible change here changes them too, and a history-format change re-records both.
 
-To test deferred discovery against a real Hoshimi account and an installed `@modelcontextprotocol/server-filesystem`, run the opt-in probe below. It uses `DeepSeek-Flash`, a temporary workspace and file, and MCP's default registration (deferred exposure). It checks `tool_list` → ordinary `tool_search` → MCP read over Responses, Chat Completions and Anthropic Messages, verifying the actual returned file contents. The Hoshimi endpoint must already have a logged-in qodercli-cn account.
+To test deferred discovery against a real Hoshimi account and an installed `@modelcontextprotocol/server-filesystem`, run the opt-in probe below. It uses `DeepSeek-Flash`, a temporary workspace and file, and MCP's default registration (deferred exposure). It checks `tool_list` → ordinary `search_tools` → MCP read over Responses, Chat Completions and Anthropic Messages, verifying the actual returned file contents. The Hoshimi endpoint must already have a logged-in qodercli-cn account.
 
 ```sh
 HOSHIMI_TOOL_TEST_URL=http://127.0.0.1:18779/v1 \

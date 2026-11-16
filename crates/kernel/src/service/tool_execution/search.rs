@@ -90,6 +90,6 @@ impl AgentService {
 
 fn search_argument_error(message: &str) -> AgentToolOutput {
     AgentToolOutput::model_visible_error(json!({
-        "error": format!("invalid tool_search arguments: {message}")
+        "error": format!("invalid tool search arguments: {message}")
     }))
 }

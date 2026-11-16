@@ -150,6 +150,7 @@ fn without_reworded(mut request: Value) -> Value {
                 "web_search"
                     | "read_thread"
                     | "tool_list"
+                    | "search_tools"
                     | "tool_search"
                     | "advanced_search"
                     | "multi_search"

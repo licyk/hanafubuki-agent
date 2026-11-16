@@ -34,7 +34,7 @@ expression: "gallery.join(\"\\n\\n\")"
       mcp__docs__lookup
 ─── expanded (Some(Generic)) ───
 • Discovered tools
-  └ Called tool_search:
+  └ Called search_tools:
       mcp__docs__lookup
       Full result kept in
       details

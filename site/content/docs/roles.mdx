@@ -134,7 +134,7 @@ model = "gpt-5.4"
 - **指令。** 会话的指令始终是 Agent 的基础指令（其中有审批指引），后面跟着角色继承链合并后的指令：`instructionsMode = "replace"` 只替换它所继承角色的指令，从不替换基础指令。选择别的模型会保留它们。
 - **模型和推理强度**（角色设置了的话），通过模型选择应用，所以上下文窗口与任何模型一样解析。之后用 `--model`（或 `/model`）仍可以选择别的。
 - **它的收窄**，作为会话的能力范围（[能力范围](/docs/plugin-rules#capability-scope)）：
-  - 只提供角色允许且没有拒绝的工具；内核自己的工具（`update_plan`、`request_user_input`、`new_context`、压缩工具）和 `tool_search` 始终提供。调用角色排除的工具，得到的回答与调用不存在的工具相同；
+  - 只提供角色允许且没有拒绝的工具；内核自己的工具（`update_plan`、`request_user_input`、`new_context`、压缩工具）和 `search_tools` 始终提供。调用角色排除的工具，得到的回答与调用不存在的工具相同；
   - `plugins.off` 中的插件不给会话任何东西：没有工具、没有上下文段、没有提示、不继续轮次。`skills` 关闭时，你显式引用的 Skill 被拒绝（"the Skill catalog is unavailable"），`$mention` 不选中任何 Skill（保持为文本），Skill 工具缺失；`memory` 关闭时，记忆摘要和记忆工具缺失，但会话仍按它的贡献模式贡献记忆；
   - 每个轮次以它的权限模式和角色的 `permissionModeCap` 中更严的那个运行。
 

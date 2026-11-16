@@ -125,10 +125,13 @@ async fn a_tool_the_scope_leaves_out_is_absent_exactly_like_an_unknown_one() {
             offered.contains(&"list_instances".to_string()),
             "{offered:?}"
         );
-        // Left out on purpose: no omission is reported, and `tool_search`
+        // Left out on purpose: no omission is reported, and `search_tools`
         // has no deferred tool left to find.
         assert!(!has_section(&requests[0], "tool_catalog_omissions"));
-        assert!(!offered.contains(&"tool_search".to_string()), "{offered:?}");
+        assert!(
+            !offered.contains(&"search_tools".to_string()),
+            "{offered:?}"
+        );
         assert!(!offered.contains(&"tool_list".to_string()), "{offered:?}");
     }
 }
@@ -144,7 +147,7 @@ async fn the_kernels_tools_and_tool_search_survive_any_scope() {
             // Only the deferred fixture, and patterns naming the kernel's.
             allow: vec![names(&["configure_instance"])],
             deny: names(&[
-                "tool_search",
+                "search_tools",
                 "tool_list",
                 "update_plan",
                 "new_context",
@@ -167,8 +170,8 @@ async fn the_kernels_tools_and_tool_search_survive_any_scope() {
         [
             "new_context",
             "request_user_input",
+            "search_tools",
             "tool_list",
-            "tool_search",
             "update_plan"
         ]
     );
@@ -179,7 +182,7 @@ async fn a_deferred_selection_of_a_tool_the_scope_leaves_out_is_ignored() {
     let model = ScriptedEventModel::new([
         call_events(
             "search",
-            "tool_search",
+            "search_tools",
             json!({ "query": "configure instance" }),
         ),
         deterministic_assistant_events("found"),

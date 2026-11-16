@@ -134,7 +134,7 @@ What the session takes of its role:
 - **Instructions.** The session's instructions are always the Agent's base instructions, which carry the approval guidance, followed by the role's chain merged: `instructionsMode = "replace"` replaces only the instructions of the roles it extends, never the base. Selecting another model keeps them.
 - **Model and reasoning effort**, when the role sets them, through the model selection, so the context window is resolved as for any model. `--model` (or `/model`) afterwards still chooses another.
 - **Its narrowing**, as the session's capability scope ([Capability scope](/docs/plugin-rules#capability-scope)):
-  - only the tools the role allows and does not deny are offered; the kernel's own (`update_plan`, `request_user_input`, `new_context`, the compression tools) and `tool_search` always are. A call to a tool the role leaves out gets the same answer as a call to a tool that does not exist;
+  - only the tools the role allows and does not deny are offered; the kernel's own (`update_plan`, `request_user_input`, `new_context`, the compression tools) and `search_tools` always are. A call to a tool the role leaves out gets the same answer as a call to a tool that does not exist;
   - a plugin in `plugins.off` gives the session nothing: no tools, no context sections, no prompt, no continuation. With `skills` off, a Skill you reference explicitly is refused ("the Skill catalog is unavailable"), a `$mention` selects no Skill (it stays text), and the Skill tools are absent; with `memory` off, the memory summary and tools are absent, but the session still contributes to memory as its contribution mode says;
   - every turn runs in the stricter of its permission mode and the role's `permissionModeCap`.
 

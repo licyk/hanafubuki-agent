@@ -29,7 +29,7 @@ async fn listing_names_is_visible_without_admitting_mcp_tools_on_every_protocol(
             call(
                 protocol,
                 "search",
-                "tool_search",
+                "search_tools",
                 json!({"query":"mcp__fixture__echo"}),
             )
         };
@@ -105,6 +105,19 @@ async fn listing_names_is_visible_without_admitting_mcp_tools_on_every_protocol(
             .iter()
             .map(|request| serde_json::from_slice::<Value>(&request.body).unwrap())
             .collect::<Vec<_>>();
+        if protocol == AgentModelProtocol::Responses {
+            for body in &bodies {
+                let mut names = std::collections::HashSet::new();
+                for tool in body["tools"].as_array().unwrap() {
+                    let name = tool["name"]
+                        .as_str()
+                        .unwrap_or_else(|| tool["type"].as_str().unwrap());
+                    assert!(names.insert(name), "duplicate tool name: {name}");
+                }
+                assert!(names.contains("search_tools"));
+                assert!(names.contains("tool_search"));
+            }
+        }
         let listed = output(protocol, &bodies[1], "list");
         let listed_text = match &listed {
             Value::String(text) => text.as_str(),
