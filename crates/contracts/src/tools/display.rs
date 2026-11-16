@@ -75,6 +75,10 @@ pub enum AgentToolDisplay {
     Text {
         text: String,
     },
+    TaskPlan {
+        explanation: Option<String>,
+        plan: Vec<AgentTaskPlanStep>,
+    },
     /// A structured output no presenter read: its top-level keys.
     Fields {
         rows: Vec<(String, String)>,
@@ -300,7 +304,7 @@ impl AgentToolDisplay {
     }
 
     /// What a call without a presenter shows: the structured output's
-    /// top-level keys when the content carries it (a structured result, as
+    /// top-level scalar keys, or complete JSON when it contains containers (as
     /// the Agent's own tools return), else the content item by item (an MCP
     /// result, whose structured content its text items repeat).
     pub fn fallback(output: &ToolOutput) -> Self {
@@ -310,6 +314,15 @@ impl AgentToolDisplay {
                 .iter()
                 .any(|item| matches!(item, ToolOutputContent::Structured { .. }));
         match structured_output(output).filter(|_| shows_structured) {
+            Some(Value::Object(object))
+                if object
+                    .values()
+                    .any(|value| value.is_array() || value.is_object()) =>
+            {
+                Self::Text {
+                    text: Value::Object(object.clone()).to_string(),
+                }
+            }
             Some(Value::Object(object)) => Self::Fields {
                 rows: object
                     .iter()
@@ -427,7 +440,23 @@ fn field_value(value: &Value) -> String {
         Value::String(text) => text.clone(),
         Value::Null => "null".to_string(),
         Value::Bool(_) | Value::Number(_) => value.to_string(),
-        Value::Array(items) => format!("{} items", items.len()),
-        Value::Object(_) => "…".to_string(),
+        Value::Array(_) | Value::Object(_) => value.to_string(),
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentTaskPlanStepStatus {
+    Pending,
+    InProgress,
+    Completed,
+}
+
+/// A plan step, as `update_plan` takes it from the model and as the task
+/// plan snapshot keeps it. Read tolerantly: an unknown field is ignored.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentTaskPlanStep {
+    pub step: String,
+    pub status: AgentTaskPlanStepStatus,
 }

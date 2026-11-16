@@ -72,11 +72,10 @@ pub use session::{
     AgentSessionForkRequest, AgentSessionHeadForkOutcome, AgentSessionHeadForkRequest,
     AgentSessionModelConfigurationUpdate, AgentSessionRuntimeSnapshot, AgentSessionSummary,
     AgentSessionTitle, AgentSessionTitleRenameRequest, AgentSessionTitleSource, AgentSkillRef,
-    AgentTaskPlanSnapshot, AgentTaskPlanStep, AgentTaskPlanStepStatus, AgentTurnInput,
-    AgentUserInputAccepted, AgentUserInputAnswer, AgentUserInputOption, AgentUserInputQuestion,
-    AgentUserInputRequest, AgentUserInputResolution, AgentUserShellCommand,
-    ConfirmedAgentSessionDeletion, PreparedAgentSessionDeletion, AGENT_SESSION_TITLE_MAX_CHARS,
-    MAXIMUM_HOST_CONTEXT_BYTES, MAXIMUM_USER_IMAGES_PER_MESSAGE,
+    AgentTaskPlanSnapshot, AgentTurnInput, AgentUserInputAccepted, AgentUserInputAnswer,
+    AgentUserInputOption, AgentUserInputQuestion, AgentUserInputRequest, AgentUserInputResolution,
+    AgentUserShellCommand, ConfirmedAgentSessionDeletion, PreparedAgentSessionDeletion,
+    AGENT_SESSION_TITLE_MAX_CHARS, MAXIMUM_HOST_CONTEXT_BYTES, MAXIMUM_USER_IMAGES_PER_MESSAGE,
 };
 pub use turn::{
     AgentCompactionImplementation, AgentCompactionOutcome, AgentCompactionPhase,
@@ -105,3 +104,5 @@ pub use world_state::{
     MAXIMUM_AGENT_PLUGIN_WORLD_STATE_SECTIONS, MAXIMUM_AGENT_WORLD_STATE_SECTIONS,
     MAXIMUM_AGENT_WORLD_STATE_SECTION_BYTES, MAXIMUM_AGENT_WORLD_STATE_TOTAL_BYTES,
 };
+
+pub use hanafubuki_agent_contracts::{AgentTaskPlanStep, AgentTaskPlanStepStatus};

@@ -17,6 +17,14 @@ fn render_lines(lines: &[Line<'static>]) -> Vec<String> {
         .collect()
 }
 
+fn new_plan_update(snapshot: &AgentTaskPlanSnapshot) -> PlanUpdateCell {
+    PlanUpdateCell::from_tool(
+        next_activity_id("plan:"),
+        snapshot.explanation.clone(),
+        snapshot.plan.clone(),
+    )
+}
+
 fn plan(explanation: Option<&str>, steps: &[(&str, &str)]) -> AgentTaskPlanSnapshot {
     serde_json::from_value(serde_json::json!({
         "turnId": 1,

@@ -1,216 +1,217 @@
 {
   "context": {
-    "sessionId": 1,
+    "callId": "test-call",
     "generation": 1,
-    "callId": "test-call"
+    "sessionId": 1
   },
+  "permissions": [
+    {
+      "arguments": {
+        "skill": "user:pdf-tools"
+      },
+      "permission": {
+        "details": {
+          "effectiveFrom": "new_session",
+          "operation": "enable",
+          "skill": "user:pdf-tools",
+          "type": "skill_management"
+        },
+        "digest": "01cd661b00c92e41df96400628c5d48995a2dc04b09dcac6949788dd8d8a5a54",
+        "kind": "skill_management",
+        "origin": {
+          "type": "model"
+        },
+        "risk": "critical",
+        "summary": "enable Skill user:pdf-tools"
+      },
+      "tool": "enable_skill"
+    },
+    {
+      "arguments": {
+        "skill": "user:pdf-tools"
+      },
+      "permission": {
+        "details": {
+          "effectiveFrom": "new_session",
+          "operation": "disable",
+          "skill": "user:pdf-tools",
+          "type": "skill_management"
+        },
+        "digest": "484d03759697b5a18b7afbdbf93687a0d9724bc6d44234c294ae4b20a918524b",
+        "kind": "skill_management",
+        "origin": {
+          "type": "model"
+        },
+        "risk": "critical",
+        "summary": "disable Skill user:pdf-tools"
+      },
+      "tool": "disable_skill"
+    },
+    {
+      "arguments": {
+        "skill": "repo:nested/workflow"
+      },
+      "permission": {
+        "details": {
+          "effectiveFrom": "new_session",
+          "operation": "enable",
+          "skill": "repo:nested/workflow",
+          "type": "skill_management"
+        },
+        "digest": "e213f14bbf2b28f95999ccf0a27ffa254b50fb5f6e20200682905ae9fc5d9605",
+        "kind": "skill_management",
+        "origin": {
+          "type": "model"
+        },
+        "risk": "critical",
+        "summary": "enable Skill repo:nested/workflow"
+      },
+      "tool": "enable_skill"
+    },
+    {
+      "arguments": {
+        "skill": "system:openai-docs"
+      },
+      "permission": {
+        "details": {
+          "effectiveFrom": "new_session",
+          "operation": "disable",
+          "skill": "system:openai-docs",
+          "type": "skill_management"
+        },
+        "digest": "01b336594388536e503b33d069fd2e52621d2884d9cea3811e8f371ad276e6ed",
+        "kind": "skill_management",
+        "origin": {
+          "type": "model"
+        },
+        "risk": "critical",
+        "summary": "disable Skill system:openai-docs"
+      },
+      "tool": "disable_skill"
+    },
+    {
+      "arguments": {},
+      "permission": "not_required",
+      "tool": "skills_list"
+    },
+    {
+      "arguments": {
+        "skill": "user:pdf-tools"
+      },
+      "permission": "not_required",
+      "tool": "skills_read"
+    }
+  ],
   "tools": {
-    "skills_list": {
-      "description": "List the Skills available for this turn. Each entry carries the id every other Skill tool takes, its name, its description, and its directory. Follow cursor until next_cursor is absent.",
+    "disable_skill": {
+      "allowedInPlanMode": false,
+      "description": "Turn one Skill off for future user turns after explicit approval. This does not rewrite the current or past turns.",
+      "exposure": "deferred",
       "inputSchema": {
-        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "skill": {
+            "maxLength": 200,
+            "minLength": 6,
+            "pattern": "^(?:(?:system|user|repo):|plugin:[A-Za-z0-9_.@-]+@[A-Za-z0-9_.@-]+:)[^/\\\\:]+(?:/[^/\\\\:]+)*$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "skill"
+        ],
+        "type": "object"
+      }
+    },
+    "enable_skill": {
+      "allowedInPlanMode": false,
+      "description": "Turn one Skill on for future user turns after explicit approval. This does not change the current turn.",
+      "exposure": "deferred",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "skill": {
+            "maxLength": 200,
+            "minLength": 6,
+            "pattern": "^(?:(?:system|user|repo):|plugin:[A-Za-z0-9_.@-]+@[A-Za-z0-9_.@-]+:)[^/\\\\:]+(?:/[^/\\\\:]+)*$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "skill"
+        ],
+        "type": "object"
+      }
+    },
+    "skills_list": {
+      "allowedInPlanMode": true,
+      "description": "List the Skills available for this turn and user_root, the user installation directory even when no user Skills exist. Each entry carries the id every other Skill tool takes, its name, its description, and its full native directory path. Follow cursor until next_cursor is absent.",
+      "exposure": "direct",
+      "inputSchema": {
+        "additionalProperties": false,
         "properties": {
           "authority": {
-            "type": [
-              "string",
-              "null"
-            ],
             "enum": [
               "repo",
               "user",
               "system",
+              "plugin",
               null
-            ]
-          },
-          "cursor": {
+            ],
             "type": [
               "string",
               "null"
-            ],
-            "maxLength": 256
+            ]
+          },
+          "cursor": {
+            "maxLength": 256,
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
-        "additionalProperties": false
-      },
-      "exposure": "direct",
-      "allowedInPlanMode": true
+        "type": "object"
+      }
     },
     "skills_read": {
+      "allowedInPlanMode": true,
       "description": "Read one Skill. Omit path to adopt the Skill for this turn: its SKILL.md is added to the conversation once, as a <skill> block. Otherwise pass a package-relative path the catalog listed and follow next_cursor until absent.",
+      "exposure": "direct",
       "inputSchema": {
-        "type": "object",
+        "additionalProperties": false,
         "properties": {
-          "skill": {
-            "type": "string",
-            "minLength": 6,
-            "maxLength": 200,
-            "pattern": "^(system|user|repo):[^/][^\\\\:]*$"
+          "cursor": {
+            "maxLength": 256,
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "path": {
             "oneOf": [
               {
-                "type": "string",
+                "maxLength": 1024,
                 "minLength": 1,
-                "maxLength": 1024
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ]
           },
-          "cursor": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "maxLength": 256
-          }
-        },
-        "required": [
-          "skill"
-        ],
-        "additionalProperties": false
-      },
-      "exposure": "direct",
-      "allowedInPlanMode": true
-    },
-    "enable_skill": {
-      "description": "Turn one Skill on for future user turns after explicit approval. This does not change the current turn.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
           "skill": {
-            "type": "string",
-            "minLength": 6,
             "maxLength": 200,
-            "pattern": "^(system|user|repo):[^/][^\\\\:]*$"
+            "minLength": 6,
+            "pattern": "^(?:(?:system|user|repo):|plugin:[A-Za-z0-9_.@-]+@[A-Za-z0-9_.@-]+:)[^/\\\\:]+(?:/[^/\\\\:]+)*$",
+            "type": "string"
           }
         },
         "required": [
           "skill"
         ],
-        "additionalProperties": false
-      },
-      "exposure": "deferred",
-      "allowedInPlanMode": false
-    },
-    "disable_skill": {
-      "description": "Turn one Skill off for future user turns after explicit approval. This does not rewrite the current or past turns.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "skill": {
-            "type": "string",
-            "minLength": 6,
-            "maxLength": 200,
-            "pattern": "^(system|user|repo):[^/][^\\\\:]*$"
-          }
-        },
-        "required": [
-          "skill"
-        ],
-        "additionalProperties": false
-      },
-      "exposure": "deferred",
-      "allowedInPlanMode": false
+        "type": "object"
+      }
     }
-  },
-  "permissions": [
-    {
-      "tool": "enable_skill",
-      "arguments": {
-        "skill": "user:pdf-tools"
-      },
-      "permission": {
-        "kind": "skill_management",
-        "risk": "critical",
-        "origin": {
-          "type": "model"
-        },
-        "summary": "enable Skill user:pdf-tools",
-        "digest": "01cd661b00c92e41df96400628c5d48995a2dc04b09dcac6949788dd8d8a5a54",
-        "details": {
-          "type": "skill_management",
-          "operation": "enable",
-          "skill": "user:pdf-tools",
-          "effectiveFrom": "new_session"
-        }
-      }
-    },
-    {
-      "tool": "disable_skill",
-      "arguments": {
-        "skill": "user:pdf-tools"
-      },
-      "permission": {
-        "kind": "skill_management",
-        "risk": "critical",
-        "origin": {
-          "type": "model"
-        },
-        "summary": "disable Skill user:pdf-tools",
-        "digest": "484d03759697b5a18b7afbdbf93687a0d9724bc6d44234c294ae4b20a918524b",
-        "details": {
-          "type": "skill_management",
-          "operation": "disable",
-          "skill": "user:pdf-tools",
-          "effectiveFrom": "new_session"
-        }
-      }
-    },
-    {
-      "tool": "enable_skill",
-      "arguments": {
-        "skill": "repo:nested/workflow"
-      },
-      "permission": {
-        "kind": "skill_management",
-        "risk": "critical",
-        "origin": {
-          "type": "model"
-        },
-        "summary": "enable Skill repo:nested/workflow",
-        "digest": "e213f14bbf2b28f95999ccf0a27ffa254b50fb5f6e20200682905ae9fc5d9605",
-        "details": {
-          "type": "skill_management",
-          "operation": "enable",
-          "skill": "repo:nested/workflow",
-          "effectiveFrom": "new_session"
-        }
-      }
-    },
-    {
-      "tool": "disable_skill",
-      "arguments": {
-        "skill": "system:openai-docs"
-      },
-      "permission": {
-        "kind": "skill_management",
-        "risk": "critical",
-        "origin": {
-          "type": "model"
-        },
-        "summary": "disable Skill system:openai-docs",
-        "digest": "01b336594388536e503b33d069fd2e52621d2884d9cea3811e8f371ad276e6ed",
-        "details": {
-          "type": "skill_management",
-          "operation": "disable",
-          "skill": "system:openai-docs",
-          "effectiveFrom": "new_session"
-        }
-      }
-    },
-    {
-      "tool": "skills_list",
-      "arguments": {},
-      "permission": "not_required"
-    },
-    {
-      "tool": "skills_read",
-      "arguments": {
-        "skill": "user:pdf-tools"
-      },
-      "permission": "not_required"
-    }
-  ]
+  }
 }

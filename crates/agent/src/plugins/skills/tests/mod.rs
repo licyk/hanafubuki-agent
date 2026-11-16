@@ -4,8 +4,8 @@
 //! `kernel_reference.json` was recorded from the kernel's closed tool set
 //! before these tools moved here. The specs, exposure, Plan-mode
 //! availability and approval actions (digests included) must stay
-//! byte-identical to it; the two descriptions changed on purpose since
-//! (Skill directories and the single delivery of `SKILL.md`).
+//! pinned to it. Regenerate intentional spec changes with
+//! `HANAFUBUKI_AGENT_UPDATE_GOLDEN=1`.
 
 use hanafubuki_agent_approval::{
     ApprovalAction, ApprovalActionKind, ApprovalOrigin, ApprovalRiskClass,
@@ -80,7 +80,20 @@ fn empty_skills(name: &str) -> (AgentSkillApplication, std::path::PathBuf) {
 
 #[test]
 fn specs_match_the_kernel_reference() {
-    let reference = kernel_reference();
+    let mut reference = kernel_reference();
+    if std::env::var_os("HANAFUBUKI_AGENT_UPDATE_GOLDEN").is_some() {
+        for kind in SkillToolKind::ALL {
+            let (description, schema) = spec(kind);
+            reference["tools"][kind.name()]["description"] = json!(description);
+            reference["tools"][kind.name()]["inputSchema"] = schema;
+        }
+        std::fs::write(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src/plugins/skills/tests/kernel_reference.json"),
+            format!("{}\n", serde_json::to_string_pretty(&reference).unwrap()),
+        )
+        .unwrap();
+    }
     let tools = reference["tools"].as_object().unwrap();
     assert_eq!(tools.len(), SkillToolKind::ALL.len());
     for kind in SkillToolKind::ALL {

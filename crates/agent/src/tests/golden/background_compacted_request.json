@@ -1295,7 +1295,7 @@
         "type": "function"
       },
       {
-        "description": "List the Skills available for this turn. Each entry carries the id every other Skill tool takes, its name, its description, and its directory. Follow cursor until next_cursor is absent.",
+        "description": "List the Skills available for this turn and user_root, the user installation directory even when no user Skills exist. Each entry carries the id every other Skill tool takes, its name, its description, and its full native directory path. Follow cursor until next_cursor is absent.",
         "name": "skills_list",
         "parameters": {
           "additionalProperties": false,
@@ -1305,6 +1305,7 @@
                 "repo",
                 "user",
                 "system",
+                "plugin",
                 null
               ],
               "type": [
@@ -1353,7 +1354,7 @@
             "skill": {
               "maxLength": 200,
               "minLength": 6,
-              "pattern": "^(system|user|repo):[^/][^\\\\:]*$",
+              "pattern": "^(?:(?:system|user|repo):|plugin:[A-Za-z0-9_.@-]+@[A-Za-z0-9_.@-]+:)[^/\\\\:]+(?:/[^/\\\\:]+)*$",
               "type": "string"
             }
           },
@@ -3227,7 +3228,7 @@
         "type": "function"
       },
       {
-        "description": "List the Skills available for this turn. Each entry carries the id every other Skill tool takes, its name, its description, and its directory. Follow cursor until next_cursor is absent.",
+        "description": "List the Skills available for this turn and user_root, the user installation directory even when no user Skills exist. Each entry carries the id every other Skill tool takes, its name, its description, and its full native directory path. Follow cursor until next_cursor is absent.",
         "name": "skills_list",
         "parameters": {
           "additionalProperties": false,
@@ -3237,6 +3238,7 @@
                 "repo",
                 "user",
                 "system",
+                "plugin",
                 null
               ],
               "type": [
@@ -3285,7 +3287,7 @@
             "skill": {
               "maxLength": 200,
               "minLength": 6,
-              "pattern": "^(system|user|repo):[^/][^\\\\:]*$",
+              "pattern": "^(?:(?:system|user|repo):|plugin:[A-Za-z0-9_.@-]+@[A-Za-z0-9_.@-]+:)[^/\\\\:]+(?:/[^/\\\\:]+)*$",
               "type": "string"
             }
           },

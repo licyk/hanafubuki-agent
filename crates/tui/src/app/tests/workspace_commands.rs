@@ -107,7 +107,7 @@ fn a_denied_action_is_approved_between_turns_and_refused_during_one() {
     ];
     let mut harness = Harness::start_timed(responses, true, TranscriptMode::Terminal);
     harness.type_and_submit("/permissions auto-review");
-    harness.pump_until_screen_shows("Permissions set to Auto-review for this session");
+    harness.pump_until_screen_shows("Permissions set to Auto-review");
     let session = harness.app.bridge.session_id().unwrap();
     let agent = harness.runtime.slot().agent().unwrap();
     assert_eq!(
@@ -192,7 +192,7 @@ fn the_status_line_shows_the_mode_permissions_set() {
         harness.bottom_rows(2).trim() == "Main agent · manual\n  ← for agents · ? for shortcuts"
     });
     harness.type_and_submit("/permissions full-access");
-    harness.pump_until_screen_shows("Permissions set to Full access for this session");
+    harness.pump_until_screen_shows("Permissions set to Full access");
     harness.pump_until("the status line to show the session's mode", |harness| {
         harness.bottom_rows(2).trim()
             == "Main agent · full-access\n  ← for agents · ? for shortcuts"
@@ -200,7 +200,7 @@ fn the_status_line_shows_the_mode_permissions_set() {
 
     // A preset sets the session's sandbox mode with its permission mode.
     harness.type_and_submit("/permissions read-only");
-    harness.pump_until_screen_shows("Permissions set to Read only for this session");
+    harness.pump_until_screen_shows("Permissions set to Read only");
     let session = harness.app.bridge.session_id().unwrap();
     let agent = harness.runtime.slot().agent().unwrap();
     assert_eq!(

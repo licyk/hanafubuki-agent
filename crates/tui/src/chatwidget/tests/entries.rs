@@ -632,8 +632,6 @@ fn categorized_tool_runs_match_replay_in_fullscreen_and_scrollback() {
             ("update", "update_goal", "complete"),
             ("question-1", "request_user_input", "target"),
             ("question-2", "request_user_input", "scope"),
-            ("plan-1", "update_plan", "implement"),
-            ("plan-2", "update_plan", "verify"),
             ("image-3", "view_image", "last.png"),
         ];
         let mut replay = Vec::new();
@@ -664,7 +662,6 @@ fn categorized_tool_runs_match_replay_in_fullscreen_and_scrollback() {
                 "• Searched the web",
                 "• Managed goal",
                 "• Asked user",
-                "• Updated plan",
                 "• Viewed image",
             ]
         );

@@ -48,6 +48,8 @@ description: 根据 git 历史为这个仓库撰写发布说明，按功能、�
 
 插件的 Skill 以插件命名，与 Codex 相同：插件 `demo` 的 Skill `search` 在列表中和对模型都叫 `demo:search`（`$demo:search` 选择它），它的 ID 写明包：`plugin:demo@my-mkt:search`。Agent Plugins 包的 Skill 是其 `skills/` 的直接子目录；其他包的 Skill 在任意深度都会被找到。它们随插件出现和消失：关闭插件就会移除它们，无需重启。它们和其他 Skill 一样可以单独开关。
 
+`skills_list` 返回配置的用户安装根目录 `user_root`，即使列表为空也会返回。直接将包放在 `<user_root>/<name>/SKILL.md`。每个条目的 `directory` 是完整的原生目录路径，可能已经解析了符号链接，不能用它可靠地推导安装根目录。`skill` ID 中的路径相对于作用域根目录，并非绝对目录。system、repo 和 plugin 的根目录相互独立。独立应用默认为 `skills/packages/`，嵌入宿主可以配置其他根目录。`authority` 筛选支持 `system`、`user`、`repo` 和 `plugin`，所有 Skill 工具均接受插件 ID，例如 `plugin:demo@local:search`。
+
 ## 查看和安装 [#manage]
 
 ```sh

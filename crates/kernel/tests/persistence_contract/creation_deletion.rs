@@ -376,3 +376,46 @@ fn stable_history_item_identity_is_independent_from_conversation_payload() {
     let mutation = AgentHistoryMutation::AppendItem { item: item.clone() };
     assert_eq!(mutation, AgentHistoryMutation::AppendItem { item });
 }
+
+#[test]
+fn session_permissions_are_durable_before_another_turn_and_recover_independently() {
+    use hanafubuki_agent_foundation::agent_settings::AgentSandboxMode;
+    use hanafubuki_agent_kernel::AgentPermissionMode;
+
+    let store = Arc::new(EphemeralAgentHistoryStore::default());
+    let service = AgentService::with_history_store(
+        Arc::new(ResponseStartedThenErrorModel),
+        AgentKernelRegistries::default(),
+        store.clone(),
+    );
+    let session = service.create_session(text_session_config()).unwrap();
+    let other = service.create_session(text_session_config()).unwrap();
+    service
+        .set_session_permission_mode(session.id, AgentPermissionMode::FullAccess)
+        .unwrap();
+    service
+        .set_session_sandbox_mode(session.id, AgentSandboxMode::FullAccess)
+        .unwrap();
+    let persisted = store.load_runtime_state(session.id).unwrap();
+    assert_eq!(
+        persisted.permission_mode,
+        Some(AgentPermissionMode::FullAccess)
+    );
+    assert_eq!(persisted.sandbox_mode, Some(AgentSandboxMode::FullAccess));
+    drop(service);
+    let recovered = AgentService::without_default_model_with_history_store(
+        AgentKernelRegistries::default(),
+        store,
+    );
+    assert_eq!(recovered.recover_sessions().unwrap().restored, 2);
+    assert_eq!(
+        recovered.session_permission_mode(session.id).unwrap(),
+        persisted.permission_mode
+    );
+    assert_eq!(
+        recovered.session_sandbox_mode(session.id).unwrap(),
+        persisted.sandbox_mode
+    );
+    assert_eq!(recovered.session_permission_mode(other.id).unwrap(), None);
+    assert_eq!(recovered.session_sandbox_mode(other.id).unwrap(), None);
+}

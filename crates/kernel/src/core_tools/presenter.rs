@@ -1,6 +1,6 @@
 //! How an interface shows the kernel's own tools: `compress` names the
 //! ranges it folds, and shows its receipt then each range's summary. The
-//! others take the fallback.
+//! task checklist uses a typed display reconstructed from the successful call.
 
 use hanafubuki_agent_contracts::{output_text, AgentToolDisplay, AgentToolPresenter};
 use hanafubuki_agent_tool_contracts::ToolOutput;
@@ -12,11 +12,17 @@ pub(crate) struct CoreToolPresenter;
 
 impl AgentToolPresenter for CoreToolPresenter {
     fn tools(&self) -> &[&'static str] {
-        &[hanafubuki_agent_compression::COMPRESS_TOOL_NAME]
+        &[
+            hanafubuki_agent_compression::COMPRESS_TOOL_NAME,
+            "update_plan",
+        ]
     }
 
     /// `m00002–m00005 Setup, m00009–m00012`: the ranges with their topics.
-    fn subject(&self, _tool: &str, arguments: &Value) -> Option<String> {
+    fn subject(&self, tool: &str, arguments: &Value) -> Option<String> {
+        if tool == "update_plan" {
+            return None;
+        }
         let ranges = compress_call_ranges(arguments);
         (!ranges.is_empty()).then(|| {
             ranges
@@ -30,10 +36,21 @@ impl AgentToolPresenter for CoreToolPresenter {
     /// The receipt's lines, then each range under its label.
     fn display(
         &self,
-        _tool: &str,
+        tool: &str,
         arguments: &Value,
         output: &ToolOutput,
     ) -> Option<AgentToolDisplay> {
+        if tool == "update_plan" {
+            if output.is_error {
+                return None;
+            }
+            let call: crate::core_tools::UpdateTaskPlanTool =
+                serde_json::from_value(arguments.clone()).ok()?;
+            return Some(AgentToolDisplay::TaskPlan {
+                explanation: call.explanation,
+                plan: call.plan,
+            });
+        }
         let mut text = output_text(output).trim_end().to_string();
         for range in compress_call_ranges(arguments) {
             text.push('\n');

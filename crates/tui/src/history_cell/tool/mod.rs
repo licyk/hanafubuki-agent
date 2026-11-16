@@ -218,7 +218,32 @@ impl ToolCallCell {
         self.calls.iter_mut().find(|call| call.call_id == call_id)
     }
 
+    fn plan(&self) -> Option<crate::history_cell::PlanUpdateCell> {
+        let [call] = &self.calls[..] else {
+            return None;
+        };
+        let AgentToolDisplay::TaskPlan { explanation, plan } =
+            call.outcome.as_ref()?.display.as_ref()?
+        else {
+            return None;
+        };
+        Some(crate::history_cell::PlanUpdateCell::from_tool(
+            format!("tool:{}", call.call_id),
+            explanation.clone(),
+            plan.clone(),
+        ))
+    }
+
     fn lines(&self, width: u16, extent: Extent) -> Vec<Line<'static>> {
+        if let Some(plan) = self.plan() {
+            return if extent.raw {
+                plan.raw_lines()
+            } else if extent.expanded {
+                plan.display_lines(width)
+            } else {
+                plan.compact_lines(width)
+            };
+        }
         match &self.calls[..] {
             [call] if matches!(self.group(), None | Some(ToolGroup::Exploration)) => {
                 let view = call.view(extent);
@@ -261,6 +286,9 @@ impl HistoryCell for ToolCallCell {
     }
 
     fn activity_disclosure(&self, width: u16) -> Option<ActivityDisclosure> {
+        if let Some(plan) = self.plan() {
+            return plan.activity_disclosure(width);
+        }
         match &self.calls[..] {
             [call]
                 if call.name == EXEC_COMMAND
@@ -452,6 +480,7 @@ impl ToolCall {
                 url, title, text, ..
             } => web::page_view(url, title.as_deref(), text, extent),
             AgentToolDisplay::Mutation { kind, paths } => mutation::view(self, *kind, paths),
+            AgentToolDisplay::TaskPlan { .. } => text::called(self, failed),
             AgentToolDisplay::Text { text } => {
                 content::view(self, failed, content::text_rows(text, extent), extent)
             }

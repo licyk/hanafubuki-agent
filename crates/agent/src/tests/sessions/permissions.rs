@@ -195,7 +195,7 @@ fn approvals(
 }
 
 /// The note survives a restart and reaches the next turn's request; the
-/// session's permission mode does not survive it.
+/// session's chosen permission mode survives with it.
 #[tokio::test]
 async fn an_approved_denial_is_a_note_the_next_turn_sends_after_a_restart() {
     let arguments = serde_json::to_string(&json!({
@@ -275,7 +275,10 @@ async fn an_approved_denial_is_a_note_the_next_turn_sends_after_a_restart() {
         ExecutorManager::default(),
     )
     .unwrap();
-    assert_eq!(restarted.session_permission_mode(session.id), Ok(None));
+    assert_eq!(
+        restarted.session_permission_mode(session.id),
+        Ok(Some(AgentPermissionMode::AutoReview))
+    );
     let outcome = restarted
         .start_turn(session.id, "Thanks.".to_string().into())
         .await

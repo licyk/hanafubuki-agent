@@ -133,7 +133,7 @@ pub(super) fn on_reply(context: &mut CommandContext<'_>, reply: SessionReply) {
         ),
         SessionReply::PermissionModeSet(mode) => {
             context.add_to_history(history_cell::new_info_event(
-                format!("Permissions set to {} for this session", label(mode)),
+                format!("Permissions set to {}", label(mode)),
                 Some(
                     "The configured permissionMode stays as it is; a running turn keeps its mode."
                         .to_string(),
@@ -146,7 +146,7 @@ pub(super) fn on_reply(context: &mut CommandContext<'_>, reply: SessionReply) {
                 .find(|preset| (preset.mode, preset.sandbox) == (mode, sandbox))
                 .map_or("the chosen preset", |preset| preset.label);
             context.add_to_history(history_cell::new_info_event(
-                format!("Permissions set to {preset} for this session"),
+                format!("Permissions set to {preset}"),
                 Some(format!(
                     "Permission mode {}, sandbox {}; the configuration stays as it is, and a \
                      running turn keeps its own.",
@@ -217,8 +217,7 @@ fn show_presets(
     context.show_selection_view(SelectionViewParams {
         title: Some("Select Permissions".to_string()),
         subtitle: Some(
-            "For this session only; the configured permissionMode and sandboxMode stay as they \
-             are."
+            "Saved with this session and inherited by /new and /clear; configuration stays unchanged."
                 .to_string(),
         ),
         items,

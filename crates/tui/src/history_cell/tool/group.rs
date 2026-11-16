@@ -21,7 +21,6 @@ pub(crate) enum ToolGroup {
     Web,
     Goals,
     Questions,
-    Plan,
 }
 
 impl ToolGroup {
@@ -43,7 +42,6 @@ impl ToolGroup {
             | "cache_search" | "free_search_test" => Some(Self::Web),
             "create_goal" | "get_goal" | "update_goal" => Some(Self::Goals),
             "request_user_input" => Some(Self::Questions),
-            "update_plan" => Some(Self::Plan),
             _ => None,
         }
     }
@@ -68,8 +66,6 @@ impl ToolGroup {
             (Self::Goals, false) => "Managed goal",
             (Self::Questions, true) => "Asking user",
             (Self::Questions, false) => "Asked user",
-            (Self::Plan, true) => "Updating plan",
-            (Self::Plan, false) => "Updated plan",
         }
     }
 }

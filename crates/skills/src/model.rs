@@ -475,6 +475,8 @@ pub struct SkillDeleteFileRequest {
 #[serde(rename_all = "camelCase")]
 pub struct SkillTurnCatalog {
     pub catalog_revision: u64,
+    /// The configured user installation root in native form, even with no user Skills.
+    pub user_root: String,
     /// The Skills the turn may use.
     pub entries: Vec<SkillTurnEntry>,
     /// Enabled Skills the turn may not use, with why: listed so the model can

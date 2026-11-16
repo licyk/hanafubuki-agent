@@ -118,11 +118,8 @@ fn assert_presented(
         ),
         crate::AgentToolCallDisplay {
             subject: None,
-            display: Some(crate::AgentToolDisplay::Fields {
-                rows: vec![
-                    ("items".to_string(), "2 items".to_string()),
-                    ("status".to_string(), "ok".to_string()),
-                ],
+            display: Some(crate::AgentToolDisplay::Text {
+                text: json!({"status":"ok", "items":[1,2]}).to_string()
             }),
         }
     );

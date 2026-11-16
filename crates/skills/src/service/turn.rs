@@ -80,6 +80,7 @@ impl SkillService {
         });
         Ok(SkillTurnCatalog {
             catalog_revision: revision,
+            user_root: crate::fs_util::native_text(&self.inner.roots.user),
             entries,
             unavailable: Vec::new(),
         })

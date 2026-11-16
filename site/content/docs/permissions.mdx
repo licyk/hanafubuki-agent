@@ -25,11 +25,11 @@ hanafubuki-agent --permission-mode full-access exec "..." # 只对这次运行
 
 ### 单个会话的模式 [#session-mode]
 
-一个会话可以使用与配置不同的模式，直到会话结束，不改变 `permissionMode`。在终端界面中用 `/permissions` 设置：和会话的沙箱一起作为[预设](#presets)设置，或用 `/permissions 模式` 单独设置（[终端界面](/docs/terminal-interface#permissions)）。嵌入的宿主用 `set_session_permission_mode` 设置它（[嵌入 Agent](/docs/embedding#permissions)）。
+一个会话可以使用与配置不同的模式，恢复会话后仍保留，不改变 `permissionMode`。在终端界面中用 `/permissions` 设置：和会话的沙箱一起作为[预设](#presets)设置，或用 `/permissions 模式` 单独设置（[终端界面](/docs/terminal-interface#permissions)）。嵌入的宿主用 `set_session_permission_mode` 设置它（[嵌入 Agent](/docs/embedding#permissions)）。
 
 - 随时可以修改。正在运行的回合保持开始时的模式，会话的下一个回合使用新模式。
 - 只属于这个会话：其他会话，以及从它分叉出的会话，仍使用配置的模式。
-- 只保存在内存中：重启后，会话回到 `permissionMode`。
+- 随会话保存，恢复时还原，重启 Agent 后恢复也一样。在 TUI 中，`/new` 和 `/clear` 继承当前会话的选择；退出 Agent 后重新以空对话启动时使用配置默认值。
 
 ## 沙箱 [#sandbox]
 
@@ -124,7 +124,7 @@ Run Posix command outside the sandbox in /home/me/project: npm install (reason: 
 
 ### 单个会话的沙箱 [#session-sandbox]
 
-和权限模式一样，一个会话可以有自己的沙箱模式，直到会话结束，不改变 `sandboxMode`（`set_session_sandbox_mode`，见[嵌入 Agent](/docs/embedding#permissions)）。会话的下一个回合使用它；它只保存在内存中；分叉出的会话不带它，子代理沿用父会话的。`sandboxWorkspaceWrite` 仍取自配置。
+和权限模式一样，一个会话可以有自己保存的沙箱模式，不改变 `sandboxMode`（`set_session_sandbox_mode`，见[嵌入 Agent](/docs/embedding#permissions)）。会话的下一个回合使用它；恢复会话时还原，同一次 TUI 运行中的 `/new` 和 `/clear` 也会继承；分叉出的会话不带它，子代理沿用父会话的。`sandboxWorkspaceWrite` 仍取自配置。
 
 ### 预设 [#presets]
 

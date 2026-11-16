@@ -416,6 +416,8 @@ pub(super) fn conversation_commit(
             generation: record.status.generation,
             revision: AgentRevision::new(record.status.revision),
             config: record.settings.config.clone(),
+            permission_mode: record.runtime.permission_mode,
+            sandbox_mode: record.runtime.sandbox_mode,
             memory_contribution: record.settings.memory_contribution,
             turn_budget_policy: record.settings.budget_policy,
             lifecycle: record.status.lifecycle,

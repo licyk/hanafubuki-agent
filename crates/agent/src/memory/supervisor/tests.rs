@@ -311,6 +311,8 @@ fn idle_session(
         turn: Some(turn),
         activities: Vec::new(),
         task_plan: None,
+        permission_mode: None,
+        sandbox_mode: None,
         pending_user_input: None,
         next_message_id: 1,
         next_history_item_id: 1,

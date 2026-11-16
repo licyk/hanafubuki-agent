@@ -39,7 +39,7 @@ pub(crate) use messages::{
     insert_before, new_user_prompt, splice_stream, stream_span, user_prompt, AgentMarkdownCell,
     AgentMessageCell, StreamId, StreamTailCell, UserHistoryCell,
 };
-pub(crate) use plan::{new_plan_update, new_proposed_plan_stream, ProposedPlanCell};
+pub(crate) use plan::{new_proposed_plan_stream, PlanUpdateCell, ProposedPlanCell};
 pub(crate) use reports::{new_mcp_output, new_skills_output};
 pub(crate) use status::{format_tokens_compact, new_status_output, permission_mode_name};
 pub(crate) use thinking::{ThinkingCell, THINKING_ACTIVITY};

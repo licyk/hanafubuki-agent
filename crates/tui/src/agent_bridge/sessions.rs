@@ -255,6 +255,7 @@ impl AgentBridge {
             }
             SessionCall::Fork(name) | SessionCall::ForkHere(name) => return self.fork(name),
             SessionCall::Clear(name) => {
+                self.remember_permissions()?;
                 self.pending_title = name;
                 let model = self.model.clone();
                 self.spawn(|agent| async move {

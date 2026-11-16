@@ -31,6 +31,7 @@ fn a_skill_whose_mcp_dependency_is_unreachable_is_listed_unavailable_with_its_se
     ));
     let mut catalog = SkillTurnCatalog {
         catalog_revision: 3,
+        user_root: "/skills/user".into(),
         entries: vec![
             entry("plain", true, Vec::new()),
             entry(
@@ -70,6 +71,7 @@ fn a_skill_whose_mcp_dependency_is_unreachable_is_listed_unavailable_with_its_se
 fn every_catalog_entry_is_selectable_with_the_context_it_adopts() {
     let catalog = SkillTurnCatalog {
         catalog_revision: 5,
+        user_root: "/skills/user".into(),
         entries: vec![
             entry("listed", true, Vec::new()),
             entry("explicit-only", false, Vec::new()),

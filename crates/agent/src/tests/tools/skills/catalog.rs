@@ -25,6 +25,7 @@ async fn skills_list_pages_the_frozen_turn_catalog_with_snapshot_bound_cursors()
     let mounted = MountedSkills::mount(&skills).await;
     let mut catalog = hanafubuki_agent_skills::SkillTurnCatalog {
         catalog_revision: 9,
+        user_root: "/skills/user".into(),
         entries: (0..48)
             .map(|index| hanafubuki_agent_skills::SkillTurnEntry {
                 id: SkillId::new(SkillScope::User, &format!("skill-{index:02}")).unwrap(),

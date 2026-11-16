@@ -95,9 +95,9 @@ impl AgentBridge {
             AgentEventKind::UserInputResolved { resolution } => {
                 TurnUpdate::UserInputResolved(resolution.request_id)
             }
-            AgentEventKind::TaskPlanUpdated { plan } => {
+            AgentEventKind::TaskPlanUpdated { .. } => {
                 self.send_session_status();
-                TurnUpdate::TaskPlan(plan)
+                return None;
             }
             AgentEventKind::SteeringConsumed {
                 through_sequence, ..

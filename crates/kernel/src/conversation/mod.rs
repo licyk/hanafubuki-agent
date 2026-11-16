@@ -171,6 +171,10 @@ pub struct PersistedAgentRuntimeState {
     pub generation: AgentGeneration,
     pub revision: AgentRevision,
     pub config: AgentSessionConfig,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permission_mode: Option<hanafubuki_agent_approval::AgentPermissionMode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox_mode: Option<hanafubuki_agent_foundation::agent_settings::AgentSandboxMode>,
     #[serde(default)]
     pub memory_contribution: AgentMemoryContributionState,
     pub turn_budget_policy: AgentTurnBudgetPolicy,

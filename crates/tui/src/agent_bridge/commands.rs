@@ -64,6 +64,7 @@ impl AgentBridge {
     fn run_command(&mut self, command: AgentCommand) -> Result<Option<TurnUpdate>, String> {
         match command {
             AgentCommand::NewSession => {
+                self.remember_permissions()?;
                 self.pending_title = None;
                 let model = self.model.clone();
                 self.spawn(|agent| async move {

@@ -74,6 +74,34 @@ impl RecentDenials {
 }
 
 impl AgentBridge {
+    pub(super) fn remember_permissions(&mut self) -> Result<(), String> {
+        if let Some(id) = self.session_id {
+            self.pending_permissions = (
+                self.agent
+                    .session_permission_mode(id)
+                    .map_err(|error| error.to_string())?,
+                self.agent
+                    .session_sandbox_mode(id)
+                    .map_err(|error| error.to_string())?,
+            );
+        }
+        Ok(())
+    }
+
+    pub(super) fn apply_pending_permissions(&self, id: AgentSessionId) -> Result<(), String> {
+        if let Some(mode) = self.pending_permissions.0 {
+            self.agent
+                .set_session_permission_mode(id, mode)
+                .map_err(|error| error.to_string())?;
+        }
+        if let Some(mode) = self.pending_permissions.1 {
+            self.agent
+                .set_session_sandbox_mode(id, mode)
+                .map_err(|error| error.to_string())?;
+        }
+        Ok(())
+    }
+
     /// The session's own mode, the configured one, and the sandbox mode in
     /// effect.
     pub(super) fn permission_modes(&self) -> Result<(), String> {

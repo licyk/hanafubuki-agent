@@ -363,7 +363,7 @@ impl AgentApplicationService {
     }
 
     /// Sets the session's permission mode, in place of the configured
-    /// `permissionMode`, until the session ends; it is not persisted. A
+    /// `permissionMode`, persisted across session recovery. A
     /// running turn keeps its mode; the next turn takes this one.
     pub fn set_session_permission_mode(
         &self,
@@ -386,8 +386,7 @@ impl AgentApplicationService {
     }
 
     /// Sets the sandbox the session's commands run in, in place of the
-    /// configured `sandboxMode`, until the session ends; it is not
-    /// persisted. Independent of the permission mode: a command a
+    /// configured `sandboxMode`, persisted across session recovery. Independent of the permission mode: a command a
     /// full-access permission mode runs without asking is still sandboxed.
     /// A running turn keeps its sandbox; the next turn takes this one.
     pub fn set_session_sandbox_mode(

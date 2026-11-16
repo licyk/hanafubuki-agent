@@ -32,10 +32,17 @@ guide, or a set of references and helper scripts that belong together.
 
 1. Ask what the Skill is for and for two or three requests that should trigger
    it. The description is written from those, not from a guess.
-2. Find the managed Skill root: call `skills_list`, take any Skill whose
-   authority is `user`, and read the `directory` it reports. Its parent is the
-   root. If there is no user Skill yet, ask the user where their Skills live.
-3. Create the directory and write `SKILL.md` with `apply_patch`. Open with the
+2. Call `skills_list` and use its `user_root` as the installation root, even
+   when no user Skills are listed. Each entry's `directory` is the full native
+   path of that Skill, which may resolve a symbolic link; it is not a root or
+   a relative path. Never infer a root by taking its parent or stripping the
+   relative path from its id. System, repo and plugin roots are independent.
+   Standalone defaults to `<data-directory>/skills/packages`, with bundled
+   Skills separately in `<data-directory>/skills/system`; embedded hosts may
+   configure different roots. The enclosing `skills` directory is not the
+   installation destination. If the tool cannot report `user_root`, ask for
+   the configured user root.
+3. Create `<user-root>/<name>/SKILL.md` with `apply_patch`. Open with the
    frontmatter and keep the body short and procedural: when to use this, the
    steps, and what to avoid.
 
@@ -54,15 +61,16 @@ guide, or a set of references and helper scripts that belong together.
 4. Put long supporting material in `references/`, runnable helpers in
    `scripts/`, and templates or samples in `assets/`. Reference them from
    `SKILL.md` by their package-relative path so a reader knows what to open.
-5. Read the result back with `skills_read` and check two things: that the
-   catalog picked it up, and that the description alone would tell you when to
-   reach for it.
+5. Read the written files back and check that the description alone tells you
+   when to reach for the Skill. On the next user turn, confirm discovery with
+   `skills_list` and read it with `skills_read`; these tools use the current
+   turn's frozen catalog and cannot see a Skill just created during that turn.
 
 ## Notes
 
 - A new Skill is on as soon as its `SKILL.md` parses; there is nothing to
   publish and no catalog to register with. The catalog rescans on its own.
-- A Skill outside the managed root — one discovered in a repository, or one
+- A Skill outside the user root — one discovered in a repository or plugin, or one
   shipped with the application — is not yours to edit. Copy the directory and
   edit the copy.
 - Never put secrets, credentials, or install hooks in a Skill.

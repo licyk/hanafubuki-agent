@@ -266,8 +266,8 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 
 - **`/permissions`** 列出 Codex 的[预设](/docs/permissions#presets)，每个都是一个权限模式加一个沙箱模式：Read only（手动，`read-only`）、Default（手动，`workspace-write`）、Auto-review（自动审查，`workspace-write`）和 Full access（完全访问，没有沙箱）。生效的预设被选中：会话自己的模式，否则是配置的模式；两者组成不了预设时，不选中任何一个。选择 Full access 时会先确认（默认选中 Cancel）。这台机器没有沙箱时，需要沙箱的预设不能选择。选中一个预设会为本会话同时设置两种模式。没有会话时，`/permissions` 会先创建一个。
 - **`/permissions read-only`** 或 **`/permissions default`** 直接设置这个预设。**`/permissions manual`**、**`/permissions auto-review`** 或 **`/permissions full-access`**（也可以写 `auto_review` 和 `full_access`）只直接设置权限模式，不再确认，沙箱保持不变：模式的名字不会被当作预设。
-- 这些模式只属于本会话，直到界面退出：`permissionMode` 和 `sandboxMode` 保持不变，其他会话和分叉出的会话仍使用配置的模式，已经在运行的回合保持它开始时的模式。见[单个会话的模式](/docs/permissions#session-mode)和[单个会话的沙箱](/docs/permissions#session-sandbox)。
-- **自动批准审核**的每次审核各有独立活动条目。第一行显示白色闪烁圆点、`Reviewing approval request` 和实时耗时；待审核操作从第二行的 `└ ` 后开始，换行后与操作内容对齐，无需展开条目即可看到。审核结果（批准、拒绝、超时、失败或中止）会替换标题并停止计时；批准显示绿色常亮圆点，拒绝、超时、失败或中止显示红色常亮圆点。返回的理由在条目详情中展开查看，无需展开工具输出。后端没有提供审核文本流，因此界面不会模拟；已结束的审核从保存的审核记录恢复，采用相同布局并保留原始耗时和理由。
+- 权限和沙箱模式随会话保存，恢复时还原，重启 Agent 后恢复也一样。同一次 TUI 运行中的 `/new` 和 `/clear` 继承当前模式；退出 Agent 后重新以空对话启动时使用配置默认值。`permissionMode` 和 `sandboxMode` 不变，其他已有会话和分叉保持自己的模式，正在运行的回合保持开始时的模式。见[单个会话的模式](/docs/permissions#session-mode)和[单个会话的沙箱](/docs/permissions#session-sandbox)。
+- **自动批准审核**的每次审核各有独立活动条目。第一行显示白色闪烁圆点、`Reviewing approval request` 和实时耗时；待审核操作从第二行的 `└ ` 后开始，换行后与操作内容对齐，无需展开条目即可看到。审核结果（批准、拒绝、超时、失败或中止）会替换标题并停止计时；批准后默认只显示一行标题，使用 **Show details** 展开操作内容和理由，恢复会话后也一样。批准显示绿色常亮圆点，拒绝、超时、失败或中止显示红色常亮圆点。返回的理由在条目详情中展开查看，无需展开工具输出。后端没有提供审核文本流，因此界面不会模拟；已结束的审核从保存的审核记录恢复，采用相同布局并保留原始耗时和理由。
 - **`/approve`** 列出本会话中被自动审查拒绝的操作，最新的在前：每个都有摘要和审查给出的理由，可以搜索。界面为每个会话保留从打开它起最近的十个，所以恢复的会话不会列出之前的拒绝。选中的操作会获得批准：模型从下一次请求起看到这次批准，重试仍要经过审查（[批准被拒绝的操作](/docs/permissions#approve-denied)）。没有被拒绝的操作时，会显示 `No denied actions to approve.`。回合进行中 Agent 会拒绝批准，对话中会说明原因。
 
 ## 工作目录和工作树 [#worktrees]
@@ -475,6 +475,8 @@ Esc 返回上一页，在标签页上回到设置中心。用 `--safe-mode` 启�
 任务引用由 `threads` 插件的只读工具 `read_thread` 承接。模型读取该任务当前的用户和助手消息，并可用 `olderCursor` 和 `throughRevision` 继续向前分页；不会复制思考内容和图片载荷。引用为当前任务提供上下文，不会继承另一段对话的指令或授权。
 
 ## 阅读对话 [#reading]
+
+成功的 `update_plan` 调用只显示一个 **Updated Plan** 清单，恢复会话后保留相同的步骤和说明。展开 Skill 列表、工具发现和 MCP 资源结果时，会显示返回的条目和嵌套字段（包括失败详情），而不只是条数。
 
 Fullscreen 下，对话会跟随最新输出，直到你向上滚动。向上滚动后，回合继续运行时视图停留在原处，输入框上方会出现 `↓ Back to bottom` 控件（下方有新内容时为 `New activity · ...`），用它回到最新输出。
 

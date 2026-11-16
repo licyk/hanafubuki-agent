@@ -56,7 +56,7 @@ fn live_hoshimi_compaction_continues_and_restarts() {
     println!("Live compaction transcript:\n{transcript}");
     harness.key(KeyCode::Esc);
     let session = harness.app.bridge.session_id().unwrap();
-    let mut restarted = harness.restart_with_compacted_history();
+    let mut restarted = harness.restart();
     restarted.type_and_submit(&format!("/resume {}", session.value()));
     restarted.pump_until("the restarted session", |h| {
         h.app.bridge.session_id() == Some(session)
@@ -117,7 +117,7 @@ fn mid_turn_compaction_continues_thinking_and_tools_and_restarts() {
     assert_eq!(harness.compacted_cells(), 1);
     harness.key(KeyCode::Esc);
     assert!(!harness.transcript().contains("turn was not interrupted"));
-    let mut restarted = harness.restart_with_compacted_history();
+    let mut restarted = harness.restart();
     restarted.type_and_submit(&format!("/resume {}", session.value()));
     restarted.pump_until("the restarted session", |h| {
         h.app.bridge.session_id() == Some(session)
@@ -167,7 +167,7 @@ fn failure_immediately_after_mid_turn_compaction_ends_working_and_restarts() {
     harness.pump_until_turn_ends();
     assert_eq!(harness.compacted_cells(), 1);
     let session = harness.app.bridge.session_id().unwrap();
-    let mut restarted = harness.restart_with_compacted_history();
+    let mut restarted = harness.restart();
     restarted.type_and_submit(&format!("/resume {}", session.value()));
     restarted.pump_until("the restarted session", |h| {
         h.app.bridge.session_id() == Some(session)
@@ -176,29 +176,6 @@ fn failure_immediately_after_mid_turn_compaction_ends_working_and_restarts() {
 }
 
 impl Harness {
-    fn restart_with_compacted_history(mut self) -> Self {
-        // The Provider stays at the same URL while only the Agent restarts.
-        let model_runtime = std::mem::replace(
-            &mut self._model_runtime,
-            tokio::runtime::Runtime::new().unwrap(),
-        );
-        let placeholder = self
-            ._model_runtime
-            .block_on(hanafubuki_agent::test_support::FakeServer::start(Vec::new()));
-        let server = std::mem::replace(&mut self.server, placeholder);
-        let home = std::mem::replace(&mut self.home, tempfile::tempdir().unwrap());
-        drop(self);
-        Self::serving(
-            home,
-            model_runtime,
-            server,
-            false,
-            TranscriptMode::Terminal,
-            |_| {},
-            None,
-        )
-    }
-
     /// The `background` strategy over a window of 100,000 tokens. The
     /// first two responses are the exchanges [`Harness::two_long_exchanges`]
     /// has; the second reports 70,000 input tokens, between the background

@@ -26,7 +26,7 @@ impl AgentService {
         Ok(record.runtime.permission_mode)
     }
 
-    /// Sets the session's permission mode until the session ends. A running
+    /// Persists the session's permission mode, including across recovery. A running
     /// turn keeps the mode it was admitted with; the next one takes this.
     /// Off the async runtime only.
     pub fn set_session_permission_mode(
@@ -36,8 +36,16 @@ impl AgentService {
     ) -> Result<(), AgentError> {
         let cell = self.session(session_id)?;
         // After the staged commit settles, so its rollback cannot undo this.
-        let mut record = cell.lock_after_persistence_blocking()?;
+        let mut guard = cell.lock_after_persistence_blocking()?;
+        let record = &mut *guard;
+        if record.runtime.permission_mode == Some(mode) {
+            return Ok(());
+        }
+        let previous = record.rollback_state();
         record.runtime.permission_mode = Some(mode);
+        let staged = StagedPersistence::commit(&cell, record, previous);
+        drop(guard);
+        self.persist_staged_blocking(staged)?;
         Ok(())
     }
 
@@ -52,7 +60,7 @@ impl AgentService {
         Ok(record.runtime.sandbox_mode)
     }
 
-    /// Sets the session's sandbox mode until the session ends. Off the
+    /// Persists the session's sandbox mode, including across recovery. Off the
     /// async runtime only.
     pub fn set_session_sandbox_mode(
         &self,
@@ -61,8 +69,16 @@ impl AgentService {
     ) -> Result<(), AgentError> {
         let cell = self.session(session_id)?;
         // After the staged commit settles, so its rollback cannot undo this.
-        let mut record = cell.lock_after_persistence_blocking()?;
+        let mut guard = cell.lock_after_persistence_blocking()?;
+        let record = &mut *guard;
+        if record.runtime.sandbox_mode == Some(mode) {
+            return Ok(());
+        }
+        let previous = record.rollback_state();
         record.runtime.sandbox_mode = Some(mode);
+        let staged = StagedPersistence::commit(&cell, record, previous);
+        drop(guard);
+        self.persist_staged_blocking(staged)?;
         Ok(())
     }
 

@@ -28,11 +28,17 @@ not apply.
 
 1. Start from `skills_list`. It is the identity authority: every action names a
    Skill by the id it returns, and each entry reports its authority (`user`,
-   `repo`, or `system`) and the directory it was loaded from.
+   `repo`, `system`, or `plugin`) and its full native directory path.
 2. `enable_skill` and `disable_skill` change which Skills are offered from the
    next turn onward. They do not change the turn in progress.
 3. Installing a Skill is copying a directory that holds a `SKILL.md` into the
-   managed root. Find that root the way `skill-creator` does, then:
+   user Skill root as `<user_root>/<name>/SKILL.md`. Use the `user_root` that
+   `skills_list` returns, including when its entries are empty. An entry's
+   `directory` may resolve a symbolic link, so never derive the root from it
+   or from a system, repo or plugin entry. If the tool cannot report the root,
+   ask for it. Standalone defaults to `<data-directory>/skills/packages`, not
+   the enclosing `skills` directory; embedded hosts can configure another
+   root. Then:
    - from a local folder, copy it with `exec_command`;
    - from Git, clone it with `exec_command` at a ref the user named, and copy
      the subdirectory that holds the `SKILL.md`.
@@ -40,9 +46,9 @@ not apply.
    Show the user the source and the destination before copying, and never run a
    script from a package you just downloaded.
 4. Removing a Skill is deleting its directory with `delete_path`. Only the
-   managed root is yours to delete from.
+   user root is yours to delete from.
 5. The catalog rescans on its own after any of this. Confirm with `skills_list`
-   rather than assuming.
+   on the next user turn: the current turn's catalog is frozen.
 
 ## Notes
 

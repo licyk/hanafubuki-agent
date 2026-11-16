@@ -109,7 +109,7 @@ fn permissions_with_a_mode_sets_it_and_without_one_lists_the_presets() {
         "Default",
         "Auto-review",
         "Full access",
-        "For this session only",
+        "Saved with this session and inherited by /new and /clear",
     ] {
         assert!(shown.contains(preset), "{preset}: {shown}");
     }
@@ -132,13 +132,13 @@ fn permissions_with_a_mode_sets_it_and_without_one_lists_the_presets() {
         ),
     );
     let shown = cells(sent(&events));
-    assert!(shown.contains("Permissions set to Auto-review for this session"));
+    assert!(shown.contains("Permissions set to Auto-review"));
     assert!(shown.contains("sandbox workspace-write"), "{shown}");
     reply(
         &mut chat,
         SessionReply::PermissionModeSet(AgentPermissionMode::Manual),
     );
-    assert!(cells(sent(&events)).contains("Permissions set to Manual for this session"));
+    assert!(cells(sent(&events)).contains("Permissions set to Manual"));
 }
 
 /// Where this machine has no sandbox, the presets that need one cannot be

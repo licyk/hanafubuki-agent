@@ -7,6 +7,7 @@ use hanafubuki_agent_skills::{
 fn snapshot(count: usize) -> SkillTurnCatalog {
     SkillTurnCatalog {
         catalog_revision: 7,
+        user_root: "/skills/user".into(),
         entries: (0..count)
             .map(|index| SkillTurnEntry {
                 id: SkillId::new(SkillScope::User, &format!("skill-{index}")).unwrap(),

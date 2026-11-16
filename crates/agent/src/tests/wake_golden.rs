@@ -144,12 +144,17 @@ async fn with_the_wake_off_a_request_is_the_one_before_wakes() {
 /// arguments, allowing the later nesting/default-limit guidance change.
 /// The rebuilt web catalog, thread reading, portable discovery and patch directory creation are pinned by current
 /// request goldens, separately from this immutable pre-wake fixture.
+/// Those also pin the Skill schemas, which now include plugin identities.
 fn without_reworded(mut request: Value) -> Value {
     request["tools"].as_array_mut().unwrap().retain(|tool| {
         !matches!(
             tool["name"].as_str(),
             Some(
                 "web_search"
+                    | "skills_list"
+                    | "skills_read"
+                    | "enable_skill"
+                    | "disable_skill"
                     | "read_thread"
                     | "tool_list"
                     | "search_tools"

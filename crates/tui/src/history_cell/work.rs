@@ -108,6 +108,9 @@ impl WorkCell {
 impl HistoryCell for WorkCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         let mut lines = vec![self.header()];
+        if self.snapshot.review_status == Some(PermissionReviewStatus::Approved) {
+            return lines;
+        }
         if let Some(subject) = &self.snapshot.subject {
             let body = word_wrap_lines(
                 raw_lines_from_source(subject),
@@ -120,6 +123,15 @@ impl HistoryCell for WorkCell {
 
     fn transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
         let mut lines = self.display_lines(width);
+        if self.snapshot.review_status == Some(PermissionReviewStatus::Approved) {
+            if let Some(subject) = &self.snapshot.subject {
+                let body = word_wrap_lines(
+                    raw_lines_from_source(subject),
+                    RtOptions::new(usize::from(width.saturating_sub(4)).max(1)),
+                );
+                lines.extend(prefix_lines(body, "  └ ".into(), "    ".into()));
+            }
+        }
         let mut body = Vec::new();
         crate::markdown::append_markdown(
             self.text(),
@@ -149,7 +161,7 @@ impl HistoryCell for WorkCell {
     }
 
     fn activity_ids(&self) -> Vec<String> {
-        if self.text().is_empty() {
+        if self.text().is_empty() && self.snapshot.subject.is_none() {
             Vec::new()
         } else {
             vec![self.snapshot.id.clone()]
@@ -157,7 +169,10 @@ impl HistoryCell for WorkCell {
     }
 
     fn activity_disclosure(&self, _width: u16) -> Option<ActivityDisclosure> {
-        (!self.text().is_empty()).then_some(ActivityDisclosure::Generic)
+        (!self.text().is_empty()
+            || (self.snapshot.review_status == Some(PermissionReviewStatus::Approved)
+                && self.snapshot.subject.is_some()))
+        .then_some(ActivityDisclosure::Generic)
     }
 
     fn transcript_animation_tick(&self) -> Option<u64> {

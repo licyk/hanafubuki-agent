@@ -64,13 +64,3 @@ expression: "gallery.join(\"\\n\\n\")"
       Choose a target
       Full result kept in
       details
-
-• Updated plan
-  └ Update plan Implement and
-      verify
-─── expanded (Some(Generic)) ───
-• Updated plan
-  └ Called update_plan:
-      Implement and verify
-      Full result kept in
-      details

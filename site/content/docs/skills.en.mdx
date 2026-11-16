@@ -48,6 +48,8 @@ Put the Skills a team shares in the repository's `.agents/skills/`, and everyone
 
 A plugin's Skills are named after the plugin, as Codex names them: the Skill `search` of the plugin `demo` is `demo:search` in the list and to the model (`$demo:search` selects it), and its id names the package, `plugin:demo@my-mkt:search`. An Agent Plugins package's Skills are the direct children of its `skills/`; other packages' are found at any depth. They come and go with their plugin: turning the plugin off removes them without a restart. They are turned on and off like any Skill.
 
+`skills_list` returns `user_root`, the configured user installation root, even when the list is empty. Use it directly for `<user_root>/<name>/SKILL.md`. Each entry’s `directory` is its full native path and may resolve a symbolic link; it cannot reliably locate the installation root. The `skill` id contains a scope-relative path, not an absolute directory. System, repository and plugin roots are independent. Standalone defaults to `skills/packages/`, while embedded hosts may configure another root. The `authority` filter accepts `system`, `user`, `repo` and `plugin`, and all Skill tools accept plugin ids such as `plugin:demo@local:search`.
+
 ## Listing and installing [#manage]
 
 ```sh

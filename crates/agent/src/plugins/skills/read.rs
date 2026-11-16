@@ -27,6 +27,7 @@ pub(super) fn list_skills(
                         (SkillCatalogAuthority::Repo, SkillScope::Repo)
                             | (SkillCatalogAuthority::User, SkillScope::User)
                             | (SkillCatalogAuthority::System, SkillScope::System)
+                            | (SkillCatalogAuthority::Plugin, SkillScope::Plugin)
                     )
                 })
         })
@@ -67,6 +68,7 @@ pub(super) fn list_skills(
         next += 1;
     }
     Ok(ToolResult::success(serde_json::json!({
+        "user_root": catalog.user_root,
         "entries": page,
         "next_cursor": (next < entries.len()).then(|| encode_cursor(&digest, next)),
     })))

@@ -90,11 +90,10 @@ pub(in crate::service) struct SessionRuntime {
     /// recovered by a new Agent instance starts without any.
     pub(in crate::service) allowances: BTreeSet<crate::service::interaction::SessionAllowance>,
     /// The permission mode the user chose for the session's next turns, in
-    /// place of the configured one. Never persisted, like `allowances`.
+    /// place of the configured one. Persisted across session recovery.
     pub(in crate::service) permission_mode: Option<hanafubuki_agent_approval::AgentPermissionMode>,
     /// The sandbox mode the user chose for the session's commands, in
-    /// place of the configured one. Never persisted, like the permission
-    /// mode; the kernel only keeps it for the application.
+    /// place of the configured one. Persisted for the application.
     pub(in crate::service) sandbox_mode:
         Option<hanafubuki_agent_foundation::agent_settings::AgentSandboxMode>,
     /// The compaction running in the background, never persisted (a restart

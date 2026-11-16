@@ -48,6 +48,29 @@ struct Harness {
 }
 
 impl Harness {
+    fn restart(mut self) -> Self {
+        // The Provider stays at the same URL while only the Agent restarts.
+        let model_runtime = std::mem::replace(
+            &mut self._model_runtime,
+            tokio::runtime::Runtime::new().unwrap(),
+        );
+        let placeholder = self
+            ._model_runtime
+            .block_on(hanafubuki_agent::test_support::FakeServer::start(Vec::new()));
+        let server = std::mem::replace(&mut self.server, placeholder);
+        let home = std::mem::replace(&mut self.home, tempfile::tempdir().unwrap());
+        drop(self);
+        Self::serving(
+            home,
+            model_runtime,
+            server,
+            false,
+            TranscriptMode::Terminal,
+            |_| {},
+            None,
+        )
+    }
+
     fn start(responses: Vec<Vec<u8>>) -> Self {
         Self::start_with(responses, true, TranscriptMode::Terminal)
     }

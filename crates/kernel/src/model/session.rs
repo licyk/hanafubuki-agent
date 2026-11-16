@@ -245,23 +245,6 @@ pub struct AgentSessionTitleRenameRequest {
     pub title: String,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AgentTaskPlanStepStatus {
-    Pending,
-    InProgress,
-    Completed,
-}
-
-/// A plan step, as `update_plan` takes it from the model and as the task
-/// plan snapshot keeps it. Read tolerantly: an unknown field is ignored.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentTaskPlanStep {
-    pub step: String,
-    pub status: AgentTaskPlanStepStatus,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentTaskPlanSnapshot {

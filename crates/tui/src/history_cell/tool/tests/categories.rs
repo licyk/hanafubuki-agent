@@ -4,7 +4,7 @@ use ratatui::style::Color;
 
 use super::*;
 
-const CATEGORIES: [(&str, &str, &str, &str); 8] = [
+const CATEGORIES: [(&str, &str, &str, &str); 7] = [
     ("view_image", "diagram.png", "Viewing image", "Viewed image"),
     ("mcp__docs__lookup", "MCP docs", "Calling MCP", "Called MCP"),
     ("skills_read", "user:rust", "Using skills", "Used skills"),
@@ -31,12 +31,6 @@ const CATEGORIES: [(&str, &str, &str, &str); 8] = [
         "Choose a target",
         "Asking user",
         "Asked user",
-    ),
-    (
-        "update_plan",
-        "Implement and verify",
-        "Updating plan",
-        "Updated plan",
     ),
 ];
 

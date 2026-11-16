@@ -20,7 +20,8 @@ pub use display::{
     output_text, structured_output, AgentListingEntry, AgentListingEntryKind, AgentMutationKind,
     AgentOutputBlock, AgentPatchFile, AgentPatchHunkStart, AgentPatchLine, AgentPatchLineKind,
     AgentPatchOperation, AgentPatchPreview, AgentSearchMatch, AgentStyleSpan, AgentStyledText,
-    AgentTextColor, AgentTextStyle, AgentToolDisplay, AgentToolDisplayMetadata, AgentWebResult,
+    AgentTaskPlanStep, AgentTaskPlanStepStatus, AgentTextColor, AgentTextStyle, AgentToolDisplay,
+    AgentToolDisplayMetadata, AgentWebResult,
 };
 pub use error::{decode_arguments, object_arguments, AgentToolError, ToolCallValidationError};
 pub use extensions::TurnExtensions;

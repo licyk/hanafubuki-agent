@@ -278,3 +278,98 @@ fn init_submits_the_agents_md_prompt_and_copy_offers_the_last_answer() {
         assert!(picker.contains(choice), "{choice}: {picker}");
     }
 }
+
+#[test]
+fn permissions_survive_new_clear_and_resume_without_changing_defaults() {
+    use crate::agent_bridge::SessionCall;
+    use hanafubuki_agent::{AgentPermissionMode, AgentSandboxMode};
+
+    let mut harness = Harness::start(vec![
+        assistant_events("First."),
+        assistant_events("Second."),
+        assistant_events("Third."),
+        assistant_events("Fresh."),
+    ]);
+    let first = harness.exchange("First", "First.");
+    harness.app.bridge.submit(crate::app_event::Op::Command(
+        crate::app_event::AgentCommand::Session(SessionCall::SetPreset(
+            AgentPermissionMode::FullAccess,
+            AgentSandboxMode::FullAccess,
+        )),
+    ));
+    let agent = harness.runtime.slot().agent().unwrap();
+    for (command, prompt, answer) in [("/new", "Second", "Second."), ("/clear", "Third", "Third.")]
+    {
+        harness.type_and_submit(command);
+        harness.pump_until_no_session();
+        let id = harness.exchange(prompt, answer);
+        assert_eq!(
+            agent.session_permission_mode(id).unwrap(),
+            Some(AgentPermissionMode::FullAccess)
+        );
+        assert_eq!(
+            agent.session_sandbox_mode(id).unwrap(),
+            Some(AgentSandboxMode::FullAccess)
+        );
+    }
+    harness.type_and_submit(&format!("/resume {}", first.value()));
+    harness.pump_until("resumed", |h| h.app.bridge.session_id() == Some(first));
+    assert_eq!(
+        agent.session_permission_mode(first).unwrap(),
+        Some(AgentPermissionMode::FullAccess)
+    );
+    assert_eq!(
+        agent.session_sandbox_mode(first).unwrap(),
+        Some(AgentSandboxMode::FullAccess)
+    );
+    drop(agent);
+    let mut restarted = harness.restart();
+    let fresh = restarted.exchange("Fresh", "Fresh.");
+    let agent = restarted.runtime.slot().agent().unwrap();
+    assert_eq!(agent.session_permission_mode(fresh).unwrap(), None);
+    assert_eq!(agent.session_sandbox_mode(fresh).unwrap(), None);
+    restarted.type_and_submit(&format!("/resume {}", first.value()));
+    restarted.pump_until("resumed after restart", |h| {
+        h.app.bridge.session_id() == Some(first)
+    });
+    assert_eq!(
+        agent.session_permission_mode(first).unwrap(),
+        Some(AgentPermissionMode::FullAccess)
+    );
+    assert_eq!(
+        agent.session_sandbox_mode(first).unwrap(),
+        Some(AgentSandboxMode::FullAccess)
+    );
+}
+
+#[test]
+fn plan_tool_renders_once_with_its_steps_live_and_after_resume() {
+    let mut harness = Harness::start(vec![
+        hanafubuki_agent::test_support::tool_events(
+            "update_plan",
+            r#"{"explanation":"Track the work","plan":[{"step":"Verify the fix","status":"completed"}]}"#,
+        ),
+        assistant_events("Verified."),
+    ]);
+    let session = harness.exchange("Check the plan", "Verified.");
+    for resumed in [false, true] {
+        if resumed {
+            harness.type_and_submit("/new");
+            harness.pump_until_no_session();
+            harness.type_and_submit(&format!("/resume {}", session.value()));
+            harness.pump_until("replayed plan", |h| {
+                h.app.bridge.session_id() == Some(session)
+                    && h.transcript().contains("Verify the fix")
+            });
+        }
+        let transcript = harness.transcript();
+        assert_eq!(
+            transcript.matches("Updated Plan").count(),
+            1,
+            "{transcript}"
+        );
+        assert!(transcript.contains("1/1 complete"), "{transcript}");
+        assert!(transcript.contains("Verify the fix"), "{transcript}");
+        assert!(!transcript.contains("Called update_plan"), "{transcript}");
+    }
+}

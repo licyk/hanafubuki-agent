@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use hanafubuki_agent::{AgentReasoningId, AgentTaskPlanSnapshot, AgentToolCallDisplay};
+use hanafubuki_agent::{AgentReasoningId, AgentToolCallDisplay};
 
 use super::input_queue::Ending;
 use super::ChatWidget;
@@ -78,7 +78,6 @@ impl ChatWidget {
             TurnUpdate::UserInputResolved(request_id) => {
                 self.bottom_pane.dismiss_user_input(request_id)
             }
-            TurnUpdate::TaskPlan(plan) => self.on_plan_update(&plan),
             TurnUpdate::Steered { id, outcome } => self.on_steered(id, outcome),
             TurnUpdate::SteeringConsumed(through) => self.on_steering_consumed(through),
             TurnUpdate::Undelivered(text) => self.on_undelivered(text),
@@ -261,11 +260,6 @@ impl ChatWidget {
         if !unsettled {
             self.complete_live_entry(cell);
         }
-    }
-
-    fn on_plan_update(&mut self, plan: &AgentTaskPlanSnapshot) {
-        self.had_work_activity = true;
-        self.add_to_history(history_cell::new_plan_update(plan));
     }
 
     fn on_turn_ended(&mut self, end: TurnEnd) {

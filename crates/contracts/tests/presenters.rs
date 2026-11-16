@@ -250,12 +250,8 @@ fn the_fallback_shows_structured_keys_before_text_notes() {
 
     assert_eq!(
         AgentToolDisplay::fallback(&output),
-        AgentToolDisplay::Fields {
-            rows: vec![
-                ("n".to_string(), "null".to_string()),
-                ("nested".to_string(), "…".to_string()),
-                ("path".to_string(), "a".to_string()),
-            ]
+        AgentToolDisplay::Text {
+            text: json!({"path":"a", "nested":{"x":1}, "n":null}).to_string()
         }
     );
     assert_eq!(

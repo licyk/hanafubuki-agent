@@ -58,9 +58,9 @@ use std::sync::Arc;
 use hanafubuki_agent::{
     AgentAvailability, AgentEventSink, AgentGoal, AgentHandle, AgentPermissionMode,
     AgentReasoningId, AgentReasoningSnapshot, AgentRuntime, AgentSessionContext, AgentSessionId,
-    AgentSessionMode, AgentSlot, AgentTaskPlanSnapshot, AgentToolCallDisplay, AgentTurnAccepted,
-    AgentUserInputRequest, AgentUserInputRequestId, AgentWakeTurnAccepted, ApprovalRequest,
-    ApprovalRequestId, ModelReasoningEffort, SkillCatalogSnapshot,
+    AgentSessionMode, AgentSlot, AgentToolCallDisplay, AgentTurnAccepted, AgentUserInputRequest,
+    AgentUserInputRequestId, AgentWakeTurnAccepted, ApprovalRequest, ApprovalRequestId,
+    ModelReasoningEffort, SkillCatalogSnapshot,
 };
 use tokio::sync::oneshot;
 
@@ -147,7 +147,6 @@ pub(crate) enum TurnUpdate {
     ApprovalResolved(ApprovalRequestId),
     UserInputRequested(AgentUserInputRequest),
     UserInputResolved(AgentUserInputRequestId),
-    TaskPlan(AgentTaskPlanSnapshot),
     /// What became of the steering message `id` the chat sent.
     Steered {
         id: u64,
@@ -269,6 +268,10 @@ pub(crate) struct AgentBridge {
     role: Option<String>,
     /// The name `/clear NAME` gives the session the next message creates.
     pending_title: Option<String>,
+    pending_permissions: (
+        Option<AgentPermissionMode>,
+        Option<hanafubuki_agent::AgentSandboxMode>,
+    ),
     /// While a session is being created: what was asked meanwhile, in
     /// order, carried out once it exists.
     creating: Option<Vec<Op>>,
@@ -319,6 +322,7 @@ impl AgentBridge {
             model,
             role,
             pending_title: None,
+            pending_permissions: (None, None),
             creating: None,
             app_event_tx,
             turn: None,
@@ -453,6 +457,9 @@ impl AgentBridge {
             }
             AgentReply::Failed(message) => Some(TurnUpdate::Error(message)),
             AgentReply::SessionCreated(session_id) => {
+                if let Err(message) = self.apply_pending_permissions(session_id) {
+                    return self.reply(AgentReply::SessionNotCreated(message));
+                }
                 self.session_id = Some(session_id);
                 self.load_session_status();
                 for op in self.creating.take().unwrap_or_default() {

@@ -68,7 +68,7 @@ fn replay_has_details_without_inventing_a_duration() {
 }
 
 #[test]
-fn review_keeps_its_action_below_the_header_in_each_view() {
+fn approved_review_collapses_to_one_line_and_reveals_the_action_and_rationale() {
     use hanafubuki_agent::PermissionReviewStatus;
 
     let action = "Run cargo test --workspace --all-features";
@@ -113,11 +113,8 @@ fn review_keeps_its_action_below_the_header_in_each_view() {
         1_000,
         Some(3_500),
     ));
-    for lines in [
-        cell.display_lines(100),
-        cell.transcript_lines(100),
-        cell.raw_lines(),
-    ] {
+    assert_eq!(cell.display_lines(100).len(), 1);
+    for lines in [cell.transcript_lines(100), cell.raw_lines()] {
         assert_eq!(
             lines[0].to_string(),
             "• Automatic approval review approved · 2.5s"

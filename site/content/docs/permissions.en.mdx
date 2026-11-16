@@ -25,11 +25,11 @@ A profile can hold it too, such as `[profiles.review] permissionMode = "auto_rev
 
 ### One session's mode [#session-mode]
 
-A session can run in another mode than the configured one, until it ends, without changing `permissionMode`. In the terminal interface `/permissions` sets it, with the session's sandbox as a [preset](#presets) or alone with `/permissions MODE` ([Terminal interface](/docs/terminal-interface#permissions)). An embedding host sets it with `set_session_permission_mode` ([Embedding the Agent](/docs/embedding#permissions)).
+A session can run in another mode than the configured one, including after recovery, without changing `permissionMode`. In the terminal interface `/permissions` sets it, with the session's sandbox as a [preset](#presets) or alone with `/permissions MODE` ([Terminal interface](/docs/terminal-interface#permissions)). An embedding host sets it with `set_session_permission_mode` ([Embedding the Agent](/docs/embedding#permissions)).
 
 - It can be changed at any time. A running turn keeps the mode it started with; the session's next turn takes the new one.
 - It belongs to that session only: other sessions, and a fork of it, keep the configured mode.
-- It is kept in memory only: after a restart the session is back on `permissionMode`.
+- It is saved with the session and restored on resume, including after restarting the Agent. In the TUI, `/new` and `/clear` inherit the current session’s choices. Starting the Agent again with an empty conversation uses the configured defaults.
 
 ## The sandbox [#sandbox]
 
@@ -124,7 +124,7 @@ After updating from the original elevated backend, rerun `/setup-default-sandbox
 
 ### One session's sandbox [#session-sandbox]
 
-Like its permission mode, a session can have its own sandbox mode until it ends, without changing `sandboxMode` (`set_session_sandbox_mode`, see [Embedding the Agent](/docs/embedding#permissions)). The session's next turn takes it; it is kept in memory only; a fork starts without one, and a sub-agent takes its parent's. `sandboxWorkspaceWrite` still comes from the configuration.
+Like its permission mode, a session can have its own saved sandbox mode, without changing `sandboxMode` (`set_session_sandbox_mode`, see [Embedding the Agent](/docs/embedding#permissions)). The session's next turn takes it; it is restored on resume and inherited by `/new` and `/clear` in the same TUI run; a fork starts without one, and a sub-agent takes its parent's. `sandboxWorkspaceWrite` still comes from the configuration.
 
 ### Presets [#presets]
 

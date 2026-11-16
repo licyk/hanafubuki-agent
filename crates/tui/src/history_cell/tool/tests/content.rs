@@ -291,3 +291,39 @@ fn structured_mcp_content_shows_its_items() {
     assert_eq!(render(&cell, 80), "• Called MCP\n  └ mcp__weather__now");
     assert!(text(&cell.transcript_lines(80)).contains("\"temperature\": 21"));
 }
+
+#[test]
+fn expanded_catalog_results_keep_entries_nested_fields_and_failures() {
+    use hanafubuki_agent::ToolOutput;
+    use serde_json::json;
+
+    for (name, value, expected) in [
+        (
+            "skills_list",
+            json!({"entries":[{"skill":"plugin:demo@local:search", "description":"Find documents", "directory":"/skills/search"}], "next_cursor":null}),
+            "plugin:demo@local:search",
+        ),
+        (
+            "tool_list",
+            json!({"tools":[{"name":"mcp__docs__lookup", "description":"Look up a document", "inputSchema":{"type":"object"}}], "total":1}),
+            "mcp__docs__lookup",
+        ),
+        (
+            "list_mcp_resources",
+            json!({"resources":[], "failures":[{"server":"docs", "error":"Connection refused"}]}),
+            "Connection refused",
+        ),
+        (
+            "list_mcp_resource_templates",
+            json!({"resourceTemplates":[{"uriTemplate":"docs://{id}", "name":"Document"}]}),
+            "docs://{id}",
+        ),
+    ] {
+        let display = AgentToolDisplay::fallback(&ToolOutput::structured(value, false));
+        let cell = shown(name, None, display);
+        assert!(cell.activity_disclosure(80).is_some());
+        assert!(!render(&cell, 80).contains(expected));
+        assert!(text(&cell.transcript_lines(80)).contains(expected));
+        assert!(text(&cell.raw_lines()).contains(expected));
+    }
+}

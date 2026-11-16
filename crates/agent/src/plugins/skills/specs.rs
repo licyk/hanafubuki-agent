@@ -8,11 +8,11 @@ use super::SkillToolKind;
 pub(super) fn spec(kind: SkillToolKind) -> (String, Value) {
     match kind {
         SkillToolKind::SkillsList => (
-            "List the Skills available for this turn. Each entry carries the id every other Skill tool takes, its name, its description, and its directory. Follow cursor until next_cursor is absent.".to_string(),
+            "List the Skills available for this turn and user_root, the user installation directory even when no user Skills exist. Each entry carries the id every other Skill tool takes, its name, its description, and its full native directory path. Follow cursor until next_cursor is absent.".to_string(),
             json!({
                 "type": "object",
                 "properties": {
-                    "authority": {"type":["string","null"],"enum":["repo","user","system",null]},
+                    "authority": {"type":["string","null"],"enum":["repo","user","system","plugin",null]},
                     "cursor": {"type":["string","null"],"maxLength":256}
                 },
                 "additionalProperties": false
@@ -51,14 +51,14 @@ fn selection_schema() -> Value {
     })
 }
 
-/// A Skill's identity: the scope it was discovered under and its directory path
-/// under that scope's root, exactly as the catalog reports it.
+/// The catalog id, not the full native path reported in `directory`:
+/// `<scope>:<relative/path>` or `plugin:<plugin>@<marketplace>:<relative/path>`.
 fn skill_id_schema() -> Value {
     json!({
         "type":"string",
         "minLength":6,
         "maxLength":200,
-        "pattern":"^(system|user|repo):[^/][^\\\\:]*$"
+        "pattern":r"^(?:(?:system|user|repo):|plugin:[A-Za-z0-9_.@-]+@[A-Za-z0-9_.@-]+:)[^/\\:]+(?:/[^/\\:]+)*$"
     })
 }
 

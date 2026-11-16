@@ -4,15 +4,13 @@
 //! The cells of plan mode's proposed plan (its streamed rows, then its
 //! Markdown) and of the task checklist.
 
-use hanafubuki_agent::{AgentTaskPlanSnapshot, AgentTaskPlanStep, AgentTaskPlanStepStatus};
+use hanafubuki_agent::{AgentTaskPlanStep, AgentTaskPlanStepStatus};
 use ratatui::style::{Style, Styled, Stylize};
 use ratatui::text::Line;
 use unicode_width::UnicodeWidthStr;
 
 use super::markdown_cache::MarkdownRenderCache;
-use super::{
-    next_activity_id, plain_lines, raw_lines_from_source, ActivityDisclosure, HistoryCell, StreamId,
-};
+use super::{plain_lines, raw_lines_from_source, ActivityDisclosure, HistoryCell, StreamId};
 use crate::markdown_render::ListSpacing;
 use crate::render::line_utils::prefix_lines;
 use crate::style::proposed_plan_style;
@@ -20,16 +18,6 @@ use crate::terminal_hyperlinks::{prefix_hyperlink_lines, visible_lines, Hyperlin
 
 /// The steps a collapsed checklist shows.
 const PLAN_PREVIEW_STEPS: usize = 3;
-
-/// The task checklist the model keeps with `update_plan`, as it stood at
-/// one update.
-pub(crate) fn new_plan_update(snapshot: &AgentTaskPlanSnapshot) -> PlanUpdateCell {
-    PlanUpdateCell {
-        activity_id: next_activity_id("plan:"),
-        explanation: snapshot.explanation.clone(),
-        plan: snapshot.plan.clone(),
-    }
-}
 
 pub(crate) fn new_proposed_plan_stream(
     lines: Vec<HyperlinkLine>,
@@ -171,6 +159,17 @@ pub(crate) struct PlanUpdateCell {
 }
 
 impl PlanUpdateCell {
+    pub(crate) fn from_tool(
+        activity_id: String,
+        explanation: Option<String>,
+        plan: Vec<AgentTaskPlanStep>,
+    ) -> Self {
+        Self {
+            activity_id,
+            explanation,
+            plan,
+        }
+    }
     /// `• Updated Plan · 1/3 complete`, the same collapsed and expanded.
     fn header(&self) -> Line<'static> {
         let completed = self

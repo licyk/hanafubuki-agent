@@ -16,6 +16,7 @@ pub(super) enum SkillCatalogAuthority {
     Repo,
     User,
     System,
+    Plugin,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
