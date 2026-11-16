@@ -1,6 +1,7 @@
 //! Startup and shutdown reports stay queued until the next user turn.
 
 use super::*;
+use crate::{AgentSubagentWake, AgentWakeQueue};
 
 impl AgentService {
     /// Records work lost at a stop, while no turn can consume it. Recovery
@@ -22,10 +23,36 @@ impl AgentService {
             }
             let previous = record.rollback_state();
             for source in sources {
+                // The run remains live until its durable completion returns to
+                // the caller. Shutdown's earlier capture can therefore be stale.
+                if already_completed(&source, &record.runtime.wake_queue) {
+                    continue;
+                }
                 record.runtime.wake_queue.push(source, now_millis_u64());
             }
             StagedPersistence::commit(&cell, &mut record, previous)
         };
         self.persist_staged_blocking(staged)
     }
+}
+
+fn already_completed(source: &AgentWakeSource, queue: &AgentWakeQueue) -> bool {
+    let AgentWakeSource::Subagent {
+        session_id,
+        event: AgentSubagentWake::Lost,
+        ..
+    } = source
+    else {
+        return false;
+    };
+    queue.events.iter().any(|queued| {
+        matches!(
+            &queued.source,
+            AgentWakeSource::Subagent {
+                session_id: completed,
+                event: AgentSubagentWake::Completed { .. },
+                ..
+            } if completed == session_id
+        )
+    })
 }

@@ -27,6 +27,49 @@ fn answering(answer: &str) -> Arc<ScriptedPersistenceModel> {
 }
 
 #[tokio::test]
+async fn a_shutdown_loss_does_not_replace_a_durable_subagent_completion() {
+    let store = Arc::new(EphemeralAgentHistoryStore::default());
+    let service = AgentService::with_history_store(
+        answering("unused"),
+        AgentKernelRegistries::default(),
+        store.clone(),
+    );
+    let session = service.create_session(text_session_config()).unwrap();
+    let completed = AgentWakeSource::Subagent {
+        session_id: AgentSessionId::new(41),
+        name: "counter".into(),
+        event: AgentSubagentWake::Completed {
+            answer: Some("Twelve files.".into()),
+            truncated: false,
+        },
+    };
+    service
+        .enqueue_wake_event(session.id, completed.clone())
+        .await
+        .unwrap();
+    let before = store.load_runtime_state(session.id).unwrap().wake_queue;
+    // Shutdown can capture the run as live while its already durable completion
+    // is still returning to the task that clears that in-memory status.
+    service
+        .record_lost_background_work(session.id, vec![lost(41), lost(42)])
+        .unwrap();
+    drop(service);
+
+    let reopened = AgentService::with_history_store(
+        answering("unused"),
+        AgentKernelRegistries::default(),
+        store.clone(),
+    );
+    reopened.activate_session(session.id).unwrap();
+    let queue = store.load_runtime_state(session.id).unwrap().wake_queue;
+    assert_eq!(queue.len(), 2);
+    assert_eq!(queue.events[0], before.events[0]);
+    assert_eq!(queue.events[0].source, completed);
+    assert_eq!(queue.events[1].source, lost(42));
+    assert_eq!(queue.last_sequence, before.last_sequence + 1);
+}
+
+#[tokio::test]
 async fn the_queue_survives_a_reopen() {
     let store = Arc::new(EphemeralAgentHistoryStore::default());
     let service = AgentService::with_history_store(
