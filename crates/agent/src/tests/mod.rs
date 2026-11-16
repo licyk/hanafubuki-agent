@@ -62,6 +62,7 @@ mod startup;
 mod structured_output;
 mod titles;
 mod tool_list;
+mod tool_search_live;
 mod tools;
 mod user_shell;
 mod wake;

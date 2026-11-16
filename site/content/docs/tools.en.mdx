@@ -32,7 +32,7 @@ All arguments are optional: `source` is an exact provider ID (for example, `mcp.
 
 The result contains `tools` (names only), `total` (the matching count) and `next_offset` (the next page's offset, or `null` at the end). An unknown source or an offset past the end returns an empty page. Pages reflect the current step's catalog; connecting or disabling a server can change it.
 
-After finding a name, the model calls `tool_search` with it to load the definition and enable the tool, then calls the tool. Listing alone grants no access. This works with Responses, Chat Completions and Anthropic Messages; MCP resource-listing tools list resources, not tools.
+After finding a name, the model calls the ordinary `tool_search` function with that exact name to retrieve only its definition, including the input schema, and enable the tool in the next request. Other queries search metadata with BM25. This function is available on all three protocols; Responses additionally retains native search. The model can then call the selected tool. Listing alone grants no access. This works with Responses, Chat Completions and Anthropic Messages; MCP resource-listing tools list resources, not tools.
 
 ## Commands and terminals [#commands]
 

@@ -6,10 +6,11 @@ use serde_json::Value;
 
 #[tokio::test]
 async fn listing_names_is_visible_without_admitting_mcp_tools_on_every_protocol() {
-    for protocol in [
-        AgentModelProtocol::Responses,
-        AgentModelProtocol::ChatCompletions,
-        AgentModelProtocol::AnthropicMessages,
+    for (protocol, native_search) in [
+        (AgentModelProtocol::Responses, false),
+        (AgentModelProtocol::Responses, true),
+        (AgentModelProtocol::ChatCompletions, false),
+        (AgentModelProtocol::AnthropicMessages, false),
     ] {
         let mcp = ScriptedMcpServers::start(BTreeMap::from([(
             "fixture",
@@ -22,7 +23,7 @@ async fn listing_names_is_visible_without_admitting_mcp_tools_on_every_protocol(
         .await;
         let list_arguments =
             json!({"source":"mcp.fixture", "offset":"0", "limit":"999", "future_field":true});
-        let search = if protocol == AgentModelProtocol::Responses {
+        let search = if native_search {
             tool_search_events("mcp__fixture__echo")
         } else {
             call(
@@ -134,7 +135,15 @@ async fn listing_names_is_visible_without_admitting_mcp_tools_on_every_protocol(
         assert!(output(protocol, &bodies[2], "denied")
             .to_string()
             .contains("tool requires discovery before use"));
-        assert!(bodies[3].to_string().contains("SCHEMA_ONLY_DESCRIPTION"));
+        assert!(bodies[3]["tools"]
+            .to_string()
+            .contains("SCHEMA_ONLY_DESCRIPTION"));
+        if !native_search {
+            let result = output(protocol, &bodies[3], "search").to_string();
+            assert!(result.contains("specification"), "{result}");
+            assert!(result.contains("properties"), "{result}");
+            assert!(result.contains("value"), "{result}");
+        }
         assert!(output(protocol, &bodies[4], "invoke")
             .to_string()
             .contains("echo called with"));

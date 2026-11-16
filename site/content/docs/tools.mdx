@@ -32,7 +32,7 @@ icon: Wrench
 
 结果包含 `tools`（只有名称）、`total`（匹配的工具总数）和 `next_offset`（下一页偏移量，末页为 `null`）。未知来源或超出末尾的偏移量返回空页。分页反映当前步骤的目录；连接或禁用服务器会改变目录。
 
-找到名称后，模型用它调用 `tool_search`，取得定义并启用工具，再调用该工具。仅列举不会授予调用权限。Responses、Chat Completions 和 Anthropic Messages 均支持此流程；MCP 的资源列举工具列出的是资源，不是工具。
+找到名称后，模型用精确名称调用普通函数 `tool_search`，只获取该工具的定义（含输入 schema），并在下一次请求中启用它。其他查询使用 BM25 搜索元数据。三种协议都提供这个普通函数，Responses 还保留原生搜索。之后模型即可调用所选工具。仅列举不会授予调用权限。Responses、Chat Completions 和 Anthropic Messages 均支持此流程；MCP 的资源列举工具列出的是资源，不是工具。
 
 ## 命令和终端 [#commands]
 

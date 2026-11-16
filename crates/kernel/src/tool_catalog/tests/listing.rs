@@ -37,6 +37,7 @@ async fn listing_keeps_fitted_native_namespaces_distinct() {
         assert!(name.len() <= 128);
         let found = plan.search_deferred(&name, 1);
         assert_eq!(found[0].model_name, name);
+        assert_eq!(plan.search_deferred(&format!("  {name}  "), 20).len(), 1);
         let wire =
             crate::tool_catalog::provider_table::ProviderToolName::of_spec(&found[0].specification)
                 .unwrap();

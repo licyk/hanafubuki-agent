@@ -271,6 +271,19 @@ impl AgentToolSearchIndex {
     }
 
     pub(super) fn search(&self, query: &str, limit: usize) -> Vec<AgentToolSearchMatch> {
+        if let Some(document) = self
+            .documents
+            .iter()
+            .find(|document| document.source.model_name == query.trim())
+        {
+            return vec![AgentToolSearchMatch {
+                selection: document.source.selection.clone(),
+                specification: document.source.info.output.clone(),
+                model_name: document.source.model_name.clone(),
+                description: document.source.description.clone(),
+                score_milli: u32::MAX,
+            }];
+        }
         let query_terms = tokenize(query);
         if query_terms.is_empty() || self.documents.is_empty() {
             return Vec::new();

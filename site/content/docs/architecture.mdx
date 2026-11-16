@@ -110,9 +110,9 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 
 ### 暴露与延迟工具 [#exposure-and-deferred-tools]
 
-`ToolExposure` 是 `Direct`、`Deferred`、`DirectModelOnly` 或 `Hidden`。直接目录超出预算时，只有工具源的直接工具会被延迟，并在各提供者之间公平分配。延迟的工具通过 `tool_search`（对名称、说明和 schema 的 BM25 索引）找到；搜索提交它的输出，然后提交一个 `ConversationItem::ToolSelection`。规划器接受上次压缩以来模型上下文中的选择，所以选择跨轮次有效，直到下次压缩。
+`ToolExposure` 是 `Direct`、`Deferred`、`DirectModelOnly` 或 `Hidden`。直接目录超出预算时，只有工具源的直接工具会被延迟，并在各提供者之间公平分配。延迟的工具通过 `tool_search`（精确列举名称只选择该工具，其他查询使用对名称、说明和 schema 的 BM25 索引）找到；搜索提交它的输出，然后提交一个 `ConversationItem::ToolSelection`。规划器接受上次压缩以来模型上下文中的选择，所以选择跨轮次有效，直到下次压缩。
 
-`tool_list` 浏览当前步骤的延迟工具索引，不选择任何工具。它在所有协议中都是普通只读函数，包括支持原生工具搜索的 Responses：输出只有适配协议后的工具名和分页信息，不含说明或 schema。可选的 `source` 按提供者 ID 精确筛选，`offset` 从零开始，`limit` 默认为 50 并收敛到 1–50。名称排序后返回，`next_offset: null` 表示最后一页。被模式、能力范围或提供者能力排除的工具不出现在搜索或列举结果中。列举不会提交 `ToolSelection`；模型仍需通过 `tool_search` 获取定义后调用。在不支持原生延迟工具的协议中，选择工具会将它提升为直接暴露，同时清除线上的延迟标记。
+`tool_list` 浏览当前步骤的延迟工具索引，不选择任何工具。它在所有协议中都是普通只读函数，包括支持原生工具搜索的 Responses：输出只有适配协议后的工具名和分页信息，不含说明或 schema。可选的 `source` 按提供者 ID 精确筛选，`offset` 从零开始，`limit` 默认为 50 并收敛到 1–50。名称排序后返回，`next_offset: null` 表示最后一页。被模式、能力范围或提供者能力排除的工具不出现在搜索或列举结果中。列举不会提交 `ToolSelection`；模型仍需通过 `tool_search` 获取定义后调用。所有协议都提供普通函数 `tool_search`，Responses 中它与原生搜索同时存在。普通搜索结果包含每个匹配工具的 `specification`，其中有输入 schema。两条搜索路径提交相同的选择；选择工具会将它提升为直接暴露，同时清除线上的延迟标记，供下一次请求使用。普通搜索不依赖网关理解原生 `tool_search_output`。
 
 ### 调用流水线 [#the-call-pipeline]
 

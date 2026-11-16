@@ -98,6 +98,16 @@ cargo test --workspace --all-features
 - fixture 只在 Linux 上有效。
 - Hanafubuki 在 `hanafubuki-agent-integration` 中保留了自己的 golden 和同一份历史语料（[双生副本](/docs/contributing#twins-shared-with-hanafubuki)）：这里模型可见的变化也会改变它们，历史格式变化要在两边都重新录制。
 
+要使用真实 Hoshimi 账号和已安装的 `@modelcontextprotocol/server-filesystem` 测试延迟发现，可运行下面的显式探针。它使用 `DeepSeek-Flash`、临时工作区与文件，以及 MCP 默认注册方式（延迟暴露）。测试在 Responses、Chat Completions、Anthropic Messages 中检查 `tool_list` → 普通 `tool_search` → MCP 读取，并核对实际返回的文件内容。Hoshimi 端点需要已有登录的 qodercli-cn 账号。
+
+```sh
+HOSHIMI_TOOL_TEST_URL=http://127.0.0.1:18779/v1 \
+MCP_FILESYSTEM_ENTRY=/path/to/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js \
+cargo test -p hanafubuki-agent --lib live_hoshimi_discovers -- --ignored --nocapture
+```
+
+也可以将 `HOSHIMI_TOOL_TEST_PROTOCOL` 设为 `Responses`、`ChatCompletions` 或 `AnthropicMessages`，只运行指定协议。
+
 ### 终端界面的快照 [#the-terminal-interfaces-snapshots]
 
 终端界面的渲染用 [insta](https://insta.rs) 做快照测试。已审核的 `.snap` 是纳入版本控制的测试基准，保留在测试旁边的 `snapshots/` 目录中，不应作为构建产物删除或忽略。这个目录不是模块。

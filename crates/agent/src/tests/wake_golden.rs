@@ -140,7 +140,7 @@ async fn with_the_wake_off_a_request_is_the_one_before_wakes() {
 
 /// `request` without the descriptions of the [`REWORDED`] tools and their
 /// arguments, allowing the later nesting/default-limit guidance change.
-/// The rebuilt web catalog and names-only discovery are pinned by current
+/// The rebuilt web catalog and portable discovery are pinned by current
 /// request goldens, separately from this immutable pre-wake fixture.
 fn without_reworded(mut request: Value) -> Value {
     request["tools"].as_array_mut().unwrap().retain(|tool| {
@@ -149,6 +149,7 @@ fn without_reworded(mut request: Value) -> Value {
             Some(
                 "web_search"
                     | "tool_list"
+                    | "tool_search"
                     | "advanced_search"
                     | "multi_search"
                     | "platform_search"

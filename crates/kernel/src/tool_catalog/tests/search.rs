@@ -206,7 +206,7 @@ async fn native_tool_search_hides_deferred_specs_until_exact_search_selection() 
         .is_ok());
     assert!(plan
         .resolve(None, hanafubuki_agent_model_api::FALLBACK_TOOL_SEARCH_NAME)
-        .is_err());
+        .is_ok());
     let matched = plan.search_deferred("calendar", 8);
     assert_eq!(matched.len(), 1);
     context
@@ -218,8 +218,8 @@ async fn native_tool_search_hides_deferred_specs_until_exact_search_selection() 
         .unwrap();
     assert!(selected_plan.resolve(None, "calendar_create").is_ok());
     assert!(selected_plan.resolve_call(&calendar_call).is_ok());
-    assert!(!selected_plan.model_specs().iter().any(|specification| {
-        matches!(specification, ToolSpec::Function(function) if function.name.local_name() == "calendar_create")
+    assert!(selected_plan.model_specs().iter().any(|specification| {
+        matches!(specification, ToolSpec::Function(function) if function.name.local_name() == "calendar_create" && !function.deferred)
     }));
 }
 

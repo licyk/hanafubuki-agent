@@ -98,6 +98,16 @@ The update rules:
 - The fixtures are Linux-only.
 - Hanafubuki keeps goldens of its own and the same history corpus in `hanafubuki-agent-integration` ([the twins](/docs/contributing#twins-shared-with-hanafubuki)): a model-visible change here changes them too, and a history-format change re-records both.
 
+To test deferred discovery against a real Hoshimi account and an installed `@modelcontextprotocol/server-filesystem`, run the opt-in probe below. It uses `DeepSeek-Flash`, a temporary workspace and file, and MCP's default registration (deferred exposure). It checks `tool_list` → ordinary `tool_search` → MCP read over Responses, Chat Completions and Anthropic Messages, verifying the actual returned file contents. The Hoshimi endpoint must already have a logged-in qodercli-cn account.
+
+```sh
+HOSHIMI_TOOL_TEST_URL=http://127.0.0.1:18779/v1 \
+MCP_FILESYSTEM_ENTRY=/path/to/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js \
+cargo test -p hanafubuki-agent --lib live_hoshimi_discovers -- --ignored --nocapture
+```
+
+Optionally set `HOSHIMI_TOOL_TEST_PROTOCOL` to `Responses`, `ChatCompletions` or `AnthropicMessages` to run just that protocol.
+
 ### The terminal interface's snapshots [#the-terminal-interfaces-snapshots]
 
 The terminal interface's rendering is snapshot-tested with [insta](https://insta.rs). Reviewed `.snap` files are versioned test baselines, kept in a `snapshots/` directory beside their tests; do not delete or ignore them as build artifacts. That directory is not a module.

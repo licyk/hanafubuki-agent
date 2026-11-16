@@ -1,7 +1,7 @@
 use crate::model::AgentError;
 use crate::service::AgentService;
 use crate::tool_runtime::AgentToolOutput;
-use hanafubuki_agent_model_api::ModelToolCall;
+use hanafubuki_agent_model_api::{ModelToolCall, ModelToolCallOrigin};
 use serde_json::json;
 
 impl AgentService {
@@ -46,20 +46,29 @@ impl AgentService {
             .iter()
             .map(|entry| entry.selection.clone())
             .collect::<Vec<_>>();
-        let tool_search_results = crate::tool_catalog::coalesce_search_specs(
-            matches
-                .iter()
-                .map(|entry| entry.specification.clone())
-                .collect::<Vec<_>>(),
-        );
+        let native = call.origin() == ModelToolCallOrigin::ToolSearch;
+        let tool_search_results = if native {
+            crate::tool_catalog::coalesce_search_specs(
+                matches
+                    .iter()
+                    .map(|entry| entry.specification.clone())
+                    .collect::<Vec<_>>(),
+            )
+        } else {
+            Vec::new()
+        };
         let visible = matches
             .iter()
             .map(|entry| {
-                json!({
+                let mut result = json!({
                     "name": entry.model_name,
                     "description": entry.description,
                     "scoreMilli": entry.score_milli,
-                })
+                });
+                if !native {
+                    result["specification"] = json!(entry.specification);
+                }
+                result
             })
             .collect::<Vec<_>>();
         Ok(AgentToolOutput {

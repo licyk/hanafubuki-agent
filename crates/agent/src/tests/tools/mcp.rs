@@ -477,11 +477,16 @@ for line in sys.stdin:
         .iter()
         .any(|item| item["type"] == "tool_search_output"
             && item.to_string().contains("mcp__fixture")));
-    assert!(!search_request["tools"]
+    assert!(search_request["tools"]
         .as_array()
         .unwrap()
         .iter()
-        .any(|tool| tool["name"] == "mcp__fixture" || tool["name"] == "mcp__fixture__echo"));
+        .any(|tool| tool["name"] == "mcp__fixture"
+            && tool["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|function| function["name"] == "echo" && function["defer_loading"] != true)));
     let output_request: Value = serde_json::from_slice(&requests[2].body).unwrap();
     let output = output_request["input"]
         .as_array()

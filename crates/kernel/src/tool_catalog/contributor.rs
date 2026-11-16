@@ -205,7 +205,6 @@ impl AgentToolPlanner {
             let selected = AgentToolSelection::from_planned_tool(registration);
             if registration.exposure == ToolExposure::Deferred
                 && context.selected_deferred_tools.contains(&selected)
-                && !context.provider_capabilities.native_tool_search
             {
                 registration.exposure = ToolExposure::Direct;
                 set_tool_spec_deferred(&mut registration.provider_spec, false);
@@ -258,12 +257,10 @@ impl AgentToolPlanner {
                     "additionalProperties": false
                 }),
             }));
-            registrations.push(plan_search_registration(ToolExposure::Hidden, description)?);
-        } else if has_deferred_tools {
-            let description = tool_search_description(&registrations);
-            registrations.push(plan_search_registration(ToolExposure::Direct, description)?);
         }
         if has_deferred_tools {
+            let description = tool_search_description(&registrations);
+            registrations.push(plan_search_registration(ToolExposure::Direct, description)?);
             registrations.push(plan_list_registration()?);
         }
         if !context.provider_capabilities.strict_json_schema {
