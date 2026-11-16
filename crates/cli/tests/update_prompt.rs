@@ -190,10 +190,9 @@ impl Term {
     }
 
     fn submit(&self, text: &str) {
-        self.send(text);
-        // A burst ending in Enter is treated as pasted text by the composer.
-        std::thread::sleep(Duration::from_millis(250));
-        self.send("\r");
+        // A sender-side pause cannot separate events if the child reads them late.
+        // Explicit paste boundaries keep Enter a submission even in one read.
+        self.send(&format!("\x1b[200~{text}\x1b[201~\r"));
     }
 
     fn contents(&self) -> String {
@@ -581,6 +580,12 @@ fn exiting_without_an_open_session_does_not_offer_a_stale_resume_command() {
         &[],
     );
     cleared.wait_for("Done.");
+    // The answer can render before the turn ends; /new is disabled until then.
+    let deadline = Instant::now() + DEADLINE;
+    while cleared.contents().contains("esc to interrupt") {
+        assert!(Instant::now() < deadline, "{}", cleared.contents());
+        std::thread::sleep(Duration::from_millis(50));
+    }
     cleared.submit("/new");
     let deadline = Instant::now() + DEADLINE;
     while cleared.contents().contains("Done.") {
