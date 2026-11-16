@@ -144,7 +144,7 @@ impl ChatComposerHistory {
             .nth(index)?
             .available();
         self.history_cursor = Some(index);
-        self.last_history_text = Some(entry.text.clone());
+        self.last_history_text = Some(crate::mention_codec::display_text(&entry.text));
         Some(entry)
     }
 
@@ -239,7 +239,11 @@ impl ChatComposerHistory {
             .map(|entry| (&entry.text, Some(entry)));
         local
             .chain(stored.iter().map(|text| (text, None)))
-            .filter(|(text, _)| text.to_lowercase().contains(&query))
+            .filter(|(text, _)| {
+                crate::mention_codec::display_text(text)
+                    .to_lowercase()
+                    .contains(&query)
+            })
             .filter(|(text, _)| seen.insert(text.as_str()))
             .map(|(text, local)| local.cloned().unwrap_or_else(|| UserMessage::stored(text)))
             .collect()

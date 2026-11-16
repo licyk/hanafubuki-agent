@@ -175,3 +175,40 @@ for line in sys.stdin:
     );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
+
+#[tokio::test]
+async fn bound_mcp_mentions_do_not_invoke_a_same_named_skill_but_bound_skills_do() {
+    let server = FakeServer::start(vec![(assistant_events("done"), Duration::ZERO)]).await;
+    let (service, paths) = configured_service("skills-bound-mentions", &server.base_url);
+    enable_skills(
+        &service,
+        &paths,
+        &[
+            ("one", "shared"),
+            ("two", "shared"),
+            ("diagnostics", "diagnostics"),
+        ],
+    );
+    let selected = service
+        .list_skills()
+        .unwrap()
+        .entries
+        .into_iter()
+        .find(|s| s.directory.ends_with("two"))
+        .unwrap();
+    let session = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap();
+    service.start_turn(session.id,format!("Use [$shared](mcp://shared), [$diagnostics](plugin://diagnostics@local), [@task $diagnostics](thread://1), and [$shared](skill://{})",selected.id.as_str()).into()).await.unwrap();
+    assert_eq!(selected_skill_names(&server), ["shared"]);
+    let wire = String::from_utf8(server.requests()[0].body.clone()).unwrap();
+    assert!(wire.contains("Do the two work."));
+    assert!(!wire.contains("Do the one work."));
+    assert!(!wire.contains("Do the diagnostics work."));
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}

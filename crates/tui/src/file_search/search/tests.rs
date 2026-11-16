@@ -287,3 +287,16 @@ fn a_nested_root_is_walked_once_and_another_roots_file_is_mentioned_whole() {
         ]
     );
 }
+
+#[test]
+fn directories_are_searchable_and_ignored_directories_stay_hidden() {
+    let root = tempfile::tempdir().unwrap();
+    fs::create_dir_all(root.path().join("nested/visible-folder")).unwrap();
+    fs::create_dir_all(root.path().join("ignored-folder")).unwrap();
+    fs::write(root.path().join(".gitignore"), "ignored-folder/\n").unwrap();
+    let matches = completed_matches(vec![root.path().into()], "folder");
+    assert_eq!(matches.len(), 1);
+    assert!(matches[0].is_dir);
+    assert_eq!(matches[0].path, Path::new("nested").join("visible-folder"));
+    assert!(matches[0].score > 0);
+}

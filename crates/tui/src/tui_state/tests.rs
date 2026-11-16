@@ -44,7 +44,7 @@ fn the_marks_are_written_and_read_back() {
     state.save_now().unwrap();
     assert_eq!(
         file(home.path()),
-        json!({ "agents": {
+        json!({ "mentionUsage": [], "agents": {
             "pinned": [3],
             "hidden": [7],
             "seen": { "3": 1_700_000_000_000_u64 },
@@ -169,4 +169,35 @@ fn only_the_latest_showings_are_kept() {
     let seen = &state.agents.seen;
     assert_eq!(seen.len(), MAX_SEEN);
     assert!(!seen.contains_key(&id(9)) && seen.contains_key(&id(10)));
+}
+
+#[test]
+fn mention_frequency_history_retains_only_the_latest_fifty_confirmed_selections() {
+    let home = tempfile::tempdir().unwrap();
+    let (mut state, warning, _) = load(home.path());
+    assert!(warning.is_none());
+    for index in 0..60 {
+        state.record_mention(format!("skill://system:{index}"));
+    }
+    state.save_now().unwrap();
+    let (loaded, warning, _) = load(home.path());
+    assert!(warning.is_none());
+    assert_eq!(loaded.mention_usage.len(), 50);
+    assert_eq!(loaded.mention_usage.first().unwrap(), "skill://system:10");
+    assert_eq!(loaded.mention_usage.last().unwrap(), "skill://system:59");
+}
+
+#[test]
+fn invalid_usage_entries_are_quarantined_without_discarding_valid_entries() {
+    let home = tempfile::tempdir().unwrap();
+    fs::write(
+        home.path().join(TUI_STATE_FILE),
+        r#"{"mentionUsage":["mcp://files",null,42,"skill://system:test"],"future":true}"#,
+    )
+    .unwrap();
+    let (mut state, _, _) = load(home.path());
+    assert_eq!(state.mention_usage, ["mcp://files", "skill://system:test"]);
+    state.save_now().unwrap();
+    assert_eq!(recovered(home.path()).len(), 1);
+    assert_eq!(file(home.path())["future"], true);
 }

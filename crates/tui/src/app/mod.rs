@@ -256,7 +256,15 @@ impl App {
                     self.show_update(update);
                 }
             }
+            AppEvent::RecordMention(identity) => self.tui_state.record_mention(identity),
             AppEvent::Op(op) => {
+                if matches!(
+                    &op,
+                    crate::app_event::Op::Command(crate::app_event::AgentCommand::LoadMentions)
+                ) {
+                    self.chat_widget
+                        .apply_mention_usage(&self.tui_state.mention_usage);
+                }
                 if let Some(update) = self.bridge.submit(op) {
                     self.show_update(update);
                 }

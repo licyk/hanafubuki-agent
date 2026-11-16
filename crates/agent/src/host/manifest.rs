@@ -26,8 +26,8 @@ use crate::goals::AgentGoalApplication;
 use crate::packages::PackageReload;
 use crate::plugins::{
     goal_plugin, memory_plugin, packages_plugin, permission_mode_plugin, recap_plugin,
-    review_plugin, skills_plugin, subagents_plugin, titles_plugin, view_image_plugin,
-    workspace_context_plugin, SUBAGENTS_PLUGIN,
+    review_plugin, skills_plugin, subagents_plugin, threads_plugin, titles_plugin,
+    view_image_plugin, workspace_context_plugin, SUBAGENTS_PLUGIN,
 };
 use crate::roles::AgentRoleCatalogReader;
 use crate::service::AgentMcpApplication;
@@ -128,6 +128,7 @@ pub(crate) fn agent_plugin_manifest(
             skills_plugin(inputs.skills, inputs.mcp_application),
         ),
         AgentPluginRow::unconfigured(Capability, titles_plugin(inputs.titles)),
+        AgentPluginRow::unconfigured(Capability, threads_plugin(inputs.conversations.clone())),
         AgentPluginRow::unconfigured(Capability, recap_plugin(inputs.conversations)),
         AgentPluginRow::unconfigured(Capability, goal_plugin(inputs.goals)),
         AgentPluginRow::from_settings(

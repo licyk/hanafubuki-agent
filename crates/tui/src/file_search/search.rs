@@ -5,11 +5,11 @@
 //! matcher, and every query update re-ranked against what was walked so far.
 //!
 //! Ported without its command line, its one-shot `run`, the exclusion
-//! globs, the shared cancellation flag and the matches' scores (nucleo
-//! 0.5 on crates.io has no accessor for them; Codex pins a git revision of
-//! nucleo that does, and nothing here reads them); the matcher loop waits on a std
-//! channel with a deadline in place of `crossbeam_channel::select!`, and a
-//! root nested in another is walked once, as its own root.
+//! globs and the shared cancellation flag. Scores are obtained from nucleo's
+//! pattern matcher for the displayed matches. The matcher loop waits on a std
+//! channel with a deadline in place of crossbeam_channel::select!; a root
+//! nested in another is walked once, as its own root. Files and directories
+//! are indexed so the unified mention picker can distinguish them.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -45,6 +45,8 @@ pub(crate) struct FileMatch {
     /// is read against.
     pub(crate) primary: bool,
     pub(crate) indices: Vec<u32>,
+    pub(crate) is_dir: bool,
+    pub(crate) score: i32,
 }
 
 impl FileMatch {
@@ -200,7 +202,7 @@ fn walker_worker(inner: Arc<SessionInner>, injector: Injector<Arc<str>>) {
                 Ok(entry) => entry,
                 Err(_) => return ignore::WalkState::Continue,
             };
-            if entry.file_type().is_some_and(|ft| ft.is_dir()) {
+            if entry.depth() == 0 {
                 return ignore::WalkState::Continue;
             }
             let path = entry.path();
@@ -317,7 +319,9 @@ fn snapshot(
                 get_file_path(Path::new(full_path), &inner.search_directories)?;
             let mut indices = Vec::<u32>::new();
             let haystack = item.matcher_columns[0].slice(..);
-            let _ = pattern.indices(haystack, indices_matcher, &mut indices);
+            let score = pattern
+                .indices(haystack, indices_matcher, &mut indices)
+                .unwrap_or_default() as i32;
             indices.sort_unstable();
             indices.dedup();
             Some(FileMatch {
@@ -325,6 +329,8 @@ fn snapshot(
                 root: inner.search_directories[root_idx].clone(),
                 primary: root_idx == 0,
                 indices,
+                is_dir: Path::new(full_path).is_dir(),
+                score,
             })
         })
         .collect();

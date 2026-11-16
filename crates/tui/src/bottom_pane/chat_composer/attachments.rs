@@ -153,7 +153,7 @@ impl ChatComposer {
             self.textarea
                 .replace_element_payload(&image_label(number), &image_label(number + count));
         }
-        let mut text = message.text;
+        let (mut text, mentions) = crate::mention_codec::decode(&message.text);
         // An image its text does not name (sent by another host) still
         // shows.
         let named = label_ranges(&text, count);
@@ -169,6 +169,9 @@ impl ChatComposer {
         self.textarea.insert_str_at(0, &text);
         for (range, _) in label_ranges(&text, count) {
             self.textarea.mark_element(range);
+        }
+        for mention in mentions {
+            self.textarea.mark_link(mention.range, mention.path);
         }
         self.images.splice(0..0, message.images);
     }

@@ -50,7 +50,7 @@ impl ChatComposer {
     }
 
     pub(crate) fn apply_external_edit(&mut self, text: String) {
-        let text = text.replace("\r\n", "\n");
+        let (text, mentions) = crate::mention_codec::decode(&text.replace("\r\n", "\n"));
         let mut pastes = std::mem::take(&mut self.pending_pastes);
         let mut images: Vec<Option<MessageImage>> = std::mem::take(&mut self.images)
             .into_iter()
@@ -73,7 +73,13 @@ impl ChatComposer {
             })
             .collect();
         // Each found where it first appears, apart from the others.
-        let mut found: Vec<(Range<usize>, Held)> = Vec::new();
+        let mut found: Vec<(Range<usize>, Held)> = mentions
+            .into_iter()
+            .map(|mention| {
+                let label = text[mention.range.clone()].to_owned();
+                (mention.range, Held::Mention(label, mention.path))
+            })
+            .collect();
         for held in held {
             let wanted = held.text();
             let at = text
@@ -115,6 +121,11 @@ impl ChatComposer {
                     self.textarea.insert_element(&placeholder);
                     self.pending_pastes.push((placeholder, actual));
                 }
+                Held::Mention(label, path) => {
+                    let start = self.textarea.cursor();
+                    self.textarea.insert_str(&label);
+                    self.textarea.mark_link(start..start + label.len(), path);
+                }
                 Held::Image(number, _) => {
                     let new = kept.iter().position(|kept| *kept == number).unwrap_or(0) + 1;
                     self.textarea.insert_element(&image_label(new));
@@ -131,6 +142,7 @@ impl ChatComposer {
 
 /// A placeholder of the draft the editor had.
 enum Held {
+    Mention(String, String),
     /// A large paste: its placeholder and its text.
     Paste(String, String),
     /// An image: its number and its label.
@@ -142,7 +154,7 @@ impl Held {
     fn text(&self) -> &str {
         match self {
             Held::Paste(_, actual) => actual,
-            Held::Image(_, label) => label,
+            Held::Image(_, label) | Held::Mention(label, _) => label,
         }
     }
 }

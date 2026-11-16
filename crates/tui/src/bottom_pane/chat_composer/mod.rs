@@ -11,12 +11,12 @@
 //! - Shell-style history navigation (↑/↓) over this run's messages ([`ChatComposerHistory`]),
 //!   and Ctrl+R's search through them and earlier sessions' (`history_search`).
 //! - Ctrl+G's edit of the draft in an external editor (`external_editor`).
-//! - Routing keys to the active popup (`popups`): the slash commands and the `@` file search.
+//! - Routing slash commands and the Codex mention menus: unified @ and Skills/MCP $.
 //! - Turning raw key streams into explicit paste operations on platforms where terminals
 //!   don't provide reliable bracketed paste (notably Windows).
 //!
-//! Codex's composer also offers Skill and app mentions, remote image rows and custom prompts;
-//! none of those are ported.
+//! Mentions are atomic while editing and keep stable identities as links in messages and history.
+//! Remote image rows and custom prompts remain outside this port.
 //!
 //! # Non-bracketed Paste Bursts
 //!
@@ -48,21 +48,26 @@ use ratatui::text::Line;
 
 mod agents_navigation;
 mod attachments;
+mod completion_target;
+mod dismissed;
 mod external_editor;
 mod history_navigation;
 mod history_search;
+mod mention_syntax;
+mod mentions;
 mod popups;
 mod render;
 
 use super::chat_composer_history::ChatComposerHistory;
 use super::command_popup::CommandPopup;
-use super::file_search_popup::FileSearchPopup;
 use super::footer::reset_mode_after_activity;
 use super::footer::toggle_shortcut_mode;
 use super::footer::FooterMode;
+use super::mentions::Popup as MentionPopup;
 use super::paste_burst::CharDecision;
 use super::paste_burst::FlushResult;
 use super::paste_burst::PasteBurst;
+use super::skill_popup::SkillPopup;
 use super::textarea::TextArea;
 use super::textarea::TextAreaState;
 use super::InputResult;
@@ -105,8 +110,11 @@ pub(crate) struct ChatComposer {
     footer_mode: FooterMode,
     /// The `@` query the file search was last asked for.
     current_file_query: Option<String>,
-    /// The `@` token whose popup Esc closed; it stays closed until the token changes.
-    dismissed_file_popup_token: Option<String>,
+    /// The mention occurrence Esc dismissed, until its query changes.
+    dismissed_mention_token: Option<dismissed::DismissedToken>,
+    mention_catalog: crate::mentions::Catalog,
+    mention_catalog_requested: bool,
+    mention_usage: HashMap<String, usize>,
     /// The commands turned off after they panicked.
     disabled_commands: Vec<&'static str>,
     /// In a second conversation (a side conversation, a subagent shown):
@@ -125,7 +133,8 @@ pub(crate) struct ChatComposer {
 enum ActivePopup {
     None,
     Command(CommandPopup),
-    File(FileSearchPopup),
+    Mention(MentionPopup),
+    Skill(SkillPopup),
 }
 
 impl ChatComposer {
@@ -156,7 +165,10 @@ impl ChatComposer {
             paste_burst: PasteBurst::default(),
             footer_mode: FooterMode::ComposerEmpty,
             current_file_query: None,
-            dismissed_file_popup_token: None,
+            dismissed_mention_token: None,
+            mention_catalog: Default::default(),
+            mention_catalog_requested: false,
+            mention_usage: HashMap::new(),
             disabled_commands: Vec::new(),
             command_scope: None,
             history_search: None,
@@ -238,7 +250,7 @@ impl ChatComposer {
 
     /// The composer's text with the large pastes it stands for put back.
     pub(crate) fn current_text_with_pending(&self) -> String {
-        let mut text = self.textarea.text().to_string();
+        let mut text = self.textarea.linked_text();
         for (placeholder, actual) in &self.pending_pastes {
             if let Some(start) = text.find(placeholder.as_str()) {
                 text.replace_range(start..start + placeholder.len(), actual);
@@ -332,7 +344,9 @@ impl ChatComposer {
                 self.handle_history_search_key(key_event)
             }
             ActivePopup::Command(_) => self.handle_key_event_with_slash_popup(key_event),
-            ActivePopup::File(_) => self.handle_key_event_with_file_popup(key_event),
+            ActivePopup::Mention(_) | ActivePopup::Skill(_) => {
+                self.handle_key_event_with_mention_popup(key_event)
+            }
             ActivePopup::None => self.handle_key_event_without_popup(key_event),
         };
         // Update (or hide/show) popup after processing the key.

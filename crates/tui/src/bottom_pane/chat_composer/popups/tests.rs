@@ -10,6 +10,7 @@ use ratatui::Terminal;
 use super::*;
 use crate::app_event::AppEventSender;
 use crate::bottom_pane::paste_burst::PasteBurst;
+use crate::bottom_pane::TextArea;
 use crate::render::renderable::Renderable;
 
 fn composer() -> (ChatComposer, Receiver<AppEvent>) {
@@ -84,7 +85,12 @@ fn test_current_at_token_basic_cases() {
             "Only @ symbol triggers empty query",
         ),
         ("@ hello", 2, None, "@ followed by space"),
-        ("test @ world", 6, None, "@ with spaces around"),
+        (
+            "test @ world",
+            6,
+            Some(String::new()),
+            "Cursor directly after an empty @ token",
+        ),
     ];
 
     for (input, cursor_pos, expected, description) in test_cases {
@@ -92,7 +98,9 @@ fn test_current_at_token_basic_cases() {
         textarea.insert_str(input);
         textarea.set_cursor(cursor_pos);
 
-        let result = ChatComposer::current_at_token(&textarea);
+        let result =
+            super::super::completion_target::current_prefixed_token_range(&textarea, '@', true)
+                .map(|(_, query)| query);
         assert_eq!(
             result, expected,
             "Failed for case: {description} - input: '{input}', cursor: {cursor_pos}"
@@ -126,7 +134,9 @@ fn test_current_at_token_cursor_positions() {
         textarea.insert_str(input);
         textarea.set_cursor(cursor_pos);
 
-        let result = ChatComposer::current_at_token(&textarea);
+        let result =
+            super::super::completion_target::current_prefixed_token_range(&textarea, '@', true)
+                .map(|(_, query)| query);
         assert_eq!(
             result, expected,
             "Failed for cursor position case: {description} - input: '{input}', cursor: {cursor_pos}",
@@ -183,7 +193,9 @@ fn test_current_at_token_whitespace_boundaries() {
         textarea.insert_str(input);
         textarea.set_cursor(cursor_pos);
 
-        let result = ChatComposer::current_at_token(&textarea);
+        let result =
+            super::super::completion_target::current_prefixed_token_range(&textarea, '@', true)
+                .map(|(_, query)| query);
         assert_eq!(
             result, expected,
             "Failed for whitespace boundary case: {description} - input: '{input}', cursor: {cursor_pos}",
@@ -436,6 +448,8 @@ fn file_match(path: &str, root: &str, primary: bool) -> FileMatch {
         root: PathBuf::from(root),
         primary,
         indices: vec![0, 1],
+        is_dir: false,
+        score: if primary { 200 } else { 100 },
     }
 }
 
@@ -453,7 +467,7 @@ fn searches(rx: &Receiver<AppEvent>) -> Vec<String> {
 fn an_at_token_searches_files_and_enter_inserts_the_mention() {
     let (mut composer, rx) = composer();
     composer.set_text_content("look at @ma".to_string());
-    assert!(matches!(composer.active_popup, ActivePopup::File(_)));
+    assert!(matches!(composer.active_popup, ActivePopup::Mention(_)));
     assert_eq!(searches(&rx), vec!["ma".to_string()]);
 
     composer.on_file_search_result(
@@ -463,7 +477,7 @@ fn an_at_token_searches_files_and_enter_inserts_the_mention() {
             file_match("lib/map.rs", "/other", false),
         ],
     );
-    let mut terminal = Terminal::new(TestBackend::new(60, 6)).expect("terminal");
+    let mut terminal = Terminal::new(TestBackend::new(70, 25)).expect("terminal");
     terminal
         .draw(|f| composer.render(f.area(), f.buffer_mut()))
         .expect("draw composer");
@@ -503,7 +517,7 @@ fn esc_hides_the_file_popup_until_the_token_changes() {
     assert_eq!(composer.textarea.text(), "@ma");
 
     type_chars_humanlike(&mut composer, &['i']);
-    assert!(matches!(composer.active_popup, ActivePopup::File(_)));
+    assert!(matches!(composer.active_popup, ActivePopup::Mention(_)));
 }
 
 #[test]

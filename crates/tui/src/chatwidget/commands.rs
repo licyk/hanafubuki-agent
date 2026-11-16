@@ -21,6 +21,10 @@ use crate::history_cell;
 use crate::settings_center::PageOverride;
 
 impl ChatWidget {
+    pub(crate) fn apply_mention_usage(&mut self, recent: &[String]) {
+        self.bottom_pane.mention_usage(recent);
+    }
+
     pub(crate) fn dispatch_command(&mut self, command: &'static CommandSpec, args: String) {
         if self.refuses_during_task(command) {
             return;
@@ -224,6 +228,8 @@ impl ChatWidget {
             TurnUpdate::Mcp(reply) => self.run_command(&commands::MCP, |context| {
                 commands::mcp::on_reply(context, reply)
             }),
+            TurnUpdate::Mentions {catalog,..} => self.bottom_pane.mention_catalog(catalog),
+            TurnUpdate::MentionTasks { query,candidates,.. } => self.bottom_pane.mention_tasks(query,candidates),
             TurnUpdate::Skills(catalog) => {
                 self.add_to_history(history_cell::new_skills_output(&catalog))
             }

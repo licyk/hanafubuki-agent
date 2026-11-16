@@ -123,6 +123,8 @@ impl ChatWidget {
             | TurnUpdate::ContextReport(_)
             | TurnUpdate::ProviderModels(_)
             | TurnUpdate::Mcp(_)
+            | TurnUpdate::Mentions{..}
+            | TurnUpdate::MentionTasks { .. }
             | TurnUpdate::Skills(_)
             | TurnUpdate::Session(_)
             | TurnUpdate::Review(_)

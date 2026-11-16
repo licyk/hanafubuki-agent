@@ -159,3 +159,14 @@ fn a_sent_message_ends_the_search() {
     history.record_local_submission("first again".into());
     assert_eq!(history.search("first", Older, false), found("first again"));
 }
+
+#[test]
+fn mention_search_matches_the_visible_message_and_keeps_the_bound_target() {
+    let mut history = ChatComposerHistory::new();
+    history.record_local_submission("Use [$shared](skill://system:hidden-id)".into());
+    assert!(history.matches("hidden-id").is_empty());
+    assert_eq!(
+        history.matches("$shared")[0].text,
+        "Use [$shared](skill://system:hidden-id)"
+    );
+}

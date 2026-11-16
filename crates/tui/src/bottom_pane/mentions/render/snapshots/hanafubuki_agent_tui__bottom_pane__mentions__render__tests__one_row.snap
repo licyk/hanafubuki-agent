@@ -1,0 +1,5 @@
+---
+source: crates/tui/src/bottom_pane/mentions/render/tests.rs
+expression: text(&buffer)
+---
+› plain.rs   src/                 File

@@ -59,6 +59,7 @@ pub(crate) enum AppEvent {
     ConsolidateStream(Consolidation),
     /// The `@` token being typed changed; an empty query ends the search.
     StartFileSearch(String),
+    RecordMention(String),
     /// The best files for `query` so far.
     FileSearchResult {
         query: String,
@@ -210,6 +211,8 @@ pub(crate) enum AgentCommand {
     ProviderModels(String),
     Mcp(McpCall),
     Skills,
+    LoadMentions,
+    SearchMentionTasks(String),
     Session(SessionCall),
     Review(ReviewCall),
     Goal(GoalCall),

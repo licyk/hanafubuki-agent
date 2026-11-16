@@ -18,7 +18,7 @@ pub(super) static DIFF: CommandSpec = CommandSpec {
 pub(super) static MENTION: CommandSpec = CommandSpec {
     name: "mention",
     aliases: &[],
-    description: "mention a file",
+    description: "mention a file, skill, plugin, or task",
     inline_args: false,
     during_task: true,
     needs_session: false,

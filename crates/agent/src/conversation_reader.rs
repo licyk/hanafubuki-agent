@@ -37,6 +37,14 @@ impl AgentConversationReader {
         Self { core, config }
     }
 
+    pub(crate) fn read_transcript_page(
+        &self,
+        request: AgentTranscriptPageRequest,
+    ) -> Result<hanafubuki_agent_kernel::AgentTranscriptPage, AgentError> {
+        // Reading a reference must not acquire the referenced task's runtime lease.
+        self.core.read_transcript_page(request)
+    }
+
     /// Hands `visit` the session's messages, newest first, until it breaks
     /// or the conversation's start; tool calls and their output, reasoning
     /// and context are skipped.

@@ -225,3 +225,58 @@ fn warnings_show_a_plugin_whose_code_failed() {
         "{list}"
     );
 }
+
+#[test]
+fn composer_mentions_load_real_plugin_skill_and_mcp_catalogs_and_bind_the_selected_skill() {
+    let mut harness = Harness::start(vec![hanafubuki_agent::test_support::assistant_events(
+        "Hello from the selected skill.",
+    )]);
+    harness.add_marketplace();
+    harness.on_agent(|agent| async move {
+        agent
+            .install_package(AgentPackageSource::Marketplace {
+                marketplace: "demo-market".into(),
+                plugin: "demo".into(),
+            })
+            .await
+    });
+    let skill = harness
+        .agent()
+        .list_skills()
+        .unwrap()
+        .entries
+        .into_iter()
+        .find(|entry| entry.name.contains("greet"))
+        .unwrap();
+    harness.agent().enable_skill(&skill.id).unwrap();
+    harness.app.chat_widget.set_composer_text("@".into());
+    let screen = harness.pump_until_screen_shows("The demo plugin.");
+    assert!(screen.contains("All Results"));
+    assert!(screen.contains("Filesystem Only"));
+    assert!(!screen.contains("[Skill]"));
+    harness.key(KeyCode::Enter);
+    assert!(harness
+        .app
+        .chat_widget
+        .composer_text()
+        .contains("plugin://demo@demo-market"));
+    harness.app.chat_widget.set_composer_text("$".into());
+    harness.pump_until_screen_shows("[MCP]");
+    harness.app.chat_widget.set_composer_text("$greet".into());
+    harness.pump_until_screen_shows("[Skill]");
+    harness.key(KeyCode::Tab);
+    assert!(harness
+        .app
+        .chat_widget
+        .composer_text()
+        .contains(&format!("skill://{}", skill.id.as_str())));
+    harness.key(KeyCode::Enter);
+    harness.pump_until("the selected skill answer", |harness| {
+        harness
+            .transcript()
+            .contains("Hello from the selected skill.")
+    });
+    harness.pump_until_turn_ends();
+    let request = String::from_utf8(harness.server.requests()[0].body.clone()).unwrap();
+    assert!(request.contains("Say hello."));
+}

@@ -1,8 +1,8 @@
 // Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).
 
-//! How the composer is drawn: the text under its `›` prompt, and under it
-//! the active popup, the history search's line, the external editor's, or
-//! the footer with the mode the composer's state selects.
+//! The unified @ and $ pickers sit above the composer, with its normal footer
+//! below. Slash completion, history search and editor hints keep their own
+//! below-composer presentation.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint;
@@ -29,12 +29,30 @@ use crate::style::user_message_style;
 use crate::ui_consts::LIVE_PREFIX_COLS;
 
 impl ChatComposer {
-    fn layout_areas(&self, area: Rect) -> [Rect; 3] {
-        let popup_constraint = Constraint::Max(self.popup_or_footer_height(area.width));
-        let [composer_rect, popup_rect] =
-            Layout::vertical([Constraint::Min(3), popup_constraint]).areas(area);
-        let textarea_rect = composer_rect.inset(Insets::tlbr(1, LIVE_PREFIX_COLS, 1, 1));
-        [composer_rect, textarea_rect, popup_rect]
+    fn layout_areas(&self, area: Rect) -> [Rect; 4] {
+        let total = self.popup_or_footer_height(area.width);
+        let above = matches!(
+            self.active_popup,
+            ActivePopup::Mention(_) | ActivePopup::Skill(_)
+        );
+        let (composer, popup, footer) = if above {
+            let footer_height = footer_height(self.footer_props(), area.width);
+            let [mut composer, mut popup, footer] = Layout::vertical([
+                Constraint::Min(3),
+                Constraint::Max(total.saturating_sub(footer_height)),
+                Constraint::Length(footer_height),
+            ])
+            .areas(area);
+            popup.y = area.y;
+            composer.y = popup.bottom();
+            (composer, popup, footer)
+        } else {
+            let [composer, popup] =
+                Layout::vertical([Constraint::Min(3), Constraint::Max(total)]).areas(area);
+            (composer, popup, popup)
+        };
+        let textarea = composer.inset(Insets::tlbr(1, LIVE_PREFIX_COLS, 1, 1));
+        [composer, textarea, popup, footer]
     }
 
     /// The rows under the text: the history search's line, the active
@@ -46,7 +64,12 @@ impl ChatComposer {
         match &self.active_popup {
             ActivePopup::None => footer_height(self.footer_props(), width),
             ActivePopup::Command(popup) => popup.calculate_required_height(width),
-            ActivePopup::File(popup) => popup.calculate_required_height(),
+            ActivePopup::Mention(popup) => {
+                popup.calculate_required_height(width) + footer_height(self.footer_props(), width)
+            }
+            ActivePopup::Skill(popup) => {
+                popup.calculate_required_height(width) + footer_height(self.footer_props(), width)
+            }
         }
     }
 
@@ -97,7 +120,7 @@ impl Renderable for ChatComposer {
         if !self.has_focus {
             return None;
         }
-        let [_, textarea_rect, mut popup_rect] = self.layout_areas(area);
+        let [_, textarea_rect, mut popup_rect, _] = self.layout_areas(area);
         if self.history_search_active() {
             popup_rect.y += u16::from(self.status_line.is_some());
             popup_rect.height = popup_rect
@@ -118,10 +141,11 @@ impl Renderable for ChatComposer {
     }
 
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        let [composer_rect, textarea_rect, popup_rect] = self.layout_areas(area);
+        let [composer_rect, textarea_rect, popup_rect, footer_rect] = self.layout_areas(area);
         match &self.active_popup {
             ActivePopup::Command(popup) => popup.render(popup_rect, buf),
-            ActivePopup::File(popup) => popup.render(popup_rect, buf),
+            ActivePopup::Mention(popup) => popup.render(popup_rect, buf),
+            ActivePopup::Skill(popup) => popup.render(popup_rect, buf),
             ActivePopup::None => match self
                 .history_search_line()
                 .or_else(|| self.external_editor_line())
@@ -145,6 +169,12 @@ impl Renderable for ChatComposer {
                     render_footer(popup_rect, buf, props);
                 }
             },
+        }
+        if matches!(
+            self.active_popup,
+            ActivePopup::Mention(_) | ActivePopup::Skill(_)
+        ) {
+            render_footer(footer_rect, buf, self.footer_props());
         }
         Block::default()
             .style(user_message_style())

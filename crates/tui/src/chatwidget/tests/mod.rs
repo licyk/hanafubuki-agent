@@ -774,6 +774,13 @@ fn a_popup_takes_tab_and_esc_before_the_queue_and_the_interrupt() {
     assert_eq!(chat.bottom_pane.composer_text(), "/status ");
     assert!(!screen(&chat, 80).contains("Queued follow-up inputs"));
     chat.set_composer_text("@src".to_string());
+    assert_eq!(
+        drain(&events).1,
+        vec![
+            Op::Command(AgentCommand::LoadMentions),
+            Op::Command(AgentCommand::SearchMentionTasks("src".into()))
+        ]
+    );
     assert!(!chat.no_modal_or_popup_active());
     // Esc closes the popup, and only then interrupts.
     chat.handle_key_event(key(KeyCode::Esc));
@@ -826,15 +833,21 @@ fn tab_in_the_file_popup_inserts_the_path_while_a_turn_runs() {
         "not".to_string(),
         vec![FileMatch {
             path: std::path::PathBuf::from("notes.txt"),
+            is_dir: false,
+            score: 100,
             root: std::path::PathBuf::from("/project"),
             primary: true,
             indices: Vec::new(),
         }],
     );
+    drain(&events);
     chat.handle_key_event(key(KeyCode::Tab));
     assert_eq!(chat.bottom_pane.composer_text(), "Read notes.txt ");
     assert!(!screen(&chat, 80).contains("Queued follow-up inputs"));
-    assert!(drain(&events).1.is_empty());
+    assert_eq!(
+        drain(&events).1,
+        vec![Op::Command(AgentCommand::SearchMentionTasks(String::new()))]
+    );
 }
 
 #[test]

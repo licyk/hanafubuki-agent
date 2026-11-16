@@ -20,6 +20,7 @@ fn is_word_separator(ch: char) -> bool {
 #[derive(Debug, Clone)]
 struct TextElement {
     range: Range<usize>,
+    link: Option<String>,
 }
 
 #[derive(Debug)]
@@ -341,9 +342,46 @@ impl TextArea {
     }
 
     fn add_element(&mut self, range: Range<usize>) {
-        let elem = TextElement { range };
+        let elem = TextElement { range, link: None };
         self.elements.push(elem);
         self.elements.sort_by_key(|e| e.range.start);
+    }
+
+    pub(crate) fn text_element_ranges(&self) -> impl Iterator<Item = Range<usize>> + '_ {
+        self.elements.iter().map(|e| e.range.clone())
+    }
+
+    pub(crate) fn text_element_ranges_overlapping(&self, range: Range<usize>) -> Vec<Range<usize>> {
+        self.elements
+            .iter()
+            .filter(|e| e.range.start < range.end && e.range.end > range.start)
+            .map(|e| e.range.clone())
+            .collect()
+    }
+
+    pub(crate) fn element_id_for_exact_range(&self, range: Range<usize>) -> Option<usize> {
+        self.elements.iter().position(|e| e.range == range)
+    }
+
+    pub(crate) fn mark_link(&mut self, range: Range<usize>, path: String) {
+        self.add_element(range.clone());
+        if let Some(id) = self.element_id_for_exact_range(range) {
+            self.elements[id].link = Some(path);
+        }
+    }
+
+    pub(crate) fn linked_text(&self) -> String {
+        let mut text = self.text.clone();
+        for element in self.elements.iter().rev() {
+            if let Some(path) = &element.link {
+                let label = &self.text[element.range.clone()];
+                text.replace_range(
+                    element.range.clone(),
+                    &crate::mention_codec::encode(label, path),
+                );
+            }
+        }
+        text
     }
 
     fn find_element_containing(&self, pos: usize) -> Option<usize> {

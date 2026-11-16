@@ -53,3 +53,4 @@ mod mcp_oauth;
 #[cfg(unix)]
 mod mcp_proxy;
 mod skills;
+mod threads;

@@ -207,7 +207,9 @@ fn extract_skill_mentions(text: &str) -> (Vec<&str>, Vec<&str>) {
     while index < bytes.len() {
         if bytes[index] == b'[' {
             if let Some((package, end)) = linked_skill_package(text, bytes, index) {
-                packages.push(package);
+                if let Some(package) = package {
+                    packages.push(package);
+                }
                 index = end;
                 continue;
             }
@@ -237,18 +239,23 @@ fn extract_skill_mentions(text: &str) -> (Vec<&str>, Vec<&str>) {
     (plain, packages)
 }
 
-/// `[$name](skill://<id>)` — the form the model is told to write when it names
-/// a Skill it read, so the reference survives a rename of the display name.
-fn linked_skill_package<'a>(text: &'a str, bytes: &[u8], start: usize) -> Option<(&'a str, usize)> {
-    if bytes.get(start + 1) != Some(&b'$') {
+/// Bound capability/task labels must not be scanned again as plain Skill
+/// mentions (a task title or an MCP label can contain a Skill's name).
+fn linked_skill_package<'a>(
+    text: &'a str,
+    bytes: &[u8],
+    start: usize,
+) -> Option<(Option<&'a str>, usize)> {
+    if !matches!(bytes.get(start + 1), Some(b'$' | b'@')) {
         return None;
     }
     let mut name_end = start + 2;
-    while bytes
-        .get(name_end)
-        .is_some_and(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b':'))
-    {
-        name_end += 1;
+    while let Some(byte) = bytes.get(name_end) {
+        match byte {
+            b'\\' => name_end += 2,
+            b']' => break,
+            _ => name_end += 1,
+        }
     }
     if name_end == start + 2 || bytes.get(name_end) != Some(&b']') {
         return None;
@@ -262,11 +269,15 @@ fn linked_skill_package<'a>(text: &'a str, bytes: &[u8], start: usize) -> Option
     }
     let close = bytes[open + 1..].iter().position(|byte| *byte == b')')? + open + 1;
     let path = text[open + 1..close].trim();
+    if path.starts_with("mcp://") || path.starts_with("plugin://") || path.starts_with("thread://")
+    {
+        return Some((None, close + 1));
+    }
     let skill = path.strip_prefix("skill://")?;
     if hanafubuki_agent_skills::SkillId::from_untrusted(skill).is_err() {
         return None;
     }
-    Some((skill, close + 1))
+    Some((Some(skill), close + 1))
 }
 
 fn is_common_environment_name(name: &str) -> bool {

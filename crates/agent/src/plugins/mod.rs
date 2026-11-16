@@ -10,6 +10,7 @@ mod review;
 mod skills;
 mod structured_request;
 mod subagents;
+mod threads;
 mod titles;
 mod view_image;
 
@@ -36,5 +37,6 @@ pub(crate) use subagents::{
     subagents_option_schema, subagents_plugin, SubagentRuns, SubagentService, SUBAGENTS_PLUGIN,
 };
 pub use subagents::{AgentSubagentState, AgentSubagentStatus};
+pub(crate) use threads::threads_plugin;
 pub(crate) use titles::{titles_plugin, TitleService, TITLES_PLUGIN};
 pub(crate) use view_image::view_image_plugin;

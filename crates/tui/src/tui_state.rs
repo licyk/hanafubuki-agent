@@ -60,6 +60,7 @@ pub(crate) struct TuiState {
     /// The file as read, its other keys kept as they were.
     document: Map<String, Value>,
     pub(crate) agents: AgentsMarks,
+    pub(crate) mention_usage: Vec<String>,
     /// An entry was not understood: the file is moved aside first.
     lossy: bool,
     /// Why the file, which exists, was not read; it is then never written.
@@ -77,6 +78,7 @@ impl TuiState {
             path,
             document: Map::new(),
             agents: AgentsMarks::default(),
+            mention_usage: Vec::new(),
             lossy: false,
             unreadable: None,
             written: Arc::new(Mutex::new(0)),
@@ -85,6 +87,13 @@ impl TuiState {
         };
         let warning = state.read();
         (state, warning)
+    }
+
+    pub(crate) fn record_mention(&mut self, identity: String) {
+        self.mention_usage.push(identity);
+        self.mention_usage
+            .drain(..self.mention_usage.len().saturating_sub(50));
+        self.save();
     }
 
     /// Writes the state off the interface's loop; a failure comes back as
@@ -152,6 +161,8 @@ impl TuiState {
         };
         self.document
             .insert("agents".to_string(), Value::Object(agents));
+        self.document
+            .insert("mentionUsage".into(), json!(self.mention_usage));
         serde_json::to_vec_pretty(&self.document)
             .map_err(|error| format!("{TUI_STATE_FILE} was not encoded: {error}"))
     }
@@ -182,7 +193,25 @@ impl TuiState {
         let Ok(Value::Object(document)) = serde_json::from_slice(&bytes) else {
             return self.set_aside("it is not a JSON object");
         };
-        let (agents, lossy) = decode(document.get("agents"));
+        let (agents, mut lossy) = decode(document.get("agents"));
+        if let Some(value) = document.get("mentionUsage") {
+            if let Some(items) = value.as_array() {
+                self.mention_usage = items
+                    .iter()
+                    .filter_map(|value| match value.as_str() {
+                        Some(s) => Some(s.to_owned()),
+                        None => {
+                            lossy = true;
+                            None
+                        }
+                    })
+                    .collect();
+                self.mention_usage
+                    .drain(..self.mention_usage.len().saturating_sub(50));
+            } else {
+                lossy = true;
+            }
+        }
         self.document = document;
         self.agents = agents;
         self.lossy = lossy;

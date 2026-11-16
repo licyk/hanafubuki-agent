@@ -53,7 +53,9 @@ impl UserHistoryCell {
             .max(1);
         let style = user_message_style();
         let wrapped = word_wrap_lines(
-            self.message.split('\n').map(|l| Line::from(l).style(style)),
+            crate::mention_codec::display_text(&self.message)
+                .split('\n')
+                .map(|l| Line::from(l.to_owned()).style(style)),
             // Wrap algorithm matches textarea.rs.
             RtOptions::new(usize::from(wrap_width))
                 .wrap_algorithm(textwrap::WrapAlgorithm::FirstFit),

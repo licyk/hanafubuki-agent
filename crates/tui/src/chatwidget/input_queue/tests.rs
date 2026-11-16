@@ -232,3 +232,12 @@ fn shift_left_takes_the_last_queued_message_then_the_held_ones() {
     assert_eq!(queue.pop_queued(), Some("refused".into()));
     assert_eq!(queue.pop_queued(), None);
 }
+
+#[test]
+fn mention_previews_show_labels_while_editing_retains_their_identity() {
+    let mut queue = running();
+    let text = "Use [$shared](skill://system:two) and [@task](thread://52)";
+    assert_eq!(queue.queue(text.into(), true), Submission::Waits);
+    assert_eq!(queue.preview().queued, ["Use $shared and @task"]);
+    assert_eq!(queue.pop_queued(), Some(text.into()));
+}

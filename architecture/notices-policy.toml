@@ -2065,3 +2065,19 @@ reason = "Agent-specific composer and frame scheduling integration for the Hana 
 [[original]]
 path = "crates/tui/src/app/tests/welcome.rs"
 reason = "Agent-specific end-to-end tests of mascot visibility in both transcript modes."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/mentions.rs"
+reason = "Native asynchronous skill, package, MCP and session catalogs for the composer."
+
+[[original]]
+path = "crates/tui/src/mentions.rs"
+reason = "Adapts native capability identities to mention candidates."
+
+[[original]]
+path = "crates/tui/src/mention_codec.rs"
+reason = "Canonical links preserve native mention identities in queued and persisted messages."
+
+[[original]]
+path = "crates/tui/src/mention_codec/tests.rs"
+reason = "Round trips of native bound mentions and ordinary markdown."

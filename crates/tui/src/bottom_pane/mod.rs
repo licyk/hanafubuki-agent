@@ -22,11 +22,11 @@ mod bottom_pane_view;
 mod chat_composer;
 mod chat_composer_history;
 mod command_popup;
-mod file_search_popup;
 mod footer;
 mod form;
 mod list_selection_view;
 mod loading_line;
+pub(crate) mod mentions;
 mod menu_view;
 mod module_view;
 mod multi_select_picker;
@@ -36,6 +36,7 @@ mod popup_consts;
 mod request_user_input;
 mod scroll_state;
 mod selection_popup_common;
+pub(crate) mod skill_popup;
 mod textarea;
 
 use std::time::Duration;
@@ -557,6 +558,20 @@ impl BottomPane {
             status.set_interrupt_hint_visible(visible);
             self.request_redraw();
         }
+    }
+
+    pub(crate) fn mention_usage(&mut self, recent: &[String]) {
+        self.composer.set_mention_usage(recent);
+    }
+    pub(crate) fn mention_catalog(&mut self, catalog: crate::mentions::Catalog) {
+        self.composer.set_mention_catalog(catalog);
+    }
+    pub(crate) fn mention_tasks(
+        &mut self,
+        query: String,
+        candidates: Vec<crate::bottom_pane::mentions::Candidate>,
+    ) {
+        self.composer.set_mention_tasks(query, candidates);
     }
 
     pub(crate) fn composer_is_empty(&self) -> bool {

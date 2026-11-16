@@ -298,7 +298,7 @@ impl InputQueue {
     }
 
     pub(super) fn preview(&self) -> PendingInput {
-        let text = |message: &UserMessage| message.text.clone();
+        let text = |message: &UserMessage| crate::mention_codec::display_text(&message.text);
         PendingInput {
             steers: self
                 .steers

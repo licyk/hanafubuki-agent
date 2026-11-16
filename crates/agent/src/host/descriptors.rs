@@ -87,6 +87,10 @@ pub fn agent_plugin_descriptors() -> Vec<AgentPluginDescriptor> {
             "The Skills catalog and the tools that read Skills",
         ),
         row("titles", "Titles for sessions"),
+        row(
+            "threads",
+            "Reading conversations referenced by task mentions",
+        ),
         row("recap", "Catch-ups on a session"),
         row(
             "goal",

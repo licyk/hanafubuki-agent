@@ -221,6 +221,8 @@ impl AgentBridge {
             AgentCommand::Plugins(call) => return Ok(self.plugins_call(call)),
             AgentCommand::Settings(call) => self.settings_call(call),
             AgentCommand::Subagents(call) => return Ok(self.subagents_call(call)),
+            AgentCommand::LoadMentions => self.load_mentions(),
+            AgentCommand::SearchMentionTasks(query) => self.search_mentions(query),
             AgentCommand::Skills => {
                 let catalog = self
                     .agent

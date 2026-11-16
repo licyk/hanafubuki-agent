@@ -34,6 +34,7 @@ pub(crate) use work::WorkSnapshot;
 mod goal;
 mod hooks;
 mod mcp;
+mod mentions;
 pub(crate) mod model_list;
 mod permissions;
 mod plugins;
@@ -93,6 +94,15 @@ pub(crate) use subagents::{NavigationAgent, SubagentsCall, SubagentsReply};
 /// commands it asked for found.
 #[derive(Debug)]
 pub(crate) enum TurnUpdate {
+    Mentions {
+        session_id: Option<AgentSessionId>,
+        catalog: crate::mentions::Catalog,
+    },
+    MentionTasks {
+        session_id: Option<AgentSessionId>,
+        query: String,
+        candidates: Vec<crate::bottom_pane::mentions::Candidate>,
+    },
     Started,
     ReasoningStarted(AgentReasoningId),
     ReasoningDelta {
@@ -245,6 +255,7 @@ pub(crate) enum AgentReply {
 }
 
 pub(crate) struct AgentBridge {
+    mention_search: Arc<std::sync::atomic::AtomicU64>,
     /// The standalone runtime, which moves the working directory (`/cd`).
     runtime: Arc<AgentRuntime>,
     agent: AgentHandle,
@@ -300,6 +311,7 @@ impl AgentBridge {
         app_event_tx: AppEventSender,
     ) -> Self {
         Self {
+            mention_search: Default::default(),
             slot: runtime.slot().clone(),
             runtime,
             agent,
@@ -475,6 +487,12 @@ impl AgentBridge {
                 Some(TurnUpdate::SessionOpened(opened))
             }
             AgentReply::Update(update) => match *update {
+                TurnUpdate::Mentions { session_id, .. }
+                | TurnUpdate::MentionTasks { session_id, .. }
+                    if session_id != self.session_id =>
+                {
+                    None
+                }
                 // The interface has moved to another session since.
                 TurnUpdate::SessionStatus(status) if Some(status.session_id) != self.session_id => {
                     None
