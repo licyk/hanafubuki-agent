@@ -96,11 +96,23 @@ async fn the_terminal_escape_runs_one_standard_compaction() {
         tool_response_with_usage(19_500),
         tool_response_with_usage(19_500),
         tool_response_with_usage(19_500),
-        response("compact", "The instances were listed three times.", 50),
-        response("answer", "No instances.", 1_000),
+        response(
+            "compact",
+            "One stopped instance was listed three times.",
+            50,
+        ),
+        response("answer", "The instance is stopped.", 1_000),
     ]);
     let tools = FakeTools::new((0..3).map(|_| {
-        FakeRegisteredExchange::success("list_instances", json!({}), json!({"instances": []}))
+        FakeRegisteredExchange::success(
+            "list_instances",
+            json!({}),
+            json!({"instances": [{
+                "id": "instance-alpha",
+                "name": "Primary image-generation workspace",
+                "status": "stopped"
+            }]}),
+        )
     }))
     .await;
     let service = AgentService::new(Arc::new(model.clone()), tools.registries());
@@ -115,7 +127,7 @@ async fn the_terminal_escape_runs_one_standard_compaction() {
         .await
         .unwrap();
 
-    assert_eq!(outcome.final_answer, "No instances.");
+    assert_eq!(outcome.final_answer, "The instance is stopped.");
     let requests = model.requests();
     assert_eq!(requests.len(), 5);
     assert_eq!(requests[3].tools, requests[2].tools);
