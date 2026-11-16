@@ -99,6 +99,7 @@ async fn world_state_replacement_removal_and_skill_catalog_changes_append_to_wir
         service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
         []
     );
+    drop(service);
     let service = reopen_service(config, test_host(&paths), &paths);
     service
         .start_turn(session.id, "After restart".into())
@@ -121,6 +122,7 @@ async fn world_state_replacement_removal_and_skill_catalog_changes_append_to_wir
     for pair in captured.windows(2) {
         assert_prefix(&pair[0], &pair[1]);
     }
+    drop(service);
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
 
@@ -174,6 +176,7 @@ async fn compaction_starts_one_new_canonical_prefix_then_preserves_it() {
     assert!(captured[3].to_string().contains("SYNTHETIC_NEW_RULE"));
     assert!(!captured[3].to_string().contains("SYNTHETIC_OLD_RULE"));
     assert_prefix(&captured[3], &captured[4]);
+    drop(service);
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
 
@@ -266,6 +269,7 @@ async fn switching_mode_after_compaction_keeps_the_baseline_explicitly_historica
     assert!(!advertises_patch(&captured[2]));
     assert!(advertises_patch(&captured[3]));
     assert_prefix(&captured[3], &captured[4]);
+    drop(service);
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
 
@@ -349,5 +353,6 @@ async fn assert_tool_history(with_plan: bool) {
     for pair in captured.windows(2) {
         assert_prefix(&pair[0], &pair[1]);
     }
+    drop(service);
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
