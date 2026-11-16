@@ -177,6 +177,10 @@ schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（
 
 会话的 `context_window_tokens` 在创建会话或选择模型时、记录它的 Provider 的列表时、每个轮次开始时以及每个回答提交时解析：配置的窗口，否则[模型元数据](#model-metadata)对该模型所知的窗口（从拒绝中学到的窗口，仅在它更小时；Provider 的模型列表报告的窗口；打开 models.dev 时它给出的窗口；否则一张已知模型系列的小表）；都没有就不做自动压缩。整个 Agent 只有一种 token 估算（`hanafubuki_agent_contracts::tokens`，字节数 / 4）。计数之所以一致，是因为它们数的是同一个请求：准入检查、步骤的请求和自动压缩对下一个请求的检查都用 `step_model_request` 构建请求，用 `estimate_model_request_tokens` 计数，工具和记忆都包括在内。步骤的计数按组得出（`compose_request`：每组是其自身序列化部分的估算，其余部分是不属于任何组的内容，合起来就是请求的估算），会话保留它（从不持久化），并在响应提交时记下 Provider 对该请求的报告，供 `/context`（`session_context`）使用；压缩安装时丢弃它，在下一个请求发送之前，`/context` 按压缩检查时的方式估算那个请求。
 
+自动压缩与后台压缩以上游最后报告的提示总 token 数为基准，只加上此后请求原始估算值的正增长量，不再用偏大的「字节数 / 4」估算覆盖已知的实际用量。`usage.contextEstimatedTokens` 与 `contextConsumedTokens` 一起持久化该估算基准，重启会话后仍能校准；响应未报告用量时保留此前的这一对值。没有可用基准时才估算整个请求。安装压缩结果或切换模型路由后清除估算基准，等待新的响应报告用量。图片按图片 token 估算参与请求增长计算，不按 Base64 数据大小计数。
+
+默认保留历史内容的字节上限为 **16 MiB**，与模型 token 窗口相互独立。它约束当前活动历史保留的内容，不是整个历史数据库或图片文件的大小。超过该上限仍会拒绝追加；模型窗口更大不会关闭这项资源限制。
+
 ### 模型元数据 [#model-metadata]
 
 Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadataRegistry`，每个 Agent 一个，按路由（`ModelRouteKey`：协议、规范化的 base URL 和模型 ID，所以提供同一模型 ID 的两个 Provider 互不混淆）存放。每项事实（上下文窗口、最大输出、推理及其强度、图片输入、结构化输出的档位）都可以未知，并带有来源和观察到的时间（`ModelMetadata`）。注册表为每个路由保存两种来源，另有一份按模型 ID 查找的 models.dev 目录副本，逐项事实分别解析，顺序如下：

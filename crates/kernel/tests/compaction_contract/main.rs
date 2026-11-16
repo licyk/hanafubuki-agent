@@ -438,6 +438,7 @@ fn config() -> AgentSessionConfig {
 
 mod automatic;
 mod background;
+mod calibrated_usage;
 mod hierarchical;
 mod local;
 mod recovery_fork;

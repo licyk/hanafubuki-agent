@@ -203,12 +203,18 @@ impl AgentService {
             return Err(AgentError::TurnAlreadyRunning);
         }
         let compaction = reconciled_compaction_config(record, model.compaction_capability());
+        // Recovery has no bound route until its first provider activation.
+        let route_changed = record
+            .settings
+            .model
+            .route_key(&record.settings.config.model)
+            .is_some_and(|route| Some(route) != model.route_key(&record.settings.config.model));
         // What the person configured for the model now; the session takes
         // it from its next turn (the window at that turn's admission).
         let facts_changed = record.settings.config.configured_facts != configured_facts
             && !has_active_operation(record)
             && ensure_no_staged_commit(record).is_ok();
-        if compaction.is_none() && !facts_changed {
+        if compaction.is_none() && !facts_changed && !route_changed {
             record.settings.model = model;
             return Ok(());
         }
@@ -223,6 +229,11 @@ impl AgentService {
         }
         if facts_changed {
             record.settings.config.configured_facts = configured_facts;
+        }
+        if route_changed {
+            if let Some(usage) = record.runtime.usage.as_mut() {
+                usage.context_estimated_tokens = None;
+            }
         }
         record.settings.model = model;
         // Not a revision: no snapshot shows the capability or the facts,

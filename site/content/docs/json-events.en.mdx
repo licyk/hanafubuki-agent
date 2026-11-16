@@ -186,6 +186,8 @@ An automatic review's `status` is `reviewing`, `approved`, `denied`, `timed_out`
 
 The stream carries no session object and no event when a session's [role](/docs/roles#sessions) changes: a role changes only between turns, so each turn's `turn_started` names the role the whole turn runs in (`role`, `null` for `default`; for `exec`, the one `--role` gave). `sessions list --json` has it as the `role` of a session's summary, which leaves it out for `default`.
 
+`usage.contextEstimatedTokens`, when present, is the raw request estimate paired with `contextConsumedTokens`. Automatic compaction adds only subsequent estimated growth to that reported prompt count. It is absent before calibration and after compaction or a model-route change.
+
 ## Activity [#activity]
 
 `activity` is set on the events that start or change an activity: `sampling_started`, `response_started`, `model_retry_scheduled`, `history_committed`, the tool events, the approval events, `user_input_requested` and `execution_progress`. It is `null` on the others.

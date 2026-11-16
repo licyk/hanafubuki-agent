@@ -10,8 +10,8 @@ use super::AgentModelUsage;
 /// One model request's contents in estimated tokens, group by group: the
 /// Agent's one estimate (about four bytes a token of the request as it is
 /// serialized, and its rule for each image), applied to each group's part.
-/// The groups add up to the request's estimate, the figure every check of a
-/// request against the window counts with.
+/// The groups add up to the raw request estimate. Compaction calibrates its
+/// growth against the provider's last reported prompt when one is available.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentContextComposition {

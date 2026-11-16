@@ -186,6 +186,8 @@ icon: Braces
 
 事件流中没有会话对象，会话的[角色](/docs/roles#sessions)改变时也没有事件：角色只在回合之间改变，所以每个回合的 `turn_started` 给出整个回合所用的角色（`role`，`default` 时为 `null`；对 `exec` 来说就是 `--role` 给的角色）。`sessions list --json` 把它作为会话摘要中的 `role` 给出，`default` 时不出现。
 
+`usage.contextEstimatedTokens` 存在时，是与 `contextConsumedTokens` 配对的请求原始估算值。自动压缩只在该已报告的提示用量上加上此后估算的增长量。尚未校准、完成压缩或切换模型路由后没有该字段。
+
 ## 活动 [#activity]
 
 `activity` 在开始或改变一项活动的事件上有值：`sampling_started`、`response_started`、`model_retry_scheduled`、`history_committed`、工具事件、审批事件、`user_input_requested` 和 `execution_progress`。其他事件为 `null`。

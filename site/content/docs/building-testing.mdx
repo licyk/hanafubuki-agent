@@ -72,6 +72,8 @@ cargo test --workspace --all-features
 
 测试针对真实实现，尽量少用 mock，不在测试里复制业务逻辑。测试的位置规则（白盒测试在 `src/<module>/tests.rs`，公开 API 与跨 crate 契约在 crate 的 `tests/`，测试辅助的写法）见[参与开发](/docs/contributing#layout-and-module-size)。
 
+设置 `HOSHIMI_COMPACTION_TEST_URL` 为真实 Hoshimi Responses 的 `/v1` 地址、`HOSHIMI_CONTEXT_TEST_IMAGE` 为含 ComfyUI、InvokeAI 或 Stable Diffusion 的 Hanafubuki 截图路径，在 Hoshimi 已登录 qodercli-cn 后，可运行 `cargo test -p hanafubuki-agent --lib live_hoshimi_reported_context_and_images_compact_at_threshold -- --ignored --nocapture`。此默认忽略的测试使用 `DeepSeek-Flash`，实际发送有图和无图的长文本，验证图片识别，在约 512k tokens 时重启会话，再跨过 80% 阈值。它使用独立的 Agent 数据目录，输出 Provider 用量、本地估算和压缩结果，不属于常规离线测试。
+
 ### golden 测试与历史语料 [#the-goldens-and-the-history-corpus]
 
 **请求 golden**（fixture 在 `crates/agent/src/tests/golden/`）在 Agent 自己的插件上、用一个什么都不添加的宿主，固定模型收到的内容：默认与计划模式、一次工具往返及其展示事件、Skill 目录、工作区指令、记忆摘要、压缩后的请求、来自脚本化进程内服务器的 MCP 工具（直接与延迟、过长与冲突的名字）和一次 `tool_search` 往返。

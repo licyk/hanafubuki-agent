@@ -39,7 +39,7 @@ pub const FIRST_BATCH_HARD_LIMITS: AgentHardLimits = AgentHardLimits {
     maximum_compaction_summary_bytes: 256 * 1024,
     maximum_compaction_summary_tokens: 64 * 1024,
     maximum_history_items: 1_024,
-    maximum_history_bytes: 4 * 1024 * 1024,
+    maximum_history_bytes: 16 * 1024 * 1024,
     stream_idle_timeout: Duration::from_secs(120),
     approval_timeout: Duration::from_secs(15 * 60),
     turn_deadline: None,

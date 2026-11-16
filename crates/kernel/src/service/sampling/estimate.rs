@@ -6,8 +6,8 @@ use hanafubuki_agent_contracts::estimate_tokens;
 use super::*;
 
 /// The tokens `request` is estimated at: its serialized bytes without media
-/// payloads, plus a per-image estimate. Every check of a request against the
-/// context window counts with this, the stream included.
+/// payloads, plus a per-image estimate. Compaction adds growth in this
+/// estimate to the provider's last reported prompt when one is available.
 pub(in crate::service) fn estimate_model_request_tokens(
     request: &ModelRequest,
 ) -> Result<u64, AgentError> {

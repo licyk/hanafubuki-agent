@@ -188,6 +188,10 @@ impl AgentService {
                 .runtime
                 .usage
                 .and_then(|value| value.context_consumed_tokens);
+            usage.context_estimated_tokens = record
+                .runtime
+                .usage
+                .and_then(|value| value.context_estimated_tokens);
             let previous = record.rollback_state();
             record.runtime.usage = Some(usage);
             StagedPersistence::commit(&cell, record, previous)
@@ -237,11 +241,19 @@ fn launch_attempt(
     else {
         return Ok(None);
     };
-    let reported = record
-        .runtime
-        .usage
-        .and_then(|usage| usage.context_consumed_tokens);
-    let Some(active) = estimated.max(reported) else {
+    let active = estimated
+        .map(|estimated| {
+            record.runtime.usage.map_or(estimated, |usage| {
+                usage.calibrated_context_tokens(estimated)
+            })
+        })
+        .or_else(|| {
+            record
+                .runtime
+                .usage
+                .and_then(|usage| usage.context_consumed_tokens)
+        });
+    let Some(active) = active else {
         return Ok(None);
     };
     if !in_background_band(active, threshold.percent, config, max_output_tokens) {

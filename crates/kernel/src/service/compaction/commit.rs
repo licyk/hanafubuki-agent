@@ -125,6 +125,7 @@ impl AgentService {
             };
             if let Some(usage) = staged.runtime.usage.as_mut() {
                 usage.context_consumed_tokens = Some(next_context_tokens);
+                usage.context_estimated_tokens = None;
             }
             let event = record_compaction_event(&mut staged, snapshot.clone(), self.inner.limits);
             staged

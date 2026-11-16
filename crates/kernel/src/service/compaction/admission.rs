@@ -300,11 +300,9 @@ impl AgentService {
             self.inner.limits.maximum_tool_output_bytes,
         )?;
         let estimated = estimate_model_request_tokens(&request)?;
-        let active = record
-            .runtime
-            .usage
-            .and_then(|usage| usage.context_consumed_tokens)
-            .map_or(estimated, |reported| reported.max(estimated));
+        let active = record.runtime.usage.map_or(estimated, |usage| {
+            usage.calibrated_context_tokens(estimated)
+        });
         let status = AgentContextTokenStatus::calculate(
             active,
             record.settings.config.context_window_tokens,

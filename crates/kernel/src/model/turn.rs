@@ -22,6 +22,14 @@ pub struct AgentModelUsage {
     /// The last response's prompt total, or after a compaction the
     /// estimate of the next request.
     pub context_consumed_tokens: Option<u64>,
+    /// The raw request estimate paired with `context_consumed_tokens`.
+    /// Kept across restarts to estimate only growth after a reported prompt.
+    #[serde(
+        default,
+        deserialize_with = "tolerant",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub context_estimated_tokens: Option<u64>,
     pub source: AgentUsageSource,
     /// The part of the last response's input read from the provider's
     /// cache; `None` when it reported none.
@@ -41,8 +49,22 @@ pub struct AgentModelUsage {
     pub cache_reporting_responses: u64,
 }
 
-/// A cache figure of a persisted usage that does not decode is its default
-/// alone (the cache fields came later than the rest).
+impl AgentModelUsage {
+    pub(crate) fn calibrated_context_tokens(&self, estimated: u64) -> u64 {
+        match (
+            self.source,
+            self.context_consumed_tokens,
+            self.context_estimated_tokens,
+        ) {
+            (AgentUsageSource::ProviderReported, Some(reported), Some(baseline)) => {
+                reported.saturating_add(estimated.saturating_sub(baseline))
+            }
+            _ => estimated,
+        }
+    }
+}
+
+/// Added usage fields default individually when persisted values do not decode.
 fn tolerant<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: serde::Deserializer<'de>,

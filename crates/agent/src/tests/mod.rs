@@ -27,6 +27,8 @@ mod compression;
 #[cfg(target_os = "linux")]
 mod compression_golden;
 mod context;
+mod context_usage;
+mod context_usage_live;
 mod descriptors;
 mod executions;
 mod features;

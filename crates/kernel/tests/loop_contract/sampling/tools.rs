@@ -227,6 +227,7 @@ async fn fake_model_and_tools_complete_a_deterministic_two_sampling_loop() {
             cumulative_output_tokens: 3,
             context_window_tokens: None,
             context_consumed_tokens: Some(3),
+            context_estimated_tokens: snapshot.usage.unwrap().context_estimated_tokens,
             source: AgentUsageSource::ProviderReported,
             last_response_cache_read_tokens: None,
             last_response_cache_write_tokens: None,

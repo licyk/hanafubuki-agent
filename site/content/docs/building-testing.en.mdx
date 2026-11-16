@@ -72,6 +72,8 @@ Besides:
 
 Tests exercise the real implementation, with as few mocks as possible and no business logic duplicated in them. Where tests live (white-box tests in `src/<module>/tests.rs`, public API and cross-crate contracts in the crate's `tests/`, how test helpers are written) is in [Contributing](/docs/contributing#layout-and-module-size).
 
+The ignored `live_hoshimi_reported_context_and_images_compact_at_threshold` test uses a real Hoshimi Responses endpoint with a logged-in qodercli-cn account and `DeepSeek-Flash`. Set `HOSHIMI_COMPACTION_TEST_URL` to its `/v1` URL and `HOSHIMI_CONTEXT_TEST_IMAGE` to a Hanafubuki screenshot showing ComfyUI, InvokeAI or Stable Diffusion, then run `cargo test -p hanafubuki-agent --lib live_hoshimi_reported_context_and_images_compact_at_threshold -- --ignored --nocapture`. It sends actual long text, with and without images, verifies image recognition, resumes the session near 512k tokens, and crosses the 80% threshold. It creates isolated Agent data directories and prints Provider usage, local estimates and compaction outcomes; it is not part of routine offline tests.
+
 ### The goldens and the history corpus [#the-goldens-and-the-history-corpus]
 
 **The request goldens** (fixtures in `crates/agent/src/tests/golden/`), over the Agent's own plugins with a host that adds nothing, pin what the model receives: Default and Plan mode, a tool round trip and its presentation events, a Skill catalog, workspace instructions, the memory summary, a compacted request, MCP tools from a scripted in-process server (direct and deferred, long and colliding names) and a `tool_search` round trip.

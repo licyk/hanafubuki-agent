@@ -802,7 +802,7 @@ async fn the_memory_context_is_prepared_per_step_and_follows_the_fragments_after
     );
 }
 
-/// Prepares a large memory context for every step.
+/// Adds a large memory context after the first turn.
 struct BulkyMemoryPrompt;
 
 impl hanafubuki_agent_contracts::PromptContributor for BulkyMemoryPrompt {
@@ -816,12 +816,13 @@ impl hanafubuki_agent_contracts::PromptContributor for BulkyMemoryPrompt {
 
     fn prepare<'a>(
         &'a self,
-        _step: &'a hanafubuki_agent_contracts::PromptStep,
+        step: &'a hanafubuki_agent_contracts::PromptStep,
         _cancellation: CancellationToken,
     ) -> hanafubuki_agent_contracts::PromptPrepareFuture<'a> {
-        Box::pin(async {
-            Ok(TurnExtensions::default()
-                .with(Arc::new(PreparedSummary("remembered ".repeat(4_000)))))
+        Box::pin(async move {
+            Ok(TurnExtensions::default().with(Arc::new(PreparedSummary(
+                "remembered ".repeat(if step.turn_id.value() > 1 { 4_000 } else { 0 }),
+            ))))
         })
     }
 

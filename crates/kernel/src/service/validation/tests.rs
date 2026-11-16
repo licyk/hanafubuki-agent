@@ -497,6 +497,7 @@ fn persisted_usage_without_cache_figures_decodes_and_recovers() {
         "source": "provider_reported"
     });
     let usage: AgentModelUsage = serde_json::from_value(old.clone()).unwrap();
+    assert_eq!(usage.context_estimated_tokens, None);
     assert_eq!(
         (
             usage.last_response_cache_read_tokens,
@@ -515,11 +516,13 @@ fn persisted_usage_without_cache_figures_decodes_and_recovers() {
     value["lastResponseCacheWriteTokens"] = serde_json::json!(100);
     value["cumulativeCacheWriteTokens"] = serde_json::json!(400);
     value["cacheReportingResponses"] = serde_json::json!(2);
+    value["contextEstimatedTokens"] = serde_json::json!("unreadable");
     let usage: AgentModelUsage = serde_json::from_value(value).unwrap();
     assert_eq!(usage.last_response_cache_read_tokens, None);
     assert_eq!(usage.cumulative_cache_read_tokens, 0);
     assert_eq!(usage.last_response_cache_write_tokens, Some(100));
     assert_eq!(usage.cache_reporting_responses, 2);
+    assert_eq!(usage.context_estimated_tokens, None);
     validate_persisted_usage(Some(usage), &config).unwrap();
 
     let regressed = AgentModelUsage {

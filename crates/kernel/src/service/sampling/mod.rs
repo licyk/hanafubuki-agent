@@ -66,6 +66,8 @@ pub(super) fn next_model_usage(
         )?,
         context_window_tokens: record.settings.config.context_window_tokens,
         context_consumed_tokens: Some(usage.input_tokens),
+        context_estimated_tokens: (source == AgentUsageSource::ProviderReported)
+            .then_some(estimated_input_tokens),
         source,
         last_response_cache_read_tokens: usage.cache_read_tokens,
         last_response_cache_write_tokens: usage.cache_write_tokens,

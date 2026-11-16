@@ -264,6 +264,14 @@ impl AgentService {
         }
         let previous = record.rollback_state();
         self.name_model_provider_at(&update.provider_id, protocol, base_url);
+        let model_changed = record.settings.config.provider_id != update.provider_id
+            || record.settings.config.provider_protocol != update.provider_protocol
+            || record.settings.config.model != update.model
+            || record
+                .settings
+                .model
+                .route_key(&record.settings.config.model)
+                .is_some_and(|route| Some(route) != model.route_key(&update.model));
         record.settings.config.provider_id = update.provider_id;
         record.settings.config.provider_protocol = update.provider_protocol;
         record.settings.config.model = update.model;
@@ -286,6 +294,9 @@ impl AgentService {
         // Recovery refuses usage measured against another window.
         if let Some(usage) = record.runtime.usage.as_mut() {
             usage.context_window_tokens = record.settings.config.context_window_tokens;
+            if model_changed {
+                usage.context_estimated_tokens = None;
+            }
         }
         record.settings.effective_input_capabilities =
             self.session_input_capabilities(model.as_ref(), &record.settings.config);
