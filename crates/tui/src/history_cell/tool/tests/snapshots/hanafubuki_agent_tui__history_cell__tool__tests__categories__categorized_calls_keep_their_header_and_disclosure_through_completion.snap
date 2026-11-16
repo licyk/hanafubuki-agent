@@ -1,0 +1,76 @@
+---
+source: crates/tui/src/history_cell/tool/tests/categories.rs
+expression: "gallery.join(\"\\n\\n\")"
+---
+• Viewed image
+  └ View diagram.png
+─── expanded (Some(Generic)) ───
+• Viewed image
+  └ Called view_image:
+      diagram.png
+      Full result kept in
+      details
+
+• Called MCP
+  └ mcp__docs__lookup: MCP docs
+─── expanded (Some(Generic)) ───
+• Called MCP
+  └ Called mcp__docs__lookup:
+      MCP docs
+      Full result kept in
+      details
+
+• Used skills
+  └ Read skill user:rust
+─── expanded (Some(Generic)) ───
+• Used skills
+  └ Called skills_read:
+      user:rust
+      Full result kept in
+      details
+
+• Discovered tools
+  └ Search tools
+      mcp__docs__lookup
+─── expanded (Some(Generic)) ───
+• Discovered tools
+  └ Called tool_search:
+      mcp__docs__lookup
+      Full result kept in
+      details
+
+• Searched the web
+  └ Search ratatui
+─── expanded (Some(Generic)) ───
+• Searched the web
+  └ Called web_search: ratatui
+      Full result kept in
+      details
+
+• Managed goal
+  └ Create goal Fix the bug
+─── expanded (Some(Generic)) ───
+• Managed goal
+  └ Called create_goal: Fix the
+      bug
+      Full result kept in
+      details
+
+• Asked user
+  └ Ask Choose a target
+─── expanded (Some(Generic)) ───
+• Asked user
+  └ Called request_user_input:
+      Choose a target
+      Full result kept in
+      details
+
+• Updated plan
+  └ Update plan Implement and
+      verify
+─── expanded (Some(Generic)) ───
+• Updated plan
+  └ Called update_plan:
+      Implement and verify
+      Full result kept in
+      details

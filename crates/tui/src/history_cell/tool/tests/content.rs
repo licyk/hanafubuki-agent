@@ -49,16 +49,17 @@ fn the_preview_shares_one_limit_across_items_and_the_transcript_keeps_all() {
     • Called MCP
       └ mcp__search__lookup: rust
     ─── expanded (Some(Generic)) ───
-    • Called mcp__search__lookup: rust
-      └ first
-        second
-        third
-        fourth
-        fifth
+    • Called MCP
+      └ Called mcp__search__lookup: rust
+          first
+          second
+          third
+          fourth
+          fifth
     ");
     assert_eq!(
         raw(&cell),
-        "• Called mcp__search__lookup: rust\n  └ first\n    second\n    third\n    fourth\n    fifth"
+        "• Called MCP\n  └ Called mcp__search__lookup: rust\n      first\n      second\n      third\n      fourth\n      fifth"
     );
 }
 
@@ -103,22 +104,23 @@ fn each_item_shows_as_text_or_a_one_line_summary() {
     • Called MCP
       └ mcp__search__lookup: rust
     ─── expanded (Some(Generic)) ───
-    • Called mcp__search__lookup: rust
-      └ {
-          "result": [
-            1,
-            2,
-            3
-          ],
-          "text": "long output 🦀"
-        }
-        image/png · 8 B
-        audio/wav · 35.2 KiB
-        embedded resource: file:///text.txt
-        resource body
-        embedded resource: file:///blob.bin · application/octet-stream · 3 B
-        link: file:///linked.txt
-        [unsupported MCP content: future_block]
+    • Called MCP
+      └ Called mcp__search__lookup: rust
+          {
+            "result": [
+              1,
+              2,
+              3
+            ],
+            "text": "long output 🦀"
+          }
+          image/png · 8 B
+          audio/wav · 35.2 KiB
+          embedded resource: file:///text.txt
+          resource body
+          embedded resource: file:///blob.bin · application/octet-stream · 3 B
+          link: file:///linked.txt
+          [unsupported MCP content: future_block]
     "#);
 }
 
@@ -130,22 +132,23 @@ fn a_json_output_is_compact_collapsed_indented_expanded_and_as_it_came_raw() {
     • Called MCP
       └ mcp__search__lookup: rust
     ─── expanded (Some(Generic)) ───
-    • Called mcp__search__lookup: rust
-      └ {
-          "name": "ratatui",
-          "versions": [
-            "0.29",
-            "0.30"
-          ],
-          "meta": {
-            "stars": 10000,
-            "empty": {}
+    • Called MCP
+      └ Called mcp__search__lookup: rust
+          {
+            "name": "ratatui",
+            "versions": [
+              "0.29",
+              "0.30"
+            ],
+            "meta": {
+              "stars": 10000,
+              "empty": {}
+            }
           }
-        }
     "#);
     assert_eq!(
         raw(&cell),
-        format!("• Called mcp__search__lookup: rust\n  └ {json}")
+        format!("• Called MCP\n  └ Called mcp__search__lookup: rust\n      {json}")
     );
     // A text display (a plugin's) is laid out the same way.
     let plugin = shown(
@@ -176,8 +179,8 @@ fn text_that_is_not_json_to_lay_out_shows_as_it_came() {
         let cell = mcp(vec![text_item(text)]);
         let expanded = super::text(&cell.transcript_lines(u16::MAX));
         assert_eq!(
-            expanded.lines().nth(1),
-            Some(format!("  └ {text}").as_str()),
+            expanded.lines().nth(2),
+            Some(format!("      {text}").as_str()),
             "{text}"
         );
     }
@@ -212,7 +215,7 @@ fn a_multi_megabyte_image_is_one_summary_row() {
     let cell = shown("mcp__shots__take", None, display);
     assert_eq!(
         both(&cell, 80),
-        "• Called MCP\n  └ mcp__shots__take\n─── expanded (Some(Generic)) ───\n• Called mcp__shots__take\n  └ image/png · 6.0 MiB"
+        "• Called MCP\n  └ mcp__shots__take\n─── expanded (Some(Generic)) ───\n• Called MCP\n  └ Called mcp__shots__take\n      image/png · 6.0 MiB"
     );
 }
 
@@ -243,7 +246,7 @@ fn a_hostile_summary_stays_one_row_without_controls() {
     let expanded = super::text(&cell.transcript_lines(80));
     assert_eq!(
         expanded,
-        "• Called mcp__x__y\n  └ image/png cleared · 1 B\n    link: https://e.x/ a\n    {\"k\": \"\\u001b[31m\"}"
+        "• Called MCP\n  └ Called mcp__x__y\n      image/png cleared · 1 B\n      link: https://e.x/ a\n      {\"k\": \"\\u001b[31m\"}"
     );
     assert!(!expanded.contains('\u{1b}'));
 }

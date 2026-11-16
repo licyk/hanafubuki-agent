@@ -5,12 +5,13 @@ expression: "format!(\"{}\\n\\n{}\", both(&mcp, 60), both(&fields, 60))"
 • Called MCP
   └ mcp__docs__lookup: ratatui
 ─── expanded (Some(Generic)) ───
-• Called mcp__docs__lookup: ratatui
-  └ result 1
-    result 2
-    result 3
-    result 4
-    result 5
+• Called MCP
+  └ Called mcp__docs__lookup: ratatui
+      result 1
+      result 2
+      result 3
+      result 4
+      result 5
 
 • Called goal_status
   └ status: active

@@ -1,6 +1,7 @@
 //! The tool call entry: each display's view collapsed and expanded, what
 //! expanding adds, the frame while a call runs, and the exploration run.
 
+mod categories;
 mod colour;
 mod content;
 mod diffs;
@@ -98,24 +99,24 @@ fn a_running_call_shows_its_command_or_its_name_and_subject() {
     assert!(cell.transcript_animation_tick().is_some());
     let cell = new_tool_call(
         "call-1".to_string(),
-        "web_search".to_string(),
+        "lookup".to_string(),
         Some("rust".to_string()),
     );
-    assert!(render(&cell, 60).ends_with("Running web_search: rust\n  └ …"));
+    assert!(render(&cell, 60).ends_with("Running lookup: rust\n  └ …"));
 }
 
 #[test]
 fn a_finished_call_without_a_display_shows_its_name() {
     let mut cell = new_tool_call(
         "call-1".to_string(),
-        "web_search".to_string(),
+        "lookup".to_string(),
         Some("rust".to_string()),
     );
     cell.complete("call-1", true);
     // Its row stays until it is known there is no display.
-    assert_eq!(render(&cell, 60), "• Failed web_search: rust\n  └ …");
+    assert_eq!(render(&cell, 60), "• Failed lookup: rust\n  └ …");
     cell.show("call-1", no_display());
-    assert_eq!(render(&cell, 60), "• Failed web_search: rust");
+    assert_eq!(render(&cell, 60), "• Failed lookup: rust");
     // A command keeps its header from when it ran.
     let mut cell = new_tool_call(
         "call-1".to_string(),

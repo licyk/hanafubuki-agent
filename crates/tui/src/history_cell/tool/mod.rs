@@ -13,7 +13,7 @@
 //! clock goes after its header only where its widest fits, so the header
 //! wraps the same as the clock counts and as it will once finished.
 //!
-//! Consecutive exploration, Skill or MCP calls of the same kind share an
+//! Consecutive categorized calls of the same kind share an
 //! entry (`group`), after Codex's exploration cell: its activity ids are its calls'.
 
 mod command;
@@ -220,10 +220,7 @@ impl ToolCallCell {
 
     fn lines(&self, width: u16, extent: Extent) -> Vec<Line<'static>> {
         match &self.calls[..] {
-            [call]
-                if extent.expanded
-                    || !matches!(self.group(), Some(ToolGroup::Skills | ToolGroup::Mcp)) =>
-            {
+            [call] if matches!(self.group(), None | Some(ToolGroup::Exploration)) => {
                 let view = call.view(extent);
                 let body = if extent.expanded {
                     view.details
@@ -237,7 +234,7 @@ impl ToolCallCell {
                 self.group().unwrap_or(ToolGroup::Exploration),
                 calls,
                 width,
-                extent.expanded,
+                extent,
             ),
         }
     }
@@ -271,7 +268,7 @@ impl HistoryCell for ToolCallCell {
             {
                 Some(ActivityDisclosure::Generic)
             }
-            [call] if !matches!(self.group(), Some(ToolGroup::Skills | ToolGroup::Mcp)) => {
+            [call] if matches!(self.group(), None | Some(ToolGroup::Exploration)) => {
                 call.view(Extent::new(width, false)).hidden
             }
             // A run's details always show more than its rows: each call's

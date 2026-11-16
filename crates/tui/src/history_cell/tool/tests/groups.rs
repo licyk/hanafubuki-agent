@@ -20,12 +20,7 @@ fn skill_and_mcp_groups_are_distinct_from_exploration_and_other_plugins() {
     ] {
         assert_eq!(ToolGroup::for_name(name), Some(ToolGroup::Mcp));
     }
-    for name in [
-        "tool_search",
-        "tool_list",
-        "plugin__skills_read",
-        "mcp_status",
-    ] {
+    for name in ["plugin__skills_read", "mcp_status"] {
         assert_eq!(ToolGroup::for_name(name), None);
     }
 }

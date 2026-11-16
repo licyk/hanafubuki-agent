@@ -614,6 +614,81 @@ fn skill_and_mcp_runs_are_separate_and_replay_as_they_did_live() {
 }
 
 #[test]
+fn categorized_tool_runs_match_replay_in_fullscreen_and_scrollback() {
+    for owned in [true, false] {
+        let (mut chat, events) = chat_in(owned);
+        let mut entries = Vec::new();
+        chat.handle_turn_update(TurnUpdate::Started);
+        transcript(&events, &mut entries);
+        entries.clear();
+        let calls = [
+            ("image-1", "view_image", "first.png"),
+            ("image-2", "view_image", "second.png"),
+            ("list", "tool_list", "mcp.docs"),
+            ("search", "tool_search", "mcp__docs__lookup"),
+            ("web", "web_search", "ratatui"),
+            ("page", "fetch_web_page", "https://ratatui.rs"),
+            ("get", "get_goal", "ship"),
+            ("update", "update_goal", "complete"),
+            ("question-1", "request_user_input", "target"),
+            ("question-2", "request_user_input", "scope"),
+            ("plan-1", "update_plan", "implement"),
+            ("plan-2", "update_plan", "verify"),
+            ("image-3", "view_image", "last.png"),
+        ];
+        let mut replay = Vec::new();
+        for (id, name, subject) in calls {
+            tool_started(&mut chat, id, name, Some(subject));
+            tool_completed(&mut chat, id, "full result");
+            transcript(&events, &mut entries);
+            replay.push(ReplayedItem::Tool {
+                call_id: id.into(),
+                name: name.into(),
+                subject: Some(subject.into()),
+                is_error: false,
+                display: Some(AgentToolDisplay::Text {
+                    text: "full result".into(),
+                }),
+            });
+        }
+        let live = texts(&entries);
+        let headers = live
+            .iter()
+            .map(|cell| cell.lines().next().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            headers,
+            [
+                "• Viewed images",
+                "• Discovered tools",
+                "• Searched the web",
+                "• Managed goal",
+                "• Asked user",
+                "• Updated plan",
+                "• Viewed image",
+            ]
+        );
+        let replayed = chat.replayed_cells(replay);
+        assert_eq!(
+            live,
+            replayed
+                .iter()
+                .map(|cell| cell_text(cell.as_ref()))
+                .collect::<Vec<_>>()
+        );
+        for (live, restored) in entries.iter().zip(&replayed) {
+            assert_eq!(
+                cell_lines(live.as_ref(), true),
+                cell_lines(restored.as_ref(), true)
+            );
+            assert_eq!(live.activity_ids(), restored.activity_ids());
+            assert_eq!(live.transcript_animation_tick(), None);
+            assert!(live.activity_disclosure(80).is_some());
+        }
+    }
+}
+
+#[test]
 fn a_replayed_run_of_exploring_calls_is_one_entry_as_it_was_live() {
     let (mut chat, events) = chat();
     drain(&events);

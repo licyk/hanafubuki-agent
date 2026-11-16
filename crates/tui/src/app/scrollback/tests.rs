@@ -115,7 +115,7 @@ fn a_live_entry_holds_back_everything_after_it_until_it_completes() {
     let mut fixture = Fixture::new();
     let running: Arc<dyn HistoryCell> = LiveCell::new(new_tool_call(
         "call-1".to_string(),
-        "web_search".to_string(),
+        "lookup".to_string(),
         None,
     ));
     fixture.tail.push(Arc::clone(&running), true);
@@ -128,7 +128,7 @@ fn a_live_entry_holds_back_everything_after_it_until_it_completes() {
 
     fixture.tail.complete(&running);
     let (written, entries) = fixture.take(Some(3));
-    assert_eq!(written[0], "• Running web_search");
+    assert_eq!(written[0], "• Running lookup");
     // An entry without a control leaves as far as needed: here the blank
     // row before the fourth note.
     assert_eq!(written[written.len() - 2..], ["• note 2", ""]);
@@ -231,7 +231,7 @@ fn a_session_opened_in_its_place_writes_everything_even_what_ran() {
     let mut fixture = Fixture::new();
     let running: Arc<dyn HistoryCell> = LiveCell::new(new_tool_call(
         "call-1".to_string(),
-        "web_search".to_string(),
+        "lookup".to_string(),
         None,
     ));
     fixture.tail.push(running, true);
@@ -239,7 +239,7 @@ fn a_session_opened_in_its_place_writes_everything_even_what_ran() {
     fixture.tail.finish();
     fixture.tail.push(info("new session"), false);
     let (written, entries) = fixture.take(Some(40));
-    assert_eq!(written, ["• Running web_search", "  └ …", "", "• note"]);
+    assert_eq!(written, ["• Running lookup", "  └ …", "", "• note"]);
     assert_eq!(entries.len(), 1);
 }
 
@@ -248,13 +248,13 @@ fn at_exit_everything_leaves_live_or_not() {
     let mut fixture = Fixture::new();
     let running: Arc<dyn HistoryCell> = LiveCell::new(new_tool_call(
         "call-1".to_string(),
-        "web_search".to_string(),
+        "lookup".to_string(),
         None,
     ));
     fixture.tail.push(running, true);
     fixture.tail.push(info("note"), false);
     let (written, entries) = fixture.take(None);
-    assert_eq!(written, ["• Running web_search", "  └ …", "", "• note"]);
+    assert_eq!(written, ["• Running lookup", "  └ …", "", "• note"]);
     assert!(entries.is_empty());
 }
 
