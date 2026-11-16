@@ -96,6 +96,10 @@ fn a_bare_bang_says_how_and_a_running_turn_refuses_a_command() {
     harness.pump_until("the turn to run", |harness| {
         harness.app.chat_widget.is_task_running()
     });
+    // A running turn can still be preparing its first model request.
+    harness.pump_until("the model request to arrive", |harness| {
+        !harness.server.requests().is_empty()
+    });
     harness.type_and_submit("!echo too-early");
     harness.pump_until_screen_shows("A turn is running; wait for it or interrupt it first.");
     harness.pump_until_screen_shows("› !echo too-early");
