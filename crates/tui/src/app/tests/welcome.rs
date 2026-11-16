@@ -92,3 +92,37 @@ fn welcome_yields_to_small_windows_and_overlays_then_reappears() {
     harness.leave_settings();
     harness.pump_until("welcome after closing the overlay", has_mascot);
 }
+
+#[test]
+fn global_settings_save_and_apply_the_welcome_toggle_and_pose() {
+    let mut harness = Harness::owned(Vec::new());
+    harness.pump_until("welcome mascot", has_mascot);
+    harness.type_and_submit("/config interface");
+    harness.pump_until_screen_shows("Terminal interface");
+    harness.select_setting("Welcome mascot");
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("Saved");
+    assert!(harness.config_file().contains("welcomeEnabled = false"));
+    assert!(!harness.app.chat_widget.preferences().welcome_enabled);
+    harness.select_setting("Welcome mascot theme");
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("Random");
+    harness.key(KeyCode::Down);
+    harness.key(KeyCode::Enter);
+    harness.pump_until("fixed center theme applied", |h| {
+        h.app.chat_widget.preferences().welcome_theme == hanafubuki_agent::AgentWelcomeTheme::Center
+    });
+    assert!(harness.config_file().contains("welcomeTheme = \"center\""));
+    harness.leave_settings();
+    harness.app.draw(&mut harness.tui).unwrap();
+    assert!(!has_mascot(&harness));
+    harness.type_and_submit("/config interface");
+    harness.pump_until_screen_shows("Terminal interface");
+    harness.select_setting("Welcome mascot");
+    harness.key(KeyCode::Enter);
+    harness.pump_until("welcome enabled", |h| {
+        h.app.chat_widget.preferences().welcome_enabled
+    });
+    harness.leave_settings();
+    harness.pump_until("welcome restored by setting", has_mascot);
+}

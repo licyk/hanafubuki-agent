@@ -133,6 +133,8 @@ cargo xtask welcome-assets --source /path/to/audit
 cargo xtask welcome-preview --input /path/to/cells.json --output /path/to/preview.svg
 ```
 
+其他姿态的可复现源文件在 `crates/tui/assets/welcome/sources/{left,sleep,read,corner}/`。将某个源目录复制到审计目录，再运行同一个 `welcome-assets --source /path/to/audit --output crates/tui/assets/welcome/<pose>` 命令。`pose.json` 指定帧宽高及布局：`horizontal` 和 `vertical` 以 0（左/上）至 1（右/下）表示空闲区域内的比例位置，`width_scale` 调整终端显示比例，`min_rows`/`max_rows` 限制大小。生成器裁掉透明边距、固定下沿，接受任意尺寸的底图，从 `base.png` 生成呼吸和摆动循环，不要求原始姿态的眼睛坐标或眨眼关键帧；原来的居中姿态仍使用单独的眨眼关键帧。逐帧图片与审计产物保留在仓库外，主题目录只存图集与元数据。运行 TUI 的 `every_theme_places` 测试时，将 `HANAFUBUKI_AGENT_WELCOME_THEMES_PREVIEW` 设为已存在的目录，可导出五种实际布局，再逐个使用 `welcome-preview` 转成 SVG。
+
 预览使用实际盲文点位和 RGB 颜色绘制，普通文字使用查看器的等宽字体。这是终端字符格的重建图，并非桌面截图。
 
 ## 文档站点 [#the-documentation-site]

@@ -15,6 +15,8 @@ expression: "screen(&mut center, 140, 25)"
     Command center grouping  Project ›                     How the command center (/agents) groups its sessions; g there changes it
     Raw output               [ ] Off                       The conversation shown as the plain text it was made from
     Syntax theme             (unset) ›                     The syntax highlighting theme; unset, the default
+    Welcome mascot           [x] On                        Show Hana in empty new conversations
+    Welcome mascot theme     Random ›                      Choose a fixed pose or a random pose for each new conversation
     Status line              model-with-reasoning, bac...  The status line's items, in order
     Status line colors       [x] On                        Whether the status line's items take the theme's colors
     Terminal title           activity, session-title, ...  The terminal title's items, in order; none leaves the title alone
@@ -23,7 +25,5 @@ expression: "screen(&mut center, 140, 25)"
     Math                     [x] On                        TeX formulas in Unicode notation; off, shown as written
     Mermaid diagrams         [x] On                        ```mermaid fences drawn as text diagrams; off, shown as code
     Check for updates        [x] On                        At launch, asks GitHub at most once a day whether a newer release exists
-    Keymap                   Open ›                        The keys of the interface's actions
-    Presets                  Open ›                        Inputs kept in slots 0 to 9
 
   ←/→ tab · / search · enter toggle · esc close

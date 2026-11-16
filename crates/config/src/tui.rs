@@ -44,6 +44,10 @@ pub struct AgentTuiPreferences {
     /// `<name>.tmTheme` in the data directory's `themes/`; `None` for the
     /// default.
     pub theme: Option<String>,
+    /// Show the empty-conversation mascot.
+    pub welcome_enabled: bool,
+    /// Random chooses once per fresh conversation.
+    pub welcome_theme: AgentWelcomeTheme,
     /// The items of the status line under the composer, in order; empty
     /// for none.
     pub status_line: Vec<String>,
@@ -65,6 +69,19 @@ pub struct AgentTuiPreferences {
     /// hours, whether a newer release exists, and the footer says so. Read
     /// at launch by the standalone command line.
     pub check_for_updates: bool,
+}
+
+/// The empty-conversation mascot's pose.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentWelcomeTheme {
+    #[default]
+    Random,
+    Center,
+    LeftPeek,
+    RightSleep,
+    RightRead,
+    LowerLeft,
 }
 
 /// One preset's slot: what it runs, and the name the menu shows.
@@ -111,6 +128,8 @@ impl Default for AgentTuiPreferences {
             agents_grouping: AgentAgentsGrouping::Project,
             raw_output: false,
             theme: None,
+            welcome_enabled: true,
+            welcome_theme: AgentWelcomeTheme::Random,
             status_line: DEFAULT_STATUS_LINE.map(String::from).to_vec(),
             status_line_colors: true,
             terminal_title: DEFAULT_TERMINAL_TITLE.map(String::from).to_vec(),
@@ -313,6 +332,21 @@ pub(crate) fn section() -> SettingsSection {
                     },
                 ),
                 "The syntax highlighting theme; unset, the default",
+            ),
+            described(
+                SettingSpec::new("tui.welcomeEnabled", "Welcome mascot", SettingKind::Boolean),
+                "Show Hana in empty new conversations",
+            ),
+            described(
+                SettingSpec::new("tui.welcomeTheme", "Welcome mascot theme", choice(&[
+                    ("random", "Random"),
+                    ("center", "Center: resting"),
+                    ("left_peek", "Left edge: peeking"),
+                    ("right_sleep", "Right: sleeping"),
+                    ("right_read", "Right: reading"),
+                    ("lower_left", "Lower left: half-hidden head"),
+                ])),
+                "Choose a fixed pose or a random pose for each new conversation",
             ),
             described(
                 SettingSpec::new("tui.statusLine", "Status line", items()),

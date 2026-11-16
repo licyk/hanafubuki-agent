@@ -9,7 +9,7 @@ use image::{imageops, Delay, Frame, Rgba, RgbaImage};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use super::{animation, Metadata, COLUMNS, FRAMES, HEIGHT, WIDTH};
+use super::{animation, Metadata, FRAMES};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -24,33 +24,41 @@ struct Evidence {
 }
 
 pub(super) fn generate(source: &Path, output: &Path) -> Result<()> {
-    let (opened, closed) = animation::source_frames(source)?;
+    let (opened, closed, metadata) = animation::source_frames(source)?;
+    let (width, height, columns) = (metadata.width, metadata.height, metadata.columns);
+    let (render_width, render_height) = opened.dimensions();
     let mut hashes = BTreeMap::new();
-    for name in ["base.png", "blink.png", "prompts.json"] {
+    for name in ["base.png", "blink.png", "prompts.json", "pose.json"]
+        .into_iter()
+        .filter(|name| source.join(name).exists())
+    {
         hashes.insert(name.to_string(), digest(&fs::read(source.join(name))?));
     }
     fs::create_dir_all(output)?;
     fs::create_dir_all(source.join("frames"))?;
-    let mut atlas = RgbaImage::new(WIDTH * COLUMNS, HEIGHT * FRAMES.div_ceil(COLUMNS));
-    let mut contact = RgbaImage::new(384 * 4, 432 * 2);
+    let mut atlas = RgbaImage::new(width * columns, height * FRAMES.div_ceil(columns));
+    let mut contact = RgbaImage::new(render_width * 4, render_height * 2);
     let mut gif =
         GifEncoder::new_with_speed(BufWriter::new(File::create(source.join("loop.gif"))?), 30);
     gif.set_repeat(Repeat::Infinite)?;
     let first = animation::frame_at(&opened, &closed, 0);
     for index in 0..FRAMES {
         let rendered = animation::frame_at(&opened, &closed, index);
-        if rendered.as_raw()[396 * 384 * 4..] != first.as_raw()[396 * 384 * 4..] {
+        if rendered.as_raw()[(render_height as usize * 92 / 100) * render_width as usize * 4..]
+            != first.as_raw()[(render_height as usize * 92 / 100) * render_width as usize * 4..]
+        {
             return Err(format!("frame {index} moved the resting forearm").into());
         }
         rendered.save(source.join("frames").join(format!("{index:03}.png")))?;
-        let small = imageops::resize(&rendered, WIDTH, HEIGHT, imageops::FilterType::Lanczos3);
+        let small = imageops::resize(&rendered, width, height, imageops::FilterType::Lanczos3);
         imageops::replace(
             &mut atlas,
             &small,
-            i64::from(index % COLUMNS * WIDTH),
-            i64::from(index / COLUMNS * HEIGHT),
+            i64::from(index % columns * width),
+            i64::from(index / columns * height),
         );
-        let mut preview = RgbaImage::from_pixel(384, 432, Rgba([32, 35, 43, 255]));
+        let mut preview =
+            RgbaImage::from_pixel(render_width, render_height, Rgba([32, 35, 43, 255]));
         imageops::overlay(&mut preview, &rendered, 0, 0);
         if let Some(slot) = [0, 12, 29, 31, 48, 54, 75, 95]
             .iter()
@@ -59,8 +67,8 @@ pub(super) fn generate(source: &Path, output: &Path) -> Result<()> {
             imageops::replace(
                 &mut contact,
                 &preview,
-                (slot % 4 * 384) as i64,
-                (slot / 4 * 432) as i64,
+                (slot as u32 % 4 * render_width) as i64,
+                (slot as u32 / 4 * render_height) as i64,
             );
         }
         // GIF has centisecond precision; 80+80+90 ms preserves the 8-second loop.
@@ -80,13 +88,13 @@ pub(super) fn generate(source: &Path, output: &Path) -> Result<()> {
     fs::write(output.join("atlas.png"), &atlas_bytes)?;
     fs::write(source.join("atlas.png"), &atlas_bytes)?;
     contact.save(source.join("contact-sheet.png"))?;
-    write_json(&output.join("atlas.json"), &Metadata::default())?;
+    write_json(&output.join("atlas.json"), &metadata)?;
     hashes.insert("atlas.png".into(), digest(&atlas_bytes));
     write_json(&source.join("conversion.json"), &Evidence {
-        metadata: Metadata::default(),
+        metadata,
         loop_seconds: FRAMES / super::FPS,
         generator: "cargo xtask welcome-assets",
-        method: "eye-only keyframe composite; anchored normalized mesh; bilinear warp; Lanczos resize; NeuQuant RGBA palette",
+        method: "optional eye-only keyframe composite; alpha crop for pose.json; anchored normalized mesh; bilinear warp; Lanczos resize; NeuQuant RGBA palette",
         sha256: hashes,
     })?;
     println!("Generated {FRAMES} frames, loop.gif, contact-sheet.png and conversion.json; atlas: {} ({} bytes)", output.join("atlas.png").display(), atlas_bytes.len());

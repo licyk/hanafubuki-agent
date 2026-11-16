@@ -3,5 +3,12 @@
   "height": 216,
   "fps": 12,
   "frames": 96,
-  "columns": 8
+  "columns": 8,
+  "layout": {
+    "horizontal": 0.5,
+    "vertical": 1.0,
+    "width_scale": 1.2,
+    "min_rows": 18,
+    "max_rows": 40
+  }
 }

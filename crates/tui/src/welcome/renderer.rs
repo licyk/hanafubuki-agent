@@ -1,12 +1,11 @@
 use std::sync::OnceLock;
 use std::time::Duration;
 
+use hanafubuki_agent::AgentWelcomeTheme;
 use image::{imageops, RgbaImage};
 use ratatui::{buffer::Buffer, layout::Rect, style::Color};
 use serde::Deserialize;
 
-const MIN_ROWS: u16 = 18;
-const MAX_ROWS: u16 = 40;
 const DOTS: [(u32, u32, u8); 8] = [
     (0, 0, 1),
     (0, 1, 2),
@@ -26,6 +25,30 @@ struct Metadata {
     columns: u32,
     frames: u32,
     fps: u32,
+    #[serde(default)]
+    layout: Layout,
+}
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(default)]
+struct Layout {
+    horizontal: f32,
+    vertical: f32,
+    width_scale: f32,
+    min_rows: u16,
+    max_rows: u16,
+}
+
+impl Default for Layout {
+    fn default() -> Self {
+        Self {
+            horizontal: 0.5,
+            vertical: 1.0,
+            width_scale: 1.2,
+            min_rows: 18,
+            max_rows: 40,
+        }
+    }
 }
 
 struct Atlas {
@@ -33,23 +56,56 @@ struct Atlas {
     meta: Metadata,
 }
 
-fn atlas() -> Option<&'static Atlas> {
-    static ATLAS: OnceLock<Option<Atlas>> = OnceLock::new();
-    ATLAS
+fn atlas(theme: AgentWelcomeTheme) -> Option<&'static Atlas> {
+    type Entry = (OnceLock<Option<Atlas>>, &'static [u8], &'static [u8]);
+    static ATLASES: [Entry; 5] = [
+        (
+            OnceLock::new(),
+            include_bytes!("../../assets/welcome/atlas.png"),
+            include_bytes!("../../assets/welcome/atlas.json"),
+        ),
+        (
+            OnceLock::new(),
+            include_bytes!("../../assets/welcome/left/atlas.png"),
+            include_bytes!("../../assets/welcome/left/atlas.json"),
+        ),
+        (
+            OnceLock::new(),
+            include_bytes!("../../assets/welcome/sleep/atlas.png"),
+            include_bytes!("../../assets/welcome/sleep/atlas.json"),
+        ),
+        (
+            OnceLock::new(),
+            include_bytes!("../../assets/welcome/read/atlas.png"),
+            include_bytes!("../../assets/welcome/read/atlas.json"),
+        ),
+        (
+            OnceLock::new(),
+            include_bytes!("../../assets/welcome/corner/atlas.png"),
+            include_bytes!("../../assets/welcome/corner/atlas.json"),
+        ),
+    ];
+    let index = match theme {
+        AgentWelcomeTheme::Random | AgentWelcomeTheme::Center => 0,
+        AgentWelcomeTheme::LeftPeek => 1,
+        AgentWelcomeTheme::RightSleep => 2,
+        AgentWelcomeTheme::RightRead => 3,
+        AgentWelcomeTheme::LowerLeft => 4,
+    };
+    let (cache, png, json) = &ATLASES[index];
+    cache
         .get_or_init(|| {
             Some(Atlas {
-                image: image::load_from_memory(include_bytes!("../../assets/welcome/atlas.png"))
-                    .ok()?
-                    .into_rgba8(),
-                meta: serde_json::from_slice(include_bytes!("../../assets/welcome/atlas.json"))
-                    .ok()?,
+                image: image::load_from_memory(png).ok()?.into_rgba8(),
+                meta: serde_json::from_slice(json).ok()?,
             })
         })
         .as_ref()
 }
 
-pub(super) fn stage(available: Rect, buf: &Buffer) -> Option<Rect> {
-    if available.width < 64 || available.height < MIN_ROWS {
+fn stage(available: Rect, buf: &Buffer, meta: &Metadata) -> Option<Rect> {
+    let layout = meta.layout;
+    if available.width < 64 || available.height < layout.min_rows {
         return None;
     }
     let mut top = available.y;
@@ -58,34 +114,46 @@ pub(super) fn stage(available: Rect, buf: &Buffer) -> Option<Rect> {
             top = y + 1;
         }
     }
-    let meta = &atlas()?.meta;
-    let rows_by_width =
-        u32::from(available.width.saturating_sub(4)) * meta.height / (meta.width * 2);
+    let aspect = meta.width as f32 * 2.0 * layout.width_scale / meta.height as f32;
+    let rows_by_width = (f32::from(available.width) / aspect).floor() as u16;
     let rows = available
         .bottom()
         .saturating_sub(top)
-        .min(MAX_ROWS)
-        .min(rows_by_width as u16);
-    if rows < MIN_ROWS {
+        .min(layout.max_rows)
+        .min(rows_by_width);
+    if rows < layout.min_rows {
         return None;
     }
-    let columns = (u32::from(rows) * meta.width * 2 / meta.height) as u16;
+    let columns = (f32::from(rows) * aspect).floor() as u16;
     Some(Rect::new(
-        available.x + (available.width - columns) / 2,
-        available.bottom() - rows,
+        available.x + (f32::from(available.width - columns) * layout.horizontal) as u16,
+        top + (f32::from(available.bottom() - top - rows) * layout.vertical) as u16,
         columns,
         rows,
     ))
 }
 
-#[derive(Default)]
 pub(super) struct Renderer {
+    theme: AgentWelcomeTheme,
     cached: Option<(u32, u16, u16, RgbaImage)>,
 }
 
 impl Renderer {
+    pub(super) fn new(theme: AgentWelcomeTheme) -> Self {
+        Self {
+            theme,
+            cached: None,
+        }
+    }
+
+    pub(super) fn stage(&self, available: Rect, buf: &Buffer) -> Option<Rect> {
+        stage(available, buf, &atlas(self.theme)?.meta)
+    }
+
     pub(super) fn paint(&mut self, area: Rect, buf: &mut Buffer, elapsed: Duration, opacity: f32) {
-        let Some(atlas) = atlas() else { return };
+        let Some(atlas) = atlas(self.theme) else {
+            return;
+        };
         let meta = &atlas.meta;
         let frame =
             ((elapsed.as_secs_f64() * f64::from(meta.fps)) as u64 % u64::from(meta.frames)) as u32;

@@ -292,6 +292,7 @@ impl ChatWidget {
 
     /// `[tui]` as the configuration resolves it after a change.
     pub(crate) fn set_preferences(&mut self, preferences: AgentTuiPreferences) {
+        self.welcome.configure(&preferences);
         self.preferences = preferences;
     }
 

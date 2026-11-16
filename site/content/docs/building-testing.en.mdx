@@ -133,6 +133,8 @@ Set `HANAFUBUKI_AGENT_WELCOME_PREVIEW` or `HANAFUBUKI_AGENT_WELCOME_TUI_PREVIEW`
 cargo xtask welcome-preview --input /path/to/cells.json --output /path/to/preview.svg
 ```
 
+Additional poses are reproducible from `crates/tui/assets/welcome/sources/{left,sleep,read,corner}/`. Copy one source directory to an audit directory, then use the same `welcome-assets --source /path/to/audit --output crates/tui/assets/welcome/<pose>` command. A `pose.json` selects the frame width/height and layout: `horizontal` and `vertical` place the image within the free region from 0 (left/top) to 1 (right/bottom), `width_scale` adjusts terminal proportions, and `min_rows`/`max_rows` bound its size. The generator crops transparent margins and anchors the lower edge, accepts arbitrary source dimensions, and creates a breathing/sway loop from `base.png`; it does not require the original pose's eye landmarks or a blink keyframe. The original center pose retains its separate blink keyframe. Keep generated frames and audit files outside the repository; copy only the atlas pair into its theme directory. To export all five rendered placements, set `HANAFUBUKI_AGENT_WELCOME_THEMES_PREVIEW` to an existing directory when running the `every_theme_places` TUI test, then run `welcome-preview` for each JSON.
+
 The preview draws the actual Braille dot masks and RGB values; ordinary text uses the viewer's monospace font. It is a reconstruction of the terminal cells, not a desktop screenshot.
 
 ## The documentation site [#the-documentation-site]

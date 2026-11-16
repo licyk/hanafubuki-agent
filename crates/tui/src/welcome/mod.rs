@@ -3,6 +3,8 @@
 
 mod renderer;
 
+use hanafubuki_agent::{AgentTuiPreferences, AgentWelcomeTheme};
+use std::hash::{BuildHasher, Hasher};
 use std::time::{Duration, Instant};
 
 use ratatui::{buffer::Buffer, layout::Rect};
@@ -14,6 +16,9 @@ const FADE_DURATION: f32 = 0.45;
 
 pub(crate) struct Welcome {
     eligible: bool,
+    enabled: bool,
+    choice: AgentWelcomeTheme,
+    random_theme: AgentWelcomeTheme,
     opacity: f32,
     elapsed: Duration,
     last_frame: Option<Instant>,
@@ -22,12 +27,45 @@ pub(crate) struct Welcome {
 
 impl Welcome {
     pub(crate) fn new(eligible: bool) -> Self {
+        let themes = [
+            AgentWelcomeTheme::Center,
+            AgentWelcomeTheme::LeftPeek,
+            AgentWelcomeTheme::RightSleep,
+            AgentWelcomeTheme::RightRead,
+            AgentWelcomeTheme::LowerLeft,
+        ];
+        let index = std::collections::hash_map::RandomState::new()
+            .build_hasher()
+            .finish() as usize
+            % themes.len();
+        let random_theme = themes[index];
         Self {
             eligible,
+            enabled: true,
+            choice: AgentWelcomeTheme::Random,
+            random_theme,
             opacity: 0.0,
             elapsed: Duration::ZERO,
             last_frame: None,
-            renderer: Renderer::default(),
+            renderer: Renderer::new(random_theme),
+        }
+    }
+
+    pub(crate) fn configure(&mut self, preferences: &AgentTuiPreferences) {
+        let choice = preferences.welcome_theme;
+        if self.choice != choice {
+            self.choice = choice;
+            self.renderer = Renderer::new(if choice == AgentWelcomeTheme::Random {
+                self.random_theme
+            } else {
+                choice
+            });
+            self.elapsed = Duration::ZERO;
+            self.hide();
+        }
+        self.enabled = preferences.welcome_enabled;
+        if !self.enabled {
+            self.hide();
         }
     }
 
@@ -36,7 +74,7 @@ impl Welcome {
     }
 
     pub(crate) fn needs_space(&self) -> bool {
-        self.eligible || self.opacity > 0.0
+        self.enabled && (self.eligible || self.opacity > 0.0)
     }
 
     pub(crate) fn hide(&mut self) {
@@ -52,8 +90,11 @@ impl Welcome {
         empty: bool,
         now: Instant,
     ) -> Option<Duration> {
-        let stage = renderer::stage(available, buf);
-        let Some(stage) = stage.filter(|_| self.needs_space()) else {
+        if !self.needs_space() {
+            self.hide();
+            return None;
+        }
+        let Some(stage) = self.renderer.stage(available, buf) else {
             self.hide();
             return None;
         };

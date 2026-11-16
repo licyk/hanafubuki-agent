@@ -2,11 +2,12 @@
 
 mod animation;
 mod export;
+mod pose;
 mod preview;
 
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 const WIDTH: u32 = 192;
 const HEIGHT: u32 = 216;
@@ -14,13 +15,15 @@ const FPS: u32 = 12;
 const FRAMES: u32 = 96;
 const COLUMNS: u32 = 8;
 
-#[derive(Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(default)]
 struct Metadata {
     width: u32,
     height: u32,
     fps: u32,
     frames: u32,
     columns: u32,
+    layout: pose::Layout,
 }
 
 impl Default for Metadata {
@@ -31,6 +34,7 @@ impl Default for Metadata {
             fps: FPS,
             frames: FRAMES,
             columns: COLUMNS,
+            layout: pose::Layout::default(),
         }
     }
 }

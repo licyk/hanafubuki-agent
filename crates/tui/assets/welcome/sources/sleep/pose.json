@@ -1,0 +1,11 @@
+{
+  "width": 256,
+  "height": 160,
+  "layout": {
+    "horizontal": 1,
+    "vertical": 1,
+    "width_scale": 1.2,
+    "min_rows": 10,
+    "max_rows": 26
+  }
+}

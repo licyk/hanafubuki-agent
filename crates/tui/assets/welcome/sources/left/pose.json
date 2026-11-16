@@ -1,0 +1,11 @@
+{
+  "width": 192,
+  "height": 216,
+  "layout": {
+    "horizontal": 0,
+    "vertical": 0.55,
+    "width_scale": 1.2,
+    "min_rows": 12,
+    "max_rows": 32
+  }
+}

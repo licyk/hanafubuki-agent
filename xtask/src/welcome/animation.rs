@@ -2,12 +2,17 @@ use std::path::Path;
 
 use image::{imageops, GrayImage, Rgba, RgbaImage};
 
-use super::{FPS, FRAMES};
+use super::{Metadata, FPS, FRAMES};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-pub(super) fn source_frames(source: &Path) -> Result<(RgbaImage, RgbaImage)> {
+pub(super) fn source_frames(source: &Path) -> Result<(RgbaImage, RgbaImage, Metadata)> {
+    let metadata = super::pose::metadata(source)?;
     let base = image::open(source.join("base.png"))?.into_rgba8();
+    if source.join("pose.json").exists() {
+        let frame = super::pose::prepare(base, &metadata)?;
+        return Ok((frame.clone(), frame, metadata));
+    }
     let blink = image::open(source.join("blink.png"))?.into_rgba8();
     if base.dimensions() != (1254, 1254) || blink.dimensions() != base.dimensions() {
         return Err("eye landmarks require matching 1254x1254 base.png and blink.png".into());
@@ -31,7 +36,7 @@ pub(super) fn source_frames(source: &Path) -> Result<(RgbaImage, RgbaImage)> {
             ((u32::from(open[c]) * (255 - weight) + u32::from(shut[c]) * weight + 127) / 255) as u8
         }))
     });
-    Ok((prepare(base), prepare(closed)))
+    Ok((prepare(base), prepare(closed), metadata))
 }
 
 fn prepare(mut source: RgbaImage) -> RgbaImage {

@@ -26,6 +26,8 @@ fn missing_preferences_are_the_defaults() {
             alternate_screen: AgentAlternateScreen::Auto,
             scrollback_mouse: AgentScrollbackMouse::Tail,
             agents_grouping: AgentAgentsGrouping::Project,
+            welcome_enabled: true,
+            welcome_theme: crate::AgentWelcomeTheme::Random,
             raw_output: false,
             theme: None,
             status_line: vec![
@@ -69,6 +71,8 @@ fn each_key_decodes_on_its_own_and_unknown_keys_are_ignored() {
             alternate_screen: AgentAlternateScreen::Auto,
             scrollback_mouse: AgentScrollbackMouse::Off,
             agents_grouping: AgentAgentsGrouping::Model,
+            welcome_enabled: true,
+            welcome_theme: crate::AgentWelcomeTheme::Random,
             raw_output: true,
             theme: Some("nord".to_string()),
             // Not a list of ids: the default.
@@ -306,4 +310,26 @@ fn a_layer_merges_its_keymap_entries_and_presets_over_the_users() {
                 && warning.contains("tui.presets.nope")),
         "{warnings:#?}"
     );
+}
+
+#[test]
+fn welcome_preferences_use_the_registry_and_tolerate_invalid_stored_fields() {
+    let (_root, config) =
+        config_with("[tui]\nwelcomeEnabled = false\nwelcomeTheme = 'future_pose'\n");
+    let preferences = config.tui_preferences().unwrap();
+    assert!(!preferences.welcome_enabled);
+    assert_eq!(preferences.welcome_theme, crate::AgentWelcomeTheme::Random);
+    config
+        .set_user_value("tui.welcomeTheme", "right_read")
+        .unwrap();
+    config.set_user_value("tui.welcomeEnabled", "true").unwrap();
+    let preferences = config.tui_preferences().unwrap();
+    assert!(preferences.welcome_enabled);
+    assert_eq!(
+        preferences.welcome_theme,
+        crate::AgentWelcomeTheme::RightRead
+    );
+    assert!(config
+        .set_user_value("tui.welcomeTheme", "future_pose")
+        .is_err());
 }

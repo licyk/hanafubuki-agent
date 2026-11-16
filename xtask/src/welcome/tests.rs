@@ -50,7 +50,7 @@ fn keyframes_replace_only_the_eye_regions_and_validate_landmark_dimensions() {
     RgbaImage::from_pixel(1254, 1254, Rgba([20, 20, 240, 255]))
         .save(dir.path().join("blink.png"))
         .unwrap();
-    let (opened, closed) = animation::source_frames(dir.path()).unwrap();
+    let (opened, closed, _) = animation::source_frames(dir.path()).unwrap();
     assert_eq!(opened.dimensions(), (384, 432));
     assert_eq!(opened.get_pixel(100, 100), closed.get_pixel(100, 100));
     assert_ne!(opened.get_pixel(135, 201), closed.get_pixel(135, 201));
@@ -114,4 +114,33 @@ fn command_options_support_explicit_paths_and_the_repository_atlas_default() {
         options(&args, "--input", None).unwrap(),
         (PathBuf::from("cells.json"), PathBuf::from("preview.svg"))
     );
+}
+
+#[test]
+fn single_pose_assets_crop_alpha_accept_dimensions_and_anchor_the_bottom() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = RgbaImage::from_fn(80, 40, |x, y| {
+        if (10..70).contains(&x) && (5..35).contains(&y) {
+            Rgba([40, 80, 240, 255])
+        } else {
+            Rgba([0; 4])
+        }
+    });
+    source.save(dir.path().join("base.png")).unwrap();
+    fs::write(dir.path().join("pose.json"), r#"{"width":128,"height":64,"future":true,"layout":{"horizontal":1,"vertical":1,"min_rows":6,"max_rows":20}}"#).unwrap();
+    let (opened, closed, _) = animation::source_frames(dir.path()).unwrap();
+    assert_eq!(opened.dimensions(), (256, 128));
+    assert_eq!(opened, closed);
+    assert_eq!(opened.get_pixel(255, 127)[3], 255);
+    assert_eq!(opened.get_pixel(0, 0)[3], 0);
+    assert_eq!(
+        animation::frame_at(&opened, &closed, 0),
+        animation::frame_at(&opened, &closed, FRAMES)
+    );
+    fs::write(
+        dir.path().join("pose.json"),
+        r#"{"layout":{"horizontal":2}}"#,
+    )
+    .unwrap();
+    assert!(animation::source_frames(dir.path()).is_err());
 }

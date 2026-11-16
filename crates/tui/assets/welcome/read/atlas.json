@@ -1,0 +1,14 @@
+{
+  "width": 192,
+  "height": 216,
+  "fps": 12,
+  "frames": 96,
+  "columns": 8,
+  "layout": {
+    "horizontal": 1.0,
+    "vertical": 1.0,
+    "width_scale": 1.2,
+    "min_rows": 14,
+    "max_rows": 36
+  }
+}
