@@ -288,7 +288,7 @@ impl App {
     }
 
     /// The session the main conversation shows.
-    pub(super) fn main_session_id(&self) -> Option<AgentSessionId> {
+    pub(crate) fn main_session_id(&self) -> Option<AgentSessionId> {
         if let Some(child) = &self.workspace.child {
             return child.parked.bridge.session_id();
         }

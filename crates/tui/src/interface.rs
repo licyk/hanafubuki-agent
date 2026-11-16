@@ -98,13 +98,14 @@ pub enum TuiResume {
 /// Runs the interface on the started Agent until the person quits. Standard
 /// input and output must be the terminal; the process's panic hook must be
 /// installed already (the interface's own restores the terminal before it).
-/// The terminal is restored on return.
+/// The terminal is restored on return. Returns the main session to resume, or
+/// `None` if the interface exits without an open session.
 pub fn run(
     events: TuiEvents,
     runtime: &Arc<AgentRuntime>,
     agent: &AgentHandle,
     options: TuiOptions,
-) -> Result<(), String> {
+) -> Result<Option<AgentSessionId>, String> {
     let bridge = AgentBridge::new(
         runtime.clone(),
         agent.clone(),
@@ -200,6 +201,7 @@ pub fn run(
     drop(restore);
     result
         .and(left)
+        .map(|()| app.main_session_id())
         .map_err(|error| format!("the terminal: {error}"))
 }
 

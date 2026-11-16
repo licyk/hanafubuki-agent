@@ -5,6 +5,7 @@
 //! is written before each launch with a fresh `checkedAtMs`, so no check
 //! runs. The test is the terminal: it reads the screen with vt100 and
 //! answers the cursor-position and device-attribute queries.
+//! The same terminal fixture checks the session resume hint after TUI shutdown.
 //!
 //! Unix only: the released update installs a shell script that prints the
 //! new version (as `tests/update.rs` does), and the pseudo-terminal is
@@ -186,6 +187,13 @@ impl Term {
         let mut input = self.input.lock().unwrap();
         input.write_all(bytes.as_bytes()).unwrap();
         input.flush().unwrap();
+    }
+
+    fn submit(&self, text: &str) {
+        self.send(text);
+        // A burst ending in Enter is treated as pasted text by the composer.
+        std::thread::sleep(Duration::from_millis(250));
+        self.send("\r");
     }
 
     fn contents(&self) -> String {
@@ -493,4 +501,93 @@ fn two_instances_prompt_and_the_second_update_finds_it_done() {
         "{screen}"
     );
     assert!(!installed.agent_started());
+}
+
+#[test]
+fn exiting_the_interface_prints_a_working_resume_command_after_terminal_restoration() {
+    let installed = Installed::new();
+    let home = installed.home();
+    let home = home.to_str().unwrap();
+    for scrollback in [false, true] {
+        let mut arguments = vec![
+            "-c",
+            "tui.alternateScreen=always",
+            "--data-dir",
+            home,
+            "Say done.",
+        ];
+        if scrollback {
+            arguments.insert(0, "--no-alt-screen");
+        }
+        let mut term = installed.launch(Path::new(BINARY), &arguments, &[]);
+        term.wait_for("Done.");
+        if scrollback {
+            term.send("\x03");
+            term.wait_for("again to quit");
+            term.send("\x03");
+        } else {
+            term.submit("/quit");
+        }
+        assert_eq!(term.exit_code(), 0, "{}", term.contents());
+        let written = term.written();
+        let hint = written
+            .rfind("To continue this session, run:")
+            .expect(&written);
+        if !scrollback {
+            let restored = written.rfind("\x1b[?1049l").expect(&written);
+            assert!(restored < hint, "{written}");
+        }
+        let command = written[hint..].lines().nth(1).unwrap().trim();
+        let id = command
+            .strip_prefix("hanafubuki-agent resume ")
+            .unwrap()
+            .split_whitespace()
+            .next()
+            .unwrap();
+        assert!(id.parse::<u64>().is_ok(), "{command}");
+        assert!(
+            command.contains(&format!("--data-dir '{home}'")),
+            "{command}"
+        );
+        assert!(!written.contains("Any running work continues"));
+
+        let mut resumed =
+            installed.launch(Path::new(BINARY), &["resume", id, "--data-dir", home], &[]);
+        resumed.wait_for("Done.");
+        resumed.submit("/exit");
+        assert_eq!(resumed.exit_code(), 0, "{}", resumed.contents());
+        assert!(resumed
+            .written()
+            .contains(&format!("hanafubuki-agent resume {id}")));
+    }
+}
+
+#[test]
+fn exiting_without_an_open_session_does_not_offer_a_stale_resume_command() {
+    let installed = Installed::new();
+    let mut empty = installed.launch(
+        Path::new(BINARY),
+        &["-c", "tui.alternateScreen=always"],
+        &[],
+    );
+    empty.wait_for(INTERFACE);
+    empty.submit("/quit");
+    assert_eq!(empty.exit_code(), 0, "{}", empty.contents());
+    assert!(!empty.written().contains("To continue this session"));
+
+    let mut cleared = installed.launch(
+        Path::new(BINARY),
+        &["-c", "tui.alternateScreen=always", "Say done."],
+        &[],
+    );
+    cleared.wait_for("Done.");
+    cleared.submit("/new");
+    let deadline = Instant::now() + DEADLINE;
+    while cleared.contents().contains("Done.") {
+        assert!(Instant::now() < deadline, "{}", cleared.contents());
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    cleared.submit("/quit");
+    assert_eq!(cleared.exit_code(), 0, "{}", cleared.contents());
+    assert!(!cleared.written().contains("To continue this session"));
 }

@@ -70,6 +70,7 @@ fn subagents_lists_them_and_shows_one_beside_its_parent() {
     harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("Subagent counter · from Delegate the count.");
     assert_eq!(harness.app.bridge.session_id(), Some(child));
+    assert_eq!(harness.app.main_session_id(), Some(parent));
     harness.pump_until("the subagent's transcript", |harness| {
         harness.transcript().contains("Twelve files.")
     });

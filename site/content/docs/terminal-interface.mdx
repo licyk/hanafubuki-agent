@@ -673,7 +673,14 @@ hanafubuki-agent resume 12 "继续" # 恢复后发送一条消息
 
 ## 退出 [#quit]
 
-输入 `/quit` 或 `/exit`，或者在 1 秒内按两次 Ctrl-C（输入框为空时也可以按两次 Ctrl-D）。退出时界面恢复终端状态（Fullscreen 下离开备用屏幕，对话也随之消失）并关闭 Agent，不额外打印内容。
+输入 `/quit` 或 `/exit`，或者在 1 秒内按两次 Ctrl-C（输入框为空时也可以按两次 Ctrl-D）。退出时界面恢复终端状态（Fullscreen 下离开备用屏幕，对话也随之消失）并关闭 Agent。如果当前有主会话，随后会打印恢复命令：
+
+```text
+To continue this session, run:
+  hanafubuki-agent resume 12
+```
+
+命令指向主会话，即使退出前显示的是旁路对话或子代理。没有打开会话时不显示提示，包括执行 `/new`、`/archive` 或 `/delete` 之后。显式指定的 `--data-dir` 会以绝对路径保留在命令中，并按 Unix 上的 POSIX shell 或 Windows 上的 PowerShell 规则加引号。退出会停止本地 Agent；这条命令用于恢复已保存的历史，不表示任务仍在后台继续运行。
 
 退出码为 0；Agent 无法启动、要恢复的会话无法打开或无法设置 `-m` 指定的模型、终端无法使用时为 1；没有终端时为 2。
 

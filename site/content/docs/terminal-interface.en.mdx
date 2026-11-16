@@ -674,7 +674,14 @@ With no session to resume, `resume --last` starts with no session, as `hanafubuk
 
 ## Quitting [#quit]
 
-Type `/quit` or `/exit`, or press Ctrl-C twice within one second (or Ctrl-D twice on an empty composer). Quitting restores the terminal (in Fullscreen, leaving the alternate screen, and the conversation with it) and shuts the Agent down, and prints nothing more.
+Type `/quit` or `/exit`, or press Ctrl-C twice within one second (or Ctrl-D twice on an empty composer). Quitting restores the terminal (in Fullscreen, leaving the alternate screen, and the conversation with it) and shuts the Agent down. If a main session is open, it then prints a command to continue it:
+
+```text
+To continue this session, run:
+  hanafubuki-agent resume 12
+```
+
+The command names the main session, including when a side conversation or subagent was shown. There is no hint when no session is open, including after `/new`, `/archive` or `/delete`. An explicit `--data-dir` is carried into the command as an absolute path, quoted for POSIX shells on Unix or PowerShell on Windows. Quitting stops the local Agent; this command restores saved history and does not mean that work continues in the background.
 
 The exit code is 0; 1 when the Agent could not start, the session to resume could not be opened or given the `-m` model, or the terminal could not be used; 2 without a terminal.
 

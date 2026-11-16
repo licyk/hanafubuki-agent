@@ -84,8 +84,36 @@ pub(crate) fn run(
         hanafubuki_agent_tui::run(events, &standalone.runtime, &agent, options)
             .map_err(Failure::new)
     });
+    let data_dir = global
+        .data_dir
+        .as_ref()
+        .map(|_| standalone.dirs.data_dir.clone());
     standalone.shutdown();
-    result.map(|()| SUCCESS)
+    let session = result?;
+    if let Some(hint) = resume_hint(session, data_dir.as_deref()) {
+        println!("{hint}");
+    }
+    Ok(SUCCESS)
+}
+
+fn resume_hint(
+    session: Option<AgentSessionId>,
+    data_dir: Option<&std::path::Path>,
+) -> Option<String> {
+    let session = session?;
+    let mut command = format!("hanafubuki-agent resume {}", session.value());
+    if let Some(directory) = data_dir {
+        let directory = directory.to_string_lossy();
+        // Single quotes are literal in POSIX shells and PowerShell; only the
+        // spelling of an embedded quote differs.
+        let directory = if cfg!(windows) {
+            directory.replace('\'', "''")
+        } else {
+            directory.replace('\'', "'\\''")
+        };
+        command.push_str(&format!(" --data-dir '{directory}'"));
+    }
+    Some(format!("To continue this session, run:\n  {command}"))
 }
 
 fn maintenance(global: crate::cli::GlobalArgs) -> hanafubuki_agent_tui::TuiMaintenance {
@@ -106,3 +134,6 @@ fn maintenance(global: crate::cli::GlobalArgs) -> hanafubuki_agent_tui::TuiMaint
         }
     }))
 }
+
+#[cfg(test)]
+mod tests;

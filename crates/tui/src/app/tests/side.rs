@@ -80,6 +80,7 @@ fn a_side_conversation_takes_its_own_messages_and_esc_returns_to_the_main_one() 
     harness.pump_until_turn_ends();
     let side = harness.session();
     assert_ne!(side, parent);
+    assert_eq!(harness.app.main_session_id(), Some(parent));
     assert_eq!(harness.origin(side), Some(AgentSessionOrigin::Side));
     assert!(harness
         .screen()
