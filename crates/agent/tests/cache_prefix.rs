@@ -9,7 +9,7 @@ use hanafubuki_agent::test_support::{
     chat_reasoning_answer_events, configure_test_provider, enable_two_skills, reopen_service,
     service_with_host, test_host, FakeServer, TEST_SHUTDOWN_DEADLINE,
 };
-use hanafubuki_agent::{AgentModelProtocol, AgentSessionMode};
+use hanafubuki_agent::{AgentApplicationService, AgentModelProtocol, AgentSessionMode};
 use serde_json::{json, Value};
 
 fn answer() -> Vec<u8> {
@@ -95,20 +95,13 @@ async fn world_state_replacement_removal_and_skill_catalog_changes_append_to_wir
         .start_turn(session.id, "Round four".into())
         .await
         .unwrap();
-    assert_eq!(
-        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
-        []
-    );
-    drop(service);
+    shutdown(service).await;
     let service = reopen_service(config, test_host(&paths), &paths);
     service
         .start_turn(session.id, "After restart".into())
         .await
         .unwrap();
-    assert_eq!(
-        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
-        []
-    );
+    shutdown(service).await;
     let captured = requests(&server);
     assert_eq!(captured.len(), 5);
     assert!(captured[0].to_string().contains("SYNTHETIC_RULE_ALPHA"));
@@ -122,7 +115,6 @@ async fn world_state_replacement_removal_and_skill_catalog_changes_append_to_wir
     for pair in captured.windows(2) {
         assert_prefix(&pair[0], &pair[1]);
     }
-    drop(service);
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
 
@@ -167,16 +159,12 @@ async fn compaction_starts_one_new_canonical_prefix_then_preserves_it() {
         .start_turn(session.id, "Second turn after compaction".into())
         .await
         .unwrap();
-    assert_eq!(
-        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
-        []
-    );
+    shutdown(service).await;
     let captured = requests(&server);
     assert_eq!(captured.len(), 5);
     assert!(captured[3].to_string().contains("SYNTHETIC_NEW_RULE"));
     assert!(!captured[3].to_string().contains("SYNTHETIC_OLD_RULE"));
     assert_prefix(&captured[3], &captured[4]);
-    drop(service);
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
 
@@ -225,10 +213,7 @@ async fn switching_mode_after_compaction_keeps_the_baseline_explicitly_historica
         .start_turn(session.id, "Continue in Default mode".into())
         .await
         .unwrap();
-    assert_eq!(
-        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
-        []
-    );
+    shutdown(service).await;
 
     let captured = requests(&server);
     assert_eq!(captured.len(), 5);
@@ -269,7 +254,6 @@ async fn switching_mode_after_compaction_keeps_the_baseline_explicitly_historica
     assert!(!advertises_patch(&captured[2]));
     assert!(advertises_patch(&captured[3]));
     assert_prefix(&captured[3], &captured[4]);
-    drop(service);
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
 
@@ -338,10 +322,7 @@ async fn assert_tool_history(with_plan: bool) {
         .start_turn(session.id, "Continue".into())
         .await
         .unwrap();
-    assert_eq!(
-        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
-        []
-    );
+    shutdown(service).await;
     let captured = requests(&server);
     assert_eq!(captured.len(), 8 + usize::from(with_plan));
     assert!(
@@ -353,6 +334,25 @@ async fn assert_tool_history(with_plan: bool) {
     for pair in captured.windows(2) {
         assert_prefix(&pair[0], &pair[1]);
     }
-    drop(service);
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
+}
+
+async fn shutdown(service: AgentApplicationService) {
+    // Plugin registrations retain service handles until their async disposal completes.
+    let deadline = Instant::now() + TEST_SHUTDOWN_DEADLINE;
+    let stopping = service.clone();
+    assert_eq!(
+        tokio::task::spawn_blocking(move || stopping.stop_accepting_and_cancel_turns(deadline))
+            .await
+            .unwrap(),
+        []
+    );
+    service.shutdown_mcp(deadline).await.unwrap();
+    assert_eq!(service.shutdown_plugins(deadline).await, []);
+    assert_eq!(
+        tokio::task::spawn_blocking(move || service.shutdown_workers_after_mcp(deadline))
+            .await
+            .unwrap(),
+        []
+    );
 }
