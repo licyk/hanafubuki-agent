@@ -185,7 +185,7 @@ A `ToolDescriptor` fixes the tool's model-visible spec and behaviour for the lif
 | `name`            | `ToolName::parse`: namespace segments and a local name; the flattened `namespace__name` is unique, and the kernel's tool names are reserved                                           |
 | `description`     | what the model reads                                                                                                                                                                  |
 | `input_schema`    | a JSON Schema with `additionalProperties: false`; the kernel validates arguments against the whole schema                                                                             |
-| `exposure`        | `Direct`, `Deferred` (found through `search_tools`), `DirectModelOnly` or `Hidden`                                                                                                     |
+| `exposure`        | `Direct`, `Deferred` (found through `search_tools`), `DirectModelOnly` or `Hidden`                                                                                                    |
 | `execution_class` | `ConcurrentRead` (runs beside other reads) or `Exclusive`                                                                                                                             |
 | `effect`          | `ReadOnly` (the only tools Plan mode offers) or `Mutating`                                                                                                                            |
 | `action`          | the activity action an interface labels the tool's activity by; an unknown one gets the generic label                                                                                 |
