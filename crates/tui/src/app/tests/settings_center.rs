@@ -25,6 +25,36 @@ impl Harness {
 }
 
 #[test]
+fn a_breadcrumb_leaves_the_hosted_model_picker_without_saving() {
+    for mode in [TranscriptMode::Terminal, TranscriptMode::Owned] {
+        let mut harness = Harness::start_with(Vec::new(), true, mode);
+        harness.type_and_submit("/providers policy");
+        harness.pump_until_screen_shows("Settings › Model policy");
+        harness.select_setting("Model");
+        let screen = harness.screen();
+        let row = screen
+            .lines()
+            .position(|line| line.trim_start().starts_with("› Model "))
+            .unwrap();
+        harness.press_at(6, row as u16);
+        harness.pump_until_screen_shows("Settings › Model policy › Model");
+        assert!(harness.app.chat_widget.has_command_view("providers"));
+        let previous = harness.registry().model_policy.model.clone();
+        let (row, column) = harness.find("Model policy");
+        harness.press_at(column, row);
+        harness.pump_until("the model policy form", |harness| {
+            !harness.app.chat_widget.has_command_view("providers")
+                && harness.screen().contains("Reasoning effort")
+        });
+        assert_eq!(harness.registry().model_policy.model, previous);
+        let (row, column) = harness.find("Settings");
+        harness.press_at(column, row);
+        harness.pump_until_screen_shows("esc close");
+        assert!(!harness.screen().contains("Settings ›"));
+    }
+}
+
+#[test]
 fn a_toggle_saves_at_once_in_both_presentations() {
     for mode in [TranscriptMode::Terminal, TranscriptMode::Owned] {
         let mut harness = Harness::start_with(Vec::new(), true, mode);
@@ -38,8 +68,7 @@ fn a_toggle_saves_at_once_in_both_presentations() {
         assert_eq!(harness.app.render_mode, HistoryRenderMode::Raw);
         harness.key(KeyCode::Esc);
         harness.pump_until("the center to close", |harness| {
-            !harness.screen().contains("Changes save automatically")
-                && !harness.screen().contains("Saved")
+            harness.app.workspace.settings().is_none()
         });
     }
 }
@@ -48,7 +77,7 @@ fn a_toggle_saves_at_once_in_both_presentations() {
 fn a_search_finds_a_setting_of_another_tab_and_an_edit_says_why_it_is_refused() {
     let mut harness = Harness::start(Vec::new());
     harness.type_and_submit("/config");
-    harness.pump_until_screen_shows("Changes save automatically");
+    harness.pump_until_screen_shows("esc close");
     harness.key(KeyCode::Char('/'));
     for character in "source age".chars() {
         harness.key(KeyCode::Char(character));
@@ -79,10 +108,15 @@ fn esc_from_a_page_returns_to_the_row_that_opened_it() {
     harness.select_setting("Syntax theme");
     harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("Select Syntax Theme");
-    assert!(harness.screen().contains("Settings › theme"));
+    assert!(harness.screen().contains("Settings › Syntax theme"));
     harness.key(KeyCode::Esc);
     harness.pump_until("the tab again", |harness| {
-        harness.screen().contains("› Syntax theme") && !harness.screen().contains("Select Syntax")
+        harness
+            .app
+            .workspace
+            .settings()
+            .is_some_and(|center| center.hosted_command().is_none())
+            && harness.screen().contains("› Syntax theme")
     });
 
     // A page of its own row, and Esc from it.
@@ -91,7 +125,12 @@ fn esc_from_a_page_returns_to_the_row_that_opened_it() {
     harness.pump_until_screen_shows("Pick an action");
     harness.key(KeyCode::Esc);
     harness.pump_until("the tab again", |harness| {
-        harness.screen().contains("› Keymap")
+        harness
+            .app
+            .workspace
+            .settings()
+            .is_some_and(|center| center.hosted_command().is_none())
+            && harness.screen().contains("› Keymap")
     });
 }
 
@@ -125,7 +164,7 @@ fn a_write_a_profile_overrides_says_so() {
 fn a_click_selects_a_tab_and_a_row_and_a_second_click_toggles_it() {
     let mut harness = Harness::owned(Vec::new());
     harness.type_and_submit("/config");
-    harness.pump_until_screen_shows("Changes save automatically");
+    harness.pump_until_screen_shows("esc close");
     let (row, column) = harness.find(" Memory ");
     harness.press_at(column + 2, row);
     harness.pump_until_screen_shows("Generate memories");

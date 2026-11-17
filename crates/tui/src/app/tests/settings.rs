@@ -29,7 +29,7 @@ fn models(ids: &[&str]) -> Vec<u8> {
 
 impl Harness {
     /// The Providers as the Agent has them.
-    fn registry(&self) -> AgentProviderRegistrySnapshot {
+    pub(super) fn registry(&self) -> AgentProviderRegistrySnapshot {
         let agent = self.runtime.slot().agent().unwrap();
         let call = agent.clone();
         agent
@@ -539,7 +539,7 @@ fn an_mcp_server_is_added_with_a_secret_and_deleted_in_the_center() {
     harness.key(KeyCode::Enter);
     harness.select_setting("Delete");
     harness.key(KeyCode::Enter);
-    harness.pump_until_screen_shows("Settings › Delete?");
+    harness.pump_until_screen_shows("Settings › MCP servers › tools › Delete?");
     harness.select_setting("2. Delete");
     harness.key(KeyCode::Enter);
     harness.pump_until("the server and its secret to go", |harness| {
@@ -589,7 +589,14 @@ fn an_mcp_login_opens_over_its_server_and_says_why_it_failed() {
     harness.pump_until_screen_shows("OAuth is disabled for this MCP server");
     // Esc goes back to the server's form, which has the login.
     harness.key(KeyCode::Esc);
-    harness.pump_until_screen_shows("MCP servers › docs");
+    harness.pump_until("the server form", |harness| {
+        harness
+            .app
+            .workspace
+            .settings()
+            .is_some_and(|center| center.hosted_command().is_none())
+            && harness.screen().contains("MCP servers › docs")
+    });
     assert!(harness.screen().contains("Log in"));
 
     // A login that ends on its own (logged in) closes its page, with no

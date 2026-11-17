@@ -106,7 +106,7 @@ fn the_separator_says_how_long_the_turn_thought_when_it_did() {
 }
 
 #[test]
-fn a_long_plan_collapses_to_the_steps_under_way() {
+fn a_long_plan_keeps_its_note_and_previews_five_rows_in_order() {
     let update = plan(
         Some("Reordered."),
         &[
@@ -115,16 +115,20 @@ fn a_long_plan_collapses_to_the_steps_under_way() {
             ("Fix the bug", "in_progress"),
             ("Update the docs", "pending"),
             ("Release", "pending"),
+            ("Verify", "pending"),
         ],
     );
     let cell = new_plan_update(&update);
     assert_eq!(
         render_lines(&cell.compact_lines(40)),
         vec![
-            "• Updated Plan · 1/5 complete",
-            "  └ □ Fix the bug",
+            "• Updated Plan · 1/6 complete",
+            "  └ Reordered.",
+            "    ✔ Read the code",
             "    □ Write the tests",
+            "    □ Fix the bug",
             "    □ Update the docs",
+            "    □ Release",
         ]
     );
     assert_eq!(
@@ -132,9 +136,32 @@ fn a_long_plan_collapses_to_the_steps_under_way() {
         Some(ActivityDisclosure::Generic)
     );
     let expanded = render_lines(&cell.expanded_lines(40));
-    assert_eq!(expanded.len(), 7, "{expanded:?}");
+    assert_eq!(expanded.len(), 8, "{expanded:?}");
     assert!(expanded.contains(&"  └ Reordered.".to_string()));
     assert!(cell.activity_ids()[0].starts_with("plan:"));
+}
+
+#[test]
+fn a_wrapped_plan_counts_display_rows_and_a_note_alone_does_not_hide_details() {
+    let update = plan(
+        Some("Explanation is always visible."),
+        &[(
+            "one two three four five six seven eight nine ten eleven twelve",
+            "pending",
+        )],
+    );
+    let cell = new_plan_update(&update);
+    let compact = cell.compact_lines(16);
+    let expanded = cell.display_lines(16);
+    let note_rows = 3;
+    assert_eq!(compact.len(), 1 + note_rows + 5);
+    assert_eq!(compact, expanded[..compact.len()]);
+    assert_eq!(
+        cell.activity_disclosure(16),
+        Some(ActivityDisclosure::Generic)
+    );
+    assert_eq!(cell.activity_disclosure(100), None);
+    assert_eq!(cell.compact_lines(100), cell.display_lines(100));
 }
 
 #[test]

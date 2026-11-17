@@ -55,8 +55,7 @@ fn tables_turned_off_show_the_next_answers_table_as_written() {
     assert!(harness.config_file().contains("tables = false"));
     harness.key(KeyCode::Esc);
     harness.pump_until("the center to close", |harness| {
-        !harness.screen().contains("Changes save automatically")
-            && !harness.screen().contains("Saved")
+        harness.app.workspace.settings().is_none()
     });
     harness.type_and_submit("Report");
     let screen = lines(&harness.pump_until_screen_shows("| second | failed |"));

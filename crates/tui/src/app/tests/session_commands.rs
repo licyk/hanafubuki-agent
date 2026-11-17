@@ -347,7 +347,7 @@ fn plan_tool_renders_once_with_its_steps_live_and_after_resume() {
     let mut harness = Harness::start(vec![
         hanafubuki_agent::test_support::tool_events(
             "update_plan",
-            r#"{"explanation":"Track the work","plan":[{"step":"Verify the fix","status":"completed"}]}"#,
+            r#"{"explanation":"Track the work","plan":[{"step":"Verify the fix","status":"completed"},{"step":"Second step","status":"pending"},{"step":"Third step","status":"pending"},{"step":"Fourth step","status":"pending"},{"step":"Fifth step","status":"pending"},{"step":"Hidden sixth step","status":"pending"}]}"#,
         ),
         assistant_events("Verified."),
     ]);
@@ -368,8 +368,18 @@ fn plan_tool_renders_once_with_its_steps_live_and_after_resume() {
             1,
             "{transcript}"
         );
-        assert!(transcript.contains("1/1 complete"), "{transcript}");
+        assert!(transcript.contains("1/6 complete"), "{transcript}");
         assert!(transcript.contains("Verify the fix"), "{transcript}");
         assert!(!transcript.contains("Called update_plan"), "{transcript}");
+        let screen = harness.screen();
+        assert!(screen.contains("Track the work"), "{screen}");
+        assert!(screen.contains("Fifth step"), "{screen}");
+        assert!(!screen.contains("Hidden sixth step"), "{screen}");
+        harness.click_on("Show details");
+        harness.pump_until_screen_shows("Hidden sixth step");
+        harness.click_on("Hide details");
+        harness.pump_until("the plan to collapse", |h| {
+            !h.screen().contains("Hidden sixth step")
+        });
     }
 }

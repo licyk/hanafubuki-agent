@@ -189,8 +189,7 @@ fn math_turned_off_shows_the_next_answers_formulas_as_written() {
     assert!(harness.config_file().contains("math = false"));
     harness.key(KeyCode::Esc);
     harness.pump_until("the center to close", |harness| {
-        !harness.screen().contains("Changes save automatically")
-            && !harness.screen().contains("Saved")
+        harness.app.workspace.settings().is_none()
     });
     harness.type_and_submit("Explain");
     harness.pump_until_screen_shows("Shell: $HOME/$USER");

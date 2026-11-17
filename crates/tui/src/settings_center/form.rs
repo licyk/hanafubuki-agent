@@ -451,20 +451,13 @@ impl FormPage {
     pub(super) fn title(&self, catalog: &SettingsCatalog) -> String {
         match &self.target {
             FormTarget::Record { .. } => match (self.collection(catalog), self.stored(catalog)) {
-                (Some(collection), Some(record)) if collection::singleton(collection).is_some() => {
-                    record.label.clone()
-                }
-                (Some(collection), Some(record)) => {
-                    format!("{} › {}", collection.title, record.label)
-                }
+                (Some(_), Some(record)) => record.label.clone(),
                 _ => String::new(),
             },
             FormTarget::Add { .. } => {
                 let collection = self.collection(catalog);
                 match (collection, add_action(collection)) {
-                    (Some(collection), Some(action)) => {
-                        format!("{} › {}", collection.title, action.label)
-                    }
+                    (Some(_), Some(action)) => action.label.clone(),
                     _ => String::new(),
                 }
             }

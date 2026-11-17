@@ -90,8 +90,11 @@ impl App {
         let Some(center) = self.workspace.settings.as_mut() else {
             return false;
         };
-        if center.hosted_command().is_none() {
-            center.handle_mouse(mouse);
+        let navigated = center.handle_breadcrumb(mouse);
+        if navigated || center.hosted_command().is_none() {
+            if !navigated {
+                center.handle_mouse(mouse);
+            }
             self.run_settings_requests(tui);
             self.schedule_frame(Instant::now());
         }
@@ -137,6 +140,9 @@ impl App {
                 frame.set_cursor_position(position);
             }
         })?;
+        if let Some(deadline) = center.notice_deadline() {
+            self.schedule_frame(deadline);
+        }
         Ok(true)
     }
 
@@ -236,6 +242,7 @@ impl App {
                 self.chat_widget.open_settings_page(page, record);
                 self.queue_settings_page_check();
             }
+            CenterRequest::ClosePage(command) => self.chat_widget.close_settings_page(command),
             CenterRequest::Close => {}
         }
     }

@@ -102,6 +102,10 @@ impl ChatWidget {
         self.bottom_pane.has_command_view(command)
     }
 
+    pub(crate) fn close_settings_page(&mut self, command: &str) {
+        self.bottom_pane.close_command_views(command);
+    }
+
     /// Opens the settings center at the Providers, to set one up and choose
     /// the model.
     pub(super) fn open_setup(&mut self) {

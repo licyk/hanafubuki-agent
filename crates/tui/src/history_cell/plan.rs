@@ -16,8 +16,8 @@ use crate::render::line_utils::prefix_lines;
 use crate::style::proposed_plan_style;
 use crate::terminal_hyperlinks::{prefix_hyperlink_lines, visible_lines, HyperlinkLine};
 
-/// The steps a collapsed checklist shows.
-const PLAN_PREVIEW_STEPS: usize = 3;
+/// The rendered checklist rows shown below its explanation when collapsed.
+const PLAN_PREVIEW_LINES: usize = 5;
 
 pub(crate) fn new_proposed_plan_stream(
     lines: Vec<HyperlinkLine>,
@@ -200,10 +200,8 @@ impl PlanUpdateCell {
         lines.extend(prefix_lines(body, "  └ ".dim(), "    ".into()));
         lines
     }
-}
 
-impl HistoryCell for PlanUpdateCell {
-    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+    fn lines(&self, width: u16, expanded: bool) -> Vec<Line<'static>> {
         let mut body = Vec::new();
         if let Some(note) = self.note() {
             let wrap_width = width.saturating_sub(4).max(1) as usize;
@@ -213,38 +211,40 @@ impl HistoryCell for PlanUpdateCell {
                     .map(|s| s.to_string().dim().italic().into()),
             );
         }
-        for AgentTaskPlanStep { step, status } in &self.plan {
-            body.extend(step_lines(status, step, width));
-        }
+        let steps = self
+            .plan
+            .iter()
+            .flat_map(|AgentTaskPlanStep { step, status }| step_lines(status, step, width));
+        body.extend(steps.take(if expanded {
+            usize::MAX
+        } else {
+            PLAN_PREVIEW_LINES
+        }));
         self.with_body(body)
     }
+}
 
-    /// Without the note; past [`PLAN_PREVIEW_STEPS`], Codex's preview: the
-    /// steps in progress, then those pending, then those completed.
+impl HistoryCell for PlanUpdateCell {
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        self.lines(width, true)
+    }
+
     fn compact_lines(&self, width: u16) -> Vec<Line<'static>> {
-        let mut steps: Vec<&AgentTaskPlanStep> = self.plan.iter().collect();
-        if steps.len() > PLAN_PREVIEW_STEPS {
-            steps.sort_by_key(|step| match step.status {
-                AgentTaskPlanStepStatus::InProgress => 0,
-                AgentTaskPlanStepStatus::Pending => 1,
-                AgentTaskPlanStepStatus::Completed => 2,
-            });
-        }
-        let body = steps
-            .into_iter()
-            .take(PLAN_PREVIEW_STEPS)
-            .flat_map(|AgentTaskPlanStep { step, status }| step_lines(status, step, width))
-            .collect();
-        self.with_body(body)
+        self.lines(width, false)
     }
 
     fn activity_ids(&self) -> Vec<String> {
         vec![self.activity_id.clone()]
     }
 
-    /// The note, and the steps past the preview.
-    fn activity_disclosure(&self, _width: u16) -> Option<ActivityDisclosure> {
-        (self.note().is_some() || self.plan.len() > PLAN_PREVIEW_STEPS)
+    fn activity_disclosure(&self, width: u16) -> Option<ActivityDisclosure> {
+        (self
+            .plan
+            .iter()
+            .flat_map(|step| step_lines(&step.status, &step.step, width))
+            .take(PLAN_PREVIEW_LINES + 1)
+            .count()
+            > PLAN_PREVIEW_LINES)
             .then_some(ActivityDisclosure::Generic)
     }
 

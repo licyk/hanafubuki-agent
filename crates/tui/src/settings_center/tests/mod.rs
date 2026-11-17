@@ -6,6 +6,7 @@
 //! nothing, and what each key and click asks of the Agent.
 
 mod interaction;
+mod navigation;
 
 use std::collections::BTreeMap;
 

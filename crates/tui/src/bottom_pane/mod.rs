@@ -333,6 +333,20 @@ impl BottomPane {
             .any(|view| view.command() == Some(command))
     }
 
+    pub(crate) fn close_command_views(&mut self, command: &str) {
+        self.view_stack.retain_mut(|view| {
+            if view.command() != Some(command) {
+                return true;
+            }
+            view.on_ctrl_c();
+            false
+        });
+        if self.view_stack.is_empty() {
+            self.on_active_view_complete();
+        }
+        self.request_redraw();
+    }
+
     /// `command`'s view, when it is the one open (the settings center
     /// shows it as its page).
     pub(crate) fn command_view(&self, command: &str) -> Option<&dyn BottomPaneView> {

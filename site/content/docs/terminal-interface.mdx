@@ -501,7 +501,7 @@ Fullscreen 下，对话会跟随最新输出，直到你向上滚动。向上滚
 | F4                                      | 聚焦最近的活动（工具调用、思考、任务计划、较长的消息）：Up/Down 在活动间移动，Enter 或点击显示或隐藏详情，Esc 离开 |
 | Ctrl-T                                  | 就地显示整个对话的详细内容（每次思考的全文、工具调用的完整输出）；Ctrl-T 或 Esc 返回                               |
 
-还有更多内容可显示的条目，下方单独一行带有控件：思考（它的文本）、折叠时显示不全的工具调用（剩下的是输出行时为 `+ 12 lines`，否则为 `+ Show details`；见[工具调用](#tools)）、带说明或超过三个步骤的任务计划（折叠时显示三个步骤：先是进行中的，然后是待办的，最后是已完成的），以及超过 12 行的你的消息（折叠时显示前 12 行，`+ 8 lines`）。展开后控件变为 `− Hide details` 或 `− Show less`。没有更多内容的条目没有控件。条目的标题行是它第一行有文字的行（消息的第一行）：点击标题行也会切换，紧接着的第二次点击会再切换回来，而不是选择一个词。展开或折叠标题行在屏幕上的条目时，标题行保持在原来的那一行。每个条目单独展开，进行中的条目完成时保持原来的状态。
+还有更多内容可显示的条目，下方单独一行带有控件：思考（它的文本）、折叠时显示不全的工具调用（剩下的是输出行时为 `+ 12 lines`，否则为 `+ Show details`；见[工具调用](#tools)）、列表超过五个显示行的任务计划（说明文字始终显示在列表上方，折叠时按原顺序显示前五行），以及超过 12 行的你的消息（折叠时显示前 12 行，`+ 8 lines`）。展开后控件变为 `− Hide details` 或 `− Show less`。没有更多内容的条目没有控件。条目的标题行是它第一行有文字的行（消息的第一行）：点击标题行也会切换，紧接着的第二次点击会再切换回来，而不是选择一个词。展开或折叠标题行在屏幕上的条目时，标题行保持在原来的那一行。每个条目单独展开，进行中的条目完成时保持原来的状态。
 
 选择、搜索或聚焦活动期间，对话下方的底栏会显示相应的按键。复制的内容放到系统剪贴板；没有系统剪贴板时（例如通过 SSH），内容发送给终端（OSC 52），大多数终端会把它放到自己的剪贴板上，界面会提示这次复制未经确认。复制的结果在输入框上方显示几秒钟。
 
@@ -979,7 +979,9 @@ yank = []
 
 ## 设置 [#config]
 
-`/config` 在整个屏幕上打开设置中心（Scrollback 下是备用屏幕），仿照 Codex 的 `/config`：Agent 的所有设置，从它的[设置目录](/docs/architecture#settings-catalog)读取，分在几个标签页中（General、Model、Tools、Memory、Context、Network、Interface、Plugins、Advanced；标签页会显示它有几个值存在问题）。每一行是标签 · 值 · 说明：`[x] On` 或 `[ ] Off`、选项的标签、数字、文本（为空时是 `(empty)`）、列表的各项（没有时是 `(none)`）、已设置的机密显示为 `••••`、`(unset)`，当你的 `config.toml` 之上的某一层设置了它时，后面会有暗色的 `· profile NAME`、`· project` 或 `· -c`。某一层的值无法使用时，说明的位置改为显示原因。标题下方显示 `Changes save automatically`，或上一次改动的结果：`Saved`、`Saved · the project layer overrides it`（或 `the profile NAME layer`、`the -c layer`）、`Saved · applies at next launch`、`Saved · applies from the next session`、`Could not save: …`。写入改动期间显示 `Saving…`，动作运行期间显示该动作（`List models…`、`Add a Provider…`）。最底一行说明选中行的按键作用。说明列不足 45 列时，选中行的说明移到列表下方。
+标题显示完整的页面路径，例如 `Settings › Model policy › Model`。点击任意上级路径可直接返回该页面，并像返回操作一样取消子页面。窄窗口中的长路径会换行。
+
+`/config` 在整个屏幕上打开设置中心（Scrollback 下是备用屏幕），仿照 Codex 的 `/config`：Agent 的所有设置，从它的[设置目录](/docs/architecture#settings-catalog)读取，分在几个标签页中（General、Model、Tools、Memory、Context、Network、Interface、Plugins、Advanced；标签页会显示它有几个值存在问题）。每一行是标签 · 值 · 说明：`[x] On` 或 `[ ] Off`、选项的标签、数字、文本（为空时是 `(empty)`）、列表的各项（没有时是 `(none)`）、已设置的机密显示为 `••••`、`(unset)`，当你的 `config.toml` 之上的某一层设置了它时，后面会有暗色的 `· profile NAME`、`· project` 或 `· -c`。某一层的值无法使用时，说明的位置改为显示原因。标题下方的状态行平时为空。成功提示显示三秒后自动消失，错误提示会保留。结果包括：`Saved`、`Saved · the project layer overrides it`（或 `the profile NAME layer`、`the -c layer`）、`Saved · applies at next launch`、`Saved · applies from the next session`、`Could not save: …`。写入改动期间显示 `Saving…`，动作运行期间显示该动作（`List models…`、`Add a Provider…`）。最底一行说明选中行的按键作用。说明列不足 45 列时，选中行的说明移到列表下方。
 
 - **左**、**右**键切换标签页；上、下、Page Up、Page Down、Home、End 移动；Esc 返回，在标签页上则关闭设置中心。
 - **`/`** 搜索所有标签页：设置、集合、记录和页面的标签、键、值、关键词和摘要。结果的说明是它所在的标签页和分节。Enter 离开搜索框进入结果，Esc 清空搜索。

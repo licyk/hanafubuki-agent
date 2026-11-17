@@ -4,7 +4,7 @@ expression: "screen(&mut center, 50, 24)"
 ---
 
   Settings › Providers › Main
-  Changes save automatically
+
 
   responses · https://main.example.test/v1
 

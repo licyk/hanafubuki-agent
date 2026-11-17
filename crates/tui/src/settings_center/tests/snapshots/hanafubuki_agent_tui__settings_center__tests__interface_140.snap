@@ -4,7 +4,7 @@ expression: "screen(&mut center, 140, 25)"
 ---
 
   Settings
-  Changes save automatically
+
 
    General   Model   Tools   Memory (1)   Context   Network   Interface   Plugins   Advanced
 

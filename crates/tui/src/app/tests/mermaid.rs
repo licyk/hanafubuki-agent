@@ -177,8 +177,7 @@ fn diagrams_turned_off_show_the_next_answers_fence_as_code() {
     assert!(harness.config_file().contains("mermaid = false"));
     harness.key(KeyCode::Esc);
     harness.pump_until("the center to close", |harness| {
-        !harness.screen().contains("Changes save automatically")
-            && !harness.screen().contains("Saved")
+        harness.app.workspace.settings().is_none()
     });
     harness.type_and_submit("Draw it");
     harness.pump_until_screen_shows("Done.");

@@ -17,6 +17,7 @@ mod collection;
 mod editor;
 mod form;
 mod main_page;
+mod navigation;
 mod registry;
 mod render;
 #[cfg(test)]
@@ -32,6 +33,7 @@ use ratatui::crossterm::event::{
 };
 use ratatui::layout::Position;
 use serde_json::Value;
+use std::time::{Duration, Instant};
 
 use crate::agent_bridge::{CatalogCall, CatalogOutcome, CatalogReply};
 use collection::CollectionPage;
@@ -52,6 +54,7 @@ pub(crate) enum CenterRequest {
     Call(u64, CatalogCall),
     /// Shows the views of the page now on top, on its record.
     OpenPage(&'static PageOverride, Option<String>),
+    ClosePage(&'static str),
     Close,
 }
 
@@ -146,8 +149,14 @@ enum Notice {
     /// What runs: `Saving…` for an edit, an action's label (`List
     /// models…`).
     Busy(String),
-    Done(String),
+    Done(String, Instant),
     Failed(String),
+}
+
+impl Notice {
+    fn done(text: String) -> Self {
+        Self::Done(text, Instant::now() + Duration::from_secs(3))
+    }
 }
 
 impl SettingsCenter {
@@ -202,7 +211,7 @@ impl SettingsCenter {
     /// center is open.
     pub(crate) fn report(&mut self, outcome: Result<String, String>) {
         self.notice = match outcome {
-            Ok(message) => Notice::Done(message),
+            Ok(message) => Notice::done(message),
             Err(error) => Notice::Failed(error),
         };
     }
@@ -249,6 +258,9 @@ impl SettingsCenter {
     /// it, a click on a row selects it, and a click on the selected row
     /// does what Enter does.
     pub(crate) fn handle_mouse(&mut self, mouse: MouseEvent) {
+        if self.handle_breadcrumb(mouse) {
+            return;
+        }
         let step = match mouse.kind {
             MouseEventKind::ScrollUp => Some(KeyCode::Up),
             MouseEventKind::ScrollDown => Some(KeyCode::Down),
@@ -471,7 +483,7 @@ impl SettingsCenter {
         match (pending, outcome) {
             (Pending::Read, _) => {}
             (Pending::Edit(at), outcome) => {
-                self.notice = Notice::Done(match &outcome {
+                self.notice = Notice::done(match &outcome {
                     CatalogOutcome::Written(written) => saved_notice(written),
                     _ => "Saved".to_string(),
                 });
@@ -497,7 +509,7 @@ impl SettingsCenter {
                         }
                     }
                 }
-                self.notice = Notice::Done(match message {
+                self.notice = Notice::done(match message {
                     Some(message) => message,
                     None => match action.as_str() {
                         "save" => "Saved".to_string(),

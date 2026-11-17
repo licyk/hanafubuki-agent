@@ -113,6 +113,7 @@ impl<'a> Row<'a> {
 /// Where the last frame put what the pointer reaches.
 #[derive(Debug, Default)]
 pub(super) struct Layout {
+    pub(super) breadcrumbs: Vec<(Rect, usize)>,
     /// Each tab's cells and its place among the tabs.
     pub(super) tabs: Vec<(Rect, usize)>,
     /// Each row drawn: its line and its index.
@@ -125,6 +126,7 @@ impl SettingsCenter {
     /// Draws the center; the area a command's views take, when they are
     /// the page on top.
     pub(crate) fn render(&mut self, area: Rect, buf: &mut Buffer) -> Option<Rect> {
+        self.expire_notice(std::time::Instant::now());
         Clear.render(area, buf);
         let area = Rect {
             x: area.x + 2,
@@ -149,7 +151,9 @@ impl SettingsCenter {
         };
         let top = self.pages.len() - 1;
         let mut y = area.y + 1;
-        self.title(catalog, top).render(line(y), buf);
+        let (breadcrumbs, last_row) = self.render_breadcrumbs(catalog, line(y), buf);
+        layout.breadcrumbs = breadcrumbs;
+        y = last_row;
         notice_line(&self.notice, self.editor_error()).render(line(y + 1), buf);
         y += 3;
         let bottom = area.bottom().saturating_sub(1);
@@ -261,23 +265,6 @@ impl SettingsCenter {
         self.layout.cursor
     }
 
-    fn title(&self, catalog: &SettingsCatalog, top: usize) -> Line<'static> {
-        let mut spans = vec!["Settings".bold()];
-        let page = match &self.pages[top] {
-            Page::Main(_) => None,
-            Page::Collection(page) => Some(page.title(catalog)),
-            Page::Form(page) => Some(page.title(catalog)),
-            Page::Choice(page) => Some(page.title.clone()),
-            Page::List(page) => Some(page.spec.label.clone()),
-            Page::Hosted(page) => Some(page.id.to_string()),
-        };
-        if let Some(page) = page.filter(|page| !page.is_empty()) {
-            spans.push(" › ".dim());
-            spans.push(page.bold());
-        }
-        Line::from(spans)
-    }
-
     /// Why the field being edited was refused.
     fn editor_error(&self) -> Option<&str> {
         let editor = match self.pages.last()? {
@@ -295,9 +282,9 @@ fn notice_line(notice: &Notice, editor_error: Option<&str>) -> Line<'static> {
         return Line::from(format!("✗ {error}").red());
     }
     match notice {
-        Notice::Ready => Line::from("Changes save automatically".dim()),
+        Notice::Ready => Line::default(),
         Notice::Busy(text) => Line::from(text.clone().dim()),
-        Notice::Done(text) => Line::from(text.clone().green()),
+        Notice::Done(text, _) => Line::from(text.clone().green()),
         Notice::Failed(text) => Line::from(text.clone().red()),
     }
 }
