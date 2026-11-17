@@ -23,8 +23,10 @@ const MAX_SHELL_SCRIPT_BYTES: usize = 48 * 1024;
 /// (`$OutputEncoding`, ASCII in 5.1), and no progress bars.
 /// `$OutputEncoding` comes first, as the console's setters throw where there
 /// is no console.
+/// Construct directly: `New-Object` can stall in Windows PowerShell when the
+/// command inherits no environment.
 pub const POWERSHELL_UTF8_OUTPUT_PREFIX: &str =
-    "try { $__hbUtf8 = New-Object System.Text.UTF8Encoding $false; \
+    "try { $__hbUtf8 = [System.Text.UTF8Encoding]::new($false); \
      $OutputEncoding = $__hbUtf8; [Console]::OutputEncoding = $__hbUtf8; \
      [Console]::InputEncoding = $__hbUtf8 } catch {}\n\
      $ProgressPreference = 'SilentlyContinue'\n";
