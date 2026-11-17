@@ -108,8 +108,8 @@ records how the turn ended. See the [CLI reference](https://licyk.github.io/hana
 
 ```toml
 [dependencies]
-hanafubuki-agent = "0.8"
-hanafubuki-agent-contracts = "0.8"
+hanafubuki-agent = "0.9"
+hanafubuki-agent-contracts = "0.9"
 ```
 
 Use `AgentRuntime::standalone` for the standalone defaults, or supply a host's ports and
