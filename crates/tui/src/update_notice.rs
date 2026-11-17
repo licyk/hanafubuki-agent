@@ -1,7 +1,7 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
-//! The footer's notice that a newer release exists (Codex's update
-//! banner, on the footer's row here). The command line finds the release,
+//! The session header's notice that a newer release exists (Codex's update
+//! banner). The command line finds the release,
 //! words the action for its installation and hands both over as text,
 //! from its cache at launch ([`crate::TuiOptions::update_notice`]) or from
 //! its check when that ends ([`TuiUpdateNotifier`]); the interface only
@@ -41,14 +41,11 @@ impl TuiUpdateNotifier {
     }
 }
 
-/// The notice in at most `room` columns: in full, else without its action,
-/// else `None`.
-pub(crate) fn notice_line(notice: &TuiUpdateNotice, room: usize) -> Option<Line<'static>> {
-    let short = Line::from(vec![
+/// The header wraps this line to its available width.
+pub(crate) fn notice_line(notice: &TuiUpdateNotice) -> Line<'static> {
+    Line::from(vec![
         "Update available: ".dim(),
         Span::styled(notice.version.clone(), Style::default().fg(accent_color())),
-    ]);
-    let mut full = short.clone();
-    full.push_span(format!(" · {}", notice.action).dim());
-    [full, short].into_iter().find(|line| line.width() <= room)
+        format!(" · {}", notice.action).dim(),
+    ])
 }

@@ -76,7 +76,6 @@ use crate::key_hint;
 use crate::key_hint::has_ctrl_or_alt;
 use crate::key_hint::KeyBinding;
 use crate::keymap::{self, Action};
-use crate::update_notice::TuiUpdateNotice;
 use crate::user_message::{MessageImage, UserMessage};
 use history_search::HistorySearchSession;
 
@@ -104,7 +103,6 @@ pub(crate) struct ChatComposer {
     status_line: Option<Line<'static>>,
     navigation_footer: Option<Vec<Line<'static>>>,
     /// A newer release, on the right of the footer's row.
-    update_notice: Option<TuiUpdateNotice>,
     /// Non-bracketed paste burst tracker (see `bottom_pane/paste_burst.rs`).
     paste_burst: PasteBurst,
     footer_mode: FooterMode,
@@ -161,7 +159,6 @@ impl ChatComposer {
             is_task_running: false,
             status_line: None,
             navigation_footer: None,
-            update_notice: None,
             paste_burst: PasteBurst::default(),
             footer_mode: FooterMode::ComposerEmpty,
             current_file_query: None,
@@ -751,10 +748,6 @@ impl ChatComposer {
 
     pub(crate) fn set_status_line(&mut self, line: Option<Line<'static>>) {
         self.status_line = line;
-    }
-
-    pub(crate) fn set_update_notice(&mut self, notice: Option<TuiUpdateNotice>) {
-        self.update_notice = notice;
     }
 
     /// Whether the terminal reports Shift+Enter apart from Enter.

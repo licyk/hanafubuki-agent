@@ -79,7 +79,7 @@ pub(crate) fn run(
             resume,
             no_alt_screen: global.no_alt_screen,
             update_notice,
-            maintenance: Some(maintenance(global.clone())),
+            maintenance: Some(maintenance(global.clone(), events.update_notifier())),
         };
         hanafubuki_agent_tui::run(events, &standalone.runtime, &agent, options)
             .map_err(Failure::new)
@@ -116,11 +116,16 @@ fn resume_hint(
     Some(format!("To continue this session, run:\n  {command}"))
 }
 
-fn maintenance(global: crate::cli::GlobalArgs) -> hanafubuki_agent_tui::TuiMaintenance {
+fn maintenance(
+    global: crate::cli::GlobalArgs,
+    notifier: hanafubuki_agent_tui::TuiUpdateNotifier,
+) -> hanafubuki_agent_tui::TuiMaintenance {
     hanafubuki_agent_tui::TuiMaintenance(std::sync::Arc::new(move |action| {
         use hanafubuki_agent_tui::TuiMaintenanceAction;
         let code = match action {
-            TuiMaintenanceAction::CheckUpdates => crate::update::run(&global, true, false),
+            TuiMaintenanceAction::CheckUpdates => {
+                crate::update::run_notifying(&global, true, false, Some(&notifier))
+            }
             TuiMaintenanceAction::Update => crate::update::run(&global, false, false),
             TuiMaintenanceAction::Doctor => crate::doctor::run_in_tui(&global),
         }

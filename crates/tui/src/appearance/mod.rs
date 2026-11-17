@@ -52,7 +52,7 @@ pub(crate) enum AppearanceEvent {
     /// The title setup shows `Some` items in the title while it is open;
     /// `None` puts the title's own items back.
     PreviewTerminalTitle(Option<Vec<TerminalTitleItem>>),
-    /// A newer release, which the footer shows for the rest of the run.
+    /// A newer release, which the session header shows for the rest of the run.
     UpdateNotice(TuiUpdateNotice),
 }
 

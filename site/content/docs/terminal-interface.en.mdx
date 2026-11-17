@@ -40,12 +40,12 @@ Resizing the terminal lays the conversation out again for the new width in eithe
 
 In Fullscreen the conversation fills the screen above the bottom area. In Scrollback the interface draws the bottom area and, above it, the conversation's newest entries (the tail); the rest of the conversation is in the scrollback above them.
 
-At the start (and after `/new` or a resume) a box shows the version, the model and the working directory. Before a session exists, the model is the one it will get: `-m`'s, else the configured one. The bottom area holds, from the top:
+At the start (and after `/new` or a resume) a box at the top left shows the version, the model and the working directory, plus a notice when a newer release is available ([Updates](#updates)). Before a session exists, the model is the one it will get: `-m`'s, else the configured one. The bottom area holds, from the top:
 
 1. **The status line**: during a turn, `• Working 25s • esc to interrupt` with the elapsed time; once the turn has thought, `• Working 25s (Thinking 20.7s) • esc to interrupt`, with the time the whole turn has thought so far, which runs on only while the model thinks ([Thinking](#thinking)). While a model request is retried it reads `Reconnecting 1/3: reason`. The working timer pauses while an approval or a question waits for you. It stays for the whole turn, also while the answer streams.
 2. **The messages waiting** for the turn, while there are any ([below](#composer)). During a turn the rows they took stay, blank, once the turn has read them, until it ends, so the conversation above does not move each time.
 3. **The composer**, starting with `›`.
-4. **The footer**: the [status line](#status-line) shows the model and its reasoning effort, the working directory and the session’s title by default. The next row shows `← for agents · ? for shortcuts` when available. Draft queuing, quitting, history navigation (`esc latest`), selection and search hints also appear below the status line. During a turn, a draft shows `tab to queue message`. A newer release’s notice appears on the right of the status row ([Updates](#updates)).
+4. **The footer**: the [status line](#status-line) shows the model and its reasoning effort, the working directory and the session’s title by default. The next row shows `← for agents · ? for shortcuts` when available. Draft queuing, quitting, history navigation (`esc latest`), selection and search hints also appear below the status line. During a turn, a draft shows `tab to queue message`.
 
 An approval, a question and the `/model` and `/mode` lists take the place of the status line and the composer while they are open. A list stays open when a turn ends; `/model`'s opens before any Provider has answered and fills in as each does ([The model list](#model-list)). The settings, `/providers` and `/mcp` among them, are the [settings center](#config)'s, over the whole screen.
 
@@ -1014,17 +1014,24 @@ When there are any at launch, one line says how many (`2 warnings: /warnings`). 
 
 ## Updates [#updates]
 
-When the interface starts (`hanafubuki-agent` and `hanafubuki-agent resume`; never `exec` or the other commands, and never without a terminal), the command line asks GitHub in the background whether a newer release exists, at most once every 20 hours; the interface does not wait for the answer. A newer release shows on the right of the [footer](#layout)'s row for the rest of the run:
+When the interface starts (`hanafubuki-agent` and `hanafubuki-agent resume`; never `exec` or the other commands, and never without a terminal), the command line asks GitHub in the background whether a newer release exists, at most once every 20 hours; the interface does not wait for the answer. A newer release appears in the session header box at the top left of the [conversation](#layout), alongside its version, model and directory:
 
 ```text
-  gpt-5.1 high · ~/src/project · Fix the footer          Update available: 0.3.0 · hanafubuki-agent update
+╭───────────────────────────────────────────────────╮
+│ >_ hanafubuki-agent (v0.2.0)                      │
+│                                                   │
+│ model:     gpt-5.1                                │
+│ directory: ~/src/project                          │
+│                                                   │
+│ Update available: 0.3.0 · hanafubuki-agent update │
+╰───────────────────────────────────────────────────╯
 ```
 
-- On a narrower row it is shortened to `Update available: 0.3.0`, and left out when even that does not fit beside the row's own content: the status line and the hints are never cut for it, and it adds no row. The shortcuts (`?`), the history search, the external editor's line and the command and file lists take the row without it.
-- A release an earlier launch found shows from the first frame; one this launch's check finds shows as soon as the answer comes, without moving the composer. It is shown in a side conversation too.
+- A narrow header wraps the notice and its installation command instead of hiding them. The footer keeps its status line and shortcut hints. The header is part of the transcript: scroll to the beginning to see it after a long conversation.
+- A cached release appears in the first session header; a background check refreshes that header when its answer arrives. New, resumed and side conversations use the same current notice.
 - The command after it depends on how this copy was installed: `hanafubuki-agent update` for a released binary, `cargo install --locked hanafubuki-agent-cli` for one `cargo install` put in place, and `hanafubuki-agent update --check` otherwise, which says what to do ([update](/docs/cli-reference#update)).
 - Only a stable release counts, and only one newer than this version. A check that fails (no network, GitHub's rate limit, an answer it does not read) shows nothing and is made again at the next launch. A build from a checkout (`target/debug`, `target/release`, or `cargo install --path`) never checks.
-- The answer is kept in [`update-check.json`](/docs/data-directory#contents).
+- The answer is kept in [`update-check.json`](/docs/data-directory#contents). **Check for updates** in Settings and `hanafubuki-agent update --check` refresh this same cache immediately, without waiting for the 20-hour interval. A successful check in Settings also refreshes the running interface’s header when you return; the next launch can offer the update prompt. A failed check keeps the previous cache.
 
 ### The prompt at launch [#update-prompt]
 
@@ -1044,7 +1051,7 @@ When the release an earlier check found is newer than this version, the next lau
 
 - **Update now** runs [`hanafubuki-agent update`](/docs/cli-reference#update) in the terminal: the screen is cleared, the latest release is looked up again (it may be newer than the one shown, and `GITHUB_TOKEN` is sent to that lookup as `update` sends it), its lines are printed, and the program ends; start it again to run the new version. When the update fails, the error says what was kept, the executable is as it was, the program ends with exit code 1, and the next launch asks again. For a copy `cargo install` put in place, on Linux and macOS, the option reads ``Update now (runs `cargo install --locked hanafubuki-agent-cli`)``, with `--root` when it was installed elsewhere, and runs cargo.
 - **Skip** starts the interface; the next launch asks again.
-- **Skip until next version** starts the interface and does not ask again until a newer release is found; the version is kept in `update-check.json` as `dismissedVersion`. The footer's notice still shows it.
+- **Skip until next version** starts the interface and does not ask again until a newer release is found; the version is kept in `update-check.json` as `dismissedVersion`. The header's notice still shows it.
 - Up or `k` and Down or `j` move the highlight, wrapping around; Enter chooses it; `1`, `2` and `3` choose at once; Esc, Ctrl+C and Ctrl+D are Skip. What was typed before the screen appeared is dropped, so an Enter pressed while the program started never chooses Update now.
 - It is shown on `hanafubuki-agent` and on `hanafubuki-agent resume`, but not when a prompt was given on the command line (`hanafubuki-agent "fix the tests"`, `resume ID PROMPT`), not when the check is off, never in `exec` or without a terminal, and not for a build from a checkout. Nor is it shown when this copy cannot be updated from here (a directory you cannot write, a platform without a released binary, a cargo installation on Windows): the notice names the step instead.
 - It takes the whole screen in both presentations and is cleared once a choice is made, before the interface starts; nothing of it is left in the scrollback. A narrow or short window wraps it and keeps the highlighted option and the keys' line in view, down to about 20 columns and 4 rows; the blank rows, then the heading and the release notes give way first.
@@ -1053,7 +1060,7 @@ When the release an earlier check found is newer than this version, the next lau
 
 What the check sends: one HTTPS request, `GET https://api.github.com/repos/licyk/hanafubuki-agent/releases/latest`, with `Accept: application/vnd.github+json` and `User-Agent: hanafubuki-agent/VERSION` (this copy's version), through [`network.proxy`](/docs/network-logging#proxy-scope). No token, cookie or identifier is sent (not even `GITHUB_TOKEN`), and nothing of your configuration, sessions or projects; GitHub sees the request's address and the version, as it would a download. A failure is logged at `debug` as its kind alone.
 
-Turn it off with `tui.checkForUpdates = false` ([Configuration reference](/docs/config-reference#tui)) or by setting `HANAFUBUKI_AGENT_NO_UPDATE_CHECK` to any non-empty value ([Environment](/docs/environment#read)): then nothing is sent and neither the notice nor the prompt is shown, not even for a release an earlier check found. Either applies at the next launch.
+Turn it off with `tui.checkForUpdates = false` ([Configuration reference](/docs/config-reference#tui)) or by setting `HANAFUBUKI_AGENT_NO_UPDATE_CHECK` to any non-empty value ([Environment](/docs/environment#read)): then no automatic request is sent and neither the cached notice nor the prompt is shown. Either applies at the next launch. An explicit **Check for updates** or `update --check` still runs; checking in Settings can show the result in the current header, but does not turn automatic checking back on.
 
 ## Terminal requirements [#terminal]
 

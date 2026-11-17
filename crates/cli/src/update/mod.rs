@@ -8,6 +8,7 @@
 mod install;
 
 use hanafubuki_agent::AgentRuntimeHost;
+use hanafubuki_agent_tui::TuiUpdateNotifier;
 use hanafubuki_agent_update::{
     compare, current_version, release_notes_url, Comparison, InstallKind, Installation,
     ManualReason, Release, ReleaseClient, UpdateAction, UpdateError, UpdateProxy, Version,
@@ -24,6 +25,15 @@ const TOKEN_ENV: &str = "GITHUB_TOKEN";
 const INSTALLATION_PAGE: &str = "https://licyk.github.io/hanafubuki-agent/docs/installation/";
 
 pub(crate) fn run(global: &GlobalArgs, check: bool, force: bool) -> Result<u8, Failure> {
+    run_notifying(global, check, force, None)
+}
+
+pub(crate) fn run_notifying(
+    global: &GlobalArgs,
+    check: bool,
+    force: bool,
+    notifier: Option<&TuiUpdateNotifier>,
+) -> Result<u8, Failure> {
     // First: once another process replaced the file, Linux reads this
     // process's executable as `<path> (deleted)`.
     let installation = Installation::current().map_err(failure)?;
@@ -41,7 +51,11 @@ pub(crate) fn run(global: &GlobalArgs, check: bool, force: bool) -> Result<u8, F
     };
     let result = client(&proxy).and_then(|client| {
         if check {
-            report(&installation, &client)
+            let data_dir = standalone
+                .as_ref()
+                .ok()
+                .map(|standalone| standalone.runtime.storage_paths().root.clone());
+            report(&installation, &client, data_dir.as_deref(), notifier)
         } else {
             update(&installation, &client, force)
         }
@@ -74,8 +88,18 @@ pub(crate) fn client(proxy: &UpdateProxy) -> Result<ReleaseClient, Failure> {
 
 /// `update --check`: the versions, the executable, how it is installed,
 /// and what to do.
-fn report(installation: &Installation, client: &ReleaseClient) -> Result<u8, Failure> {
+fn report(
+    installation: &Installation,
+    client: &ReleaseClient,
+    data_dir: Option<&std::path::Path>,
+    notifier: Option<&TuiUpdateNotifier>,
+) -> Result<u8, Failure> {
     let release = client.latest_blocking().map_err(failure)?;
+    if let Some(notice) = crate::update_check::record(data_dir, installation, &release.version) {
+        if let Some(notifier) = notifier {
+            notifier.notify(notice);
+        }
+    }
     let action = installation.action();
     let fields = [
         ("Current version", current_version().to_string()),

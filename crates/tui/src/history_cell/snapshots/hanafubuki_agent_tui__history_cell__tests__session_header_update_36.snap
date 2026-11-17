@@ -1,0 +1,14 @@
+---
+source: crates/tui/src/history_cell/tests.rs
+expression: "render_lines(&lines).join(\"\\n\")"
+---
+╭──────────────────────────────────╮
+│ >_ hanafubuki-agent (v0.1.0)     │
+│                                  │
+│ model:     模型-with-reasoning   │
+│ directory: /home/someone/project │
+│                                  │
+│ Update available: 0.3.0 · cargo  │
+│ install --locked hanafubuki-     │
+│ agent-cli                        │
+╰──────────────────────────────────╯

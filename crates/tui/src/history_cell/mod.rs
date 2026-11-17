@@ -20,6 +20,7 @@ pub(crate) use work::WorkCell;
 
 use std::any::Any;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use ratatui::buffer::Buffer;
@@ -32,6 +33,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::render::renderable::Renderable;
 use crate::status_indicator_widget::{fmt_elapsed_compact, fmt_elapsed_tenths};
 use crate::terminal_hyperlinks::{plain_hyperlink_lines, HyperlinkLine};
+use crate::update_notice::TuiUpdateNotice;
 
 pub(crate) use context::new_context_output;
 pub(crate) use live::LiveCell;
@@ -278,11 +280,17 @@ impl HistoryCell for PlainHistoryCell {
 
 /// The session's header card: the application, the model and the working
 /// directory.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct SessionHeaderHistoryCell {
+    content: Arc<LiveCell<SessionHeader>>,
+}
+
+#[derive(Debug)]
+struct SessionHeader {
     version: &'static str,
     model: String,
     directory: String,
+    update_notice: Option<TuiUpdateNotice>,
 }
 
 const SESSION_HEADER_MAX_INNER_WIDTH: usize = 56; // Just an eyeballed value
@@ -290,14 +298,36 @@ const SESSION_HEADER_MAX_INNER_WIDTH: usize = 56; // Just an eyeballed value
 impl SessionHeaderHistoryCell {
     pub(crate) fn new(model: String, directory: String, version: &'static str) -> Self {
         Self {
-            version,
-            model,
-            directory,
+            content: LiveCell::new(SessionHeader {
+                version,
+                model,
+                directory,
+                update_notice: None,
+            }),
         }
+    }
+
+    pub(crate) fn set_update_notice(&self, notice: TuiUpdateNotice) {
+        self.content
+            .update(|header| header.update_notice = Some(notice));
     }
 }
 
 impl HistoryCell for SessionHeaderHistoryCell {
+    fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        self.content.display_lines(width)
+    }
+
+    fn raw_lines(&self) -> Vec<Line<'static>> {
+        self.content.raw_lines()
+    }
+
+    fn revision(&self) -> u64 {
+        self.content.revision()
+    }
+}
+
+impl HistoryCell for SessionHeader {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
         if width < 4 {
             return Vec::new();
@@ -322,20 +352,29 @@ impl HistoryCell for SessionHeaderHistoryCell {
         } else {
             self.directory.clone()
         };
-        with_border(vec![
+        let mut lines = vec![
             Line::from(title),
             Line::default(),
             Line::from(model),
             Line::from(vec![Span::from(dir_prefix).dim(), Span::from(directory)]),
-        ])
+        ];
+        if let Some(notice) = &self.update_notice {
+            lines.push(Line::default());
+            lines.push(crate::update_notice::notice_line(notice));
+        }
+        with_border(crate::wrapping::word_wrap_lines(lines, inner_width.max(1)))
     }
 
     fn raw_lines(&self) -> Vec<Line<'static>> {
-        vec![
+        let mut lines = vec![
             Line::from(format!("hanafubuki-agent (v{})", self.version)),
             Line::from(format!("model: {}", self.model)),
             Line::from(format!("directory: {}", self.directory)),
-        ]
+        ];
+        if let Some(notice) = &self.update_notice {
+            lines.push(crate::update_notice::notice_line(notice));
+        }
+        plain_lines(lines)
     }
 }
 

@@ -52,11 +52,16 @@ impl ChatWidget {
         values.model = opened.model.clone();
         values.status = None;
         self.sync_status_line();
-        self.add_to_history(history_cell::SessionHeaderHistoryCell::new(
+        let header = history_cell::SessionHeaderHistoryCell::new(
             opened.model,
             self.directory.clone(),
             env!("CARGO_PKG_VERSION"),
-        ));
+        );
+        if let Some(notice) = self.appearance.update_notice() {
+            header.set_update_notice(notice.clone());
+        }
+        self.add_to_history(header.clone());
+        self.session_header = Some(header);
         // The owned transcript loads the earlier messages instead.
         if opened.older.is_some() && !self.owned_transcript {
             self.add_to_history(history_cell::new_info_event(

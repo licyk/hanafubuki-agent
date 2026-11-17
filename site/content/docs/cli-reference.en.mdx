@@ -180,11 +180,13 @@ See [Troubleshooting](/docs/troubleshooting#doctor).
 
 ## update [#update]
 
-| Command          | Does                                                                                                                                                                                       |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `update`         | Updates this executable to the latest release, the way it was installed (below): the steps on standard error, the result on standard output                                                |
-| `update --check` | Looks the latest release up and reports it: this version, the latest, the executable, how it was installed, the release notes and what `update` would do. It downloads and changes nothing |
-| `update --force` | Also reinstalls the latest release when it is this version. Nothing installs an older release: a build newer than the latest release is left as it is                                      |
+| Command          | Does                                                                                                                                                                                                                  |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `update`         | Updates this executable to the latest release, the way it was installed (below): the steps on standard error, the result on standard output                                                                           |
+| `update --check` | Looks the latest release up and reports it: this version, the latest, the executable, how it was installed, the release notes and what `update` would do. It downloads no binary and does not change the installation |
+| `update --force` | Also reinstalls the latest release when it is this version. Nothing installs an older release: a build newer than the latest release is left as it is                                                                 |
+
+`--check` saves a successful lookup in the same update cache used by the TUI at launch. It replaces even a fresh cached answer; a failed lookup leaves the cache unchanged. Checking from Settings also refreshes the running TUI’s session header.
 
 `--check` and `--force` together are a usage error (exit code 2).
 

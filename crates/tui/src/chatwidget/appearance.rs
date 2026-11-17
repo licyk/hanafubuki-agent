@@ -23,6 +23,11 @@ impl ChatWidget {
 
     /// A change of the theme, the status line or the title.
     pub(crate) fn apply_appearance(&mut self, event: AppearanceEvent) {
+        if let (AppearanceEvent::UpdateNotice(notice), Some(header)) =
+            (&event, &self.session_header)
+        {
+            header.set_update_notice(notice.clone());
+        }
         self.appearance.apply(event);
         self.sync_status_line();
     }
@@ -40,13 +45,10 @@ impl ChatWidget {
         self.sync_status_line();
     }
 
-    /// The status line as the settings and the session have it now, and
-    /// the update notice beside it.
+    /// The status line as the settings and the session have it now.
     pub(super) fn sync_status_line(&mut self) {
         self.bottom_pane
             .set_status_line(self.appearance.status_line());
-        self.bottom_pane
-            .set_update_notice(self.appearance.update_notice().cloned());
     }
 
     /// The terminal's title at `now`, and whether it changes with time.

@@ -102,6 +102,9 @@ impl App {
             AppearanceEvent::StatusLine { save: false, .. }
                 | AppearanceEvent::TerminalTitle { save: false, .. }
         );
+        if matches!(event, AppearanceEvent::UpdateNotice(_)) && !self.mode.is_owned() {
+            self.reflow.schedule_immediate(Instant::now());
+        }
         self.chat_widget.apply_appearance(event);
         match save {
             Some((changes, message)) => self.write_tui_settings(changes, message),

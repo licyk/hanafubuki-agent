@@ -63,7 +63,6 @@ use crate::render::renderable::Renderable;
 use crate::render::renderable::RenderableItem;
 use crate::status_indicator_widget::StatusIndicatorWidget;
 use crate::tui::FrameRequester;
-use crate::update_notice::TuiUpdateNotice;
 use crate::user_message::{MessageImage, UserMessage};
 use approval_overlay::ApprovalOverlay;
 pub(crate) use bottom_pane_view::BottomPaneView;
@@ -524,11 +523,6 @@ impl BottomPane {
             self.waiting = waiting;
             self.request_redraw();
         }
-    }
-
-    pub(crate) fn set_update_notice(&mut self, notice: Option<TuiUpdateNotice>) {
-        self.composer.set_update_notice(notice);
-        self.request_redraw();
     }
 
     pub(crate) fn set_task_running(&mut self, running: bool) {

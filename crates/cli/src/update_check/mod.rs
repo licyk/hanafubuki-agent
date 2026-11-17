@@ -14,7 +14,7 @@ mod check;
 mod prompt;
 
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use hanafubuki_agent_tui::{TuiUpdateChoice, TuiUpdateNotice, TuiUpdateNotifier, TuiUpdatePrompt};
 use hanafubuki_agent_update::{
@@ -175,7 +175,19 @@ fn notice(latest: &Version, action: &UpdateAction) -> TuiUpdateNotice {
     }
 }
 
-/// The footer's command: the update itself, cargo's for a cargo
+/// Keeps an explicit check in the same cache the next launch reads.
+pub(crate) fn record(
+    data_dir: Option<&Path>,
+    installation: &Installation,
+    latest: &Version,
+) -> Option<TuiUpdateNotice> {
+    if let Some(data_dir) = data_dir {
+        check::remember(data_dir, latest, now_ms());
+    }
+    is_newer(latest, &current_version()).then(|| notice(latest, &installation.action()))
+}
+
+/// The header's command: the update itself, cargo's for a cargo
 /// installation (named on Windows too, where the updater does not run it),
 /// else `update --check`, which says what to do.
 fn action_text(action: &UpdateAction) -> &'static str {

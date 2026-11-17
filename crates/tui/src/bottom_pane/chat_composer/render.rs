@@ -81,7 +81,6 @@ impl ChatComposer {
             quit_shortcut_key: self.quit_shortcut_key,
             status_line: self.status_line.as_ref(),
             navigation: self.navigation_footer.as_deref(),
-            update_notice: self.update_notice.as_ref(),
             task_running: self.is_task_running,
             agents_hint: self.agents_navigation_available(),
             second_conversation: self.command_scope.is_some(),

@@ -174,6 +174,42 @@ mod launch {
         }
     }
 
+    #[test]
+    fn a_manual_check_replaces_a_fresh_cache_and_the_next_launch_offers_the_release() {
+        let fixture = Fixture::new(Some(format!(
+            r#"{{"latestVersion":"{}","checkedAtMs":{}}}"#,
+            current_version(),
+            now_ms()
+        )));
+        let installation = Installation::at(&fixture.executable()).unwrap();
+        let latest = Version::new(9999, 0, 0);
+        let found = record(Some(fixture.dir.path()), &installation, &latest).unwrap();
+        assert_eq!(found.version, latest.to_string());
+        let cache = UpdateCache::load(fixture.dir.path());
+        assert!(!cache.is_due(now_ms()));
+
+        let mut prompted = false;
+        let started = Launch {
+            data_dir: fixture.dir.path().to_path_buf(),
+            installation,
+            current: current_version(),
+            now_ms: now_ms(),
+        }
+        .start(
+            true,
+            || Ok(fixture.release.client(None)),
+            Some(|prompt: TuiUpdatePrompt| {
+                assert_eq!(prompt.latest, latest.to_string());
+                prompted = true;
+                TuiUpdateChoice::Skip
+            }),
+            TuiEvents::new().update_notifier(),
+        );
+        assert!(prompted);
+        assert!(matches!(started, Started::Interface(Some(notice)) if notice == found));
+        assert!(fixture.release.requests().is_empty());
+    }
+
     fn cache_text(dir: &Path) -> String {
         fs::read_to_string(dir.join(UPDATE_CHECK_FILE)).unwrap_or_default()
     }

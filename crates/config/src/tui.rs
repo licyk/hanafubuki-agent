@@ -66,7 +66,7 @@ pub struct AgentTuiPreferences {
     /// were typed, a message or a slash command.
     pub presets: BTreeMap<String, AgentTuiPreset>,
     /// Whether the interface's launch asks GitHub, at most once every 20
-    /// hours, whether a newer release exists, and the footer says so. Read
+    /// hours, whether a newer release exists, and the session header says so. Read
     /// at launch by the standalone command line.
     pub check_for_updates: bool,
 }

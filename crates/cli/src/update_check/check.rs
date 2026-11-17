@@ -61,6 +61,11 @@ pub(super) fn check(
         }
     };
     let latest = release.version;
+    remember(data_dir, &latest, now_ms);
+    is_newer(&latest, current).then_some(latest)
+}
+
+pub(super) fn remember(data_dir: &Path, latest: &Version, now_ms: u64) {
     let written = UpdateCache::update(data_dir, |cache| {
         cache.latest_version = Some(latest.clone());
         cache.checked_at_ms = Some(now_ms);
@@ -68,7 +73,6 @@ pub(super) fn check(
     if written.is_err() {
         log::debug!("update check: the cache was not written");
     }
-    is_newer(&latest, current).then_some(latest)
 }
 
 pub(super) fn now_ms() -> u64 {

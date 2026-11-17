@@ -314,6 +314,35 @@ fn heading() -> String {
 }
 
 #[test]
+fn a_manual_check_of_a_fresh_cache_is_prompted_at_the_next_launch() {
+    let installed = Installed::new();
+    installed.publish();
+    installed.cache(&format!(
+        r#"{{"latestVersion":"{}","checkedAtMs":{}}}"#,
+        current_version(),
+        now_ms()
+    ));
+    let mut check = installed.launch(&installed.executable, &["update", "--check"], &[]);
+    assert_eq!(check.exit_code(), 0, "{}", check.contents());
+    assert!(installed.cache_text().contains("99.0.0"));
+    assert_eq!(installed.requests(), [LATEST_PATH]);
+
+    let mut term = installed.launch(&installed.executable, &[], &[]);
+    term.wait_for(&heading());
+    term.send("2");
+    term.wait_for("Update available: 99.0.0");
+    let screen = term.contents();
+    let notice = screen
+        .lines()
+        .find(|line| line.contains("Update available:"))
+        .unwrap();
+    assert!(notice.starts_with('│') && notice.ends_with('│'), "{screen}");
+    assert_eq!(installed.requests(), [LATEST_PATH]);
+    term.submit("/quit");
+    assert_eq!(term.exit_code(), 0);
+}
+
+#[test]
 fn update_now_installs_the_release_and_ends_without_starting_the_agent() {
     let installed = Installed::new();
     installed.publish();

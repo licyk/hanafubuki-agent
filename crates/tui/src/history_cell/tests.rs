@@ -88,6 +88,30 @@ fn session_header_names_the_model_and_the_directory() {
 }
 
 #[test]
+fn session_header_wraps_the_update_and_keeps_it_in_raw_output() {
+    let cell = SessionHeaderHistoryCell::new(
+        "模型-with-reasoning".to_string(),
+        "/home/someone/project".to_string(),
+        "0.1.0",
+    );
+    cell.set_update_notice(crate::update_notice::TuiUpdateNotice {
+        version: "0.3.0".to_string(),
+        action: "cargo install --locked hanafubuki-agent-cli".to_string(),
+    });
+    for width in [80, 36, 20] {
+        let lines = cell.display_lines(width);
+        assert!(lines.iter().all(|line| line.width() <= width as usize));
+        insta::assert_snapshot!(
+            format!("session_header_update_{width}"),
+            render_lines(&lines).join("\n")
+        );
+    }
+    assert!(render_lines(&cell.raw_lines())
+        .join("\n")
+        .contains("Update available: 0.3.0 · cargo install --locked hanafubuki-agent-cli"));
+}
+
+#[test]
 fn the_separator_says_how_long_the_turn_worked() {
     let lines = render_lines(&TurnCompletionSummary::new(Some(75), None).display_lines(24));
     assert_eq!(lines, vec!["─ Worked for 1m 15s ────"]);

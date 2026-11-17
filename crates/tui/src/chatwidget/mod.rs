@@ -88,6 +88,7 @@ pub(crate) struct ChatWidget {
     awaiting_display: Vec<(String, Arc<LiveCell<ToolCallCell>>)>,
     /// The open group of consecutive calls, which the next matching call may join.
     tool_group: Option<Arc<LiveCell<ToolCallCell>>>,
+    session_header: Option<history_cell::SessionHeaderHistoryCell>,
     /// The reasoning items the model is thinking in, in the order they
     /// started.
     live_thinking: Vec<(AgentReasoningId, Arc<LiveCell<ThinkingCell>>)>,
@@ -159,6 +160,7 @@ impl ChatWidget {
             executing_tools: Vec::new(),
             awaiting_display: Vec::new(),
             tool_group: None,
+            session_header: None,
             live_thinking: Vec::new(),
             work_entries: std::collections::HashMap::new(),
             stream_controller: None,
