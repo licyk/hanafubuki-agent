@@ -7,38 +7,26 @@ use std::path::Path;
 use crate::git::git;
 use crate::version::{workspace_version, Version};
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, clap::Args)]
 pub struct Options {
+    /// Explicit version; must match the workspace version.
+    #[arg(long, conflicts_with = "name", value_name = "X.Y.Z")]
     pub version: Option<String>,
+    /// Custom tag name instead of a version tag.
+    #[arg(long, value_name = "NAME")]
     pub name: Option<String>,
+    /// Annotation text (default: the release or tag name).
+    #[arg(long, short = 'm', value_name = "TEXT")]
     pub message: Option<String>,
+    /// Push the created tag.
+    #[arg(long)]
     pub push: bool,
+    /// Remote to push to (default: origin).
+    #[arg(long, value_name = "NAME")]
     pub remote: Option<String>,
+    /// Print the planned tag without creating or pushing it.
+    #[arg(long)]
     pub dry_run: bool,
-}
-
-impl Options {
-    pub fn parse(args: &[String]) -> Result<Self, String> {
-        let mut options = Self::default();
-        let mut args = args.iter();
-        while let Some(arg) = args.next() {
-            let mut value =
-                |flag: &str| args.next().cloned().ok_or(format!("{flag} needs a value"));
-            match arg.as_str() {
-                "--version" => options.version = Some(value("--version")?),
-                "--name" => options.name = Some(value("--name")?),
-                "--message" | "-m" => options.message = Some(value("--message")?),
-                "--remote" => options.remote = Some(value("--remote")?),
-                "--push" => options.push = true,
-                "--dry-run" => options.dry_run = true,
-                other => return Err(format!("unexpected argument `{other}`")),
-            }
-        }
-        if options.version.is_some() && options.name.is_some() {
-            return Err("give either --version or --name, not both".into());
-        }
-        Ok(options)
-    }
 }
 
 pub fn run(root: &Path, options: &Options) -> Result<(), String> {

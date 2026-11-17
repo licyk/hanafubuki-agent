@@ -5,7 +5,7 @@ mod export;
 mod pose;
 mod preview;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
@@ -39,46 +39,12 @@ impl Default for Metadata {
     }
 }
 
-pub(crate) fn generate(root: &Path, args: &[String]) -> Result<(), String> {
-    let (source, output) = options(
-        args,
-        "--source",
-        Some(root.join("crates/tui/assets/welcome")),
-    )?;
-    export::generate(&source, &output).map_err(|error| error.to_string())
+pub(crate) fn generate(source: &Path, output: &Path) -> Result<(), String> {
+    export::generate(source, output).map_err(|error| error.to_string())
 }
 
-pub(crate) fn preview(args: &[String]) -> Result<(), String> {
-    let (input, output) = options(args, "--input", None)?;
-    preview::run(&input, &output).map_err(|error| error.to_string())
-}
-
-fn options(
-    args: &[String],
-    input_flag: &str,
-    default_output: Option<PathBuf>,
-) -> Result<(PathBuf, PathBuf), String> {
-    let mut input = None;
-    let mut output = default_output;
-    let mut arguments = args.iter();
-    while let Some(flag) = arguments.next() {
-        if flag != input_flag && flag != "--output" {
-            return Err(format!("unexpected argument `{flag}`"));
-        }
-        let path = arguments
-            .next()
-            .filter(|value| !value.starts_with("--"))
-            .ok_or_else(|| format!("{flag} requires a path"))?;
-        if flag == input_flag {
-            input = Some(PathBuf::from(path));
-        } else {
-            output = Some(PathBuf::from(path));
-        }
-    }
-    Ok((
-        input.ok_or_else(|| format!("{input_flag} is required"))?,
-        output.ok_or("--output is required")?,
-    ))
+pub(crate) fn preview(input: &Path, output: &Path) -> Result<(), String> {
+    preview::run(input, output).map_err(|error| error.to_string())
 }
 
 #[cfg(test)]

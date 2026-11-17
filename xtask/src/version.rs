@@ -8,39 +8,21 @@ use std::process::Command;
 
 use toml_edit::{value, DocumentMut, Item};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum Level {
     Patch,
     Minor,
     Major,
 }
 
-#[derive(Debug)]
+#[derive(Debug, clap::Args)]
 pub struct Options {
+    /// Version component to increment.
+    #[arg(value_enum)]
     pub level: Level,
+    /// Print the planned changes without writing files.
+    #[arg(long)]
     pub dry_run: bool,
-}
-
-impl Options {
-    pub fn parse(args: &[String]) -> Result<Self, String> {
-        let mut level = None;
-        let mut dry_run = false;
-        for arg in args {
-            match arg.as_str() {
-                "patch" => level = Some(Level::Patch),
-                "minor" => level = Some(Level::Minor),
-                "major" => level = Some(Level::Major),
-                "--dry-run" => dry_run = true,
-                other => {
-                    return Err(format!(
-                        "unexpected argument `{other}`: version <patch|minor|major> [--dry-run]"
-                    ))
-                }
-            }
-        }
-        let level = level.ok_or("which increment: version <patch|minor|major>")?;
-        Ok(Self { level, dry_run })
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

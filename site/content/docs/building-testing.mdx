@@ -36,6 +36,8 @@ cargo test --workspace --all-features
 
 ## `cargo xtask` 的检查 [#the-checks-of-cargo-xtask]
 
+命令和参数通过 Clap 派生宏声明在 `xtask/src/cli.rs` 及发布模块中，帮助文本与参数校验由声明自动生成。使用 `cargo xtask --help` 查看命令列表，使用 `cargo xtask <command> --help` 查看对应选项。帮助以状态码 0 退出，参数错误为 2，任务执行失败为 1。新增命令或参数时修改声明，不再单独维护帮助字符串或手写参数解析。
+
 `cargo xtask check` 依次运行下面每一项，每一项也可以单独运行：
 
 | 命令                      | 检查什么                                                                                                                                                                                                                                                  |

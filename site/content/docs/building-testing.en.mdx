@@ -36,6 +36,8 @@ cargo test --workspace --all-features
 
 ## The checks of `cargo xtask` [#the-checks-of-cargo-xtask]
 
+Commands and arguments are declared with Clap derives in `xtask/src/cli.rs` and the release modules. Help and argument validation come from those declarations: use `cargo xtask --help` for the command list and `cargo xtask <command> --help` for its options. Help exits with status 0, invalid arguments with 2, and a failed task with 1. Keep command names and flags in the declarations rather than maintaining a separate usage string or argument parser.
+
 `cargo xtask check` runs each of these in turn, and each also runs on its own:
 
 | Command                   | What it checks                                                                                                                                                                                                                                                                                                                                                    |

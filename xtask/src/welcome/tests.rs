@@ -1,9 +1,8 @@
 use std::fs;
-use std::path::PathBuf;
 
 use image::{Rgba, RgbaImage};
 
-use super::{animation, export, options, preview, FRAMES};
+use super::{animation, export, preview, FRAMES};
 
 #[test]
 fn native_frames_loop_blink_and_keep_the_forearm_stationary() {
@@ -97,23 +96,6 @@ fn svg_preview_uses_cell_colors_and_escapes_text() {
     fs::write(&input, r#"{"width":2,"height":1,"cells":[]}"#).unwrap();
     assert!(preview::run(&input, &output).is_err());
     assert_eq!(fs::read_to_string(&output).unwrap(), svg);
-}
-
-#[test]
-fn command_options_support_explicit_paths_and_the_repository_atlas_default() {
-    let default = PathBuf::from("repo/crates/tui/assets/welcome");
-    let args = ["--source", "audit directory"].map(String::from);
-    assert_eq!(
-        options(&args, "--source", Some(default.clone())).unwrap(),
-        (PathBuf::from("audit directory"), default)
-    );
-    assert!(options(&args, "--input", None).is_err());
-    assert!(options(&["--source".into()], "--source", None).is_err());
-    let args = ["--output", "preview.svg", "--input", "cells.json"].map(String::from);
-    assert_eq!(
-        options(&args, "--input", None).unwrap(),
-        (PathBuf::from("cells.json"), PathBuf::from("preview.svg"))
-    );
 }
 
 #[test]

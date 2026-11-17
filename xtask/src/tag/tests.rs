@@ -7,7 +7,15 @@ fn version(text: &str) -> Version {
 }
 
 fn options(args: &[&str]) -> Options {
-    Options::parse(&args.iter().map(|arg| arg.to_string()).collect::<Vec<_>>()).unwrap()
+    use clap::Parser;
+    let crate::cli::Task::Tag(options) =
+        crate::cli::Cli::try_parse_from(["xtask", "tag"].into_iter().chain(args.iter().copied()))
+            .unwrap()
+            .task
+    else {
+        panic!("expected tag options")
+    };
+    options
 }
 
 #[test]
@@ -45,13 +53,6 @@ fn takes_any_name_and_message() {
     .unwrap();
     assert_eq!((tag.as_str(), message.as_str()), ("docs-1", "Docs"));
     assert!(tag_for(version("0.1.2"), &options(&["--name", "two words"])).is_err());
-    assert!(Options::parse(&[
-        "--version".into(),
-        "1.0.0".into(),
-        "--name".into(),
-        "x".into()
-    ])
-    .is_err());
 }
 
 #[test]
