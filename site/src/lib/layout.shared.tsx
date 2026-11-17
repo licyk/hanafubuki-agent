@@ -40,9 +40,8 @@ export function baseOptions(locale: Locale = DEFAULT_LOCALE): BaseLayoutProps {
   };
 }
 
-export function docsOptions(locale: Locale = DEFAULT_LOCALE): BaseLayoutProps {
+export function docsOptions(): BaseLayoutProps {
   return {
-    links: [{ text: locale === "zh-CN" ? "下载" : "Download", url: "/download" }],
     slots: { themeSwitch: ThemeToggle },
     nav: {
       title: SITE_NAME,
