@@ -113,25 +113,8 @@
 }
 
 .home-install {
-  display: flex;
-  width: fit-content;
-  max-width: 100%;
-  align-items: center;
-  gap: 0.75rem;
+  max-width: 56rem;
   margin-top: clamp(1.1rem, 2.5vh, 2rem);
-  padding: 0.8rem 1.1rem;
-  border: 1px solid var(--color-fd-border);
-  border-radius: 0.78rem;
-  background: var(--page-surface-strong);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.9rem;
-  overflow-x: auto;
-  white-space: nowrap;
-}
-
-.home-install span {
-  color: var(--page-accent-strong);
-  user-select: none;
 }
 
 .home-actions {

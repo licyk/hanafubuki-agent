@@ -143,6 +143,8 @@ The preview draws the actual Braille dot masks and RGB values; ordinary text use
 
 ## The documentation site [#the-documentation-site]
 
+The home page detects desktop platforms in the browser and offers PowerShell on Windows or `install.sh` through Bash on Linux/macOS. Unknown or mobile platforms require a manual choice. `/download` includes both scripts, released archives and SHA-256 files, Cargo, and source installation. It fetches the latest stable release in the browser; an API failure leaves the scripts and GitHub Releases link usable. The static-output check requires `download/index.html` as well as every documentation page.
+
 The site is `site/`: Fumadocs on TanStack Start, prerendered to static files and built for GitHub Pages under `/hanafubuki-agent/`.
 
 ```sh

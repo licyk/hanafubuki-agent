@@ -3,12 +3,12 @@ import Link from "fumadocs-core/link";
 import { HomeLayout } from "fumadocs-ui/layouts/home";
 import { ArrowRight } from "lucide-react";
 
+import PlatformInstall from "@/components/platform-install";
 import { useDocumentMetadata } from "@/lib/document-metadata";
 import { DEFAULT_LOCALE } from "@/lib/i18n";
 import { baseOptions, REPOSITORY_URL, SITE_NAME } from "@/lib/layout.shared";
 import { getSiteCopy, useSiteCopy, useSiteLocale } from "@/lib/site-copy";
 
-const INSTALL_COMMAND = "cargo install hanafubuki-agent-cli";
 const AUTHOR = "licyk";
 
 export const Route = createFileRoute("/")({
@@ -35,12 +35,9 @@ function Home() {
           <div className="home-hero">
             <h1 id="home-title">{SITE_NAME}</h1>
             <p>{copy.description}</p>
-            <code aria-label={copy.install} className="home-install">
-              <span aria-hidden="true">$</span>
-              {INSTALL_COMMAND}
-            </code>
+            <PlatformInstall />
             <div className="home-actions">
-              <Link className="home-primary-link page-interactive" href="/docs/installation">
+              <Link className="home-primary-link page-interactive" href="/download">
                 {copy.installation}
                 <ArrowRight className="page-interactive-part" aria-hidden="true" />
               </Link>

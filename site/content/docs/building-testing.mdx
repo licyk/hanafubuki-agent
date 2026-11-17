@@ -143,6 +143,8 @@ cargo xtask welcome-preview --input /path/to/cells.json --output /path/to/previe
 
 ## 文档站点 [#the-documentation-site]
 
+首页在浏览器中识别桌面平台：Windows 显示 PowerShell 命令，Linux/macOS 显示通过 Bash 运行 `install.sh` 的命令；未知或移动平台需要手动选择。`/download` 汇总两种脚本、发布压缩包与 SHA-256 文件、Cargo 和源码安装。它在浏览器中获取最新稳定版；API 不可用时，安装脚本和 GitHub Releases 链接仍可使用。静态输出检查要求生成 `download/index.html` 以及每个文档页。
+
 站点在 `site/`：TanStack Start 上的 Fumadocs，预渲染为静态文件，为 GitHub Pages 构建在 `/hanafubuki-agent/` 下。
 
 ```sh

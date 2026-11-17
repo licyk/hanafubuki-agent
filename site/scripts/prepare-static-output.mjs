@@ -10,7 +10,13 @@ const documentSlugs = metadata.pages.filter((page) => !page.startsWith("---"));
 const documents = documentSlugs.map((slug) =>
   slug === "index" ? "docs/index.html" : `docs/${slug}/index.html`,
 );
-const requiredFiles = ["_shell.html", "index.html", "api/search", ...documents];
+const requiredFiles = [
+  "_shell.html",
+  "index.html",
+  "download/index.html",
+  "api/search",
+  ...documents,
+];
 
 await Promise.all(requiredFiles.map((file) => access(join(publicDirectory, file))));
 

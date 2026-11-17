@@ -30,6 +30,7 @@ export function baseOptions(locale: Locale = DEFAULT_LOCALE): BaseLayoutProps {
     },
     githubUrl: REPOSITORY_URL,
     links: [
+      { text: locale === "zh-CN" ? "下载" : "Download", url: "/download", active: "url" },
       {
         text: locale === "zh-CN" ? "文档" : "Docs",
         url: "/docs",
@@ -39,8 +40,9 @@ export function baseOptions(locale: Locale = DEFAULT_LOCALE): BaseLayoutProps {
   };
 }
 
-export function docsOptions(): BaseLayoutProps {
+export function docsOptions(locale: Locale = DEFAULT_LOCALE): BaseLayoutProps {
   return {
+    links: [{ text: locale === "zh-CN" ? "下载" : "Download", url: "/download" }],
     slots: { themeSwitch: ThemeToggle },
     nav: {
       title: SITE_NAME,

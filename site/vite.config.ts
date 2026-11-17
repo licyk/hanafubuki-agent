@@ -29,7 +29,7 @@ export default defineConfig({
           crawlLinks: true,
         },
       },
-      pages: [{ path: "/" }, { path: "/docs" }, { path: "/api/search" }],
+      pages: [{ path: "/" }, { path: "/download" }, { path: "/docs" }, { path: "/api/search" }],
     }),
     react(),
     nitro({

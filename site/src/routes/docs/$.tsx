@@ -116,7 +116,7 @@ function DocumentationPage() {
   });
 
   return (
-    <DocsLayout {...docsOptions()} tree={pageTree}>
+    <DocsLayout {...docsOptions(locale)} tree={pageTree}>
       <Suspense>
         <DocumentationContent key={path} path={path} />
       </Suspense>
