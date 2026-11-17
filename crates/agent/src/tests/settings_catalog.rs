@@ -47,7 +47,7 @@ fn with_token(_: &TestPaths, config: &AgentConfig) {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn the_catalog_reads_every_owner_and_returns_no_secret() {
+async fn the_local_catalog_reads_every_owner_and_includes_editable_secrets() {
     let (service, paths, _) = service_with_config("settings-catalog", with_token);
     let catalog = service.settings_catalog().await.unwrap();
 
@@ -113,7 +113,10 @@ async fn the_catalog_reads_every_owner_and_returns_no_secret() {
     assert_eq!(providers.revision, Some(2));
     let provider = &providers.records[0];
     assert_eq!(provider.state.as_deref(), Some("default"));
-    assert!(!provider.values.contains_key("apiToken"));
+    assert_eq!(
+        provider.values["apiToken"],
+        SettingValue::Text("sk-catalog-secret".into())
+    );
     assert_eq!(provider.secrets_set, ["apiToken"]);
     let policy = &collection(&catalog, "modelPolicy").records[0];
     assert_eq!(
@@ -124,8 +127,8 @@ async fn the_catalog_reads_every_owner_and_returns_no_secret() {
     assert!(roles.records.iter().any(|role| role.id == DEFAULT_ROLE));
     let text = serde_json::to_string(&catalog).unwrap();
     assert!(
-        !text.contains("sk-catalog-secret"),
-        "a secret is never returned"
+        text.contains("sk-catalog-secret"),
+        "the local editor can reveal the saved token"
     );
     done(service, paths);
 }
@@ -676,9 +679,10 @@ async fn an_mcp_server_is_added_saved_and_deleted() {
     let secret = &collection(&catalog, "mcpSecrets").records[0];
     assert_eq!(secret.id, "demo/API_KEY");
     assert_eq!(secret.secrets_set, ["value"]);
-    assert!(!serde_json::to_string(&catalog)
-        .unwrap()
-        .contains("sk-mcp-secret"));
+    assert_eq!(
+        secret.values["value"],
+        SettingValue::Text("sk-mcp-secret".into())
+    );
     let settings = config.mcp().load().unwrap();
     let McpTransportConfig::Stdio(stdio) = &settings.servers[0].transport else {
         panic!("a stdio server");

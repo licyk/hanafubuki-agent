@@ -4,7 +4,7 @@
 //! history, its killed text included, so yanking in another field cannot
 //! reveal a secret.
 
-use ratatui::crossterm::event::KeyEvent;
+use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::style::Stylize;
 use ratatui::text::{Line, Span};
 use unicode_segmentation::UnicodeSegmentation;
@@ -24,16 +24,25 @@ pub(crate) enum FieldDisplay {
 pub(crate) struct TextField {
     editor: TextArea,
     secret: bool,
+    revealed: bool,
 }
 
 impl TextField {
     pub(crate) fn new(text: &str, secret: bool) -> Self {
         let mut editor = TextArea::new_single_line();
         editor.insert_str(text);
-        Self { editor, secret }
+        Self {
+            editor,
+            secret,
+            revealed: false,
+        }
     }
 
     pub(crate) fn input(&mut self, event: KeyEvent) {
+        if self.secret && crate::key_hint::ctrl(KeyCode::Char('r')).is_press(event) {
+            self.revealed = !self.revealed;
+            return;
+        }
         self.editor.input(event);
     }
 
@@ -49,10 +58,19 @@ impl TextField {
 
     pub(crate) fn set_secret(&mut self, secret: bool) {
         self.secret = secret;
+        self.revealed = false;
+    }
+
+    pub(crate) fn visibility_hint(&self) -> Option<&'static str> {
+        self.secret.then_some(if self.revealed {
+            "ctrl+r hide secret"
+        } else {
+            "ctrl+r show secret"
+        })
     }
 
     pub(crate) fn display(&self, focused: bool) -> FieldDisplay {
-        match (focused, self.secret) {
+        match (focused, self.secret && !(focused && self.revealed)) {
             (true, false) => FieldDisplay::Focused,
             (false, false) => FieldDisplay::Unfocused,
             (true, true) => FieldDisplay::FocusedSecret,

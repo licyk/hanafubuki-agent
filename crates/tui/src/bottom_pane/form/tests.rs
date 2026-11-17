@@ -76,6 +76,27 @@ fn a_secret_shows_dots_with_only_its_last_character_while_typed() {
 }
 
 #[test]
+fn a_secret_can_be_revealed_edited_and_hidden_without_submitting() {
+    let mut form = provider_like();
+    form.handle_key(key(KeyCode::Tab));
+    form.handle_paste("sk-secret");
+    assert!(screen(&form).join("\n").contains("ctrl+r show secret"));
+    assert_eq!(form.handle_key(ctrl('r')), FormEvent::None);
+    assert!(line_with(&form, "API token").contains("sk-secret"));
+    assert!(screen(&form).join("\n").contains("ctrl+r hide secret"));
+    form.handle_key(key(KeyCode::Backspace));
+    type_text(&mut form, "X");
+    assert_eq!(form.text("token"), "sk-secreX");
+    form.handle_key(key(KeyCode::Tab));
+    assert!(!line_with(&form, "API token").contains("sk-secreX"));
+    form.handle_key(key(KeyCode::Up));
+    assert_eq!(form.handle_key(ctrl('r')), FormEvent::None);
+    assert!(!line_with(&form, "API token").contains("sk-secreX"));
+    assert_eq!(form.text("token"), "sk-secreX");
+    assert!(screen(&form).join("\n").contains("ctrl+r show secret"));
+}
+
+#[test]
 fn text_killed_in_a_secret_cannot_be_yanked_in_another_field() {
     let mut form = provider_like();
     form.handle_key(key(KeyCode::Tab));

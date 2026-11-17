@@ -93,7 +93,7 @@ pub struct SettingsRecord {
     /// Why its fields are shown and not written here (a role defined in a
     /// file), when they are not; its actions still run.
     pub read_only: Option<String>,
-    /// Its fields' values by key; a secret is never among them.
+    /// Its fields' values by key, including secrets for the local settings UI.
     pub values: BTreeMap<String, SettingValue>,
     /// The keys of its secret fields that hold a value.
     pub secrets_set: Vec<String>,

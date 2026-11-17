@@ -186,7 +186,7 @@ impl SettingsCenter {
                 let rows = page.rows(catalog);
                 let view = page.view(catalog, &rows);
                 let hint = match &page.search {
-                    _ if page.editor.is_some() => Some("enter save · esc cancel".to_string()),
+                    _ if page.editor.is_some() => page.editor.as_ref().map(LineEditor::hint),
                     Some(search) if search.editing => {
                         Some("type to search · enter results · esc clear".to_string())
                     }
@@ -384,7 +384,10 @@ fn row_hint(rows: &[Row], selected: usize, prefix: &str, suffix: &str) -> String
 
 fn editing_hint(rows: &[Row], selected: usize, suffix: &str) -> String {
     match rows.get(selected) {
-        Some(row) if row.editor.is_some() => "enter save · esc cancel".to_string(),
+        Some(Row {
+            editor: Some(editor),
+            ..
+        }) => editor.hint(),
         _ => row_hint(rows, selected, "", suffix),
     }
 }

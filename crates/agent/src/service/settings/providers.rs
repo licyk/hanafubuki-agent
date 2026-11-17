@@ -1,6 +1,6 @@
 //! The Providers of `providers.toml`: the registry's records, written
-//! through its revision-gated calls. The API token is a secret: the catalog
-//! says only whether it is set, and a save that leaves it out keeps it. The
+//! through its revision-gated calls. The local catalog includes the API token
+//! for editing, and a save that leaves it out keeps it. The
 //! request headers, whose values the registry checks as credentials, are
 //! listed by name only and written as `NAME=VALUE` texts, a name alone
 //! keeping the value it has.

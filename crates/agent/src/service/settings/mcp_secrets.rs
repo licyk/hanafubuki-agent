@@ -1,13 +1,13 @@
 //! The secret environment variables and headers of the MCP servers: a
 //! record per name a server's transport fills from a credential
-//! (`SERVER/NAME`), its value written with `mcp_set_credential` and never
-//! returned. Adding or deleting one writes the server's reference first,
+//! (`SERVER/NAME`), its value written with `mcp_set_credential` and returned
+//! to the local settings editor. Adding or deleting one writes the server's reference first,
 //! at the revision read; a credential no server references any more is
 //! removed after it.
 
 use std::collections::BTreeMap;
 
-use hanafubuki_agent_config::{SettingKind, SettingSpec, SettingsGroup};
+use hanafubuki_agent_config::{SettingKind, SettingSpec, SettingValue, SettingsGroup};
 use hanafubuki_agent_mcp::{McpCredentialKey, McpServerConfig, McpServerId, McpTransportConfig};
 use serde_json::Value;
 
@@ -23,7 +23,7 @@ const VALUE: &str = "value";
 
 fn fields() -> Vec<SettingSpec> {
     vec![SettingSpec {
-        summary: "Written only; it is never shown".into(),
+        summary: "Masked by default; reveal or edit in the local settings".into(),
         ..SettingSpec::new(
             VALUE,
             "Value",
@@ -66,7 +66,16 @@ pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCol
                     state: None,
                     issue: (!credentials.contains_key(&key)).then(|| "it has no value".into()),
                     read_only: None,
-                    values: BTreeMap::new(),
+                    values: credentials
+                        .get(&key)
+                        .map(|credential| {
+                            (
+                                VALUE.to_string(),
+                                SettingValue::Text(credential.value.clone()),
+                            )
+                        })
+                        .into_iter()
+                        .collect(),
                     secrets_set: credentials
                         .contains_key(&key)
                         .then(|| VALUE.to_string())

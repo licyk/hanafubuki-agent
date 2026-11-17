@@ -96,11 +96,7 @@ pub(super) struct LineEditor {
 impl LineEditor {
     pub(super) fn new(spec: &SettingSpec, value: Option<&SettingValue>) -> Self {
         let secret = matches!(spec.kind, SettingKind::Text { secret: true, .. });
-        let text = if secret {
-            String::new()
-        } else {
-            editable_text(value)
-        };
+        let text = editable_text(value);
         Self {
             field: TextField::new(&text, secret),
             error: None,
@@ -110,6 +106,13 @@ impl LineEditor {
 
     pub(super) fn field(&self) -> &TextField {
         &self.field
+    }
+
+    pub(super) fn hint(&self) -> String {
+        match self.field.visibility_hint() {
+            Some(hint) => format!("{hint} · enter save · esc cancel"),
+            None => "enter save · esc cancel".into(),
+        }
     }
 
     /// `Some(true)` on Enter, `Some(false)` on Esc; other keys edit.

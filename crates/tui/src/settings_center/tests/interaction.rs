@@ -41,6 +41,43 @@ fn select(center: &mut SettingsCenter, label: &str) {
 }
 
 #[test]
+fn a_saved_secret_can_be_revealed_and_edited_without_saving_on_reveal() {
+    let mut catalog = catalog();
+    catalog.collections[0].records[0].values.insert(
+        "apiToken".into(),
+        SettingValue::Text("sk-saved-secret".into()),
+    );
+    let mut center = center_with(catalog, Some("providers"));
+    press(&mut center, KeyCode::Enter);
+    select(&mut center, "API token");
+    assert!(!screen(&mut center, 140, 40).contains("sk-saved-secret"));
+    press(&mut center, KeyCode::Enter);
+    assert!(screen(&mut center, 140, 40).contains("ctrl+r show secret"));
+    let reveal =
+        ratatui::crossterm::event::KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL);
+    center.handle_key(reveal);
+    assert!(screen(&mut center, 140, 40).contains("sk-saved-secret"));
+    assert!(screen(&mut center, 140, 40).contains("ctrl+r hide secret"));
+    assert!(calls(&mut center).is_empty(), "reveal does not write");
+    center.handle_key(reveal);
+    assert!(!screen(&mut center, 140, 40).contains("sk-saved-secret"));
+    press(&mut center, KeyCode::Esc);
+    assert!(calls(&mut center).is_empty(), "cancel does not write");
+    press(&mut center, KeyCode::Enter);
+    assert!(screen(&mut center, 140, 40).contains("ctrl+r show secret"));
+    center.handle_key(reveal);
+    press(&mut center, KeyCode::Backspace);
+    type_text(&mut center, "X");
+    assert!(calls(&mut center).is_empty(), "editing waits for Enter");
+    press(&mut center, KeyCode::Enter);
+    let sent = calls(&mut center);
+    let [(_, CatalogCall::Action(request))] = sent.as_slice() else {
+        panic!("{sent:?}");
+    };
+    assert_eq!(request.values["apiToken"], json!("sk-saved-secreX"));
+}
+
+#[test]
 fn a_boolean_is_written_at_once() {
     let mut center = center_with(catalog(), None);
     show_tab(&mut center, "Memory");

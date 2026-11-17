@@ -41,7 +41,10 @@ pub(super) fn value_text(
     value: Option<&SettingValue>,
     secret_set: bool,
 ) -> String {
-    if secret_set {
+    if secret_set
+        || (matches!(spec.kind, SettingKind::Text { secret: true, .. })
+            && value.is_some_and(|value| !matches!(value, SettingValue::Null)))
+    {
         return "••••".to_string();
     }
     let Some(value) = value else {

@@ -16,7 +16,7 @@ use serde_json::{Map, Value};
 use super::SettingsRecord;
 
 /// The record `id` of `fields`, its values read from `record` (its
-/// serialized form); a secret field says only whether it is set.
+/// serialized form), including secret values for the local settings editor.
 pub(super) fn record_of<T: Serialize>(
     id: &str,
     label: &str,
@@ -36,7 +36,8 @@ pub(super) fn record_of<T: Serialize>(
         };
         if is_secret(spec) {
             secrets_set.push(spec.key.clone());
-        } else if let Ok(read) = spec.read(value) {
+        }
+        if let Ok(read) = spec.read(value) {
             values.insert(spec.key.clone(), read);
         } else {
             issues.push(format!(

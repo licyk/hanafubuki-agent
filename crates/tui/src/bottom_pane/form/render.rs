@@ -84,6 +84,11 @@ impl FormView {
             lines.extend(self.status.iter().cloned());
         }
         lines.push(Line::default());
+        if let Some(Kind::Text { field, .. }) = self.items.get(self.focus).map(|item| &item.kind) {
+            if let Some(hint) = field.visibility_hint() {
+                lines.push(Line::from(hint.dim()));
+            }
+        }
         lines.push(Line::from(vec![
             key_hint::plain(KeyCode::Tab).into(),
             " move · ".dim(),

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::ShellEnvironment;
-use hanafubuki_agent_foundation::environment_policy::{current_environment, insert};
+use hanafubuki_agent_foundation::environment_policy::insert;
 
 #[cfg(not(windows))]
 const UNIX_DEFAULT_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
@@ -40,7 +40,7 @@ pub(crate) fn build_command_environment(
     overrides: &BTreeMap<String, String>,
 ) -> BTreeMap<String, String> {
     build_environment_from(
-        current_environment(),
+        hanafubuki_agent_foundation::environment_policy::current_environment(),
         &ShellEnvironment::default(),
         overrides,
     )

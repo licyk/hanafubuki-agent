@@ -10,7 +10,7 @@ use hanafubuki_agent::{
     AgentModelPolicyWriteRequest, AgentProviderRegistrySnapshot, McpApplicationSnapshot,
     McpCredentialKey, McpServerId, McpTransportConfig,
 };
-use ratatui::crossterm::event::KeyCode;
+use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 use tokio::sync::Notify;
 
 use super::Harness;
@@ -107,14 +107,29 @@ fn without_a_provider_the_setup_opens_and_the_first_message_waits_for_it() {
     for character in "sk-test".chars() {
         harness.key(KeyCode::Char(character));
     }
-    let screen = harness.screen();
+    let screen = harness.pump_until_screen_shows("ctrl+r show secret");
     assert!(!screen.contains("sk-tes"), "a secret is dots: {screen}");
+    assert!(screen.contains("ctrl+r show secret"), "{screen}");
+    harness.key_with(KeyCode::Char('r'), KeyModifiers::CONTROL);
+    harness.pump_until_screen_shows("sk-test");
+    assert!(
+        harness.registry().providers.is_empty(),
+        "revealing does not save"
+    );
+    harness.key_with(KeyCode::Char('r'), KeyModifiers::CONTROL);
+    harness.pump_until_screen_shows("ctrl+r show secret");
+    assert!(!harness.screen().contains("sk-test"));
     harness.key(KeyCode::Enter);
     harness.select_setting("Add a Provider");
     harness.key(KeyCode::Enter);
     // The record added is selected; its model page lists the models.
     harness.pump_until_screen_shows("› Fixture");
     harness.key(KeyCode::Enter);
+    harness.select_setting("API token");
+    harness.key(KeyCode::Enter);
+    harness.key_with(KeyCode::Char('r'), KeyModifiers::CONTROL);
+    harness.pump_until_screen_shows("sk-test");
+    harness.key(KeyCode::Esc);
     harness.select_setting("Choose the model");
     harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("model-b");
