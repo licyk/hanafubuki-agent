@@ -45,6 +45,8 @@ if [ -n "${BASH_VERSION-}" ]; then shopt -s expand_aliases; fi
                 "--nocapture",
             ])
             .env(MARKER, temp.path())
+            // Login shells also read HOME's profile, independently of BASH_ENV.
+            .env("HOME", temp.path())
             .env("BASH_ENV", &profile)
             .env("ZDOTDIR", temp.path())
             .env("SHELL", shell)
@@ -53,7 +55,7 @@ if [ -n "${BASH_VERSION-}" ]; then shopt -s expand_aliases; fi
             .unwrap();
             assert!(
                 output.status.success(),
-                "{}\n{}",
+                "{shell}: {}\n{}",
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
             );
