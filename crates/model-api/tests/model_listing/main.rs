@@ -27,6 +27,70 @@ use serde_json::json;
 use support::{FakeHttpServer, PlannedResponse};
 
 #[tokio::test]
+async fn a_large_catalog_keeps_every_model_without_entry_or_body_limits() {
+    let data = (0..2_100)
+        .map(|index| {
+            json!({
+                "id": format!("model-{index:04}"),
+                "description": "x".repeat(1024),
+                "context_length": 1_000_000,
+            })
+        })
+        .collect::<Vec<_>>();
+    let body = json!({"data": data}).to_string();
+    assert!(body.len() > 2 * 1024 * 1024);
+    for protocol in [
+        ModelApiProtocol::Responses,
+        ModelApiProtocol::ChatCompletions,
+    ] {
+        let listing = list_one_page(protocol, &body).await.unwrap();
+        assert_eq!(listing.entries.len(), 2_100);
+        assert_eq!(listing.skipped, 0);
+        for (index, entry) in listing.entries.iter().enumerate() {
+            assert_eq!(entry.id, format!("model-{index:04}"));
+            assert_eq!(entry.context_window, Some(1_000_000));
+        }
+    }
+}
+
+#[tokio::test]
+async fn anthropic_catalogs_continue_past_ten_pages() {
+    let responses = (0..12)
+        .map(|page| {
+            let data = (0..100)
+                .map(|index| json!({"id": format!("model-{:04}", page * 100 + index)}))
+                .collect::<Vec<_>>();
+            PlannedResponse::status(
+                200,
+                json!({
+                    "data": data, "has_more": page < 11,
+                    "last_id": format!("model-{:04}", page * 100 + 99),
+                })
+                .to_string()
+                .into_bytes(),
+            )
+        })
+        .collect();
+    let server = FakeHttpServer::start(responses).await;
+    let listing = ModelCatalogClient::new(provider(&server))
+        .unwrap()
+        .list(
+            ModelApiProtocol::AnthropicMessages,
+            CancellationToken::default(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(listing.entries.len(), 1_200);
+    let requests = server.requests();
+    assert_eq!(requests.len(), 12);
+    assert_eq!(
+        requests[11].path,
+        "/v1/models?limit=100&after_id=model-1099"
+    );
+    assert_eq!(listing.entries.last().unwrap().id, "model-1199");
+}
+
+#[tokio::test]
 async fn the_documented_openai_listing_reports_ids_only() {
     let listing = list_one_page(
         ModelApiProtocol::Responses,

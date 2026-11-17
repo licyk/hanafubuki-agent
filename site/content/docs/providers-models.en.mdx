@@ -88,6 +88,8 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 
 ## The model [#model]
 
+Provider model catalogs have no fixed entry-count, response-size or page-count limit. Anthropic pagination follows the returned cursor until the Provider reports the end; cancellation and network timeouts still apply.
+
 | How                                | For                                                                    |
 | ---------------------------------- | ---------------------------------------------------------------------- |
 | `providers default ID --model`     | The model policy's model: what every new session runs from then on     |

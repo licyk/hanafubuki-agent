@@ -88,6 +88,8 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 
 ## 模型 [#model]
 
+Provider 模型目录不设置固定的条目数、响应大小或分页数上限。Anthropic 分页沿返回的游标读取，直到 Provider 表示结束；取消操作和网络超时仍然有效。
+
 | 方式                           | 作用范围                                                     |
 | ------------------------------ | ------------------------------------------------------------ |
 | `providers default ID --model` | 模型策略中的模型：之后所有新会话的默认模型                   |

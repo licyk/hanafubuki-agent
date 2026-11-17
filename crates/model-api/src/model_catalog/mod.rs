@@ -23,10 +23,6 @@ use crate::ModelReasoningEffort;
 mod entry;
 mod shapes;
 
-const MAX_CATALOG_BODY_BYTES: usize = 2 * 1024 * 1024;
-const MAX_CATALOG_ENTRIES: usize = 1_000;
-const MAX_ANTHROPIC_PAGES: usize = 10;
-
 /// One model of a listing. Every field but the id is what the Provider
 /// reports, or unknown (`None`, empty) when it reports nothing usable.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -85,9 +81,7 @@ impl ModelCatalogClient {
         }
         let mut entries = BTreeMap::<String, ModelCatalogEntry>::new();
         let mut skipped = 0usize;
-        let mut pages = 0usize;
         loop {
-            pages += 1;
             let value = self
                 .fetch_page(endpoint.clone(), authentication, &cancellation)
                 .await?;
@@ -101,11 +95,6 @@ impl ModelCatalogClient {
                     continue;
                 };
                 entries.entry(entry.id.clone()).or_insert(entry);
-                if entries.len() > MAX_CATALOG_ENTRIES {
-                    return Err(ModelError::Protocol(format!(
-                        "model catalog exceeded {MAX_CATALOG_ENTRIES} entries"
-                    )));
-                }
             }
             if protocol != ModelApiProtocol::AnthropicMessages
                 || !value
@@ -114,11 +103,6 @@ impl ModelCatalogClient {
                     .unwrap_or(false)
             {
                 break;
-            }
-            if pages >= MAX_ANTHROPIC_PAGES {
-                return Err(ModelError::Protocol(
-                    "Anthropic model catalog exceeded the page limit".into(),
-                ));
             }
             // `last_id` is nullable: without it the listing is what was read.
             let Some(after_id) = value
@@ -204,7 +188,7 @@ impl ModelCatalogClient {
             };
             match sent {
                 Ok(response) if response.status().is_success() => {
-                    let body = read_bounded_body(response, &self.provider, cancellation).await?;
+                    let body = read_body(response, &self.provider, cancellation).await?;
                     return serde_json::from_slice(&body).map_err(|_| {
                         ModelError::Protocol("model catalog response is not valid JSON".into())
                     });
@@ -272,7 +256,7 @@ impl ModelCatalogClient {
     }
 }
 
-async fn read_bounded_body(
+async fn read_body(
     response: reqwest::Response,
     provider: &ModelProvider,
     cancellation: &CancellationToken,
@@ -290,11 +274,6 @@ async fn read_bounded_body(
         };
         match next {
             Some(Ok(chunk)) => {
-                if body.len().saturating_add(chunk.len()) > MAX_CATALOG_BODY_BYTES {
-                    return Err(ModelError::Protocol(format!(
-                        "model catalog response exceeded {MAX_CATALOG_BODY_BYTES} bytes"
-                    )));
-                }
                 body.extend_from_slice(&chunk);
             }
             Some(Err(_)) => {
