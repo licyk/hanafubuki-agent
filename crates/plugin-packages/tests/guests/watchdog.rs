@@ -34,20 +34,27 @@ pub fn guard(name: &str, check: impl FnOnce()) {
     let started = Instant::now();
     // Dropped when the check ends, or unwinds from a failed assertion.
     let (finished, done) = mpsc::channel::<()>();
-    let name = name.to_string();
+    let watchdog_name = name.to_string();
     let watchdog = std::thread::spawn(move || {
         if let Err(RecvTimeoutError::Timeout) = done.recv_timeout(CHECK_DEADLINE) {
-            report(&name, started);
+            report(&watchdog_name, started);
             std::process::exit(1);
         }
     });
-    check();
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(check));
     drop(finished);
     watchdog.join().unwrap();
+    if let Err(panic) = outcome {
+        report(name, started);
+        std::panic::resume_unwind(panic);
+    }
 }
 
 fn report(name: &str, started: Instant) {
-    let mut report = format!("{name}: still running after {CHECK_DEADLINE:?}\nits steps:\n");
+    let mut report = format!(
+        "{name}: failed or timed out after {:?}\nits steps:\n",
+        started.elapsed()
+    );
     // A lock that a stuck thread holds must not stop the report.
     match STEPS.try_lock_for(Duration::from_secs(1)) {
         Some(steps) => {

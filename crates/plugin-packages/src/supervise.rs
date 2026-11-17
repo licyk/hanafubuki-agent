@@ -11,8 +11,10 @@ use std::time::{Duration, Instant};
 
 use hanafubuki_agent_contracts::CancellationToken;
 use hanafubuki_agent_foundation::trace_content::bounded_trace_content;
+use hanafubuki_agent_host::GUEST_LOGGER_PREFIX;
 use kardia_core::{Fiber, FiberState};
 use kardia_hmr::{ExitCause, GuestExit, GuestHandle};
+use kardia_loader::Loader;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 
@@ -31,8 +33,7 @@ impl Shared {
     /// The package of a guest fiber of this host's loader.
     fn guest_of(&self, fiber: &Fiber) -> Option<String> {
         let mount = self.mount()?;
-        let entry = mount.loader.entry_of(fiber.context())?;
-        (entry.inner_fiber().as_ref() == Some(fiber)).then(|| entry.id())
+        guest_of(&mount.loader, fiber)
     }
 
     pub(crate) fn on_status(self: &Arc<Self>, fiber: &Fiber, state: FiberState) {
@@ -73,8 +74,6 @@ impl Shared {
                     log::info!("plugin {id}: its guest runs");
                     None
                 }
-                // A new fiber's first load is announced before its entry
-                // holds it, so the next start's begins here.
                 FiberState::Disposed => {
                     if record.state != GuestState::Blocked {
                         record.state = GuestState::Stopped;
@@ -198,6 +197,24 @@ impl Shared {
         restart_fiber(&restart.fiber).await;
     }
 }
+
+fn guest_of(loader: &Loader, fiber: &Fiber) -> Option<String> {
+    let entry = loader.entry_of(fiber.context())?;
+    let id = entry.id();
+    match entry.inner_fiber() {
+        Some(current) if current == *fiber => return Some(id),
+        Some(current) if !current.is_removed() => return None,
+        _ => {}
+    }
+    // Loading is synchronous, and even Active can arrive before the loader
+    // stores inner_fiber. The definition's own name also excludes loader
+    // wrappers and guest children, whose Fiber::name() can inherit this name.
+    let name = format!("{GUEST_LOGGER_PREFIX}{id}");
+    (fiber.def()?.plugin_name() == Some(name.as_str())).then_some(id)
+}
+
+#[cfg(test)]
+mod tests;
 
 /// The guest host's worker: it applies the packages once the loader runs,
 /// then runs each restart after its delay, until the guest host stops
