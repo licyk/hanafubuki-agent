@@ -40,7 +40,13 @@ pub fn execution_plugin(executions: AgentExecutionService) -> PluginDef {
             // Agent threads: a panicking monitor ends only itself.
             let workers = BackgroundWorkerGroup::contained();
             let command_timeout_ms = Arc::new(AtomicU64::new(options.command_timeout_ms()));
+            let shell_environment = Arc::new(parking_lot::RwLock::new(
+                options
+                    .shell_environment()
+                    .map_err(kardia_core::Error::msg)?,
+            ));
             let services = ExecServices {
+                shell_environment: shell_environment.clone(),
                 executions,
                 workers: workers.clone(),
                 blocking: blocking.clone(),
@@ -48,6 +54,10 @@ pub fn execution_plugin(executions: AgentExecutionService) -> PluginDef {
             };
             let updated = command_timeout_ms.clone();
             ctx.on_update(move |options: &ExecutionOptions| {
+                let Ok(environment) = options.shell_environment() else {
+                    return false;
+                };
+                *shell_environment.write() = environment;
                 updated.store(options.command_timeout_ms(), Ordering::Relaxed);
                 true
             })?;

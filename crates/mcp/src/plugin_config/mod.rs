@@ -76,6 +76,7 @@ struct LegacyServer {
     command: Option<String>,
     args: Option<Vec<String>>,
     env: Option<BTreeMap<String, String>>,
+    env_vars: Option<Vec<String>>,
     cwd: Option<String>,
     url: Option<String>,
     #[serde(alias = "headers")]
@@ -145,6 +146,7 @@ fn legacy_server(
                 .map(|(name, value)| (name, placeholders.expand(&value))),
         );
         McpTransportConfig::Stdio(McpStdioConfig {
+            environment_variables: server.env_vars.unwrap_or_default(),
             program,
             argv: server
                 .args

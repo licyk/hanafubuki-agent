@@ -101,6 +101,15 @@ fn fields() -> Vec<SettingSpec> {
         },
         SettingSpec {
             visible_if: on(STDIO),
+            summary: "Additional names inherited from the Agent process".into(),
+            ..SettingSpec::new(
+                "transport.environmentVariables",
+                "Inherited environment names",
+                list.clone(),
+            )
+        },
+        SettingSpec {
+            visible_if: on(STDIO),
             summary: "Each NAME=VALUE; a secret one is in MCP secrets".into(),
             ..SettingSpec::new("transport.publicEnvironment", "Environment", list.clone())
         },
@@ -366,6 +375,7 @@ fn with_both_transports(
         "program": "",
         "argv": [],
         "cwd": null,
+        "environmentVariables": [],
         "publicEnvironment": {},
         "credentialEnvironment": {},
         "url": "",

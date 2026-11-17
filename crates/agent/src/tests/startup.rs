@@ -521,6 +521,7 @@ fn silent_mcp_server(timeout_seconds: u64) -> hanafubuki_agent_mcp::McpServerCon
         protocol_mode: hanafubuki_agent_mcp::McpProtocolMode::Legacy,
         transport: hanafubuki_agent_mcp::McpTransportConfig::Stdio(
             hanafubuki_agent_mcp::McpStdioConfig {
+                environment_variables: Vec::new(),
                 program: "sleep".into(),
                 argv: vec!["300".into()],
                 cwd: None,

@@ -13,7 +13,7 @@ use hanafubuki_agent_approval::{
 use hanafubuki_agent_process::executor::ExecutorIoMode;
 use serde::Serialize;
 
-use crate::environment::build_clean_command_environment;
+use crate::environment::build_command_environment;
 use crate::model::{AgentExecutionError, ResolvedCommandPlan, StartCommandRequest};
 use crate::resolver::{
     canonical_directory, resolve_executable, utf8_path, validate_execution_origin,
@@ -63,7 +63,7 @@ pub fn prepare_command(
 ) -> Result<PreparedCommand, AgentExecutionError> {
     validate_request(request)?;
     let cwd = canonical_directory(request.cwd.as_deref().unwrap_or_else(|| Path::new(".")))?;
-    let environment = build_clean_command_environment(&request.environment)?;
+    let environment = build_command_environment(&request.environment)?;
     let program = resolve_executable(&request.argv[0], &cwd, &environment)?;
     let program_text = utf8_path(&program, "resolved executable")?;
     let cwd_text = utf8_path(&cwd, "resolved working directory")?;

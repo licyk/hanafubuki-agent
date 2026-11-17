@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
+use crate::ShellEnvironment;
 use hanafubuki_agent_foundation::environment::validate_native_environment;
+use hanafubuki_agent_foundation::environment_policy::{current_environment, insert};
 
 use crate::AgentExecutionError;
 
@@ -12,7 +14,8 @@ const UNIX_DEFAULT_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
 /// its output with escape sequences; and Python in UTF-8, which on Windows
 /// otherwise writes a pipe in the ANSI code page. A request's own environment
 /// overrides them.
-const NON_INTERACTIVE_ENVIRONMENT: [(&str, &str); 11] = [
+const NON_INTERACTIVE_ENVIRONMENT: [(&str, &str); 12] = [
+    ("CODEX_CI", "1"),
     ("NO_COLOR", "1"),
     ("TERM", "dumb"),
     ("LANG", "C.UTF-8"),
@@ -26,17 +29,32 @@ const NON_INTERACTIVE_ENVIRONMENT: [(&str, &str); 11] = [
     ("PYTHONIOENCODING", "utf-8"),
 ];
 
-/// Builds the complete environment for an Agent command without inheriting the
-/// desktop process environment at spawn time.
-pub(crate) fn build_clean_command_environment(
+pub(crate) const RUNTIME_IDENTITY_KEYS: &[&str] = &[
+    "HANAFUBUKI_AGENT_SESSION_ID",
+    "HANAFUBUKI_AGENT_TURN_ID",
+    "HANAFUBUKI_AGENT_TOOL_CALL_ID",
+    "HANAFUBUKI_AGENT_PERMISSION_MODE",
+];
+
+/// Captures the parent's environment before approval, then applies the command
+/// defaults and overrides. Spawn installs this snapshot without inheriting again.
+#[cfg(any(test, feature = "test-support"))]
+pub(crate) fn build_command_environment(
     overrides: &BTreeMap<String, String>,
 ) -> Result<BTreeMap<String, String>, AgentExecutionError> {
-    let mut environment = BTreeMap::new();
-    for key in platform_allowlist() {
-        if let Some((actual, value)) = read_environment_case_aware(key) {
-            environment.insert(actual, value);
-        }
-    }
+    build_environment_from(
+        current_environment(),
+        &ShellEnvironment::default(),
+        overrides,
+    )
+}
+
+pub(crate) fn build_environment_from(
+    inherited: BTreeMap<String, String>,
+    settings: &ShellEnvironment,
+    overrides: &BTreeMap<String, String>,
+) -> Result<BTreeMap<String, String>, AgentExecutionError> {
+    let mut environment = settings.policy.apply(inherited);
     if !contains_key_case_aware(&environment, "PATH") {
         environment.insert("PATH".to_string(), platform_default_path(&environment));
     }
@@ -44,9 +62,45 @@ pub(crate) fn build_clean_command_environment(
         remove_key_case_aware(&mut environment, key);
         environment.insert(key.to_string(), value.to_string());
     }
+    #[cfg(windows)]
+    if !contains_key_case_aware(&environment, "PATHEXT") {
+        environment.insert("PATHEXT".into(), ".COM;.EXE;.BAT;.CMD".into());
+    }
     for (key, value) in overrides {
         remove_key_case_aware(&mut environment, key);
         environment.insert(key.clone(), value.clone());
+    }
+    for key in RUNTIME_IDENTITY_KEYS {
+        remove_key_case_aware(&mut environment, key);
+    }
+    insert(
+        &mut environment,
+        "HANAFUBUKI_AGENT_VERSION".into(),
+        env!("CARGO_PKG_VERSION").into(),
+    );
+    if let Some(context) = &settings.context {
+        insert(
+            &mut environment,
+            "HANAFUBUKI_AGENT_SESSION_ID".into(),
+            context.session_id.to_string(),
+        );
+        insert(
+            &mut environment,
+            "HANAFUBUKI_AGENT_TURN_ID".into(),
+            context.turn_id.to_string(),
+        );
+        insert(
+            &mut environment,
+            "HANAFUBUKI_AGENT_TOOL_CALL_ID".into(),
+            context.tool_call_id.clone(),
+        );
+        if let Some(mode) = &context.permission_mode {
+            insert(
+                &mut environment,
+                "HANAFUBUKI_AGENT_PERMISSION_MODE".into(),
+                mode.clone(),
+            );
+        }
     }
     validate_native_environment(
         environment
@@ -69,44 +123,7 @@ fn platform_default_path(environment: &BTreeMap<String, String>) -> String {
         .find(|(key, _)| key.eq_ignore_ascii_case("SYSTEMROOT"))
         .map(|(_, value)| value.as_str())
         .unwrap_or(r"C:\Windows");
-    format!(r"{root}\System32;{root}")
-}
-
-/// The system's variables, not the user's (D17): what Windows PowerShell's
-/// module autoload, git's global configuration and npm's cache read.
-#[cfg(windows)]
-fn platform_allowlist() -> &'static [&'static str] {
-    &[
-        "PATH",
-        "PATHEXT",
-        "SYSTEMROOT",
-        "WINDIR",
-        "COMSPEC",
-        "TEMP",
-        "TMP",
-        "USERPROFILE",
-        "APPDATA",
-        "LOCALAPPDATA",
-        "ProgramData",
-        "ProgramFiles",
-        "ProgramFiles(x86)",
-        "SystemDrive",
-        "HOMEDRIVE",
-        "HOMEPATH",
-        "PSModulePath",
-        "PROCESSOR_ARCHITECTURE",
-        "NUMBER_OF_PROCESSORS",
-        "OS",
-    ]
-}
-
-#[cfg(not(windows))]
-fn platform_allowlist() -> &'static [&'static str] {
-    &["PATH", "TMPDIR"]
-}
-
-fn read_environment_case_aware(name: &str) -> Option<(String, String)> {
-    std::env::vars().find(|(key, _)| environment_key_eq(key, name))
+    format!(r"{root}\System32;{root};{root}\System32\WindowsPowerShell\v1.0")
 }
 
 fn contains_key_case_aware(environment: &BTreeMap<String, String>, name: &str) -> bool {

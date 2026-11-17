@@ -267,6 +267,7 @@ fn command(cmd: &str, origin: ToolCallOrigin, progress: Arc<RecordingProgress>) 
         },
         arguments: json!({
             "cmd": cmd,
+            "login": false,
             "yield_time_ms": 1,
             "workdir": std::env::current_dir().unwrap(),
         }),
@@ -325,6 +326,54 @@ async fn a_command_takes_the_timeout_at_its_call_and_a_change_restarts_nothing()
     assert_ne!(
         first.digest, next.digest,
         "the approval is of the timeout too"
+    );
+    mounted.root.fiber().dispose().await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn environment_options_update_in_place_and_calls_receive_runtime_identity() {
+    let mounted = mount_with(json!({
+        "environmentInherit": "none",
+        "environmentSet": ["HB_OPTION=first", "HB_DROP=removed"],
+        "environmentIncludeOnly": ["HB_OPTION"],
+    }))
+    .await;
+    let tool = mounted.exec_command();
+    let progress = Arc::new(RecordingProgress::default());
+    mounted
+        .run(command("serve", ToolCallOrigin::Model, progress.clone()))
+        .await;
+    let starts = mounted.process.starts();
+    assert_eq!(starts[0].env["HB_OPTION"].as_deref(), Some("first"));
+    assert!(!starts[0].env.contains_key("HB_DROP"));
+    assert_eq!(
+        starts[0].env["HANAFUBUKI_AGENT_TOOL_CALL_ID"].as_deref(),
+        Some("call-1")
+    );
+    assert!(starts[0].env.contains_key("HANAFUBUKI_AGENT_SESSION_ID"));
+    mounted
+        .fiber
+        .update(json!({
+            "environmentInherit": "unfiltered",
+            "environmentIgnoreDefaultExcludes": false,
+            "environmentExclude": ["*"],
+            "environmentIncludeOnly": ["HB_OPTION"],
+            "environmentSet": ["HB_OPTION=second", "HB_DROP=restored"],
+        }))
+        .unwrap()
+        .await
+        .unwrap();
+    assert!(Arc::ptr_eq(&tool, &mounted.exec_command()));
+    mounted
+        .run(command("serve", ToolCallOrigin::Model, progress))
+        .await;
+    assert_eq!(
+        mounted.process.starts()[1].env["HB_OPTION"].as_deref(),
+        Some("second")
+    );
+    assert_eq!(
+        mounted.process.starts()[1].env["HB_DROP"].as_deref(),
+        Some("restored")
     );
     mounted.root.fiber().dispose().await.unwrap();
 }

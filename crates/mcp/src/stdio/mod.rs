@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, Arc};
 use std::time::Duration;
@@ -64,6 +64,7 @@ impl McpResolvedSecretEnvironment {
 }
 
 mod connection;
+mod environment;
 mod process;
 mod transport;
 mod worker;

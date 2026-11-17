@@ -29,6 +29,7 @@ const STDIO_TRANSPORT_FIELDS: &[JsonField] = &[
     JsonField::new("program", &OPAQUE_JSON_SHAPE),
     JsonField::new("argv", &OPAQUE_JSON_SHAPE),
     JsonField::new("cwd", &OPAQUE_JSON_SHAPE),
+    JsonField::new("environmentVariables", &OPAQUE_JSON_SHAPE),
     JsonField::new("publicEnvironment", &OPAQUE_JSON_SHAPE),
     JsonField::new("credentialEnvironment", &OPAQUE_JSON_SHAPE),
 ];
@@ -320,6 +321,7 @@ fn fill_server_defaults(value: &mut Value) {
     let defaults = match transport.get("type").and_then(Value::as_str) {
         Some("stdio") => json!({
             "argv": [],
+            "environmentVariables": [],
             "publicEnvironment": {},
             "credentialEnvironment": {},
         }),

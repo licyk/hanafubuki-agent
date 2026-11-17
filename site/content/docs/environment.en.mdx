@@ -22,17 +22,53 @@ The Agent itself reads neither `RUST_LOG` nor `NO_COLOR`: the log level is `logL
 
 ## The environment of commands and terminals [#commands]
 
-The commands the model runs through its tools do not inherit the Agent process's environment. They get a clean one:
+By default, commands and terminals inherit the Agent process's UTF-8 environment, matching Codex's default `inherit = "all"` behavior. The execution plugin can select and filter it as described below. The command plan captures it before approval; spawning installs that snapshot instead of inheriting again. On top of it:
 
-- Of the Agent's environment, only `PATH` and `TMPDIR`. On Windows, the system's variables, not the user's: `PATH`, `PATHEXT`, `SYSTEMROOT`, `WINDIR`, `COMSPEC`, `TEMP`, `TMP`, `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `ProgramData`, `ProgramFiles`, `ProgramFiles(x86)`, `SystemDrive`, `HOMEDRIVE`, `HOMEPATH`, `PSModulePath`, `PROCESSOR_ARCHITECTURE`, `NUMBER_OF_PROCESSORS` and `OS`, which Windows PowerShell's modules, git's global configuration and npm's cache need.
-- So that a command neither waits on a pager nor fills its output with escape sequences: `NO_COLOR=1`, `TERM=dumb`, `LANG`, `LC_CTYPE` and `LC_ALL` set to `C.UTF-8`, `COLORTERM` empty, and `PAGER`, `GIT_PAGER` and `GH_PAGER` set to `cat`.
+- So that a command neither waits on a pager nor fills its output with escape sequences: `CODEX_CI=1`, `NO_COLOR=1`, `TERM=dumb`, `LANG`, `LC_CTYPE` and `LC_ALL` set to `C.UTF-8`, `COLORTERM` empty, and `PAGER`, `GIT_PAGER` and `GH_PAGER` set to `cat`.
 - So that Python writes UTF-8, on Windows too: `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8`. How the other shells' output is kept UTF-8 is in [Tools](/docs/tools#commands).
-- The proxy variables `network.proxy` decides.
+- A command's explicit environment overrides the inherited values and the non-interactive defaults. The host's final overlay, including the proxy variables `network.proxy` decides, has the last word.
 - For a [POSIX shell on Windows](/docs/tools#commands) (Git for Windows' or MSYS2's bash), what it needs to run like one: the shell's directory (`usr\bin`, where `ls` and the other MSYS programs are) first on `PATH`, since a shell that is not a login shell keeps the `PATH` it is given; `CHERE_INVOKING=1`, without which MSYS2's login shell changes to `$HOME`; `MSYS2_PATH_TYPE=inherit`, without which MSYS2's login shell keeps only the system directories of the Windows `PATH` (Git for Windows' keeps it all by default); and, when the Agent itself runs in an MSYS2 or Git Bash shell, its `MSYSTEM`. A variable the command already has is left as it is.
 
-So a variable you set in your shell (an API token, a proxy) does not reach the commands the model runs.
+With the default policy, variables set before starting the Agent, including proxy settings, `HOME`, and API tokens, reach its commands. Names and values that cannot be represented as UTF-8 are omitted. Changing the launching shell's environment after the Agent starts does not change the Agent's environment.
 
-stdio MCP servers differ: they inherit the Agent process's whole environment, plus the variables `mcp.toml` gives them, and then the proxy variables `network.proxy` decides, which win over both. A proxy change starts them anew under the new proxy.
+### Selection and filtering [#selection]
+
+The settings live in `[pluginOptions.execution]` of the user's global configuration. Every option below is editable in `/config → Plugins → execution`, or directly through `/config pluginOptions.execution`. Saving writes the user's `config.toml` and affects subsequent commands; the settings center reports higher-priority overrides.
+
+```toml
+[pluginOptions.execution]
+environmentInherit = "all" # all, core, none, unfiltered
+environmentIgnoreDefaultExcludes = true
+environmentExclude = ["PRIVATE_*"]
+environmentSet = ["APP_MODE=development"]
+environmentIncludeOnly = []
+shellUseProfile = false
+shellSnapshot = true
+```
+
+Set **Inherited environment** to **unfiltered** (`environmentInherit = "unfiltered"`) to inherit every usable UTF-8 variable from the Agent's current process, bypassing the default sensitive-name filter, `environmentExclude` and `environmentIncludeOnly`. Saved filters remain intact and resume when switching back to `all`, `core` or `none`. `environmentSet`, non-interactive defaults, command overrides, runtime identity and the proxy overlay still apply in the order below; other features can still add or override variables automatically. This mode does not change the separate local stdio MCP inheritance list.
+
+For the other modes, the order is inheritance → optional default exclusion → `environmentExclude` → `environmentSet` → `environmentIncludeOnly`. Patterns are case-insensitive; `*` matches any number of characters and `?` one. An empty include list does not filter. `core` keeps platform basics (paths, home/user, temporary directories, locale and Windows system variables); `none` starts empty. `environmentIgnoreDefaultExcludes = false` excludes inherited names matching `*KEY*`, `*SECRET*` and `*TOKEN*`. Explicit `environmentSet` entries can restore an excluded name, but the include list still applies. Setting changes apply to subsequent calls without restarting running commands.
+
+Non-interactive defaults, command-specific overrides and runtime identity follow the selection policy; the host's final proxy overlay follows them. A missing `PATH` receives the platform fallback, and a missing Windows `PATHEXT` receives `.COM;.EXE;.BAT;.CMD`. The existing Python and MSYS adjustments remain.
+
+### Shell startup [#shell-startup]
+
+On Unix, the Agent prefers the supported shell named by `SHELL` (`bash`, `zsh`, `sh` or `dash`), then tries bash and sh. With `shellSnapshot = true` and a login POSIX command, the first approved command captures startup state using an Agent-owned process under the command's sandbox. Subsequent commands in that session reuse its functions, aliases, options and selected exports. Bash/zsh capture also loads the interactive rc file. `login = false` bypasses snapshots. PowerShell uses `-NoProfile` unless `shellUseProfile = true`; its UTF-8 setup still runs.
+
+Snapshots stay in memory and are discarded on shutdown or session terminal cleanup. A changed working directory, shell, environment policy, explicit environment, sandbox or host proxy overlay invalidates the cache. Capture has a 10-second timeout; a failed, truncated or oversized capture falls back to ordinary shell startup. A snapshot's state is limited to 64 KiB and its capture to 256 KiB. No profile exports are written to snapshot files or conversation history. This cache does not preserve changes made by individual commands: an `export` in one command does not update the next command's environment.
+
+### Runtime identity [#runtime-identity]
+
+The execution plugin supplies `HANAFUBUKI_AGENT_SESSION_ID`, `HANAFUBUKI_AGENT_TURN_ID`, `HANAFUBUKI_AGENT_TOOL_CALL_ID`, `HANAFUBUKI_AGENT_VERSION` and, when supplied by the turn, `HANAFUBUKI_AGENT_PERMISSION_MODE`. These values override inherited and configured names after filtering; a caller without invocation context has no stale session or call identity. They describe the invocation, not proof of sandbox enforcement. Embedded users of `AgentExecutionService` provide `ExecCommandRequest.shell_environment`, including its optional typed `context`.
+
+### Local stdio MCP [#stdio-mcp]
+
+Edit a server in the global settings' **MCP servers** collection (or `/mcp`) to change **Inherited environment names**, public variables and credential references. These are saved to the user's `mcp.toml`.
+
+Local stdio MCP servers inherit a basic environment, not the shell policy: on Unix, `HOME`, `LOGNAME`, `PATH`, `SHELL`, `USER`, `__CF_USER_TEXT_ENCODING`, `LANG`, `LC_ALL`, `TERM`, `TMPDIR` and `TZ`; on Windows, the core platform variables. Add names to `transport.environmentVariables` to inherit them explicitly. Configured `publicEnvironment` and resolved `credentialEnvironment` values override inheritance; the host's proxy overlay has final priority. Common certificate variables (`SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`, `NODE_EXTRA_CA_CERTS`, `GIT_SSL_CAINFO`, `CARGO_HTTP_CAINFO`, `PIP_CERT`, `BUNDLE_SSL_CA_CERT`, and npm's `cafile` variables) are also inherited, with relative paths resolved before changing to the server's working directory. A legacy plugin's `env_vars` supplies the same inherited-name list.
+
+With `network.proxy = "system"`, explicitly list the proxy variables a server needs; they are not in the basic MCP environment. A proxy change restarts enabled servers under the new overlay.
 
 ## Proxy variables [#proxy]
 
@@ -40,7 +76,7 @@ stdio MCP servers differ: they inherit the Agent process's whole environment, pl
 
 | `network.proxy`      | What commands, terminals and stdio MCP servers get                                                 |
 | -------------------- | -------------------------------------------------------------------------------------------------- |
-| `"system"` (default) | No proxy variable (a stdio MCP server keeps those of the Agent's environment)                      |
+| `"system"` (default) | Preserve inherited proxy variables and explicit command or MCP environment values                  |
 | A proxy URL          | `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` set to the URL, and `NO_PROXY=localhost,127.0.0.1,::1` |
 | `"disabled"`         | `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` removed, and `NO_PROXY=localhost,127.0.0.1,::1`        |
 

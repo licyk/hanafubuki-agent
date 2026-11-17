@@ -91,7 +91,7 @@ fn native_platform_smoke_runs_reads_and_confirmed_disposes_a_real_process() {
 }
 
 #[test]
-fn clean_environment_is_allowlisted_and_approval_is_bound_to_the_exact_plan() {
+fn environment_is_inherited_and_approval_is_bound_to_the_exact_plan() {
     let process = FakeAgentExecutionProcessPort::shared();
     let service = AgentExecutionService::with_process_port(process.clone());
     let request = command_request();
@@ -104,9 +104,16 @@ fn clean_environment_is_allowlisted_and_approval_is_bound_to_the_exact_plan() {
             &CancellationToken::default(),
         )
         .unwrap();
-    let clean = &process.starts()[0].env;
-    assert!(clean.keys().any(|key| key.eq_ignore_ascii_case("PATH")));
-    assert!(!clean.contains_key("CARGO_PKG_NAME"));
+    let environment = &process.starts()[0].env;
+    assert!(environment
+        .keys()
+        .any(|key| key.eq_ignore_ascii_case("PATH")));
+    assert_eq!(
+        environment
+            .get("CARGO_PKG_NAME")
+            .and_then(|value| value.as_deref()),
+        std::env::var("CARGO_PKG_NAME").ok().as_deref()
+    );
 
     let process = FakeAgentExecutionProcessPort::shared();
     let service = AgentExecutionService::with_process_port(process.clone());

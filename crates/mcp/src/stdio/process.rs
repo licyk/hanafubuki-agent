@@ -17,17 +17,29 @@ impl McpStdioProcess {
         manager: Arc<ExecutorManager>,
         workers: BackgroundWorkerGroup,
     ) -> Result<(Arc<Self>, McpExecutorTransport), McpError> {
-        let mut environment = config
-            .public_environment
-            .iter()
-            .map(|(name, value)| (name.clone(), Some(value.clone())))
-            .collect::<HashMap<_, _>>();
+        let mut environment = super::environment::inherited(config)?;
+        for (name, value) in &config.public_environment {
+            if cfg!(windows) {
+                environment.retain(|key, _| !key.eq_ignore_ascii_case(name));
+            }
+            environment.insert(name.clone(), Some(value.clone()));
+        }
         for (name, value) in secrets.0 {
-            if environment.insert(name, Some(value)).is_some() {
+            if config.public_environment.keys().any(|key| {
+                if cfg!(windows) {
+                    key.eq_ignore_ascii_case(&name)
+                } else {
+                    key == &name
+                }
+            }) {
                 return Err(McpError::InvalidConfig(
                     "public and secret environment entries overlap".into(),
                 ));
             }
+            if cfg!(windows) {
+                environment.retain(|key, _| !key.eq_ignore_ascii_case(&name));
+            }
+            environment.insert(name, Some(value));
         }
         let inherited_path = std::env::var_os("PATH");
         let configured_path = environment.iter().find_map(|(name, value)| {
@@ -54,7 +66,7 @@ impl McpStdioProcess {
             executor_id: Some(executor_id),
             command,
             cwd: config.cwd.clone(),
-            environment_inheritance: EnvironmentInheritance::Inherit,
+            environment_inheritance: EnvironmentInheritance::Clear,
             env: environment,
             io_mode: ExecutorIoMode::Pipe,
             stream_stdin: true,

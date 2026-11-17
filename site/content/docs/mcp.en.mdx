@@ -109,6 +109,7 @@ The facade's MCP snapshot lists them as `pluginServers`, each with its plugin, i
   </Tab>
 </Tabs>
 
+- stdio inherits a basic platform environment. `transport.environmentVariables` lists additional names to inherit; configured public and secret values override them. See [Environment](/docs/environment#stdio-mcp).
 - Variables and headers that are not secret go in `publicEnvironment` and `publicHeaders`.
 - When you change a credential's value, raise its `generation` by one.
 - A server that refers to a credential key that does not exist cannot connect.
@@ -194,6 +195,18 @@ hanafubuki-agent doctor --online      # connects each enabled server and reports
 ## Resources [#resources]
 
 A server's resources are read with `list_mcp_resources`, `list_mcp_resource_templates` and `read_mcp_resource`, which need no approval.
+
+| Tool                          | Arguments and result                                                                                 |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `list_mcp_resources`          | Optional `server` and `cursor`; returns `resources`, an array of server pages                        |
+| `list_mcp_resource_templates` | The same arguments; returns `resourceTemplates` for resources whose URI parameters must be filled in |
+| `read_mcp_resource`           | Required `server` and exact `uri`; returns the content from that server                              |
+
+Without `server`, a listing queries the servers bound to the current model step. Each page has `server`, `items` and `nextCursor`. To continue, pass that page's opaque `nextCursor` as `cursor` together with its `server`; a cursor without a server is refused. Continue each server independently, without interpreting or rebuilding its cursor.
+
+A failed optional server appears in `failures` while successful pages remain available; a required server's failure fails the call. Large listings may omit items to fit the model's output budget: check `truncated`, `omittedItems` and `warning` before treating the list as complete. Query a named server to narrow the result, and follow its cursor when available.
+
+Resource URIs and template descriptions are server-provided metadata. A read routes the URI only to the named MCP connection captured for this step; even a `file:` or `https:` URI is not opened as a local file or fetched separately by the Agent. For connection, OAuth and elicitation controls in an embedded application, see [MCP management](/docs/embedding#mcp-management).
 
 ## MCP and memory [#memory]
 

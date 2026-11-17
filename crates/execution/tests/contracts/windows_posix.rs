@@ -143,6 +143,7 @@ fn request(flavour: Flavour, script: &str, login: bool, tty: bool) -> ExecComman
         max_output_bytes: None,
         timeout_ms: 600_000,
         workdir: Some(std::env::current_dir().unwrap()),
+        shell_environment: Default::default(),
         environment: flavour.environment(),
         origin: ApprovalOrigin::Model,
         sandbox: SandboxSettings::full_access(),

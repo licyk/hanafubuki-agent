@@ -194,9 +194,11 @@ async fn the_command_timeout_is_the_execution_plugins_option() {
         .find(|section| section.id == "pluginOptions.execution")
         .unwrap();
     assert_eq!(section.group, SettingsGroup::Plugins);
-    let [spec] = section.settings.as_slice() else {
-        panic!("one option: {:?}", section.settings);
-    };
+    let spec = section
+        .settings
+        .iter()
+        .find(|spec| spec.key == "pluginOptions.execution.commandTimeoutMinutes")
+        .unwrap();
     assert_eq!(
         (spec.key.as_str(), spec.label.as_str()),
         (
@@ -617,6 +619,7 @@ async fn an_mcp_server_is_added_saved_and_deleted() {
                 "enabled": false,
                 "transport.program": "demo-server",
                 "transport.argv": ["serve"],
+                "transport.environmentVariables": ["HTTP_PROXY", "EXTRA_PATH"],
                 "transport.publicEnvironment": ["MODE=fast"],
                 "toolApprovalPolicies": ["search=ask"],
                 "toolMaximumConcurrentCalls": ["search=2"],
@@ -629,6 +632,7 @@ async fn an_mcp_server_is_added_saved_and_deleted() {
         panic!("a stdio server");
     };
     assert_eq!(stdio.public_environment["MODE"], "fast");
+    assert_eq!(stdio.environment_variables, ["HTTP_PROXY", "EXTRA_PATH"]);
     assert_eq!(
         server.tool_approval_policies["search"],
         McpApprovalPolicy::Ask

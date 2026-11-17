@@ -59,6 +59,10 @@ impl AgentExecutionService {
         &self,
         scope: &AgentExecutionScope,
     ) -> AgentBackgroundTerminalStopOutcome {
+        self.inner
+            .shell_snapshots
+            .lock()
+            .remove(&scope.session_id());
         let identities = {
             let registry = self.inner.registry.lock();
             registry

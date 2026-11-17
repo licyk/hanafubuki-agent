@@ -135,8 +135,61 @@ fn execution_option_schema() -> PluginOptionSchema {
                     maximum: Some(maximum as i64),
                 },
             )
-        }],
+        }]
+        .into_iter()
+        .chain(execution_environment_options())
+        .collect(),
     }
+}
+
+fn execution_environment_options() -> Vec<SettingSpec> {
+    use hanafubuki_agent_foundation::settings::SettingChoice;
+    let mut options = vec![SettingSpec {
+        summary: "unfiltered inherits every UTF-8 environment variable without filtering; explicit values and automatic additions still apply".into(),
+        default: Some(SettingValue::Text("all".into())),
+        ..SettingSpec::new(
+            "environmentInherit",
+            "Inherited environment",
+            SettingKind::Choice {
+                values: ["all", "core", "none", "unfiltered"]
+                    .into_iter()
+                    .map(|value| SettingChoice::new(value, value))
+                    .collect(),
+            },
+        )
+    }];
+    for (key, label, default) in [
+        (
+            "environmentIgnoreDefaultExcludes",
+            "Keep KEY, SECRET and TOKEN variables",
+            true,
+        ),
+        ("shellUseProfile", "Load PowerShell profiles", false),
+        ("shellSnapshot", "Reuse POSIX shell startup state", true),
+    ] {
+        options.push(SettingSpec {
+            default: Some(SettingValue::Boolean(default)),
+            ..SettingSpec::new(key, label, SettingKind::Boolean)
+        });
+    }
+    for (key, label) in [
+        ("environmentExclude", "Exclude environment patterns"),
+        ("environmentIncludeOnly", "Keep only environment patterns"),
+        ("environmentSet", "Environment overrides (NAME=VALUE)"),
+    ] {
+        options.push(SettingSpec {
+            default: Some(SettingValue::TextList(Vec::new())),
+            ..SettingSpec::new(
+                key,
+                label,
+                SettingKind::TextList {
+                    maximum_items: None,
+                    maximum_item_chars: None,
+                },
+            )
+        });
+    }
+    options
 }
 
 /// Every row's descriptor, by name.

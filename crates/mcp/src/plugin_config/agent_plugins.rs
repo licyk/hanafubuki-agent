@@ -212,6 +212,7 @@ fn stdio(server: StdioServer, roots: &Roots) -> Result<McpTransportConfig, Strin
         );
     };
     Ok(McpTransportConfig::Stdio(McpStdioConfig {
+        environment_variables: Vec::new(),
         program,
         argv: args.iter().map(|argument| roots.expand(argument)).collect(),
         cwd: Some(cwd),

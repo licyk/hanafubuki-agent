@@ -41,6 +41,7 @@ async fn live_hoshimi_discovers_and_calls_default_mcp_tools() {
         let mut config = serde_json::to_value(McpServerDefaults::default()).unwrap();
         config["id"] = json!("filesystem");
         config["transport"] = json!(McpTransportConfig::Stdio(McpStdioConfig {
+            environment_variables: Vec::new(),
             program: "node".into(),
             argv: vec![
                 entry.clone(),

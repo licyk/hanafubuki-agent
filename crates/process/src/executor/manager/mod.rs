@@ -69,6 +69,10 @@ pub(crate) enum ProcessSupervision {
 }
 
 impl ExecutorManager {
+    pub fn environment_overlay(&self) -> std::collections::HashMap<String, Option<String>> {
+        self.child_process_environment.snapshot()
+    }
+
     pub fn new(child_process_environment: ChildProcessEnvironment) -> Self {
         Self {
             registry: Arc::new(Mutex::new(ExecutorRegistry::default())),

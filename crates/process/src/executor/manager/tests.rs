@@ -160,6 +160,38 @@ fn child_process_environment_wins_for_pipe_pty_and_cleared_inheritance() {
 }
 
 #[test]
+fn final_environment_overrides_follow_platform_case_rules() {
+    let environment = ChildProcessEnvironment::default();
+    environment
+        .replace(HashMap::from([
+            ("HTTP_PROXY".into(), Some("http://configured:8080".into())),
+            ("HTTPS_PROXY".into(), None),
+        ]))
+        .unwrap();
+    let manager = ExecutorManager::new(environment);
+    for mode in [
+        super::super::model::ExecutorIoMode::Pipe,
+        super::super::model::ExecutorIoMode::Pty,
+    ] {
+        let mut request = request(vec!["ignored".into()]);
+        request.io_mode = mode;
+        request.env = HashMap::from([
+            ("http_proxy".into(), Some("http://inherited:9000".into())),
+            ("https_proxy".into(), Some("http://inherited:9000".into())),
+        ]);
+        apply_child_process_environment(&manager, &mut request);
+        assert_eq!(
+            request.env["HTTP_PROXY"].as_deref(),
+            Some("http://configured:8080")
+        );
+        assert_eq!(request.env["HTTPS_PROXY"], None);
+        for key in ["http_proxy", "https_proxy"] {
+            assert_eq!(request.env.contains_key(key), !cfg!(windows));
+        }
+    }
+}
+
+#[test]
 fn independent_start_rejects_pty() {
     let manager = ExecutorManager::default();
     let mut pty = request(vec!["ignored".into()]);

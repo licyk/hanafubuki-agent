@@ -19,6 +19,7 @@ fn request(cmd: &str, timeout_ms: u64) -> ExecCommandRequest {
         max_output_bytes: None,
         timeout_ms,
         workdir: Some(std::env::current_dir().unwrap()),
+        shell_environment: Default::default(),
         environment: BTreeMap::new(),
         origin: ApprovalOrigin::Model,
         sandbox: SandboxSettings::full_access(),

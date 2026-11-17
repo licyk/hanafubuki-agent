@@ -110,6 +110,7 @@ for line in sys.stdin:
         protocol_mode: hanafubuki_agent_mcp::McpProtocolMode::Legacy,
         transport: hanafubuki_agent_mcp::McpTransportConfig::Stdio(
             hanafubuki_agent_mcp::McpStdioConfig {
+                environment_variables: Vec::new(),
                 program: "python3".into(),
                 argv: vec!["-u".into(), "-c".into(), fixture.into()],
                 cwd: None,

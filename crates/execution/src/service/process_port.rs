@@ -1,6 +1,9 @@
 use super::*;
 
 pub trait AgentExecutionProcessPort: Send + Sync {
+    fn environment_overlay(&self) -> HashMap<String, Option<String>> {
+        HashMap::new()
+    }
     fn reserve(
         &self,
         process_id: &str,
@@ -38,6 +41,9 @@ impl ExecutorAgentExecutionPort {
 }
 
 impl AgentExecutionProcessPort for ExecutorAgentExecutionPort {
+    fn environment_overlay(&self) -> HashMap<String, Option<String>> {
+        self.executor.environment_overlay()
+    }
     fn reserve(
         &self,
         process_id: &str,

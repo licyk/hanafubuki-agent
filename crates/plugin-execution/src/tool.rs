@@ -58,6 +58,8 @@ pub(crate) struct ExecServices {
     pub(crate) workers: BackgroundWorkerGroup,
     pub(crate) blocking: Arc<BlockingService>,
     pub(crate) command_timeout_ms: Arc<AtomicU64>,
+    pub(crate) shell_environment:
+        Arc<parking_lot::RwLock<hanafubuki_agent_execution::ShellEnvironment>>,
 }
 
 /// One execution tool. `exec_command` needs approval of the exact prepared
@@ -193,6 +195,18 @@ fn parse_call(
     let command_timeout_ms = services.command_timeout_ms.load(Ordering::Relaxed);
     let (mut call, notes) = parse(kind, &invocation.arguments, command_timeout_ms)?;
     if let ExecCall::ExecCommand(request) = &mut call {
+        request.shell_environment = services.shell_environment.read().clone();
+        request.shell_environment.context =
+            Some(hanafubuki_agent_execution::ExecutionEnvironmentContext {
+                session_id: invocation.context.session_id.value(),
+                turn_id: invocation.context.turn_id.value(),
+                tool_call_id: invocation.context.call_id.clone(),
+                permission_mode: invocation
+                    .turn
+                    .get::<hanafubuki_agent_approval::AgentPermissionMode>()
+                    .and_then(|mode| serde_json::to_value(mode).ok())
+                    .and_then(|value| value.as_str().map(str::to_owned)),
+            });
         if invocation.context.origin == ToolCallOrigin::User {
             request.origin = ApprovalOrigin::User;
         }
@@ -237,7 +251,7 @@ fn execute(
     match call {
         ExecCall::ExecCommand(request) => {
             let snapshot = executions
-                .start_exec_command(scope.clone(), request.clone(), approval, cancellation)
+                .start_exec_command(scope.clone(), (*request).clone(), approval, cancellation)
                 .map_err(|error| {
                     if let AgentExecutionError::CleanupRetained { execution_id, .. } = &error {
                         retain_cleanup(*execution_id, true);

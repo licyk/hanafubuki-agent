@@ -24,8 +24,10 @@ Each line has the id, the last update (local time), the model and the title, the
 - Only sessions without a parent are listed: a [child session](#children) is found under its parent.
 
 <Callout>
-  Every start of the terminal interface creates a session, even if you send no message. `sessions
-  list` shows these empty sessions; the resume picker hides them.
+  The terminal interface starts without a session. The first submitted message, or a command that
+  needs a session, creates one. `/new` and `/clear` return to this empty state without allocating
+  another session immediately. Empty sessions created through other entry points can still appear in
+  `sessions list`; the resume picker hides them.
 </Callout>
 
 ## Reading a session [#show]

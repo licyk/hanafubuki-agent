@@ -93,6 +93,7 @@ mod windows {
             timeout_ms: 600_000,
             workdir: None,
             environment,
+            shell_environment: Default::default(),
             origin: ApprovalOrigin::Model,
             sandbox: SandboxSettings {
                 mode: AgentSandboxMode::WorkspaceWrite,

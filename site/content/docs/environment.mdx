@@ -22,17 +22,53 @@ Agent 本身不读取 `RUST_LOG` 或 `NO_COLOR`：日志级别由 `logLevel` 和
 
 ## 命令和终端的环境 [#commands]
 
-模型通过工具运行的命令不会继承 Agent 进程的全部环境。它们只得到一个干净的环境：
+命令和终端默认继承 Agent 进程中可用的 UTF-8 环境变量，与 Codex 默认的 `inherit = "all"` 行为一致。命令计划在审批前捕获环境，启动时安装这份快照，不再重新继承。执行插件还可按下文配置选择和过滤环境。在此基础上：
 
-- 从 Agent 的环境中只保留 `PATH` 和 `TMPDIR`。Windows 上保留系统的变量，而不是用户的变量：`PATH`、`PATHEXT`、`SYSTEMROOT`、`WINDIR`、`COMSPEC`、`TEMP`、`TMP`、`USERPROFILE`、`APPDATA`、`LOCALAPPDATA`、`ProgramData`、`ProgramFiles`、`ProgramFiles(x86)`、`SystemDrive`、`HOMEDRIVE`、`HOMEPATH`、`PSModulePath`、`PROCESSOR_ARCHITECTURE`、`NUMBER_OF_PROCESSORS` 和 `OS`，Windows PowerShell 的模块、git 的全局配置和 npm 的缓存需要它们。
-- 为了不让命令等待分页器或输出控制字符，固定设置 `NO_COLOR=1`、`TERM=dumb`、`LANG`、`LC_CTYPE`、`LC_ALL` 为 `C.UTF-8`、`COLORTERM` 为空，以及 `PAGER`、`GIT_PAGER`、`GH_PAGER` 为 `cat`。
+- 为了不让命令等待分页器或输出控制字符，固定设置 `CODEX_CI=1`、`NO_COLOR=1`、`TERM=dumb`、`LANG`、`LC_CTYPE`、`LC_ALL` 为 `C.UTF-8`、`COLORTERM` 为空，以及 `PAGER`、`GIT_PAGER`、`GH_PAGER` 为 `cat`。
 - 为了让 Python 写出 UTF-8（Windows 上也是）：`PYTHONUTF8=1` 和 `PYTHONIOENCODING=utf-8`。其他 Shell 的输出如何保持 UTF-8，见[工具](/docs/tools#commands)。
-- 再加上由 `network.proxy` 决定的代理变量。
+- 命令显式指定的环境变量覆盖继承值和非交互默认值。宿主最后施加的覆盖层（包括由 `network.proxy` 决定的代理变量）优先级最高。
 - 对于 [Windows 上的 POSIX Shell](/docs/tools#commands)（Git for Windows 或 MSYS2 的 bash），加上它像 POSIX Shell 一样运行所需的变量：把 Shell 所在目录（`usr\bin`，`ls` 等 MSYS 程序所在的目录）放在 `PATH` 的最前面，因为非登录 Shell 原样使用得到的 `PATH`；`CHERE_INVOKING=1`，否则 MSYS2 的登录 Shell 会切换到 `$HOME`；`MSYS2_PATH_TYPE=inherit`，否则 MSYS2 的登录 Shell 只保留 Windows `PATH` 中的系统目录（Git for Windows 默认保留全部）；以及 Agent 本身运行在 MSYS2 或 Git Bash 的 Shell 中时，它的 `MSYSTEM`。命令已有的变量保持不变。
 
-因此，你在 Shell 中设置的变量（例如 API 令牌或代理）不会自动传给模型运行的命令。
+默认策略下，启动 Agent 前设置的代理、`HOME`、API 令牌等环境变量会传给命令。无法表示为 UTF-8 的变量名或值会被省略。Agent 启动后再修改启动 Shell 的环境，不会改变 Agent 已有的环境。
 
-stdio MCP 服务器不同：它们继承 Agent 进程的完整环境，再加上 `mcp.toml` 中为它们配置的变量，最后是由 `network.proxy` 决定的代理变量，后者优先于前两者。修改代理后，它们会在新代理下重新启动。
+### 选择与过滤 [#selection]
+
+配置位于用户全局配置的 `[pluginOptions.execution]`。在 `/config → Plugins → execution` 中可调整下列全部选项，也可用 `/config pluginOptions.execution` 直接定位。保存写入用户的 `config.toml`，对后续命令生效；存在更高优先级的配置覆盖时，设置中心会提示。
+
+```toml
+[pluginOptions.execution]
+environmentInherit = "all" # all、core、none、unfiltered
+environmentIgnoreDefaultExcludes = true
+environmentExclude = ["PRIVATE_*"]
+environmentSet = ["APP_MODE=development"]
+environmentIncludeOnly = []
+shellUseProfile = false
+shellSnapshot = true
+```
+
+将 **Inherited environment** 设为 **unfiltered**（`environmentInherit = "unfiltered"`），Shell 就会继承 Agent 当前进程中所有可用的 UTF-8 环境变量，跳过默认敏感变量过滤、`environmentExclude` 和 `environmentIncludeOnly`。原有过滤配置仍保留，切回 `all`、`core` 或 `none` 后恢复生效。`environmentSet`、非交互默认值、命令显式覆盖、运行时身份及代理覆盖仍按下述顺序应用，其他功能仍可自动补充或覆盖环境变量。此模式不改变本地 stdio MCP 的独立继承名单。
+
+其他模式的顺序为：继承 → 可选的默认排除 → `environmentExclude` → `environmentSet` → `environmentIncludeOnly`。模式不区分大小写，`*` 匹配任意数量字符，`?` 匹配一个字符；空的保留名单不做过滤。`core` 保留平台基础变量（路径、用户目录、临时目录、语言及 Windows 系统变量），`none` 从空环境开始。`environmentIgnoreDefaultExcludes = false` 会排除继承名称匹配 `*KEY*`、`*SECRET*`、`*TOKEN*` 的变量。显式的 `environmentSet` 可以恢复被排除的名称，但仍受保留名单限制。修改对后续调用生效，不重启已运行的命令。
+
+选择策略之后依次应用非交互默认值、命令显式覆盖和运行时身份，最后应用宿主的代理覆盖。缺少 `PATH` 时补上平台默认路径；Windows 缺少 `PATHEXT` 时补上 `.COM;.EXE;.BAT;.CMD`。原有 Python 和 MSYS 处理继续保留。
+
+### Shell 启动 [#shell-startup]
+
+Unix 优先选择 `SHELL` 指定且支持的 Shell（`bash`、`zsh`、`sh` 或 `dash`），随后尝试 bash 和 sh。`shellSnapshot = true` 时，首条获批的登录 POSIX 命令会通过 Agent 管理的进程，在该命令的沙箱中捕获启动状态；同一会话后续命令复用其中的函数、别名、选项及经过选择的导出变量。Bash/zsh 捕获时还会加载交互 rc 文件。`login = false` 跳过快照。PowerShell 默认使用 `-NoProfile`，`shellUseProfile = true` 时加载配置，原有 UTF-8 初始化仍然执行。
+
+快照仅保存在内存中，退出或清理会话终端时丢弃；工作目录、Shell、环境策略、显式环境、沙箱或宿主代理覆盖变化后缓存失效。捕获限时 10 秒，失败、截断或超过大小限制时回退到普通 Shell 启动。状态上限为 64 KiB，捕获输出上限为 256 KiB。配置导出的变量不会写入快照文件或对话历史。缓存不保存单条命令造成的环境变化：某次命令的 `export` 不会更新下一次命令的环境。
+
+### 运行时身份 [#runtime-identity]
+
+执行插件提供 `HANAFUBUKI_AGENT_SESSION_ID`、`HANAFUBUKI_AGENT_TURN_ID`、`HANAFUBUKI_AGENT_TOOL_CALL_ID`、`HANAFUBUKI_AGENT_VERSION`，以及轮次提供时的 `HANAFUBUKI_AGENT_PERMISSION_MODE`。这些值在过滤后覆盖继承及配置中的同名值；没有调用上下文时不会保留过期的会话或调用身份。它们用于描述调用，不能作为沙箱已生效的证明。直接嵌入 `AgentExecutionService` 的宿主通过 `ExecCommandRequest.shell_environment` 提供策略及可选的强类型 `context`。
+
+### 本地 stdio MCP [#stdio-mcp]
+
+在全局设置的 **MCP servers** 集合（或 `/mcp`）中编辑服务器，可调整 **Inherited environment names**、公开环境变量及凭据引用；保存到用户的 `mcp.toml`。
+
+本地 stdio MCP 继承基础环境，不使用 Shell 策略：Unix 保留 `HOME`、`LOGNAME`、`PATH`、`SHELL`、`USER`、`__CF_USER_TEXT_ENCODING`、`LANG`、`LC_ALL`、`TERM`、`TMPDIR` 和 `TZ`，Windows 保留平台核心变量。通过 `transport.environmentVariables` 指定额外继承的名称。`publicEnvironment` 和解析后的 `credentialEnvironment` 覆盖继承值，宿主代理覆盖优先级最高。常用证书变量（`SSL_CERT_FILE`、`REQUESTS_CA_BUNDLE`、`CURL_CA_BUNDLE`、`NODE_EXTRA_CA_CERTS`、`GIT_SSL_CAINFO`、`CARGO_HTTP_CAINFO`、`PIP_CERT`、`BUNDLE_SSL_CA_CERT` 及 npm 的 `cafile` 变量）也会继承，相对路径在切换到服务器工作目录前解析。旧格式插件的 `env_vars` 对应同一继承名单。
+
+使用 `network.proxy = "system"` 时，请在名单中列出 MCP 需要的代理变量；基础 MCP 环境不包含它们。修改代理会在新覆盖层下重新启动已启用的服务器。
 
 ## 代理变量 [#proxy]
 
@@ -40,7 +76,7 @@ stdio MCP 服务器不同：它们继承 Agent 进程的完整环境，再加上
 
 | `network.proxy`    | 命令、终端和 stdio MCP 服务器得到的变量                                                   |
 | ------------------ | ----------------------------------------------------------------------------------------- |
-| `"system"`（默认） | 不设置代理变量（stdio MCP 服务器保留 Agent 环境中的代理变量）                             |
+| `"system"`（默认） | 保留继承的代理变量以及命令或 MCP 显式指定的环境变量                                       |
 | 一个代理 URL       | `HTTP_PROXY`、`HTTPS_PROXY` 和 `ALL_PROXY` 为这个 URL，`NO_PROXY=localhost,127.0.0.1,::1` |
 | `"disabled"`       | 去掉 `HTTP_PROXY`、`HTTPS_PROXY` 和 `ALL_PROXY`，`NO_PROXY=localhost,127.0.0.1,::1`       |
 

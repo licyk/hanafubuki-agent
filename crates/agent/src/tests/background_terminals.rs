@@ -43,7 +43,7 @@ fn exec_arguments(cmd: &str, yield_time_ms: u64) -> String {
     json!({
         "cmd": cmd,
         "shell": null,
-        "login": null,
+        "login": false,
         "tty": null,
         "yield_time_ms": yield_time_ms,
         "max_output_bytes": 32_768,

@@ -37,6 +37,7 @@ fn stdio_config() -> McpServerConfig {
         required: false,
         protocol_mode: McpProtocolMode::Legacy,
         transport: McpTransportConfig::Stdio(McpStdioConfig {
+            environment_variables: Vec::new(),
             program: "fake-mcp".into(),
             argv: vec!["--stdio".into()],
             cwd: None,
@@ -168,3 +169,4 @@ mod output;
 mod producer_quirks;
 mod reconnect;
 mod stdio;
+mod stdio_environment;

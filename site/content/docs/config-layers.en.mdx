@@ -133,4 +133,4 @@ Started in `/home/me/src/my-project/crates/core` as `hanafubuki-agent -p review 
 
 ## What the Agent writes [#writes]
 
-The Agent writes only the user's `config.toml`: the key `config set` names, and the settings an embedding application's settings page changes. A write never copies a profile's, a project's or an override's value into it, and keeps comments and keys it does not know.
+Ordinary global setting writes and `config set` edit the user's `config.toml`. The settings center also supports explicit targets: **Profiles** edits the selected profile table, and **Configuration layers** can edit the user file or a trusted current project's file. Its source action shows the destination and precedence before editing. Writes preserve comments and unknown keys; they do not copy effective values from higher layers into another layer implicitly. A higher layer may still shadow what was saved.

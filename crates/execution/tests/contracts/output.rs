@@ -18,6 +18,7 @@ fn request(cmd: &str, tty: bool, max_output_bytes: Option<usize>) -> ExecCommand
         max_output_bytes,
         timeout_ms: 600_000,
         workdir: Some(std::env::current_dir().unwrap()),
+        shell_environment: Default::default(),
         environment: BTreeMap::new(),
         origin: ApprovalOrigin::Model,
         sandbox: SandboxSettings::full_access(),

@@ -1,18 +1,19 @@
 use std::path::{Path, PathBuf};
 
 use hanafubuki_agent_approval::{
-    ApprovalAction, ApprovalActionKind, ApprovalOrigin, ApprovalRiskClass, PermissionActionDetails,
+    ApprovalAction, ApprovalActionKind, ApprovalRiskClass, PermissionActionDetails,
 };
 use hanafubuki_agent_process::executor::ExecutorIoMode;
 use hanafubuki_agent_process::terminal_size::TerminalSize;
 use serde::Serialize;
 
-use crate::environment::build_clean_command_environment;
+use crate::environment::build_environment_from;
 use crate::model::{AgentExecutionError, ExecCommandRequest, PlatformShell, ResolvedCommandPlan};
 use crate::resolver::{
     canonical_directory, resolve_executable, utf8_path, validate_execution_origin,
     EXEC_RETAINED_OUTPUT_BYTES, MAX_WAIT_MS,
 };
+use hanafubuki_agent_foundation::environment_policy::current_environment;
 use sha2::{Digest, Sha256};
 
 const MAX_SHELL_SCRIPT_BYTES: usize = 48 * 1024;
@@ -53,6 +54,7 @@ struct CanonicalShellAction<'a> {
     script: &'a str,
     cwd: &'a str,
     environment: &'a std::collections::BTreeMap<String, String>,
+    shell_environment: &'a crate::ShellEnvironment,
     timeout_ms: u64,
     output_bytes_cap: usize,
     io_mode: ExecutorIoMode,
@@ -91,7 +93,11 @@ pub(crate) fn prepare_exec_command(
         working_directory,
     )?)?;
     #[cfg_attr(not(windows), allow(unused_mut, reason = "only Windows adds to it"))]
-    let mut environment = build_clean_command_environment(&request.environment)?;
+    let mut environment = build_environment_from(
+        current_environment(),
+        &request.shell_environment,
+        &request.environment,
+    )?;
     let program = resolve_shell(shell, &cwd, &environment)?;
     #[cfg(windows)]
     if shell == PlatformShell::Posix {
@@ -111,7 +117,13 @@ pub(crate) fn prepare_exec_command(
         (ExecutorIoMode::Pipe, None, None)
     };
     let plan = ResolvedCommandPlan {
-        command: exec_shell_command(shell, program, &request.cmd, request.login)?,
+        command: exec_shell_command(
+            shell,
+            program,
+            &request.cmd,
+            request.login,
+            request.shell_environment.use_profile,
+        )?,
         cwd,
         environment,
         timeout_ms: request.timeout_ms,
@@ -140,14 +152,7 @@ pub(crate) fn prepare_exec_command(
                 .unwrap_or_default()
         ),
     };
-    let mut action = shell_action(
-        shell,
-        &plan,
-        &request.cmd,
-        summary,
-        &request.origin,
-        request.sandbox_escalation.is_some(),
-    )?;
+    let mut action = shell_action(shell, &plan, request, summary)?;
     if let Some(escalation) = &request.sandbox_escalation {
         action = action.with_sandbox_escalation(escalation.clone());
     }
@@ -189,7 +194,14 @@ fn resolve_shell(
         PlatformShell::Posix => {
             #[cfg(unix)]
             {
-                for candidate in ["/bin/bash", "/bin/sh"] {
+                let preferred = std::env::var("SHELL")
+                    .ok()
+                    .filter(|program| crate::snapshot::kind(program).is_some());
+                for candidate in preferred
+                    .as_deref()
+                    .into_iter()
+                    .chain(["/bin/bash", "/bin/sh"])
+                {
                     if let Ok(program) = resolve_executable(candidate, cwd, environment) {
                         return Ok(program);
                     }
@@ -216,7 +228,7 @@ fn resolve_shell(
                 }
             }
             Err(AgentExecutionError::Resolution(
-                "PowerShell was not found in the clean PATH".to_string(),
+                "PowerShell was not found in PATH".to_string(),
             ))
         }
         PlatformShell::Cmd => {
@@ -239,6 +251,7 @@ fn exec_shell_command(
     program: PathBuf,
     command_text: &str,
     login: bool,
+    use_profile: bool,
 ) -> Result<Vec<String>, AgentExecutionError> {
     let mut command = vec![program.to_string_lossy().into_owned()];
     match shell {
@@ -249,13 +262,17 @@ fn exec_shell_command(
             #[cfg(not(windows))]
             command.push(command_text.to_string());
         }
-        PlatformShell::PowerShell => command.extend([
-            "-NoLogo".to_string(),
-            "-NoProfile".to_string(),
-            "-NonInteractive".to_string(),
-            "-Command".to_string(),
-            format!("{POWERSHELL_UTF8_OUTPUT_PREFIX}{command_text}"),
-        ]),
+        PlatformShell::PowerShell => {
+            if !use_profile {
+                command.push("-NoProfile".into());
+            }
+            command.extend([
+                "-NoLogo".to_string(),
+                "-NonInteractive".to_string(),
+                "-Command".to_string(),
+                format!("{POWERSHELL_UTF8_OUTPUT_PREFIX}{command_text}"),
+            ]);
+        }
         PlatformShell::Cmd => command.extend([
             "/D".to_string(),
             "/S".to_string(),
@@ -269,31 +286,30 @@ fn exec_shell_command(
 fn shell_action(
     shell: PlatformShell,
     plan: &ResolvedCommandPlan,
-    script: &str,
+    request: &ExecCommandRequest,
     summary: String,
-    origin: &ApprovalOrigin,
-    unsandboxed: bool,
 ) -> Result<ApprovalAction, AgentExecutionError> {
     let canonical = serde_json::to_vec(&CanonicalShellAction {
-        version: "agent-shell-v5",
+        version: "agent-shell-v6",
         shell,
         program: &plan.command[0],
         argv: &plan.command,
-        script,
+        script: &request.cmd,
         cwd: utf8_path(&plan.cwd, "resolved working directory")?,
         environment: &plan.environment,
+        shell_environment: &request.shell_environment,
         timeout_ms: plan.timeout_ms,
         output_bytes_cap: plan.output_bytes_cap,
         io_mode: plan.io_mode,
         cols: plan.cols,
         rows: plan.rows,
-        unsandboxed,
+        unsandboxed: request.sandbox_escalation.is_some(),
     })
     .map_err(|error| AgentExecutionError::Resolution(error.to_string()))?;
     ApprovalAction::from_canonical_bytes(
         ApprovalActionKind::ShellExecution,
         ApprovalRiskClass::Critical,
-        origin.clone(),
+        request.origin.clone(),
         bounded_action_summary(&summary),
         &canonical,
     )

@@ -23,9 +23,11 @@ running jobs: 0
 ```
 
 <Callout>
-  Whether a session contributes is decided **when it is created**: only a session created while
-  `memory.enabled` and `memory.generateMemories` are both `true` is read. Sessions from before you
-  turned the memory on are not.
+  A session's **initial** contribution setting is decided when it is created: it is enabled only
+  when `memory.enabled` and `memory.generateMemories` are both `true`. Turning memory on does not
+  automatically opt earlier sessions in. You can change an existing session with **This session
+  contributes** in the [Memory store](#status-reset), unless external content permanently excluded
+  it.
 </Callout>
 
 In the [terminal interface](/docs/terminal-interface), `/memories` opens the settings center's Memory tab, where **Memory** turns it on.

@@ -30,6 +30,32 @@ description: Write release notes for this repository from its git history, group
 
 Fields it does not know are ignored. A Skill directory may also have an `agents/openai.yaml`, with a display name, icons, and the MCP servers it depends on; while such a server is not ready, the Skill is listed as unavailable.
 
+### Interface and explicit invocation [#interface]
+
+The optional `agents/openai.yaml` separates display metadata from instructions:
+
+```yaml
+interface:
+  display_name: "Release notes"
+  short_description: "Prepare notes from repository history"
+  icon_small: "./assets/icon.svg"
+  brand_color: "#2563EB"
+  default_prompt: "Use $release-notes to prepare release notes."
+policy:
+  allow_implicit_invocation: false
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "github"
+      description: "Read pull requests and releases"
+      transport: "streamable_http"
+      url: "https://example.com/mcp"
+```
+
+`icon_large` is also supported; both icon paths are relative to the Skill directory. Display fields are metadata for interfaces, not additional instructions automatically sent as a user message. Unusable fields are ignored individually and reported in the catalog's issues; an invalid interface file does not invalidate an otherwise usable `SKILL.md`.
+
+`allow_implicit_invocation` defaults to `true`. Setting it to `false` leaves the Skill out of automatic discovery, including `skills_list`, while still allowing an explicit `$NAME` or `skill://` selection. This differs from disabling the Skill, which makes it unavailable for a new turn. A declared MCP dependency must already be configured and ready: the declaration does not install a server or grant it permissions.
+
 ## Where Skills come from [#sources]
 
 | Source     | Where                                                                                                                                                                 | Id, for example             |
@@ -67,11 +93,25 @@ hanafubuki-agent skills remove user:release-notes
 
 ## Using one in a conversation [#use]
 
-- **Let the model choose**: the model sees the catalog with every request, and reads a Skill with `skills_read` when the task fits its description.
+- **Let the model choose**: the model sees the available Skills that allow implicit invocation, and reads a Skill with `skills_read` when the task fits its description.
 - **Name it**: write `$NAME` in a message, such as `Use $release-notes to write the notes for 0.2.0`. A Skill you name is given to the model for that turn.
 - **Link it**: `[$release-notes](skill://user:release-notes)` names a Skill by its id, so it selects that Skill even after its name changed, or when the name is also a tool's. The model writes this form when it names a Skill it has read.
 
 Environment variable names such as `$PATH` or `$HOME`, and the names of tools and MCP servers, are never taken for a Skill.
+
+### Reading references and assets [#resources]
+
+The model's Skill catalog is captured at the start of a user turn. Reading a Skill without `path` adopts it: its complete `SKILL.md` is delivered once as a `<skill>` context block. Repeated reads do not insert another copy. Catalog and instruction changes are captured for later user turns rather than rewriting the current or past turns. Resource reads still check that the Skill is currently enabled.
+
+`skills_list` accepts an optional `authority` (`system`, `user`, `repo` or `plugin`) and pages entries with `next_cursor`: pass it back as `cursor` with the same authority filter until it is `null`. The result also reports `user_root`, even when no user Skills are installed, so installation does not need to infer the root from an existing entry.
+
+Each entry lists non-script resources with their package-relative paths, kinds and sizes. `skills_read` then takes `skill`, `path` and, for text, the previous result's `next_cursor` as `cursor`:
+
+- Reference text is returned in pages of up to 8 KiB, without splitting a UTF-8 character. A resource changed since the last page invalidates its cursor; start again without it.
+- Images are returned as image content; other binary assets as embedded resources. Binary assets do not take a cursor.
+- Files under `scripts/` are not disclosed through `skills_read`. Running a script uses the command execution tools and their normal approval rules.
+
+Only resources listed in the turn's catalog can be read this way. A resource path is relative to its Skill, not an arbitrary filesystem path. The instructions are frozen for the turn; resource bytes are read when requested.
 
 ## Turning one on or off [#enable]
 
@@ -80,7 +120,9 @@ Every Skill found is on by default. A Skill that is turned off is left out of th
 - Ask the model: "turn off the release-notes Skill", say. It calls `disable_skill` (or `enable_skill`), which **always asks you**, whatever the permission mode, and is not available in plan mode.
 - Or edit `skills/state.json` in the data directory, adding the Skill's id to its `disabled` list or removing it.
 
-Neither the command line nor the terminal interface has a command that turns a Skill on or off.
+In the terminal interface, open `/skills`, select the Skill, change **Enabled**; the form saves the change. This is a direct settings action and does not require a model tool call. The standalone `skills` CLI has no enable/disable subcommand.
+
+The [host API](/docs/embedding#skill-management) also supports creating and duplicating Skills and editing their files; those authoring operations write only to the user root.
 
 To turn Skills off altogether, add `skills` to `disabledPlugins`.
 

@@ -63,6 +63,7 @@ pub(super) fn install_fake_background_execution(
         max_output_bytes: Some(32 * 1024),
         timeout_ms: 600_000,
         workdir: Some(std::env::current_dir().unwrap()),
+        shell_environment: Default::default(),
         environment: BTreeMap::new(),
         origin: ApprovalOrigin::Model,
         sandbox: hanafubuki_agent_sandbox::SandboxSettings::full_access(),

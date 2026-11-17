@@ -74,6 +74,10 @@ fn exec_request(tty: bool) -> ExecCommandRequest {
         max_output_bytes: Some(4096),
         timeout_ms: 600_000,
         workdir: Some(std::env::current_dir().unwrap()),
+        shell_environment: hanafubuki_agent_execution::ShellEnvironment {
+            snapshot: false,
+            ..Default::default()
+        },
         environment: BTreeMap::new(),
         origin: ApprovalOrigin::Model,
         sandbox: SandboxSettings::full_access(),
@@ -83,11 +87,13 @@ fn exec_request(tty: bool) -> ExecCommandRequest {
 
 mod cleanup;
 mod colour;
+mod environment;
 #[cfg(unix)]
 mod output;
 #[cfg(unix)]
 mod ownership;
 mod platform;
+mod shell_environment;
 mod timeout;
 mod unified;
 #[cfg(windows)]

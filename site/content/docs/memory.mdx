@@ -23,8 +23,9 @@ running jobs: 0
 ```
 
 <Callout>
-  一个会话是否参与记忆，在它**创建时**就决定了：只有在 `memory.enabled` 和 `memory.generateMemories`
-  都为 `true` 时创建的会话才会被提取。启用记忆之前的会话不会被读取。
+  会话是否贡献记忆的**初始设置**在创建时决定：只有当 `memory.enabled` 和 `memory.generateMemories`
+  都为 `true` 时才启用贡献。打开记忆不会自动让之前的会话参与。可以在[记忆存储](#status-reset)中 用
+  **This session contributes** 修改已有会话，但因外部内容被永久排除的会话不能重新启用。
 </Callout>
 
 在[终端界面](/docs/terminal-interface)中，`/memories` 打开设置中心的 Memory 标签页，其中的 **Memory** 开启记忆。

@@ -46,6 +46,7 @@ impl AgentExecutionService {
         exact_approval(prepared.action(), approval)?;
         // The approval is of the command; the sandbox confines it after.
         let mut plan = prepared.plan;
+        self.restore_shell_snapshot(&scope, &request, &mut plan, cancellation)?;
         plan.command = self.sandboxed(plan.command, &request)?;
         self.start_plan(
             scope,
@@ -56,7 +57,7 @@ impl AgentExecutionService {
         )
     }
 
-    fn start_plan(
+    pub(super) fn start_plan(
         &self,
         scope: AgentExecutionScope,
         plan: ResolvedCommandPlan,

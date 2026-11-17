@@ -56,6 +56,7 @@ mod session_workspaces;
 mod sessions;
 mod settings_catalog;
 mod settings_collections;
+mod settings_environment;
 mod shutdown;
 mod standalone;
 mod startup;

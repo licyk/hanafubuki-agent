@@ -227,7 +227,7 @@ Updated to 0.3.0. The next start of hanafubuki-agent runs it; running ones keep 
 
 ## 哪些命令会启动 Agent [#agent-start]
 
-`config`、`providers list`、`roles` 和不带 `--online` 的 `doctor` 只读写配置（`roles` 和 `doctor` 还会读取已安装插件，但不在那里写入任何东西），`update` 只读取其中的代理；它们都不启动 Agent，可以在另一个 Agent 进程运行时使用。其他命令会启动 Agent，需要独占数据目录。终端界面的[更新提示](/docs/terminal-interface#update-prompt)出现在 Agent 启动之前：选择 Update now 会结束程序，不启动 Agent。
+`config`、`providers list`、`roles` 和不带 `--online` 的 `doctor` 只读写配置（`roles` 和 `doctor` 还会读取已安装插件，但不在那里写入任何东西），`update` 只读取其中的代理；它们都不启动 Agent，可以在另一个 Agent 进程运行时使用。其他命令会启动 Agent，包括 `mcp list`。它们可以与其他实例共享数据目录；打开或修改已由另一实例持有的会话会被拒绝（[并发 Agent](/docs/data-directory#lock)）。终端界面的[更新提示](/docs/terminal-interface#update-prompt)出现在 Agent 启动之前：选择 Update now 会结束程序，不启动 Agent。
 
 每个命令都会先读取配置，再安装崩溃处理和日志文件，然后才启动 Agent 或修改任何内容。会启动 Agent 的管理命令也会像每次启动一样在后台连接启用的 MCP 服务器。
 

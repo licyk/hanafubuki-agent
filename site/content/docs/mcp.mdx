@@ -109,6 +109,7 @@ MCP（Model Context Protocol）服务器可以把本地程序或远程服务的�
   </Tab>
 </Tabs>
 
+- stdio 继承平台基础环境；`transport.environmentVariables` 列出额外继承的名称，显式配置的公开变量和凭据覆盖继承值。见[环境变量](/docs/environment#stdio-mcp)。
 - 不是秘密的变量和请求头写在 `publicEnvironment` 和 `publicHeaders` 中。
 - 修改凭据的值时，同时把 `generation` 加一。
 - 引用了不存在的凭据键的服务器无法连接。
@@ -194,6 +195,18 @@ hanafubuki-agent doctor --online      # 连接每个启用的服务器并报告�
 ## 资源 [#resources]
 
 服务器提供的资源通过 `list_mcp_resources`、`list_mcp_resource_templates` 和 `read_mcp_resource` 读取，不需要审批。
+
+| 工具                          | 参数与结果                                                            |
+| ----------------------------- | --------------------------------------------------------------------- |
+| `list_mcp_resources`          | 可选的 `server` 和 `cursor`；返回 `resources`，即服务器分页结果的数组 |
+| `list_mcp_resource_templates` | 参数相同；返回 `resourceTemplates`，用于需要填入 URI 参数的资源       |
+| `read_mcp_resource`           | 必填 `server` 和确切的 `uri`；返回该服务器提供的内容                  |
+
+不传 `server` 时，列表查询当前模型步骤绑定的服务器。每页都有 `server`、`items` 和 `nextCursor`。继续读取时，将该页不透明的 `nextCursor` 作为 `cursor`，同时传入所属 `server`；只有游标、没有服务器的请求会被拒绝。每个服务器独立翻页，不要解析或重建游标。
+
+可选服务器失败时，错误出现在 `failures`，成功的分页结果仍然可用；必需服务器失败则使整个调用失败。较大的列表可能为了适应模型输出预算而省略条目，应检查 `truncated`、`omittedItems` 和 `warning`，不能直接视为完整列表。可以指定服务器缩小结果范围，并在有游标时继续翻页。
+
+资源 URI 和模板描述是服务器提供的元数据。读取只把 URI 交给当前步骤捕获的指定 MCP 连接；即使是 `file:` 或 `https:` URI，Agent 也不会将其作为本地文件打开或另行抓取。嵌入应用的连接、OAuth 与 elicitation 控制见 [MCP 管理](/docs/embedding#mcp-management)。
 
 ## MCP 与记忆 [#memory]
 

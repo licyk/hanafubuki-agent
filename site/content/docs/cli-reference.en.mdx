@@ -227,7 +227,7 @@ It exits with 0 when it updated or there was nothing to install, and with 1 when
 
 ## Which commands start the Agent [#agent-start]
 
-`config`, `providers list`, `roles` and `doctor` without `--online` only read and write the configuration (`roles` and `doctor` also read the installed plugins, writing nothing there), and `update` reads it for its proxy: they do not start the Agent, and work while another Agent process runs. The other commands start it, and need the data directory to themselves. The terminal interface's [update prompt](/docs/terminal-interface#update-prompt) comes before its start: "Update now" ends the program without starting the Agent.
+`config`, `providers list`, `roles` and `doctor` without `--online` only read and write the configuration (`roles` and `doctor` also read the installed plugins, writing nothing there), and `update` reads it for its proxy: they do not start the Agent, and work while another Agent process runs. The other commands start it, including `mcp list`. They may share a data directory with other running instances; opening or changing a session already owned by another instance is refused ([Concurrent Agents](/docs/data-directory#lock)). The terminal interface's [update prompt](/docs/terminal-interface#update-prompt) comes before its start: "Update now" ends the program without starting the Agent.
 
 Every command reads the configuration first, then installs the crash handler and the log file, before it starts the Agent or changes anything. A management command that starts the Agent also connects the enabled MCP servers in the background, as every start does.
 

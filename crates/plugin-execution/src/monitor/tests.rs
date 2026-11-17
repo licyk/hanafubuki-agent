@@ -54,6 +54,10 @@ fn unified_exec_watcher_publishes_before_wait_without_consuming_model_output() {
         max_output_bytes: Some(32 * 1024),
         timeout_ms: 600_000,
         workdir: Some(std::env::current_dir().unwrap()),
+        shell_environment: hanafubuki_agent_execution::ShellEnvironment {
+            snapshot: false,
+            ..Default::default()
+        },
         environment: BTreeMap::new(),
         origin: ApprovalOrigin::Model,
         sandbox: hanafubuki_agent_sandbox::SandboxSettings::full_access(),
@@ -179,6 +183,10 @@ fn watcher_registration_failure_is_explicit_and_confirms_process_cleanup() {
         max_output_bytes: Some(4096),
         timeout_ms: 600_000,
         workdir: Some(std::env::current_dir().unwrap()),
+        shell_environment: hanafubuki_agent_execution::ShellEnvironment {
+            snapshot: false,
+            ..Default::default()
+        },
         environment: BTreeMap::new(),
         origin: ApprovalOrigin::Model,
         sandbox: hanafubuki_agent_sandbox::SandboxSettings::full_access(),
@@ -360,6 +368,10 @@ fn monitored_output(tty: bool, output: &str) -> Vec<(String, bool)> {
         max_output_bytes: Some(32 * 1024),
         timeout_ms: 600_000,
         workdir: Some(std::env::current_dir().unwrap()),
+        shell_environment: hanafubuki_agent_execution::ShellEnvironment {
+            snapshot: false,
+            ..Default::default()
+        },
         environment: BTreeMap::new(),
         origin: ApprovalOrigin::Model,
         sandbox: hanafubuki_agent_sandbox::SandboxSettings::full_access(),

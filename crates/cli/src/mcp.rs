@@ -189,6 +189,7 @@ fn transport(
         })
         .collect::<Result<_, _>>()?;
     Ok(McpTransportConfig::Stdio(McpStdioConfig {
+        environment_variables: Vec::new(),
         program,
         argv: command.collect(),
         cwd: None,

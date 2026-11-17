@@ -265,7 +265,13 @@ pub(super) fn apply_child_process_environment(
     manager: &ExecutorManager,
     request: &mut ExecutorStartRequest,
 ) {
-    request
-        .env
-        .extend(manager.child_process_environment.snapshot());
+    let overlay = manager.child_process_environment.snapshot();
+    if cfg!(windows) {
+        // HashMap keys are case-sensitive, but Windows environment names are
+        // not. Keep only the final spelling so spawn order cannot undo it.
+        request
+            .env
+            .retain(|key, _| !overlay.keys().any(|name| name.eq_ignore_ascii_case(key)));
+    }
+    request.env.extend(overlay);
 }

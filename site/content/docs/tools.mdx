@@ -63,7 +63,7 @@ icon: Wrench
 - **时限**：每个进程（包括后台终端的）在命令超时后被停止：默认 10 分钟，可由 [`pluginOptions.execution.commandTimeoutMinutes`](/docs/config-reference#plugin-options) 设为 1 到 1440 分钟（一天），在设置中心的 Plugins 标签页（`/config pluginOptions.execution`）、`config set` 或 `config.toml` 中设置。更改作用于此后启动的命令；正在运行的命令保留启动时的超时，什么都不会重启。工具 10 分钟没有进展也会被停止。
 - **沙箱**：命令在会话的[沙箱](/docs/permissions#sandbox)中运行：Linux 和 macOS 上默认只能写入工作区根目录和临时目录，不能使用网络；需要这台机器无法提供的沙箱的命令不会运行。
 - **在沙箱之外运行**：和 Codex 一样，模型可以请求在沙箱之外运行一条命令，参数是 `sandbox_permissions`（`"use_default"`，即默认值，或 `"require_escalated"`）和 `justification`（随审批显示的一个问题，最多 1024 字节；只能和 `"require_escalated"` 一起使用，否则是模型会读到的错误）。这样的命令需要单独的审批，完全访问模式永远不会给出；见[权限](/docs/permissions#escalation)。
-- **环境**：命令得到一个干净的环境，不继承你 Shell 中的变量，见[环境变量](/docs/environment#commands)。
+- **环境**：命令继承 Agent 的环境，并应用非交互默认值和显式代理覆盖，见[环境变量](/docs/environment#commands)。
 - **文本编码**：输出以 UTF-8 交给模型。
   - PowerShell（5.1 和 7 都一样）开始时把控制台的输出和输入代码页，以及它通过管道传给程序的文本的编码（`$OutputEncoding`，5.1 中默认是 ASCII）设为不带字节顺序标记的 UTF-8，并关闭进度条（`$ProgressPreference = 'SilentlyContinue'`）。
   - `cmd.exe` 先运行 `chcp 65001`，因此它启动的、遵循控制台代码页的程序写出 UTF-8。它自己的内置命令（`dir`、`echo`、`type`）写入管道时仍使用 `cmd.exe` 启动时的代码页，即控制台的（OEM）代码页；在伪终端中，或从 PowerShell 中以 `cmd /c …` 运行时，它们的输出完整无误。

@@ -108,6 +108,7 @@ pub enum PlatformShell {
 /// typed application boundary.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExecCommandRequest {
+    pub shell_environment: crate::ShellEnvironment,
     pub cmd: String,
     pub shell: Option<PlatformShell>,
     pub login: bool,

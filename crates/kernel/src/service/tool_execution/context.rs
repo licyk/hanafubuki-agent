@@ -55,6 +55,8 @@ impl AgentService {
         let cell = self.session(identity.session_id)?;
         let record = cell.lock()?;
         let turn = exact_turn(&record, identity.turn_id, identity.generation)?;
-        Ok(turn.extensions.clone())
+        let mut extensions = turn.extensions.clone();
+        extensions.insert(Arc::new(turn.permission_mode));
+        Ok(extensions)
     }
 }

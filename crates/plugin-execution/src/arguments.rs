@@ -17,7 +17,7 @@ use crate::tool::ExecToolKind;
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum ExecCall {
-    ExecCommand(ExecCommandRequest),
+    ExecCommand(Box<ExecCommandRequest>),
     WriteStdin {
         session_id: u64,
         chars: String,
@@ -61,7 +61,7 @@ pub(crate) fn parse(
                     _ => Err(ToolCallValidationError::InvalidArgument("shell")),
                 })
                 .transpose()?;
-            ExecCall::ExecCommand(ExecCommandRequest {
+            ExecCall::ExecCommand(Box::new(ExecCommandRequest {
                 cmd: required_bounded_string(arguments, "cmd", 48 * 1024)?,
                 shell,
                 login: nullable_bool(arguments, "login")?.unwrap_or(true),
@@ -83,12 +83,13 @@ pub(crate) fn parse(
                 )?,
                 timeout_ms: command_timeout_ms,
                 workdir: nullable_bounded_string(arguments, "workdir", 4096)?.map(PathBuf::from),
+                shell_environment: Default::default(),
                 environment: Default::default(),
                 origin: ApprovalOrigin::Model,
                 // The turn's, which the tool sets (`tool::parse_call`).
                 sandbox: SandboxSettings::full_access(),
                 sandbox_escalation: sandbox_escalation(arguments)?,
-            })
+            }))
         }
         ExecToolKind::WriteStdin => {
             let chars = nullable_text_or_default(arguments, "chars", 16 * 1024)?;

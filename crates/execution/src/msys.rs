@@ -125,7 +125,7 @@ fn shell_behind_git_launcher(shell: &Path, name: &str) -> Option<PathBuf> {
     canonical_executable(&bin.parent()?.join("usr").join("bin").join(name)).ok()
 }
 
-/// What a POSIX shell on Windows needs beside the clean environment; a
+/// What a POSIX shell on Windows needs beside the inherited environment; a
 /// request's own variables win.
 ///
 /// - The shell's directory first on `PATH`, where the MSYS programs (`ls`,

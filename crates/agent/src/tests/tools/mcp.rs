@@ -139,6 +139,7 @@ for line in sys.stdin:
         protocol_mode: hanafubuki_agent_mcp::McpProtocolMode::Legacy,
         transport: hanafubuki_agent_mcp::McpTransportConfig::Stdio(
             hanafubuki_agent_mcp::McpStdioConfig {
+                environment_variables: Vec::new(),
                 program: "fixture-mcp".to_string(),
                 argv: vec!["-u".to_string(), "-c".to_string(), fixture.to_string()],
                 cwd: Some(root.clone()),
@@ -363,6 +364,7 @@ for line in sys.stdin:
         protocol_mode: hanafubuki_agent_mcp::McpProtocolMode::Legacy,
         transport: hanafubuki_agent_mcp::McpTransportConfig::Stdio(
             hanafubuki_agent_mcp::McpStdioConfig {
+                environment_variables: Vec::new(),
                 program: if cfg!(windows) { "python" } else { "python3" }.into(),
                 argv: vec!["-u".into(), "-c".into(), fixture],
                 cwd: None,
@@ -525,6 +527,7 @@ async fn optional_mcp_start_failure_warns_while_required_failure_blocks_startup(
         protocol_mode: hanafubuki_agent_mcp::McpProtocolMode::Legacy,
         transport: hanafubuki_agent_mcp::McpTransportConfig::Stdio(
             hanafubuki_agent_mcp::McpStdioConfig {
+                environment_variables: Vec::new(),
                 program: "definitely-missing-mcp-fixture".into(),
                 argv: Vec::new(),
                 cwd: None,

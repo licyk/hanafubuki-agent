@@ -98,6 +98,8 @@ pub enum McpTransportConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpStdioConfig {
+    #[serde(default)]
+    pub environment_variables: Vec<String>,
     pub program: String,
     pub argv: Vec<String>,
     pub cwd: Option<PathBuf>,
@@ -250,12 +252,16 @@ fn validate_stdio(config: &McpStdioConfig) -> Result<(), McpError> {
     for argument in &config.argv {
         validate_field("stdio argument", argument)?;
     }
-    if config.public_environment.len() > MAX_MCP_ENVIRONMENT_ENTRIES
+    if config.environment_variables.len() > MAX_MCP_ENVIRONMENT_ENTRIES
+        || config.public_environment.len() > MAX_MCP_ENVIRONMENT_ENTRIES
         || config.credential_environment.len() > MAX_MCP_ENVIRONMENT_ENTRIES
     {
         return Err(McpError::InvalidConfig(
             "too many stdio environment entries".into(),
         ));
+    }
+    for name in &config.environment_variables {
+        validate_environment_name(name)?;
     }
     for (name, value) in &config.public_environment {
         validate_environment_name(name)?;

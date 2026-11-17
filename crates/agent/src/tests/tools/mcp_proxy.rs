@@ -81,6 +81,7 @@ fn a_proxy_change_starts_the_stdio_servers_anew_under_it() {
         protocol_mode: hanafubuki_agent_mcp::McpProtocolMode::Legacy,
         transport: hanafubuki_agent_mcp::McpTransportConfig::Stdio(
             hanafubuki_agent_mcp::McpStdioConfig {
+                environment_variables: Vec::new(),
                 program: python,
                 argv: vec!["-u".to_string(), "-c".to_string(), FIXTURE.to_string()],
                 cwd: None,

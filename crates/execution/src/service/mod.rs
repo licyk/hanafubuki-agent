@@ -57,6 +57,7 @@ mod output;
 mod process_port;
 mod registry;
 mod shutdown;
+mod snapshot;
 mod start;
 mod unified;
 
@@ -84,6 +85,7 @@ struct AgentExecutionServiceInner {
     workspace_roots: RwLock<Vec<PathBuf>>,
     /// What confines a command that asks for a sandbox.
     sandbox: Sandbox,
+    shell_snapshots: Mutex<HashMap<u64, snapshot::CachedSnapshot>>,
 }
 
 impl AgentExecutionService {
@@ -128,6 +130,7 @@ impl AgentExecutionService {
                 observer_released: Condvar::new(),
                 workspace_roots: RwLock::new(Vec::new()),
                 sandbox,
+                shell_snapshots: Mutex::new(HashMap::new()),
             }),
         }
     }

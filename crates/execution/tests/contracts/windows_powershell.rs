@@ -48,6 +48,7 @@ fn request(shell: PlatformShell, script: &str, tty: bool) -> ExecCommandRequest 
         timeout_ms: 600_000,
         workdir: Some(std::env::current_dir().unwrap()),
         environment,
+        shell_environment: Default::default(),
         origin: ApprovalOrigin::Model,
         sandbox: SandboxSettings::full_access(),
         sandbox_escalation: None,

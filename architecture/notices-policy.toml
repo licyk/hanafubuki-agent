@@ -2081,3 +2081,18 @@ reason = "Canonical links preserve native mention identities in queued and persi
 [[original]]
 path = "crates/tui/src/mention_codec/tests.rs"
 reason = "Round trips of native bound mentions and ordinary markdown."
+
+[[derived]]
+path = "crates/foundation/src/environment_policy.rs"
+markers = ["derived from OpenAI Codex 57a808a392 (Apache-2.0)", "Derived from OpenAI Codex 57a808a392 (Apache-2.0)"]
+notice = "crates/foundation/src/environment_policy.rs"
+
+[[derived]]
+path = "crates/execution/src/snapshot.rs"
+markers = ["derived from OpenAI Codex 57a808a392 (Apache-2.0)", "Derived from OpenAI Codex 57a808a392 (Apache-2.0)"]
+notice = "crates/execution/src/snapshot.rs"
+
+[[derived]]
+path = "crates/mcp/src/stdio/environment.rs"
+markers = ["derived from OpenAI Codex 57a808a392 (Apache-2.0)", "Derived from OpenAI Codex 57a808a392 (Apache-2.0)"]
+notice = "crates/mcp/src/stdio/environment.rs"

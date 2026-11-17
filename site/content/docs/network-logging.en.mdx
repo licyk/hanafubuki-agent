@@ -39,16 +39,16 @@ hanafubuki-agent config set network.proxy system
 
 ### The commands' proxy variables [#child-processes]
 
-The commands the model runs get a clean environment (see [Environment](/docs/environment#commands)), whose proxy variables `network.proxy` decides:
+The commands the model runs inherit the Agent's environment (see [Environment](/docs/environment#commands)); `network.proxy` then controls their proxy variables:
 
 - a proxy URL: `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` set to it;
 - `"disabled"`: `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` removed;
 - both of these also set `NO_PROXY=localhost,127.0.0.1,::1`;
-- `"system"`: no proxy variable at all. Since the commands' environment is clean, your shell's proxy variables do not reach them either: to have commands use a proxy, set a proxy URL.
+- `"system"`: keep the inherited proxy variables, including `NO_PROXY`, and any explicit command environment overrides. Set proxy variables before starting the Agent for its commands to inherit them.
 
 Each name is set or removed in upper and lower case (`https_proxy`, `no_proxy` and so on), except on Windows, where names are not case-sensitive. A change applies to the commands started after it.
 
-MCP stdio servers get the same variables over the Agent's environment and their own variables from `mcp.toml`, so `network.proxy` wins over a proxy variable either gives them (with `"system"`, they keep those). A proxy change starts the enabled ones anew under it, as it reconnects the Streamable HTTP ones.
+MCP stdio servers get the same final proxy overlay over their [selected environment](/docs/environment#stdio-mcp) and variables from `mcp.toml`. With `"system"`, a server inherits proxy variables only when its `transport.environmentVariables` lists them, or uses values explicitly configured for that server. A proxy change starts the enabled ones anew under it, as it reconnects the Streamable HTTP ones.
 
 ### The model Providers' proxy [#provider-proxy]
 

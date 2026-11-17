@@ -8,6 +8,7 @@ const HELD_POLL: Duration = Duration::from_millis(10);
 
 impl AgentExecutionService {
     pub fn shutdown(&self, deadline: Instant) -> Vec<WorkerShutdownDiagnostic> {
+        self.inner.shell_snapshots.lock().clear();
         let entries = self
             .inner
             .registry
