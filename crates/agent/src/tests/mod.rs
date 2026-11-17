@@ -43,6 +43,7 @@ mod model_discovery;
 mod model_list;
 mod model_reasoning;
 mod model_vision;
+mod model_vision_live;
 mod network_proxy;
 mod packages;
 mod patch_lines;

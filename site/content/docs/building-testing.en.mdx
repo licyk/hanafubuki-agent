@@ -102,6 +102,8 @@ The update rules:
 - The fixtures are Linux-only.
 - Hanafubuki keeps goldens of its own and the same history corpus in `hanafubuki-agent-integration` ([the twins](/docs/contributing#twins-shared-with-hanafubuki)): a model-visible change here changes them too, and a history-format change re-records both.
 
+To compare tool images with pasted images through a real Hoshimi Responses endpoint, set `HOSHIMI_VISION_TEST_URL` to its `/v1` URL and `HOSHIMI_VISION_TEST_IMAGE` to an image file, then run `cargo test -p hanafubuki-agent --lib live_hoshimi_view_image_and_paste_deliver_the_same_image -- --ignored --nocapture`. It uses the logged-in qodercli-cn account's `DeepSeek-Flash`, asks the model to call the real `view_image` tool, and sends the same image as an attachment in a separate session. It checks the tool call and identical stored image digests, and prints both descriptions for comparison with the image; passing these structural assertions alone does not prove visual recognition. This is an explicit network probe, excluded from routine tests.
+
 To test deferred discovery against a real Hoshimi account and an installed `@modelcontextprotocol/server-filesystem`, run the opt-in probe below. It uses `DeepSeek-Flash`, a temporary workspace and file, and MCP's default registration (deferred exposure). It checks `tool_list` → ordinary `search_tools` → MCP read over Responses, Chat Completions and Anthropic Messages, verifying the actual returned file contents. The Hoshimi endpoint must already have a logged-in qodercli-cn account.
 
 ```sh
