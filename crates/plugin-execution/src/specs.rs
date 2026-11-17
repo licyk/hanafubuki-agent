@@ -14,7 +14,10 @@ pub(crate) fn spec(kind: ExecToolKind) -> (&'static str, Value) {
                 "properties": {
                     "cmd": { "type": "string", "minLength": 1, "maxLength": 49152 },
                     "shell": { "type": ["string", "null"], "enum": ["posix", "power_shell", "cmd", null] },
-                    "login": { "type": ["boolean", "null"] },
+                    "login": {
+                        "type": ["boolean", "null"],
+                        "description": "Load shell startup files: POSIX login mode or PowerShell/pwsh profiles. true enables, false disables; null or omitted defaults to true for POSIX and the shellUseProfile setting for PowerShell. Ignored by cmd."
+                    },
                     "tty": { "type": ["boolean", "null"] },
                     "yield_time_ms": { "type": ["integer", "null"], "minimum": 1, "maximum": 30000 },
                     "max_output_bytes": { "type": ["integer", "null"], "minimum": 1, "maximum": 262144 },

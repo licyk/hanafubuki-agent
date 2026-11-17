@@ -35,6 +35,9 @@ pub const POWERSHELL_UTF8_OUTPUT_PREFIX: &str =
 /// (the OEM one) when they write to a pipe.
 const CMD_UTF8_PREFIX: &str = "chcp 65001 >NUL & ";
 
+#[cfg(test)]
+mod tests;
+
 pub(crate) struct PreparedExecCommand {
     pub(crate) plan: ResolvedCommandPlan,
     action: ApprovalAction,
@@ -252,13 +255,13 @@ fn exec_shell_command(
     shell: PlatformShell,
     program: PathBuf,
     command_text: &str,
-    login: bool,
+    login: Option<bool>,
     use_profile: bool,
 ) -> Result<Vec<String>, AgentExecutionError> {
     let mut command = vec![program.to_string_lossy().into_owned()];
     match shell {
         PlatformShell::Posix => {
-            command.push(if login { "-lc" } else { "-c" }.to_string());
+            command.push(if login.unwrap_or(true) { "-lc" } else { "-c" }.to_string());
             #[cfg(windows)]
             command.push(crate::msys::command_line_script(command_text)?);
             #[cfg(not(windows))]
@@ -266,7 +269,7 @@ fn exec_shell_command(
         }
         PlatformShell::PowerShell => {
             command.push("-NoLogo".into());
-            if !use_profile {
+            if !login.unwrap_or(use_profile) {
                 command.push("-NoProfile".into());
             }
             command.extend([

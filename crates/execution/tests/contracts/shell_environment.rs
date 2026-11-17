@@ -128,7 +128,7 @@ fn empty_inheritance_still_has_defaults_overrides_and_runtime_identity() {
     let mut request = if cfg!(windows) {
         ExecCommandRequest {
             cmd: "[Console]::WriteLine($env:HB_TEST_VALUE + ':' + $env:HANAFUBUKI_AGENT_SESSION_ID + ':' + $env:CODEX_CI + ':' + $env:PYTHONUTF8 + ':' + $env:PATHEXT + ':' + $env:SYSTEMROOT)".into(),
-            shell: Some(PlatformShell::PowerShell), login: false, tty: false,
+            shell: Some(PlatformShell::PowerShell), login: Some(false), tty: false,
             yield_time_ms: 1000, timeout_ms: 30_000, max_output_bytes: Some(4096),
             workdir: Some(std::env::current_dir().unwrap()), environment: Default::default(),
             shell_environment: Default::default(), origin: ApprovalOrigin::Model,
@@ -138,7 +138,7 @@ fn empty_inheritance_still_has_defaults_overrides_and_runtime_identity() {
         #[cfg(unix)]
         {
             let mut request = exec_request(false);
-            request.login = false;
+            request.login = Some(false);
             request.cmd = "printf '%s\\n' \"$HB_TEST_VALUE:$HANAFUBUKI_AGENT_SESSION_ID:$CODEX_CI:$PYTHONUTF8\"".into();
             request
         }
@@ -231,7 +231,7 @@ fn windows_hidden_environment_survives_shell_execution() {
                 let mut request = ExecCommandRequest {
                     cmd: cmd.clone(),
                     shell: Some(shell),
-                    login: false,
+                    login: Some(false),
                     tty,
                     yield_time_ms: 1000,
                     timeout_ms: 30_000,
@@ -247,6 +247,54 @@ fn windows_hidden_environment_survives_shell_execution() {
                 let output = run(&service, request);
                 assert!(output.contains("hidden-environment-preserved"), "{output}");
             }
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn pwsh_login_loads_real_profiles_in_pipes_and_ptys() {
+    if std::process::Command::new("pwsh")
+        .args(["-NoProfile", "-NonInteractive", "-Command", "exit 0"])
+        .status()
+        .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+    {
+        eprintln!("pwsh unavailable; skipping real profile test");
+        return;
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let profiles = temp.path().join("powershell");
+    std::fs::create_dir(&profiles).unwrap();
+    std::fs::write(
+        profiles.join("Microsoft.PowerShell_profile.ps1"),
+        "function Get-HbLoginProfileMarker { 'profile-loaded' }",
+    )
+    .unwrap();
+    let service = AgentExecutionService::new(ExecutorManager::default());
+    for tty in [false, true] {
+        for (login, use_profile, expected) in [
+            (None, false, "profile-absent"),
+            (None, true, "profile-loaded"),
+            (Some(true), false, "profile-loaded"),
+            (Some(true), true, "profile-loaded"),
+            (Some(false), false, "profile-absent"),
+            (Some(false), true, "profile-absent"),
+        ] {
+            let mut request = exec_request(tty);
+            request.shell = Some(PlatformShell::PowerShell);
+            request.login = login;
+            request.shell_environment.use_profile = use_profile;
+            request.environment.insert(
+                "XDG_CONFIG_HOME".into(),
+                temp.path().to_str().unwrap().into(),
+            );
+            request.cmd = "if (Get-Command Get-HbLoginProfileMarker -ErrorAction SilentlyContinue) { Get-HbLoginProfileMarker } else { 'profile-absent' }; 'encoding=' + $OutputEncoding.CodePage".into();
+            let output = run(&service, request);
+            assert!(
+                output.contains(expected),
+                "login={login:?}, use_profile={use_profile}, tty={tty}: {output}"
+            );
+            assert!(output.contains("encoding=65001"), "{output}");
         }
     }
 }

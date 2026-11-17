@@ -145,6 +145,7 @@ async fn with_the_wake_off_a_request_is_the_one_before_wakes() {
 /// The rebuilt web catalog, thread reading, portable discovery and patch directory creation are pinned by current
 /// request goldens, separately from this immutable pre-wake fixture.
 /// Those also pin the Skill schemas, which now include plugin identities.
+/// The current execution schema documents PowerShell's `login` override.
 fn without_reworded(mut request: Value) -> Value {
     request["tools"].as_array_mut().unwrap().retain(|tool| {
         !matches!(
@@ -173,6 +174,12 @@ fn without_reworded(mut request: Value) -> Value {
         )
     });
     for tool in request["tools"].as_array_mut().unwrap() {
+        if tool["name"] == "exec_command" {
+            tool["parameters"]["properties"]["login"]
+                .as_object_mut()
+                .unwrap()
+                .remove("description");
+        }
         if tool["type"] == "tool_search" || tool["name"] == "apply_patch" {
             tool.as_object_mut().unwrap().remove("description");
         }

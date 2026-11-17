@@ -86,7 +86,7 @@ mod windows {
                 escaped.display()
             ),
             shell: Some(PlatformShell::Posix),
-            login: false,
+            login: Some(false),
             tty,
             yield_time_ms: 30_000,
             max_output_bytes: None,

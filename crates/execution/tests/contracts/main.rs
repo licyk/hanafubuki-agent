@@ -68,7 +68,7 @@ fn exec_request(tty: bool) -> ExecCommandRequest {
     ExecCommandRequest {
         cmd: "printf unified".to_string(),
         shell: None,
-        login: true,
+        login: Some(true),
         tty,
         yield_time_ms: 10,
         max_output_bytes: Some(4096),

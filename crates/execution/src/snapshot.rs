@@ -117,7 +117,7 @@ impl ShellSnapshot {
 
 pub(crate) fn enabled(request: &ExecCommandRequest, plan: &ResolvedCommandPlan) -> bool {
     request.shell_environment.snapshot
-        && request.login
+        && request.login.unwrap_or(true)
         && request.shell != Some(PlatformShell::PowerShell)
         && request.shell != Some(PlatformShell::Cmd)
         && kind(&plan.command[0]).is_some()

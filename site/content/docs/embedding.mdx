@@ -432,7 +432,7 @@ Agent 启动的进程归 Agent 所有：它有自己的 `ExecutorManager`，与�
 
 ## 宿主中的配置 [#configuration-in-a-host]
 
-嵌入模式的执行插件同样从 `[pluginOptions.execution]` 读取环境选择与 Shell 启动选项。直接调用 `AgentExecutionService` 时设置 `ExecCommandRequest.shell_environment`，其可选的 `ExecutionEnvironmentContext` 提供会话、轮次、工具调用及权限模式信息。MCP stdio 通过 `McpStdioConfig.environment_variables` 指定额外继承的名称。宿主最终的 `ChildProcessEnvironment` 覆盖仍然优先，见[环境变量](/docs/environment#selection)。
+嵌入模式的执行插件同样从 `[pluginOptions.execution]` 读取环境选择与 Shell 启动选项。直接调用 `AgentExecutionService` 时设置 `ExecCommandRequest.shell_environment`，其可选的 `ExecutionEnvironmentContext` 提供会话、轮次、工具调用及权限模式信息。`ExecCommandRequest.login` 的类型为 `Option<bool>`：`Some(true)` / `Some(false)` 启用 / 禁用 POSIX 登录启动或 PowerShell Profile；`None` 使用 POSIX 登录启动，或 PowerShell 的 `shell_environment.use_profile` 默认设置。MCP stdio 通过 `McpStdioConfig.environment_variables` 指定额外继承的名称。宿主最终的 `ChildProcessEnvironment` 覆盖仍然优先，见[环境变量](/docs/environment#selection)。
 
 宿主为 Agent 指定一个配置目录，用 `AgentConfig::new(dir)` 打开（Hanafubuki 用 `<app_data>/config/agent/`）。目录里有三个 TOML 文件，各自是一个修订域、各有一把锁：
 

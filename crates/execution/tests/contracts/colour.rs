@@ -25,7 +25,7 @@ fn request(cmd: &str, tty: bool, yield_time_ms: u64) -> ExecCommandRequest {
     ExecCommandRequest {
         cmd: cmd.to_string(),
         shell: None,
-        login: false,
+        login: Some(false),
         tty,
         yield_time_ms,
         max_output_bytes: None,

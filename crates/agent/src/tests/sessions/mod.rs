@@ -57,7 +57,7 @@ pub(super) fn install_fake_background_execution(
     let request = ExecCommandRequest {
         cmd: command.to_string(),
         shell: None,
-        login: true,
+        login: Some(true),
         tty: false,
         yield_time_ms: 5_000,
         max_output_bytes: Some(32 * 1024),

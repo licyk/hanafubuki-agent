@@ -13,7 +13,7 @@ fn request(cmd: &str, timeout_ms: u64) -> ExecCommandRequest {
     ExecCommandRequest {
         cmd: cmd.to_string(),
         shell: None,
-        login: false,
+        login: Some(false),
         tty: false,
         yield_time_ms: 10,
         max_output_bytes: None,

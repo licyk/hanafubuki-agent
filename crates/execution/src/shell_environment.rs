@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase", default)]
 pub struct ShellEnvironment {
     pub policy: EnvironmentPolicy,
+    /// PowerShell profile default when the command leaves `login` unset.
     pub use_profile: bool,
     pub snapshot: bool,
     pub context: Option<ExecutionEnvironmentContext>,

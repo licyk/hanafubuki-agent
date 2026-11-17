@@ -41,7 +41,7 @@ fn request(shell: PlatformShell, script: &str, tty: bool) -> ExecCommandRequest 
     ExecCommandRequest {
         cmd: script.to_string(),
         shell: Some(shell),
-        login: false,
+        login: Some(false),
         tty,
         yield_time_ms: YIELD_MS,
         max_output_bytes: None,

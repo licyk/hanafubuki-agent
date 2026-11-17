@@ -8,6 +8,33 @@ use crate::tool::ExecToolKind;
 /// The plugin's command timeout in these tests.
 const COMMAND_TIMEOUT_MS: u64 = 7 * 60_000;
 
+#[test]
+fn login_preserves_explicit_values_and_shell_defaults() {
+    for (argument, expected) in [
+        (json!({}), None),
+        (json!({ "login": null }), None),
+        (json!({ "login": true }), Some(true)),
+        (json!({ "login": false }), Some(false)),
+    ] {
+        for shell in [
+            json!(null),
+            json!("posix"),
+            json!("power_shell"),
+            json!("cmd"),
+        ] {
+            let mut raw = argument.clone();
+            raw["cmd"] = json!("echo test");
+            raw["shell"] = shell;
+            let (ExecCall::ExecCommand(request), _) =
+                parse(ExecToolKind::ExecCommand, &raw).unwrap()
+            else {
+                panic!("exec_command parses to a command");
+            };
+            assert_eq!(request.login, expected);
+        }
+    }
+}
+
 fn parse(
     kind: ExecToolKind,
     raw: &Value,
@@ -50,7 +77,7 @@ fn execution_tools_are_typed_and_do_not_accept_executor_capabilities() {
         panic!("exec_command parses to a command");
     };
     assert_eq!(request.cmd, "program argument");
-    assert!(request.login, "login defaults to true");
+    assert_eq!(request.login, None, "login defaults depend on the shell");
 
     // The executor's capabilities are never arguments: a key that names one
     // is ignored and changes nothing.

@@ -64,7 +64,7 @@ pub(crate) fn parse(
             ExecCall::ExecCommand(Box::new(ExecCommandRequest {
                 cmd: required_bounded_string(arguments, "cmd", 48 * 1024)?,
                 shell,
-                login: nullable_bool(arguments, "login")?.unwrap_or(true),
+                login: nullable_bool(arguments, "login")?,
                 tty: nullable_bool_or_default(arguments, "tty", false)?,
                 yield_time_ms: clamped_u64(
                     arguments,

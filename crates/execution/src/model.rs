@@ -111,7 +111,9 @@ pub struct ExecCommandRequest {
     pub shell_environment: crate::ShellEnvironment,
     pub cmd: String,
     pub shell: Option<PlatformShell>,
-    pub login: bool,
+    /// Load shell startup files. `None` uses login mode for POSIX and
+    /// `shell_environment.use_profile` for PowerShell; CMD ignores it.
+    pub login: Option<bool>,
     pub tty: bool,
     pub yield_time_ms: u64,
     pub max_output_bytes: Option<usize>,

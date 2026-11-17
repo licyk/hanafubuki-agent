@@ -137,7 +137,7 @@ fn request(flavour: Flavour, script: &str, login: bool, tty: bool) -> ExecComman
     ExecCommandRequest {
         cmd: script.to_string(),
         shell: Some(PlatformShell::Posix),
-        login,
+        login: Some(login),
         tty,
         yield_time_ms: YIELD_MS,
         max_output_bytes: None,

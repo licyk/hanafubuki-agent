@@ -164,7 +164,7 @@ fn run_shell(
         } else {
             PlatformShell::Posix
         }),
-        login: false,
+        login: Some(false),
         tty,
         yield_time_ms: 1_000,
         max_output_bytes: Some(4096),

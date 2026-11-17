@@ -443,7 +443,7 @@ The processes the Agent starts are the Agent's: it has its own `ExecutorManager`
 
 ## Configuration in a host [#configuration-in-a-host]
 
-The execution plugin takes its environment selection and shell startup options from `[pluginOptions.execution]` in embedded mode too. Direct `AgentExecutionService` callers set `ExecCommandRequest.shell_environment`; its optional `ExecutionEnvironmentContext` supplies session, turn, tool-call and permission-mode metadata. MCP stdio uses `McpStdioConfig.environment_variables` for extra inherited names. The host's final `ChildProcessEnvironment` overlay still wins; see [Environment](/docs/environment#selection).
+The execution plugin takes its environment selection and shell startup options from `[pluginOptions.execution]` in embedded mode too. Direct `AgentExecutionService` callers set `ExecCommandRequest.shell_environment`; its optional `ExecutionEnvironmentContext` supplies session, turn, tool-call and permission-mode metadata. `ExecCommandRequest.login` is `Option<bool>`: `Some(true)` / `Some(false)` enables / disables POSIX login startup or PowerShell profiles; `None` uses POSIX login startup or PowerShell's `shell_environment.use_profile` default. MCP stdio uses `McpStdioConfig.environment_variables` for extra inherited names. The host's final `ChildProcessEnvironment` overlay still wins; see [Environment](/docs/environment#selection).
 
 The host names a configuration directory for the Agent and opens it with `AgentConfig::new(dir)` (Hanafubuki's is `<app_data>/config/agent/`). It holds three TOML files, each its own revision domain with its own lock:
 

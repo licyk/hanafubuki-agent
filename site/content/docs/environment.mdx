@@ -58,7 +58,9 @@ shellSnapshot = true
 
 ### Shell 启动 [#shell-startup]
 
-Unix 优先选择 `SHELL` 指定且支持的 Shell（`bash`、`zsh`、`sh` 或 `dash`），随后尝试 bash 和 sh。`shellSnapshot = true` 时，首条获批的登录 POSIX 命令会通过 Agent 管理的进程，在该命令的沙箱中捕获启动状态；同一会话后续命令复用其中的函数、别名、选项及经过选择的导出变量。Bash/zsh 捕获时还会加载交互 rc 文件。`login = false` 跳过快照。PowerShell 默认使用 `-NoProfile`，`shellUseProfile = true` 时加载配置，原有 UTF-8 初始化仍然执行。
+Unix 优先选择 `SHELL` 指定且支持的 Shell（`bash`、`zsh`、`sh` 或 `dash`），随后尝试 bash 和 sh。`shellSnapshot = true` 时，首条获批的登录 POSIX 命令会通过 Agent 管理的进程，在该命令的沙箱中捕获启动状态；同一会话后续命令复用其中的函数、别名、选项及经过选择的导出变量。Bash/zsh 捕获时还会加载交互 rc 文件。`login = false` 跳过快照。
+
+`exec_command` 的 `login` 参数也控制 Windows PowerShell（`powershell`）和 PowerShell 7（`pwsh`）的 Profile 加载：`true` 加载 Profile，`false` 添加 `-NoProfile`。省略 `login` 或传入 `null` 时，PowerShell 遵循全局 `shellUseProfile` 设置（默认 `false`），POSIX 则默认使用登录模式。显式值会覆盖该次命令的 PowerShell 全局设置。UTF-8 初始化仍然执行，`tty` 不影响此行为。CMD 忽略 `login`。嵌入调用方通过 `ExecCommandRequest.login` 的 `Some(true)`、`Some(false)` 或 `None` 使用相同语义。
 
 快照仅保存在内存中，退出或清理会话终端时丢弃；工作目录、Shell、环境策略、显式环境、沙箱或宿主代理覆盖变化后缓存失效。捕获限时 10 秒，失败、截断或超过大小限制时回退到普通 Shell 启动。状态上限为 64 KiB，捕获输出上限为 256 KiB。配置导出的变量不会写入快照文件或对话历史。缓存不保存单条命令造成的环境变化：某次命令的 `export` 不会更新下一次命令的环境。
 

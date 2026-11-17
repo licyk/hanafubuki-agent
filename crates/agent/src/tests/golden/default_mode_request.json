@@ -408,6 +408,7 @@
             ]
           },
           "login": {
+            "description": "Load shell startup files: POSIX login mode or PowerShell/pwsh profiles. true enables, false disables; null or omitted defaults to true for POSIX and the shellUseProfile setting for PowerShell. Ignored by cmd.",
             "type": [
               "boolean",
               "null"

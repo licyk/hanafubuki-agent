@@ -12,7 +12,7 @@ fn request(cmd: &str, tty: bool, max_output_bytes: Option<usize>) -> ExecCommand
     ExecCommandRequest {
         cmd: cmd.to_string(),
         shell: None,
-        login: false,
+        login: Some(false),
         tty,
         yield_time_ms: 10_000,
         max_output_bytes,

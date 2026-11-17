@@ -48,7 +48,7 @@ fn unified_exec_watcher_publishes_before_wait_without_consuming_model_output() {
     let request = ExecCommandRequest {
         cmd: "long-running-command".to_string(),
         shell: None,
-        login: true,
+        login: Some(true),
         tty: false,
         yield_time_ms: 5_000,
         max_output_bytes: Some(32 * 1024),
@@ -177,7 +177,7 @@ fn watcher_registration_failure_is_explicit_and_confirms_process_cleanup() {
     let request = ExecCommandRequest {
         cmd: "watcher-registration".to_string(),
         shell: None,
-        login: true,
+        login: Some(true),
         tty: false,
         yield_time_ms: 5_000,
         max_output_bytes: Some(4096),
@@ -362,7 +362,7 @@ fn monitored_output(tty: bool, output: &str) -> Vec<(String, bool)> {
     let request = ExecCommandRequest {
         cmd: "some-output".to_string(),
         shell: None,
-        login: true,
+        login: Some(true),
         tty,
         yield_time_ms: 5_000,
         max_output_bytes: Some(32 * 1024),
