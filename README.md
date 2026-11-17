@@ -3,14 +3,32 @@
 # hanafubuki-agent
 
 <p align="center">
-  <a href="https://github.com/licyk/hanafubuki-agent/stargazers"><img src="https://img.shields.io/github/stars/licyk/hanafubuki-agent?style=flat&logo=github&logoColor=silver&color=bluegreen&labelColor=grey" alt="Stars"></a>
-  <a href="https://github.com/licyk/hanafubuki-agent/issues"><img src="https://img.shields.io/github/issues/licyk/hanafubuki-agent?style=flat&logo=github&logoColor=silver&color=bluegreen&labelColor=grey" alt="Issues"></a>
-  <a href="https://github.com/licyk/hanafubuki-agent/actions/workflows/ci.yml"><img src="https://github.com/licyk/hanafubuki-agent/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/licyk/hanafubuki-agent/releases"><img src="https://img.shields.io/github/v/release/licyk/hanafubuki-agent?color=bluegreen&labelColor=grey" alt="Release"></a>
-  <a href="https://crates.io/crates/hanafubuki-agent"><img src="https://img.shields.io/crates/v/hanafubuki-agent?logo=rust&color=bluegreen&labelColor=grey" alt="crates.io"></a>
+  <a href="https://github.com/licyk/hanafubuki-agent/stargazers">
+    <img src="https://img.shields.io/github/stars/licyk/hanafubuki-agent?style=flat&logo=github&logoColor=silver&color=bluegreen&labelColor=grey" alt="Stars">
+  </a>
+  <a href="https://github.com/licyk/hanafubuki-agent/issues">
+    <img src="https://img.shields.io/github/issues/licyk/hanafubuki-agent?style=flat&logo=github&logoColor=silver&color=bluegreen&labelColor=grey" alt="Issues">
+  </a>
+  <a href="https://github.com/licyk/hanafubuki-agent/commits/main">
+    <img src="https://flat.badgen.net/github/last-commit/licyk/hanafubuki-agent/main?icon=github&color=green&label=last%20main%20commit" alt="Last main commit">
+  </a>
+  <a href="https://github.com/licyk/hanafubuki-agent/actions/workflows/ci.yml">
+    <img src="https://github.com/licyk/hanafubuki-agent/actions/workflows/ci.yml/badge.svg" alt="CI">
+  </a>
+  <a href="https://github.com/licyk/hanafubuki-agent/actions/workflows/release.yml">
+    <img src="https://github.com/licyk/hanafubuki-agent/actions/workflows/release.yml/badge.svg" alt="Release workflow">
+  </a>
+  <a href="https://github.com/licyk/hanafubuki-agent/releases">
+    <img src="https://img.shields.io/github/v/release/licyk/hanafubuki-agent?color=bluegreen&labelColor=grey" alt="Latest release">
+  </a>
+  <a href="https://crates.io/crates/hanafubuki-agent">
+    <img src="https://img.shields.io/crates/v/hanafubuki-agent?logo=rust&color=bluegreen&labelColor=grey" alt="crates.io">
+  </a>
 </p>
 
-[Documentation · 简体中文 / English](https://licyk.github.io/hanafubuki-agent/docs/)
+[English](https://github.com/licyk/hanafubuki-agent/blob/main/README.md) | [简体中文](https://github.com/licyk/hanafubuki-agent/blob/main/README.zh-CN.md)
+
+**[Website](https://licyk.github.io/hanafubuki-agent/)** · **[Documentation](https://licyk.github.io/hanafubuki-agent/docs/)**
 
 </div>
 
