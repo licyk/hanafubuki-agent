@@ -16,6 +16,8 @@ use hanafubuki_agent::{AgentSessionListRequest, AgentTurnPhase, ConversationItem
 use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 
 use super::Harness;
+use crate::agent_bridge::{AgentReply, SteerOutcome, TurnUpdate};
+use crate::app_event::AppEvent;
 use crate::transcript_mode::TranscriptMode;
 
 /// A model stream that completes with no answer: the turn fails.
@@ -28,19 +30,12 @@ fn failing_events() -> Vec<u8> {
     .to_vec()
 }
 
-fn slow(events: Vec<u8>, seconds: u64) -> (Vec<u8>, Duration) {
-    (events, Duration::from_secs(seconds))
+fn held(events: Vec<u8>) -> (Vec<u8>, Duration) {
+    ([HOLD.as_bytes(), &events].concat(), Duration::ZERO)
 }
 
 fn now(events: Vec<u8>) -> (Vec<u8>, Duration) {
     (events, Duration::ZERO)
-}
-
-/// An answer that comes only after the test has interrupted or outlived
-/// its turn, so the turn runs however long a loaded runner takes over the
-/// test's steps. The server answers nothing else meanwhile.
-fn never(events: Vec<u8>) -> (Vec<u8>, Duration) {
-    (events, Duration::from_secs(60))
 }
 
 impl Harness {
@@ -67,6 +62,26 @@ impl Harness {
         self.pump_until("the turn to run", |harness| {
             harness.app.chat_widget.is_task_running()
         });
+    }
+
+    fn pump_until_steered(&mut self) {
+        let deadline = Instant::now() + super::DEADLINE;
+        loop {
+            let event = self
+                .events
+                .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                .expect("the Agent to accept the steering message");
+            let accepted = matches!(&event,
+                AppEvent::AgentReply(AgentReply::Update(update))
+                    if matches!(update.as_ref(), TurnUpdate::Steered {
+                        outcome: SteerOutcome::Accepted(_), ..
+                    })
+            );
+            assert!(self.app.handle_event(&mut self.tui, event));
+            if accepted {
+                return;
+            }
+        }
     }
 
     /// The person's messages the session holds, oldest first, a steering
@@ -119,17 +134,19 @@ impl Harness {
 #[test]
 fn enter_steers_the_running_turn_which_reads_it_at_its_next_step() {
     let mut harness = Harness::timed(vec![
-        slow(assistant_events("Working on it."), 2),
+        held(assistant_events("Working on it.")),
         now(assistant_events("Steered.")),
     ]);
     harness.type_and_submit("Start.");
     harness.pump_until_running();
     harness.type_and_submit("Also check the tests.");
+    harness.pump_until_steered();
     let waiting = harness.pump_until_screen_shows("Messages to be submitted after next tool call");
     assert!(waiting.contains("↳ Also check the tests."), "{waiting}");
     // Not written until the turn reads it.
     assert!(!harness.transcript().contains("Also check the tests."));
 
+    harness.server.hold.notify_one();
     harness.pump_until_screen_shows("Steered.");
     harness.pump_until_turn_ends();
     harness.assert_in_order(&[
@@ -265,7 +282,7 @@ fn esc_interrupts_and_sends_the_waiting_steers_as_one_turn_which_can_be_edited()
     let mut harness = Harness::timed(vec![
         // The server answers one request at a time: "Resent." waits for
         // this one.
-        slow(assistant_events("Too slow."), 3),
+        held(assistant_events("Too slow.")),
         now(assistant_events("Resent.")),
     ]);
     harness.type_and_submit("Start.");
@@ -276,6 +293,8 @@ fn esc_interrupts_and_sends_the_waiting_steers_as_one_turn_which_can_be_edited()
     harness.type_draft("a draft");
 
     harness.key(KeyCode::Esc);
+    harness.pump_until_screen_shows("Model interrupted to submit steer instructions.");
+    harness.server.hold.notify_one();
     harness.pump_until_screen_shows("Resent.");
     harness.pump_until_turn_ends();
     harness.assert_in_order(&[
@@ -308,7 +327,7 @@ fn esc_interrupts_and_sends_the_waiting_steers_as_one_turn_which_can_be_edited()
 #[test]
 fn tab_queues_each_message_for_a_turn_of_its_own_after_the_running_one() {
     let mut harness = Harness::timed(vec![
-        slow(assistant_events("First."), 2),
+        held(assistant_events("First.")),
         now(assistant_events("Second.")),
         now(assistant_events("Third.")),
     ]);
@@ -319,6 +338,7 @@ fn tab_queues_each_message_for_a_turn_of_its_own_after_the_running_one() {
     let queued = harness.pump_until_screen_shows("Queued follow-up inputs");
     assert!(queued.contains("↳ Queued two."), "{queued}");
 
+    harness.server.hold.notify_one();
     harness.pump_until_screen_shows("Third.");
     harness.pump_until_turn_ends();
     harness.assert_in_order(&[
@@ -337,19 +357,20 @@ fn tab_queues_each_message_for_a_turn_of_its_own_after_the_running_one() {
 #[test]
 fn a_failed_turn_goes_on_with_the_queue() {
     let mut harness = Harness::timed(vec![
-        slow(failing_events(), 2),
+        held(failing_events()),
         now(assistant_events("Recovered.")),
     ]);
     harness.type_and_submit("Start.");
     harness.pump_until_running();
     harness.type_and_queue("After the failure.");
+    harness.server.hold.notify_one();
     harness.pump_until_screen_shows("Recovered.");
     harness.assert_in_order(&["■", "› After the failure.", "Recovered."]);
 }
 
 #[test]
 fn an_interrupt_puts_the_queue_back_in_the_composer_and_sends_nothing() {
-    let mut harness = Harness::timed(vec![never(assistant_events("Too slow."))]);
+    let mut harness = Harness::timed(vec![held(assistant_events("Too slow."))]);
     harness.type_and_submit("Start.");
     harness.pump_until_running();
     harness.type_and_queue("Queued.");
@@ -370,7 +391,7 @@ fn an_interrupt_puts_the_queue_back_in_the_composer_and_sends_nothing() {
 #[test]
 fn shift_left_edits_the_last_queued_message_but_a_selection_keeps_its_keys() {
     let mut harness = Harness::start_timed(
-        vec![never(assistant_events("Done."))],
+        vec![held(assistant_events("Done."))],
         true,
         TranscriptMode::Owned,
     );
@@ -401,7 +422,7 @@ fn shift_left_edits_the_last_queued_message_but_a_selection_keeps_its_keys() {
 fn a_parked_conversations_queue_drains_while_the_side_one_has_the_focus() {
     let mut harness = Harness::timed(vec![
         now(assistant_events("Hi.")),
-        slow(assistant_events("Main done."), 2),
+        held(assistant_events("Main done.")),
         now(assistant_events("Queued answer.")),
     ]);
     harness.answered("Hello.", "Hi.");
@@ -416,6 +437,7 @@ fn a_parked_conversations_queue_drains_while_the_side_one_has_the_focus() {
     });
     // The side conversation has a queue of its own, empty.
     assert!(!harness.screen().contains("Queued follow-up inputs"));
+    harness.server.hold.notify_one();
     harness.pump_until("the main queue to drain", |harness| {
         harness.server.requests().len() == 3
     });
@@ -438,7 +460,7 @@ fn submitting_a_message_returns_to_latest_but_editing_does_not() {
         (true, KeyCode::Tab),
     ] {
         let mut harness = Harness::start_timed(
-            vec![never(assistant_events("Too slow."))],
+            vec![held(assistant_events("Too slow."))],
             true,
             TranscriptMode::Owned,
         );
@@ -473,7 +495,7 @@ fn submitting_a_message_returns_to_latest_but_editing_does_not() {
 #[test]
 fn esc_returns_a_scrolled_conversation_to_the_bottom_before_it_interrupts() {
     let mut harness = Harness::start_timed(
-        vec![never(assistant_events("Too slow."))],
+        vec![held(assistant_events("Too slow."))],
         true,
         TranscriptMode::Owned,
     );
@@ -504,7 +526,7 @@ fn esc_returns_a_scrolled_conversation_to_the_bottom_before_it_interrupts() {
 fn esc_interrupts_a_side_conversations_turn_without_leaving_it() {
     let mut harness = Harness::timed(vec![
         now(assistant_events("Hi.")),
-        never(assistant_events("Too slow.")),
+        held(assistant_events("Too slow.")),
     ]);
     harness.answered("Hello.", "Hi.");
     harness.type_and_submit("/btw What is 2 + 2?");
@@ -520,7 +542,7 @@ fn esc_interrupts_a_side_conversations_turn_without_leaving_it() {
 
 #[test]
 fn the_leaders_tab_is_the_chords_and_queues_nothing() {
-    let mut harness = Harness::timed(vec![never(assistant_events("Done."))]);
+    let mut harness = Harness::timed(vec![held(assistant_events("Done."))]);
     harness.type_and_submit("Start.");
     harness.pump_until_running();
     harness.type_draft("draft");
@@ -537,7 +559,7 @@ fn a_subagent_shown_queues_its_own_messages_for_its_turns() {
         now(super::subagents::spawn_and_wait("Count the files.")),
         now(assistant_events("Twelve files.")),
         now(assistant_events("There are twelve.")),
-        slow(assistant_events("Counting again."), 2),
+        held(assistant_events("Counting again.")),
         now(assistant_events("Steered count.")),
         now(assistant_events("First queued answer.")),
         now(assistant_events("Second queued answer.")),
@@ -559,6 +581,7 @@ fn a_subagent_shown_queues_its_own_messages_for_its_turns() {
     harness.type_and_queue("Then once more.");
     harness.type_and_queue("And a last time.");
     harness.pump_until_screen_shows("Queued follow-up inputs");
+    harness.server.hold.notify_one();
     harness.pump_until("the last queued answer", |harness| {
         harness.transcript().contains("Second queued answer.")
     });

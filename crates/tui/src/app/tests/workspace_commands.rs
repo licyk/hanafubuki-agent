@@ -6,7 +6,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use hanafubuki_agent::sandbox::SandboxStatus;
-use hanafubuki_agent::test_support::assistant_events;
+use hanafubuki_agent::test_support::{assistant_events, HOLD};
 use hanafubuki_agent::{AgentPermissionMode, AgentSessionListRequest, AgentWorktree};
 use ratatui::crossterm::event::KeyCode;
 
@@ -85,10 +85,7 @@ fn git(directory: &Path, args: &[&str]) {
     assert!(output.status.success(), "{output:?}");
 }
 
-// TODO: refuse `/approve` while a turn is held open by the test, not by a
-// 10 s model delay a loaded runner can outlast; then remove the `ignore`.
 #[test]
-#[ignore = "timing-dependent: a 10 s model delay is the window `/approve` is refused in"]
 fn a_denied_action_is_approved_between_turns_and_refused_during_one() {
     // A review is named after its call: the second call needs an id of its own.
     let second = String::from_utf8(command_call("echo second-denied"))
@@ -101,8 +98,10 @@ fn a_denied_action_is_approved_between_turns_and_refused_during_one() {
         (second, Duration::ZERO),
         (assistant_events(DENIAL), Duration::ZERO),
         (assistant_events("Not run."), Duration::ZERO),
-        // Long enough for `/approve` to be tried while it runs.
-        (assistant_events("Going on."), Duration::from_secs(10)),
+        (
+            [HOLD.as_bytes(), &assistant_events("Going on.")].concat(),
+            Duration::ZERO,
+        ),
     ];
     let mut harness = Harness::start_timed(responses, true, TranscriptMode::Terminal);
     harness.type_and_submit("/permissions auto-review");
@@ -121,11 +120,16 @@ fn a_denied_action_is_approved_between_turns_and_refused_during_one() {
     harness.type_and_submit("/permissions");
     let list = harness.pump_until_screen_shows("Select Permissions");
     assert!(!list.contains("(current)"), "{list}");
-    assert_eq!(
-        list.contains("The sandbox is unavailable on this machine"),
-        !matches!(sandbox, SandboxStatus::Available { .. }),
-        "{sandbox:?}: {list}"
-    );
+    if let SandboxStatus::Unavailable { reason } = sandbox {
+        let unwrapped = list.split_whitespace().collect::<String>();
+        assert!(
+            unwrapped.contains(&reason.split_whitespace().collect::<String>()),
+            "{list}"
+        );
+        assert!(list.contains("(disabled)"), "{list}");
+    } else {
+        assert!(!list.contains("(disabled)"), "{list}");
+    }
     harness.key(KeyCode::Esc);
     harness.type_and_submit("/status");
     harness.pump_until_screen_shows("Permissions:");
@@ -176,6 +180,7 @@ fn a_denied_action_is_approved_between_turns_and_refused_during_one() {
     harness.pump_until_screen_shows("second-denied");
     harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("/approve: the action was not approved");
+    harness.server.hold.notify_one();
     harness.pump_until_screen_shows("Going on.");
 }
 

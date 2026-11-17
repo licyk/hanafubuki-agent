@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use hanafubuki_agent::test_support::assistant_events;
+use hanafubuki_agent::test_support::{assistant_events, HOLD};
 use hanafubuki_agent::{
     AgentSessionId, AgentSessionLifecycle, AgentSessionListRequest, ConversationItem,
 };
@@ -101,7 +101,10 @@ fn a_first_esc_primes_and_any_other_key_cancels() {
 #[test]
 fn esc_while_a_turn_runs_interrupts_and_does_not_prime() {
     let mut harness = Harness::start_timed(
-        vec![(assistant_events("Too late."), Duration::from_secs(30))],
+        vec![(
+            [HOLD.as_bytes(), &assistant_events("Too late.")].concat(),
+            Duration::ZERO,
+        )],
         true,
         TranscriptMode::Terminal,
     );

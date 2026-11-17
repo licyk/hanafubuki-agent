@@ -8,7 +8,7 @@
 
 use std::time::Duration;
 
-use hanafubuki_agent::test_support::assistant_events;
+use hanafubuki_agent::test_support::{assistant_events, HOLD};
 use ratatui::crossterm::event::KeyCode;
 
 use super::{has_output_row, Harness};
@@ -85,7 +85,10 @@ fn a_shell_command_runs_without_the_model_and_the_next_message_carries_it() {
 #[test]
 fn a_bare_bang_says_how_and_a_running_turn_refuses_a_command() {
     let mut harness = Harness::start_timed(
-        vec![(assistant_events("Slow answer."), Duration::from_secs(60))],
+        vec![(
+            [HOLD.as_bytes(), &assistant_events("Slow answer.")].concat(),
+            Duration::ZERO,
+        )],
         true,
         TranscriptMode::Terminal,
     );

@@ -5,7 +5,7 @@
 
 use std::time::Duration;
 
-use hanafubuki_agent::test_support::assistant_events;
+use hanafubuki_agent::test_support::{assistant_events, HOLD};
 use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 
 use super::Harness;
@@ -78,7 +78,10 @@ fn ctrl_r_finds_what_an_earlier_run_sent_in_fullscreen() {
 
 fn the_search_closes_without_touching_a_running_turn(mode: TranscriptMode) {
     let mut harness = Harness::start_timed(
-        vec![(assistant_events("Slow answer."), Duration::from_secs(60))],
+        vec![(
+            [HOLD.as_bytes(), &assistant_events("Slow answer.")].concat(),
+            Duration::ZERO,
+        )],
         true,
         mode,
     );
