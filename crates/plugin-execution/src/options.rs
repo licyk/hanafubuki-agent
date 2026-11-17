@@ -45,14 +45,13 @@ impl ExecutionOptions {
     pub(crate) fn shell_environment(&self) -> Result<ShellEnvironment, String> {
         let mut set = std::collections::BTreeMap::new();
         for entry in &self.environment_set {
-            let (name, value) = entry
-                .split_once('=')
+            // A leading '=' belongs to a Windows hidden variable's name.
+            let separator = entry
+                .char_indices()
+                .find(|(index, ch)| *index > 0 && *ch == '=')
+                .map(|(index, _)| index)
                 .ok_or("environmentSet entries must be NAME=VALUE")?;
-            hanafubuki_agent_foundation::environment::validate_native_environment_entry(
-                name,
-                Some(value),
-            )
-            .map_err(|_| "environmentSet contains an invalid environment entry")?;
+            let (name, value) = (&entry[..separator], &entry[separator + 1..]);
             hanafubuki_agent_foundation::environment_policy::insert(
                 &mut set,
                 name.into(),

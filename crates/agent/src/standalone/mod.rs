@@ -123,7 +123,7 @@ impl AgentRuntime {
         // A command line that starts the Agent asks for it, so an earlier
         // run's unfinished starts never keep it off.
         let slot = AgentSlot::new(None, host.status).starting_with(options.start);
-        let agent = DesktopAgent::new(slot, marker, HashMap::new())?;
+        let agent = DesktopAgent::new(slot, marker, HashMap::new());
         let processes = agent.child_environment();
         ConfiguredNetwork {
             config: config.clone(),
@@ -297,9 +297,7 @@ struct ConfiguredNetwork {
 impl NetworkSettingsPort for ConfiguredNetwork {
     fn proxy(&self) -> Result<AgentProxy, String> {
         let proxy = self.config.standalone_settings()?.network.proxy;
-        self.processes
-            .replace(proxy_environment(&proxy))
-            .map_err(|error| format!("invalid Agent child process environment: {error}"))?;
+        self.processes.replace(proxy_environment(&proxy));
         Ok(proxy)
     }
 }

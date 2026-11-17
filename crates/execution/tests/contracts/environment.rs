@@ -78,7 +78,7 @@ fn shell_processes_inherit_environment_and_apply_proxy_overlays() {
                         )
                     }))
                     .collect();
-                environment.replace(overlay).unwrap();
+                environment.replace(overlay);
             }
             let overrides = if mode == "system" {
                 BTreeMap::new()

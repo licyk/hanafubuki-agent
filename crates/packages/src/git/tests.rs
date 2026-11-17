@@ -40,14 +40,12 @@ fn a_remote_is_reached_through_the_processes_proxy() {
             .write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
     });
     let overlay = ChildProcessEnvironment::default();
-    overlay
-        .replace(
-            proxy_names()
-                .iter()
-                .map(|name| (name.to_string(), Some(address.clone())))
-                .collect::<HashMap<_, _>>(),
-        )
-        .unwrap();
+    overlay.replace(
+        proxy_names()
+            .iter()
+            .map(|name| (name.to_string(), Some(address.clone())))
+            .collect::<HashMap<_, _>>(),
+    );
     let executor = ExecutorManager::new(overlay);
     let cwd = std::env::temp_dir();
 

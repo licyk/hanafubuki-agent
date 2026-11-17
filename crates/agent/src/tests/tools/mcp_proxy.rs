@@ -49,9 +49,7 @@ fn a_proxy_change_starts_the_stdio_servers_anew_under_it() {
     .to_string();
     let paths = test_paths("mcp-stdio-proxy");
     let processes = ChildProcessEnvironment::default();
-    processes
-        .replace(proxy_overlay("http://first.proxy:1"))
-        .unwrap();
+    processes.replace(proxy_overlay("http://first.proxy:1"));
     let manager = Arc::new(hanafubuki_agent_mcp::McpManager::new(
         Arc::new(ExecutorManager::new(processes.clone())),
         BackgroundWorkerGroup::default(),
@@ -135,9 +133,7 @@ fn a_proxy_change_starts_the_stdio_servers_anew_under_it() {
         application.mcp_connect(config.id.clone()).await.unwrap();
         let before = called().await;
 
-        processes
-            .replace(proxy_overlay("http://second.proxy:2"))
-            .unwrap();
+        processes.replace(proxy_overlay("http://second.proxy:2"));
         assert!(application
             .apply_proxy_policy(&AgentProxy::Explicit("http://second.proxy:2".into()))
             .await

@@ -88,7 +88,7 @@ fn main() -> Result<(), String> {
     let marker = AgentStartMarker::new(storage.start_marker_file.clone())
         .with_crash_record(storage.crash_record_file.clone());
     let slot = AgentSlot::new(marker.disabled_reason(true), Arc::new(LogStatus));
-    let agent = DesktopAgent::new(slot, marker, HashMap::new())?;
+    let agent = DesktopAgent::new(slot, marker, HashMap::new());
 
     // 2. What builds every Agent instance: the first start and each restart.
     let process_groups_file = storage.process_groups_file.clone();
@@ -175,7 +175,7 @@ fn main() -> Result<(), String> {
 Points to note:
 
 - `AgentSlot::new` takes an `Option<AgentDisabledReason>` first: `None` means the Agent will start. `AgentStartMarker::disabled_reason(module_enabled)` gives the reason to stay off when the host turned the Agent off, or when the last starts never finished (a crash loop, `CRASH_LOOP_STARTS` being 3).
-- `DesktopAgent::new`'s third argument is the environment the Agent's child processes inherit in place of this process's (`HashMap<String, Option<String>>`, `None` removing a variable). When the host's proxy changes, `DesktopAgent::replace_child_environment` replaces the overlay applied last.
+- `DesktopAgent::new`'s third argument is the environment the Agent's child processes inherit in place of this process's (`HashMap<String, Option<String>>`, `None` removing a variable). When the host's proxy changes, `DesktopAgent::replace_child_environment` replaces the overlay applied last. These operations store the supplied entries without validating names or values: `new` returns `DesktopAgent` directly, and replacement returns `()`; native process launch reports any launch failure.
 - `start` returns at once: the start runs on the Agent instance's own runtime (construction and recovery on its blocking pool, the plugins as its tasks, the MCP servers connecting in the background). A failure leaves the slot `Failed` and never reaches the host.
 - `wait_until_started` returns the running `AgentHandle`, or why the Agent does not run (`AgentUnavailable`, whose `Display` is "the Agent is unavailable: …").
 - `AgentHandle` dereferences to `AgentApplicationService`. Its async methods run on `handle.runtime()` (`ContainedRuntime::block_on`, or `spawn` on its handle): kardia and the Agent's tasks run only there, and only there is a panic contained.

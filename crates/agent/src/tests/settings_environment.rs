@@ -9,7 +9,10 @@ async fn every_shell_environment_option_is_editable_and_saved_globally() {
         ("environmentIgnoreDefaultExcludes", json!(false)),
         ("environmentExclude", json!(["PRIVATE_*"])),
         ("environmentIncludeOnly", json!(["PATH", "APP_MODE"])),
-        ("environmentSet", json!(["APP_MODE=development"])),
+        (
+            "environmentSet",
+            json!(["APP_MODE=development", "=C:=C:\\Users\\example"]),
+        ),
         ("shellUseProfile", json!(true)),
         ("shellSnapshot", json!(false)),
     ];

@@ -88,7 +88,7 @@ fn main() -> Result<(), String> {
     let marker = AgentStartMarker::new(storage.start_marker_file.clone())
         .with_crash_record(storage.crash_record_file.clone());
     let slot = AgentSlot::new(marker.disabled_reason(true), Arc::new(LogStatus));
-    let agent = DesktopAgent::new(slot, marker, HashMap::new())?;
+    let agent = DesktopAgent::new(slot, marker, HashMap::new());
 
     // 2. 构造每个 Agent 实例：首次启动和每次重启。
     let process_groups_file = storage.process_groups_file.clone();
@@ -175,7 +175,7 @@ fn main() -> Result<(), String> {
 要点：
 
 - `AgentSlot::new` 的第一个参数是 `Option<AgentDisabledReason>`：`None` 表示 Agent 会启动。`AgentStartMarker::disabled_reason(module_enabled)` 在宿主关闭了 Agent，或者前几次启动都没有完成（崩溃循环，`CRASH_LOOP_STARTS` 为 3）时给出停用原因。
-- `DesktopAgent::new` 的第三个参数是 Agent 子进程继承的环境（代替本进程的环境，`HashMap<String, Option<String>>`，`None` 表示移除）。宿主的代理改变时用 `DesktopAgent::replace_child_environment` 替换最后应用的覆盖层。
+- `DesktopAgent::new` 的第三个参数是 Agent 子进程继承的环境（代替本进程的环境，`HashMap<String, Option<String>>`，`None` 表示移除）。宿主的代理改变时用 `DesktopAgent::replace_child_environment` 替换最后应用的覆盖层。这两个操作直接保存条目，不校验变量名和值：`new` 直接返回 `DesktopAgent`，替换方法返回 `()`；进程启动失败由原生启动器报告。
 - `start` 立即返回：启动在 Agent 实例自己的运行时上进行（构造与恢复在它的阻塞池上，插件作为它的任务，MCP 服务器在后台连接）。失败时槽位变为 `Failed`，不会影响宿主。
 - `wait_until_started` 返回运行中的 `AgentHandle`，或者 Agent 为什么没有运行（`AgentUnavailable`，它的 `Display` 就是“the Agent is unavailable: …”）。
 - `AgentHandle` 解引用为 `AgentApplicationService`。异步方法必须在 `handle.runtime()` 上运行（`ContainedRuntime::block_on`，或者在它的 handle 上 `spawn`）：kardia 与 Agent 的任务只能在那里运行，panic 也只在那里被隔离。

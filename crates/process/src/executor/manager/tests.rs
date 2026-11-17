@@ -129,12 +129,10 @@ fn insert_fake_session(
 #[test]
 fn child_process_environment_wins_for_pipe_pty_and_cleared_inheritance() {
     let environment = ChildProcessEnvironment::default();
-    environment
-        .replace(HashMap::from([
-            ("HTTP_PROXY".into(), Some("http://global:8080".into())),
-            ("HTTPS_PROXY".into(), None),
-        ]))
-        .unwrap();
+    environment.replace(HashMap::from([
+        ("HTTP_PROXY".into(), Some("http://global:8080".into())),
+        ("HTTPS_PROXY".into(), None),
+    ]));
     let manager = ExecutorManager::new(environment);
     let mut pipe = request(vec!["ignored".into()]);
     pipe.env
@@ -162,12 +160,10 @@ fn child_process_environment_wins_for_pipe_pty_and_cleared_inheritance() {
 #[test]
 fn final_environment_overrides_follow_platform_case_rules() {
     let environment = ChildProcessEnvironment::default();
-    environment
-        .replace(HashMap::from([
-            ("HTTP_PROXY".into(), Some("http://configured:8080".into())),
-            ("HTTPS_PROXY".into(), None),
-        ]))
-        .unwrap();
+    environment.replace(HashMap::from([
+        ("HTTP_PROXY".into(), Some("http://configured:8080".into())),
+        ("HTTPS_PROXY".into(), None),
+    ]));
     let manager = ExecutorManager::new(environment);
     for mode in [
         super::super::model::ExecutorIoMode::Pipe,
@@ -229,12 +225,10 @@ fn child_process_environment_sets_and_removes_variables_in_real_pipe_child() {
     }
 
     let environment = ChildProcessEnvironment::default();
-    environment
-        .replace(HashMap::from([
-            ("HTTP_PROXY".into(), Some("http://global:8080".into())),
-            ("HTTPS_PROXY".into(), Some("http://global:8080".into())),
-        ]))
-        .unwrap();
+    environment.replace(HashMap::from([
+        ("HTTP_PROXY".into(), Some("http://global:8080".into())),
+        ("HTTPS_PROXY".into(), Some("http://global:8080".into())),
+    ]));
     let manager = ExecutorManager::new(environment.clone());
     let output = run_env(
         &manager,
@@ -243,12 +237,10 @@ fn child_process_environment_sets_and_removes_variables_in_real_pipe_child() {
     assert!(output.contains("HTTP_PROXY=http://global:8080"));
     assert!(output.contains("HTTPS_PROXY=http://global:8080"));
 
-    environment
-        .replace(HashMap::from([
-            ("HTTP_PROXY".into(), None),
-            ("HTTPS_PROXY".into(), None),
-        ]))
-        .unwrap();
+    environment.replace(HashMap::from([
+        ("HTTP_PROXY".into(), None),
+        ("HTTPS_PROXY".into(), None),
+    ]));
     let output = run_env(
         &manager,
         HashMap::from([
@@ -296,14 +288,11 @@ fn inherited_repair_precedes_caller_and_final_environment() {
     let environment = ChildProcessEnvironment::with_inherited_overlay(HashMap::from([
         ("HANAFUBUKI_INHERITED_ORDER".into(), Some("base".into())),
         ("HANAFUBUKI_INHERITED_ONLY".into(), Some("base".into())),
-    ]))
-    .unwrap();
-    environment
-        .replace(HashMap::from([(
-            "HANAFUBUKI_INHERITED_ORDER".into(),
-            Some("final".into()),
-        )]))
-        .unwrap();
+    ]));
+    environment.replace(HashMap::from([(
+        "HANAFUBUKI_INHERITED_ORDER".into(),
+        Some("final".into()),
+    )]));
     let output = run_env(
         environment,
         EnvironmentInheritance::Inherit,
@@ -315,8 +304,7 @@ fn inherited_repair_precedes_caller_and_final_environment() {
     let environment = ChildProcessEnvironment::with_inherited_overlay(HashMap::from([(
         "HANAFUBUKI_INHERITED_ONLY".into(),
         Some("base".into()),
-    )]))
-    .unwrap();
+    )]));
     let output = run_env(environment, EnvironmentInheritance::Clear, HashMap::new());
     assert!(!output.contains("HANAFUBUKI_INHERITED_ONLY="));
 }

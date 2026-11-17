@@ -107,14 +107,12 @@ if [ -n "${BASH_VERSION-}" ]; then shopt -s expand_aliases; fi
     request.shell_environment.policy.exclude = vec!["*".into()];
     request.shell_environment.policy.include_only = vec!["NOT_A_VARIABLE".into()];
     request.cmd = "printf '%s\\n' \"$HANAFUBUKI_AGENT_TOOL_CALL_ID\" \"$HTTP_PROXY\" \"$SNAPSHOT_SECRET\" \"$CODEX_CI:$PYTHONUTF8\"".into();
-    overlay
-        .replace(std::collections::HashMap::from([(
-            "HTTP_PROXY".into(),
-            Some("http://configured.invalid:9000".into()),
-        )]))
-        .unwrap();
+    overlay.replace(std::collections::HashMap::from([(
+        "HTTP_PROXY".into(),
+        Some("http://configured.invalid:9000".into()),
+    )]));
     assert!(run(&service, request.clone()).contains("http://configured.invalid:9000"));
-    overlay.replace(Default::default()).unwrap();
+    overlay.replace(Default::default());
     let output = run(&service, request);
     assert!(output.contains("call-two"));
     assert!(output.contains("fake secret"), "{output}");
@@ -175,6 +173,79 @@ fn empty_inheritance_still_has_defaults_overrides_and_runtime_identity() {
             output.contains(&std::env::var("SystemRoot").unwrap()),
             "{output}"
         );
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_hidden_environment_survives_shell_execution() {
+    use hanafubuki_agent_foundation::paths::ResolvedPath;
+
+    const MARKER: &str = "HANAFUBUKI_HIDDEN_ENV_TEST";
+    const TEST: &str = "shell_environment::windows_hidden_environment_survives_shell_execution";
+    const VALUE: &str = r"Z:\hanafubuki test";
+    let executable = ResolvedPath::resolve(std::env::current_exe().unwrap()).unwrap();
+    match std::env::var(MARKER).as_deref() {
+        Ok("probe") => {
+            assert_eq!(std::env::var("=Z:").unwrap(), VALUE);
+            println!("hidden-environment-preserved");
+            return;
+        }
+        Ok("runner") => {}
+        _ => {
+            // Give only the isolated runner a hidden drive entry; never mutate
+            // the test harness environment shared by concurrently running tests.
+            let output = std::process::Command::new(executable.system())
+                .args(["--exact", TEST, "--nocapture"])
+                .env(MARKER, "runner")
+                .env("=Z:", VALUE)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
+    }
+    assert_eq!(std::env::var("=Z:").unwrap(), VALUE);
+    let service = AgentExecutionService::new(ExecutorManager::default());
+    for inherit in [EnvironmentInherit::All, EnvironmentInherit::Unfiltered] {
+        for shell in [PlatformShell::PowerShell, PlatformShell::Cmd] {
+            let cmd = if shell == PlatformShell::PowerShell {
+                format!(
+                    "& '{}' --exact {TEST} --nocapture; exit $LASTEXITCODE",
+                    executable.native_text().replace('\'', "''")
+                )
+            } else {
+                format!(
+                    "\"{}\" --exact {TEST} --nocapture",
+                    executable.native_text()
+                )
+            };
+            for tty in [false, true] {
+                let mut request = ExecCommandRequest {
+                    cmd: cmd.clone(),
+                    shell: Some(shell),
+                    login: false,
+                    tty,
+                    yield_time_ms: 1000,
+                    timeout_ms: 30_000,
+                    max_output_bytes: Some(4096),
+                    workdir: Some(std::env::current_dir().unwrap()),
+                    environment: BTreeMap::from([(MARKER.into(), "probe".into())]),
+                    shell_environment: Default::default(),
+                    origin: ApprovalOrigin::Model,
+                    sandbox: SandboxSettings::full_access(),
+                    sandbox_escalation: None,
+                };
+                request.shell_environment.policy.inherit = inherit;
+                let output = run(&service, request);
+                assert!(output.contains("hidden-environment-preserved"), "{output}");
+            }
+        }
     }
 }
 

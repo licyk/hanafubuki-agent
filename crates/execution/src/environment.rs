@@ -1,10 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::ShellEnvironment;
-use hanafubuki_agent_foundation::environment::validate_native_environment;
 use hanafubuki_agent_foundation::environment_policy::{current_environment, insert};
-
-use crate::AgentExecutionError;
 
 #[cfg(not(windows))]
 const UNIX_DEFAULT_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
@@ -41,7 +38,7 @@ pub(crate) const RUNTIME_IDENTITY_KEYS: &[&str] = &[
 #[cfg(any(test, feature = "test-support"))]
 pub(crate) fn build_command_environment(
     overrides: &BTreeMap<String, String>,
-) -> Result<BTreeMap<String, String>, AgentExecutionError> {
+) -> BTreeMap<String, String> {
     build_environment_from(
         current_environment(),
         &ShellEnvironment::default(),
@@ -53,7 +50,7 @@ pub(crate) fn build_environment_from(
     inherited: BTreeMap<String, String>,
     settings: &ShellEnvironment,
     overrides: &BTreeMap<String, String>,
-) -> Result<BTreeMap<String, String>, AgentExecutionError> {
+) -> BTreeMap<String, String> {
     #[cfg(windows)]
     let system_root = inherited
         .iter()
@@ -113,13 +110,7 @@ pub(crate) fn build_environment_from(
             );
         }
     }
-    validate_native_environment(
-        environment
-            .iter()
-            .map(|(key, value)| (key.as_str(), Some(value.as_str()))),
-    )
-    .map_err(|error| AgentExecutionError::InvalidRequest(error.to_string()))?;
-    Ok(environment)
+    environment
 }
 
 #[cfg(not(windows))]

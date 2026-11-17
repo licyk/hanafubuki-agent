@@ -99,7 +99,7 @@ pub(crate) fn prepare_exec_command(
         current_environment(),
         &request.shell_environment,
         &request.environment,
-    )?;
+    );
     let program = resolve_shell(shell, &cwd, &environment)?;
     #[cfg(windows)]
     if shell == PlatformShell::Posix {

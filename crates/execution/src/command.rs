@@ -63,7 +63,7 @@ pub fn prepare_command(
 ) -> Result<PreparedCommand, AgentExecutionError> {
     validate_request(request)?;
     let cwd = canonical_directory(request.cwd.as_deref().unwrap_or_else(|| Path::new(".")))?;
-    let environment = build_command_environment(&request.environment)?;
+    let environment = build_command_environment(&request.environment);
     let program = resolve_executable(&request.argv[0], &cwd, &environment)?;
     let program_text = utf8_path(&program, "resolved executable")?;
     let cwd_text = utf8_path(&cwd, "resolved working directory")?;

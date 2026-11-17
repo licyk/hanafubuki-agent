@@ -850,14 +850,11 @@ fn the_agents_processes_inherit_the_hosts_overlay_and_follow_its_replacement() {
             "HANAFUBUKI_TEST_INHERITED".to_string(),
             Some("inherited".to_string()),
         )]),
-    )
-    .unwrap();
-    agent
-        .replace_child_environment(std::collections::HashMap::from([(
-            "HANAFUBUKI_TEST_PROXY".to_string(),
-            Some("proxy".to_string()),
-        )]))
-        .unwrap();
+    );
+    agent.replace_child_environment(std::collections::HashMap::from([(
+        "HANAFUBUKI_TEST_PROXY".to_string(),
+        Some("proxy".to_string()),
+    )]));
     let executors = Arc::new(Mutex::new(Vec::new()));
     let inner = unrecovered(&paths, storage_of(&paths));
     let seen = executors.clone();
@@ -902,12 +899,10 @@ fn the_agents_processes_inherit_the_hosts_overlay_and_follow_its_replacement() {
     assert_eq!(environment_of(&executor), "inherited proxy");
 
     // A proxy change while the Agent runs reaches its next process.
-    agent
-        .replace_child_environment(std::collections::HashMap::from([(
-            "HANAFUBUKI_TEST_PROXY".to_string(),
-            Some("changed".to_string()),
-        )]))
-        .unwrap();
+    agent.replace_child_environment(std::collections::HashMap::from([(
+        "HANAFUBUKI_TEST_PROXY".to_string(),
+        Some("changed".to_string()),
+    )]));
     assert_eq!(environment_of(&executor), "inherited changed");
     let diagnostics = agent.shutdown(AGENT_SHUTDOWN_BUDGET);
     assert!(diagnostics.is_empty(), "{diagnostics:?}");

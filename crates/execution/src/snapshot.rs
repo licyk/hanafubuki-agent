@@ -80,7 +80,7 @@ impl ShellSnapshot {
             self.environment.clone(),
             &request.shell_environment,
             &request.environment,
-        )?;
+        );
         #[cfg(windows)]
         crate::msys::add_posix_shell_environment(
             &mut environment,

@@ -31,26 +31,20 @@ impl DesktopAgent {
         slot: AgentSlot,
         marker: AgentStartMarker,
         inherited_environment: HashMap<String, Option<String>>,
-    ) -> Result<Self, String> {
+    ) -> Self {
         let child_environment =
-            ChildProcessEnvironment::with_inherited_overlay(inherited_environment)
-                .map_err(|error| format!("invalid Agent child process environment: {error}"))?;
-        Ok(Self {
+            ChildProcessEnvironment::with_inherited_overlay(inherited_environment);
+        Self {
             slot,
             marker,
             child_environment,
-        })
+        }
     }
 
     /// Replaces the overlay applied last to every process the Agent starts
     /// from now on (the host's proxy), as the host does for its own.
-    pub fn replace_child_environment(
-        &self,
-        entries: HashMap<String, Option<String>>,
-    ) -> Result<(), String> {
-        self.child_environment
-            .replace(entries)
-            .map_err(|error| format!("invalid Agent child process environment: {error}"))
+    pub fn replace_child_environment(&self, entries: HashMap<String, Option<String>>) {
+        self.child_environment.replace(entries);
     }
 
     /// The overlay itself, for a host port that keeps it current.

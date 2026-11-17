@@ -55,12 +55,10 @@ for line in sys.stdin:
     stdio.public_environment = BTreeMap::from([("HB_ENV_ALLOWED".into(), "configured".into())]);
     stdio.credential_environment.clear();
     let overlay = hanafubuki_agent_foundation::environment::ChildProcessEnvironment::default();
-    overlay
-        .replace(std::collections::HashMap::from([(
-            "HTTP_PROXY".into(),
-            Some("http://configured.invalid:9000".into()),
-        )]))
-        .unwrap();
+    overlay.replace(std::collections::HashMap::from([(
+        "HTTP_PROXY".into(),
+        Some("http://configured.invalid:9000".into()),
+    )]));
     let executor = Arc::new(ExecutorManager::new(overlay));
     let workers = BackgroundWorkerGroup::default();
     let connection = McpStdioConnection::connect(

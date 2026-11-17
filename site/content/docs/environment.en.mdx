@@ -31,6 +31,8 @@ By default, commands and terminals inherit the Agent process's UTF-8 environment
 
 With the default policy, variables set before starting the Agent, including proxy settings, `HOME`, and API tokens, reach its commands. Names and values that cannot be represented as UTF-8 are omitted. Changing the launching shell's environment after the Agent starts does not change the Agent's environment.
 
+Inherited variables and environment overlays are passed to the native process launcher without an additional name/value validity check. Windows hidden variables such as `=C:` (the current directory for drive C) follow the same selection policy; `all` with the default filters and `unfiltered` preserve them for both pipe and terminal commands.
+
 ### Selection and filtering [#selection]
 
 The settings live in `[pluginOptions.execution]` of the user's global configuration. Every option below is editable in `/config → Plugins → execution`, or directly through `/config pluginOptions.execution`. Saving writes the user's `config.toml` and affects subsequent commands; the settings center reports higher-priority overrides.
@@ -45,6 +47,8 @@ environmentIncludeOnly = []
 shellUseProfile = false
 shellSnapshot = true
 ```
+
+Each `environmentSet` entry is a `NAME=VALUE` assignment. A leading `=` belongs to the name, so `'=C:=C:\Users\example'` sets `=C:` to `C:\Users\example`. Values may be empty or contain further `=` characters; names and values are preserved without trimming. Entries without an assignment separator produce a configuration-format error.
 
 Set **Inherited environment** to **unfiltered** (`environmentInherit = "unfiltered"`) to inherit every usable UTF-8 variable from the Agent's current process, bypassing the default sensitive-name filter, `environmentExclude` and `environmentIncludeOnly`. Saved filters remain intact and resume when switching back to `all`, `core` or `none`. `environmentSet`, non-interactive defaults, command overrides, runtime identity and the proxy overlay still apply in the order below; other features can still add or override variables automatically. This mode does not change the separate local stdio MCP inheritance list.
 
