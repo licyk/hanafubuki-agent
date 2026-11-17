@@ -84,7 +84,7 @@ fn layered(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn registered_plugin_options_are_editable_in_profiles_without_leaking_secrets() {
+async fn registered_plugin_options_and_secrets_are_editable_in_local_profiles() {
     let (service, paths, config) = layered(
         "settings-profile-options",
         "[pluginOptions.subagents]\nmaximumRunningAgents = 4\n[profiles.work]\n",
@@ -113,9 +113,10 @@ async fn registered_plugin_options_are_editable_in_profiles_without_leaking_secr
     assert!(work
         .secrets_set
         .contains(&"pluginOptions.web.exaApiKeys".to_string()));
-    assert!(!serde_json::to_string(&profiles)
-        .unwrap()
-        .contains("profile-secret"));
+    assert_eq!(
+        work.values["pluginOptions.web.exaApiKeys"],
+        SettingValue::Text("profile-secret".into())
+    );
     let options = service
         .plugin_status()
         .into_iter()

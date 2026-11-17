@@ -220,9 +220,11 @@ fn windows_hidden_environment_survives_shell_execution() {
                     executable.native_text().replace('\'', "''")
                 )
             } else {
+                // Run by basename from its directory so this environment test
+                // does not depend on CMD's quoting of absolute paths.
                 format!(
-                    "\"{}\" --exact {TEST} --nocapture",
-                    executable.native_text()
+                    "{} --exact {TEST} --nocapture",
+                    executable.file_name().unwrap().to_str().unwrap()
                 )
             };
             for tty in [false, true] {
@@ -234,7 +236,7 @@ fn windows_hidden_environment_survives_shell_execution() {
                     yield_time_ms: 1000,
                     timeout_ms: 30_000,
                     max_output_bytes: Some(4096),
-                    workdir: Some(std::env::current_dir().unwrap()),
+                    workdir: Some(executable.system().parent().unwrap().to_path_buf()),
                     environment: BTreeMap::from([(MARKER.into(), "probe".into())]),
                     shell_environment: Default::default(),
                     origin: ApprovalOrigin::Model,

@@ -375,6 +375,9 @@ fn an_interrupt_puts_the_queue_back_in_the_composer_and_sends_nothing() {
     harness.pump_until_running();
     harness.type_and_queue("Queued.");
     harness.pump_until_screen_shows("Queued follow-up inputs");
+    harness.pump_until("the first request to reach the server", |harness| {
+        harness.server.requests().len() == 1
+    });
     // No steer waits: Esc interrupts, as Ctrl-C does.
     harness.key(KeyCode::Esc);
     harness.pump_until_turn_ends();
