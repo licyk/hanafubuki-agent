@@ -1,6 +1,6 @@
 //! The guest host: the code of installed plugins, run as Kardia guests, out
-//! of process or as WebAssembly modules (docs/plan-plugin-system.md, §4.2;
-//! the site's architecture page, "Code plugins").
+//! of process or as WebAssembly modules (the site's architecture page,
+//! "Code plugins").
 //!
 //! A package in this project's format may declare a `runtime`, a program
 //! speaking Kardia's guest protocol (`kardia-guest/2`). The facade's

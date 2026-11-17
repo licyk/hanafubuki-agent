@@ -86,8 +86,7 @@ fn git(directory: &Path, args: &[&str]) {
 }
 
 // TODO: refuse `/approve` while a turn is held open by the test, not by a
-// 10 s model delay a loaded runner can outlast; then remove the `ignore`
-// (todo.md, the CI entry after P14).
+// 10 s model delay a loaded runner can outlast; then remove the `ignore`.
 #[test]
 #[ignore = "timing-dependent: a 10 s model delay is the window `/approve` is refused in"]
 fn a_denied_action_is_approved_between_turns_and_refused_during_one() {

@@ -155,9 +155,9 @@ default with English: every page under `site/content/docs` is `x.mdx` plus
 same order (`i18n-content.test.ts`). Every heading carries an explicit
 `[#id]`, the same in both languages, and links to another page's heading
 use it (`/docs/<slug>#<id>`). The Agent's documentation is the site; the
-repository keeps no other Markdown documents but this file, the README and
-`todo.md` (and the plans under `docs/`, one per piece of work, each kept
-while `todo.md` still points at it).
+repository keeps no other Markdown documents but this file and the README
+(and temporary plans under `docs/`, one per active piece of work, removed
+once the work is complete).
 
 - `bun run site:dev|check|test|build|preview` run the site's scripts;
   `bun run format:site` formats `site/` and the root `package.json` and
