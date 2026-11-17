@@ -50,7 +50,7 @@ Set **Inherited environment** to **unfiltered** (`environmentInherit = "unfilter
 
 For the other modes, the order is inheritance → optional default exclusion → `environmentExclude` → `environmentSet` → `environmentIncludeOnly`. Patterns are case-insensitive; `*` matches any number of characters and `?` one. An empty include list does not filter. `core` keeps platform basics (paths, home/user, temporary directories, locale and Windows system variables); `none` starts empty. `environmentIgnoreDefaultExcludes = false` excludes inherited names matching `*KEY*`, `*SECRET*` and `*TOKEN*`. Explicit `environmentSet` entries can restore an excluded name, but the include list still applies. Setting changes apply to subsequent calls without restarting running commands.
 
-Non-interactive defaults, command-specific overrides and runtime identity follow the selection policy; the host's final proxy overlay follows them. A missing `PATH` receives the platform fallback, and a missing Windows `PATHEXT` receives `.COM;.EXE;.BAT;.CMD`. The existing Python and MSYS adjustments remain.
+Non-interactive defaults, command-specific overrides and runtime identity follow the selection policy; the host's final proxy overlay follows them. A missing `PATH` receives the platform fallback. On Windows, a missing `SYSTEMROOT` is restored from the parent (or `C:\Windows`) so Windows PowerShell can initialize its runtime, and a missing `PATHEXT` receives `.COM;.EXE;.BAT;.CMD`. The existing Python and MSYS adjustments remain.
 
 ### Shell startup [#shell-startup]
 

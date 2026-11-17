@@ -263,11 +263,11 @@ fn exec_shell_command(
             command.push(command_text.to_string());
         }
         PlatformShell::PowerShell => {
+            command.push("-NoLogo".into());
             if !use_profile {
                 command.push("-NoProfile".into());
             }
             command.extend([
-                "-NoLogo".to_string(),
                 "-NonInteractive".to_string(),
                 "-Command".to_string(),
                 format!("{POWERSHELL_UTF8_OUTPUT_PREFIX}{command_text}"),

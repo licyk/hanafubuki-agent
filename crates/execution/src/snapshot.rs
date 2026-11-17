@@ -23,10 +23,11 @@ pub(crate) fn kind(program: &str) -> Option<&'static str> {
 }
 
 pub(crate) fn capture_script(kind: &str) -> String {
+    // Bash 3.2's `set +o posix` resets expand_aliases; replay shopt after set.
     let (startup, state) = match kind {
         "bash" => (
             "if [ -z \"${BASH_ENV-}\" ] && [ -n \"${HOME-}\" ] && [ -r \"$HOME/.bashrc\" ]; then . \"$HOME/.bashrc\"; fi",
-            "declare -f; shopt -p || true; set +o; alias -p",
+            "declare -f; set +o; shopt -p || true; alias -p",
         ),
         "zsh" => (
             "if [ -n \"${ZDOTDIR-}\" ]; then rc=\"$ZDOTDIR/.zshrc\"; else rc=\"${HOME-}/.zshrc\"; fi; if [ -r \"$rc\" ]; then . \"$rc\"; fi; unset rc",
@@ -34,7 +35,7 @@ pub(crate) fn capture_script(kind: &str) -> String {
         ),
         _ => (
             "if [ -n \"${ENV-}\" ] && [ -r \"$ENV\" ]; then . \"$ENV\"; fi",
-            "if [ -n \"${BASH_VERSION-}\" ]; then declare -f; shopt -p || true; fi; set +o; alias",
+            "set +o; if [ -n \"${BASH_VERSION-}\" ]; then declare -f; shopt -p || true; fi; alias",
         ),
     };
     // MSYS exports a POSIX PATH; the next native Windows spawn needs its

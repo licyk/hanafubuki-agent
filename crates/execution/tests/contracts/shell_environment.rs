@@ -129,7 +129,7 @@ fn empty_inheritance_still_has_defaults_overrides_and_runtime_identity() {
     let service = AgentExecutionService::new(ExecutorManager::default());
     let mut request = if cfg!(windows) {
         ExecCommandRequest {
-            cmd: "[Console]::WriteLine($env:HB_TEST_VALUE + ':' + $env:HANAFUBUKI_AGENT_SESSION_ID + ':' + $env:CODEX_CI + ':' + $env:PYTHONUTF8 + ':' + $env:PATHEXT)".into(),
+            cmd: "[Console]::WriteLine($env:HB_TEST_VALUE + ':' + $env:HANAFUBUKI_AGENT_SESSION_ID + ':' + $env:CODEX_CI + ':' + $env:PYTHONUTF8 + ':' + $env:PATHEXT + ':' + $env:SYSTEMROOT)".into(),
             shell: Some(PlatformShell::PowerShell), login: false, tty: false,
             yield_time_ms: 1000, timeout_ms: 30_000, max_output_bytes: Some(4096),
             workdir: Some(std::env::current_dir().unwrap()), environment: Default::default(),
@@ -171,6 +171,10 @@ fn empty_inheritance_still_has_defaults_overrides_and_runtime_identity() {
     assert!(output.contains("request:301:1:1"), "{output}");
     if cfg!(windows) {
         assert!(output.contains(".COM;.EXE;.BAT;.CMD"), "{output}");
+        assert!(
+            output.contains(&std::env::var("SystemRoot").unwrap()),
+            "{output}"
+        );
     }
 }
 

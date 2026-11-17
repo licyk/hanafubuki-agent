@@ -54,7 +54,18 @@ pub(crate) fn build_environment_from(
     settings: &ShellEnvironment,
     overrides: &BTreeMap<String, String>,
 ) -> Result<BTreeMap<String, String>, AgentExecutionError> {
+    #[cfg(windows)]
+    let system_root = inherited
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case("SYSTEMROOT"))
+        .map(|(_, value)| value.clone())
+        .unwrap_or_else(|| r"C:\Windows".into());
     let mut environment = settings.policy.apply(inherited);
+    // Windows PowerShell's CLR needs SystemRoot even without inherited variables.
+    #[cfg(windows)]
+    if !contains_key_case_aware(&environment, "SYSTEMROOT") {
+        environment.insert("SYSTEMROOT".into(), system_root);
+    }
     if !contains_key_case_aware(&environment, "PATH") {
         environment.insert("PATH".to_string(), platform_default_path(&environment));
     }

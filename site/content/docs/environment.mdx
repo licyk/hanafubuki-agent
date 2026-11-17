@@ -50,7 +50,7 @@ shellSnapshot = true
 
 其他模式的顺序为：继承 → 可选的默认排除 → `environmentExclude` → `environmentSet` → `environmentIncludeOnly`。模式不区分大小写，`*` 匹配任意数量字符，`?` 匹配一个字符；空的保留名单不做过滤。`core` 保留平台基础变量（路径、用户目录、临时目录、语言及 Windows 系统变量），`none` 从空环境开始。`environmentIgnoreDefaultExcludes = false` 会排除继承名称匹配 `*KEY*`、`*SECRET*`、`*TOKEN*` 的变量。显式的 `environmentSet` 可以恢复被排除的名称，但仍受保留名单限制。修改对后续调用生效，不重启已运行的命令。
 
-选择策略之后依次应用非交互默认值、命令显式覆盖和运行时身份，最后应用宿主的代理覆盖。缺少 `PATH` 时补上平台默认路径；Windows 缺少 `PATHEXT` 时补上 `.COM;.EXE;.BAT;.CMD`。原有 Python 和 MSYS 处理继续保留。
+选择策略之后依次应用非交互默认值、命令显式覆盖和运行时身份，最后应用宿主的代理覆盖。缺少 `PATH` 时补上平台默认路径；Windows 缺少 `SYSTEMROOT` 时从父环境恢复（否则使用 `C:\Windows`），使 Windows PowerShell 能初始化运行时，缺少 `PATHEXT` 时补上 `.COM;.EXE;.BAT;.CMD`。原有 Python 和 MSYS 处理继续保留。
 
 ### Shell 启动 [#shell-startup]
 
