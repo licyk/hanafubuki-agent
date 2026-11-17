@@ -8,7 +8,7 @@ use hanafubuki_agent_contracts::tools::arguments::{
 };
 use hanafubuki_agent_contracts::{
     object_arguments, AgentActivityAction, AgentMemoryContextEffect, AgentToolError,
-    AgentToolHandler, ArgumentSubjects, BlockingService, Register, ToolDescriptor, ToolEffect,
+    AgentToolHandler, AgentToolPresenter, BlockingService, Register, ToolDescriptor, ToolEffect,
     ToolFuture, ToolInvocation, ToolPresenterRegistry, ToolRegistry, ToolResult,
 };
 use hanafubuki_agent_kernel::{
@@ -47,7 +47,7 @@ pub(crate) fn threads_plugin(conversations: AgentConversationReader) -> PluginDe
                 blocking: ctx.get::<BlockingService>()?.arc().clone(),
                 descriptor,
             }))?;
-            ctx.get::<ToolPresenterRegistry>()?.register(Arc::new(ArgumentSubjects::new(&[("read_thread", "threadId")])))?;
+            ctx.get::<ToolPresenterRegistry>()?.register(Arc::new(ThreadPresenter))?;
             Ok(())
         }
     }).name("threads").inject(Inject::new().with(ToolRegistry::NAME).with(ToolPresenterRegistry::NAME).with(BlockingService::NAME))
@@ -58,6 +58,21 @@ struct ReadThread {
     blocking: Arc<BlockingService>,
     descriptor: ToolDescriptor,
 }
+
+struct ThreadPresenter;
+
+impl AgentToolPresenter for ThreadPresenter {
+    fn tools(&self) -> &[&'static str] {
+        &["read_thread"]
+    }
+
+    fn subject(&self, _tool: &str, arguments: &serde_json::Value) -> Option<String> {
+        Some(format!("session {}", arguments.get("threadId")?.as_u64()?))
+    }
+}
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

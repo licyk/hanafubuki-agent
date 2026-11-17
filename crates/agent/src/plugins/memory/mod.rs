@@ -4,13 +4,14 @@
 //! memory store in step with what the kernel commits.
 
 mod observer;
+mod presenter;
 mod prompt;
 mod tools;
 
 use std::sync::Arc;
 
 use hanafubuki_agent_contracts::{
-    AgentToolError, AgentToolSource, ArgumentSubjects, ContextRendererRegistry, ObserverRegistry,
+    AgentToolError, AgentToolSource, ContextRendererRegistry, ObserverRegistry,
     PromptContributorRegistry, Register, ToolFuture, ToolPresenterRegistry, ToolSourceContribution,
     ToolSourceRegistry, ToolSourceStep,
 };
@@ -39,11 +40,7 @@ pub(crate) fn memory_plugin(memory: AgentMemoryApplication) -> PluginDef {
                 memory: memory.clone(),
             }))?;
             ctx.get::<ToolPresenterRegistry>()?
-                .register(Arc::new(ArgumentSubjects::new(&[
-                    ("search_agent_memories", "query"),
-                    ("read_agent_memory", "resourceId"),
-                    ("append_agent_memory_note", "operation"),
-                ])))?;
+                .register(Arc::new(presenter::MemoryPresenter))?;
             let observers = ctx.get::<ObserverRegistry>()?;
             observers.register(Arc::new(MemoryObserver { memory }))?;
             Ok(())

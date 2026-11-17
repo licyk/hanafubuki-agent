@@ -75,7 +75,7 @@ fn a_fold_shows_one_folded_cell_live_and_replayed() {
     let transcript = harness.transcript();
     assert_eq!(transcript.matches(RECEIPT).count(), 1, "{transcript}");
     assert!(
-        transcript.contains("Called compress: m00002–m00002 Greeting"),
+        transcript.contains("Compressed context m00002–m00002 Greeting"),
         "{transcript}"
     );
     // The summary and the receipt's fingerprints are folded away.
@@ -94,7 +94,7 @@ fn a_fold_shows_one_folded_cell_live_and_replayed() {
     let transcript = harness.transcript();
     assert_eq!(transcript.matches(RECEIPT).count(), 1, "{transcript}");
     assert!(
-        transcript.contains("Called compress: m00002–m00002 Greeting"),
+        transcript.contains("Compressed context m00002–m00002 Greeting"),
         "{transcript}"
     );
 }

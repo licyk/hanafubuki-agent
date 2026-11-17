@@ -2,7 +2,9 @@
 //! once its display arrives, dimmed when collapsed, kept across wrapping
 //! when expanded, and none of them in the raw text.
 
-use hanafubuki_agent::{render_styled_text, AgentTextStyle, AgentToolCallDisplay};
+use hanafubuki_agent::{
+    render_styled_text, AgentExecutionProgressStatus, AgentTextStyle, AgentToolCallDisplay,
+};
 use ratatui::style::{Color, Modifier, Style};
 
 use super::*;
@@ -73,6 +75,93 @@ fn green_bold() -> Style {
     Style::default()
         .fg(Color::Green)
         .add_modifier(Modifier::BOLD)
+}
+
+#[test]
+fn command_syntax_colours_are_present_from_start_through_completion() {
+    let script = "printf '%s\\n' \"$HOME\" && echo done";
+    for (by_user, background) in [(false, false), (true, false), (false, true)] {
+        let mut cell = new_tool_call("call-1".into(), "exec_command".into(), Some(script.into()));
+        if by_user {
+            cell = cell.typed_by_user();
+        }
+        // Compare the command's styled characters, excluding the bullet,
+        // lifecycle verb and running clock.
+        let colours = |cell: &ToolCallCell| {
+            let lines = cell.display_lines(120);
+            let header = &lines[0];
+            let shown = text(std::slice::from_ref(header));
+            let start = shown[..shown.find(script).unwrap()].chars().count();
+            header
+                .spans
+                .iter()
+                .flat_map(|span| {
+                    span.content
+                        .chars()
+                        .map(move |character| (character, header.style.patch(span.style)))
+                })
+                .skip(start)
+                .take(script.chars().count())
+                .collect::<Vec<_>>()
+        };
+        let started = colours(&cell);
+        assert!(
+            started.iter().any(|(_, style)| style.fg.is_some()),
+            "command is unhighlighted: {started:?}"
+        );
+        cell.push_output("call-1", "working\n", false);
+        assert_eq!(colours(&cell), started);
+        if background {
+            cell.execution_status("call-1", AgentExecutionProgressStatus::Running, None);
+        }
+        cell.complete("call-1", false);
+        assert_eq!(colours(&cell), started);
+        if background {
+            cell.show(
+                "call-1",
+                AgentToolCallDisplay {
+                    subject: None,
+                    display: Some(command(script, "working\n", None)),
+                },
+            );
+            assert_eq!(colours(&cell), started);
+            cell.execution_status("call-1", AgentExecutionProgressStatus::Exited, Some(0));
+            assert_eq!(colours(&cell), started);
+        }
+        cell.show(
+            "call-1",
+            AgentToolCallDisplay {
+                subject: None,
+                display: Some(command(script, "done\n", Some(0))),
+            },
+        );
+        assert_eq!(colours(&cell), started);
+    }
+}
+
+#[test]
+fn a_multiline_command_is_highlighted_in_details_before_any_output() {
+    let script = "echo 'first'\nprintf '%s' \"$HOME\"";
+    let mut cell = new_tool_call("call-1".into(), "exec_command".into(), Some(script.into()));
+    let running = cell.transcript_lines(120);
+    let shown = text(&running);
+    assert!(shown.contains("Running echo 'first' …"), "{shown}");
+    assert!(shown.contains("$ echo 'first'"), "{shown}");
+    assert!(shown.contains("printf '%s' \"$HOME\""), "{shown}");
+    cell.complete("call-1", false);
+    cell.show(
+        "call-1",
+        AgentToolCallDisplay {
+            subject: None,
+            display: Some(command(script, "", Some(0))),
+        },
+    );
+    let finished = cell.transcript_lines(120);
+    assert_eq!(running[1..3], finished[1..3]);
+    assert!(running[1..3]
+        .iter()
+        .flat_map(|line| &line.spans)
+        .any(|span| span.style.fg.is_some()));
 }
 
 #[test]

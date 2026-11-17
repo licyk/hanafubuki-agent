@@ -85,6 +85,30 @@ impl AgentBridge {
                 text,
                 truncated,
             },
+            AgentEventKind::ExecutionProgress {
+                call_id: Some(call_id),
+                update: AgentToolProgressUpdate::ExecutionStarted { status, .. },
+            } => TurnUpdate::ToolExecution {
+                call_id,
+                status,
+                exit_code: None,
+            },
+            AgentEventKind::ExecutionProgress {
+                call_id: Some(call_id),
+                update:
+                    AgentToolProgressUpdate::ExecutionStatus {
+                        status, exit_code, ..
+                    },
+            } => {
+                if status.is_terminal() && !self.turn_running {
+                    self.send_session_status();
+                }
+                TurnUpdate::ToolExecution {
+                    call_id,
+                    status,
+                    exit_code,
+                }
+            }
             AgentEventKind::ApprovalRequested { request } => TurnUpdate::ApprovalRequested(request),
             AgentEventKind::ApprovalResolved { request_id, .. } => {
                 TurnUpdate::ApprovalResolved(request_id)

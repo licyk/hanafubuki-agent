@@ -159,7 +159,11 @@ fn a_command_shows_its_last_lines_and_expands_to_its_whole_output() {
 #[test]
 fn a_session_written_to_or_waited_for_names_the_session() {
     let poll = shown("write_stdin", Some("session 3"), command("", "", None));
-    assert_eq!(render(&poll, 60), "• Waited for session 3");
+    assert_eq!(
+        render(&poll, 60),
+        "• Interacted with terminals\n  └ Wait for session 3"
+    );
+    assert!(text(&poll.transcript_lines(60)).contains("Waited for session 3"));
     let typed = shown(
         "write_stdin",
         Some("session 3 ← ls\\n"),
@@ -167,8 +171,9 @@ fn a_session_written_to_or_waited_for_names_the_session() {
     );
     assert_eq!(
         render(&typed, 60),
-        "• Interacted with session 3 ← ls\\n\n  └ a.txt"
+        "• Interacted with terminals\n  └ Send input to session 3 ← ls\\n"
     );
+    assert!(text(&typed.transcript_lines(60)).contains("a.txt"));
 }
 
 #[test]
@@ -187,7 +192,7 @@ fn a_compress_call_folds_its_summaries_and_receipt() {
 
     assert_eq!(
         render(&cell, 100).replace('\u{2022}', "*"),
-        "* Called compress: m00002–m00004 Setup, m00006–m00007\n  └ [Compressed m00002–m00004 → 1 block(s), ~8000 tokens saved.]"
+        "* Compressed context m00002–m00004 Setup, m00006–m00007\n  └ [Compressed m00002–m00004 → 1 block(s), ~8000 tokens saved.]"
     );
     assert_eq!(
         cell.activity_disclosure(100),

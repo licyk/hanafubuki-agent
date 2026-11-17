@@ -12,19 +12,19 @@ use ratatui::text::{Line, Span};
 
 use super::{clipped, wrapped, Extent, ToolCall, View, COMPRESS, EXEC_COMMAND, PREVIEW_LINES};
 use crate::history_cell::ActivityDisclosure;
+use crate::render::highlight::highlight_code_to_lines;
 
 /// `Running` and the command (its clock follows, see `frame`), or the
 /// tool and its subject.
 pub(super) fn running(call: &ToolCall) -> View {
-    if let Some(title) = collaboration_title(call, true) {
+    if let Some(title) = operation_title(call, true) {
         return View::title(title, false);
     }
-    let mut title = vec!["Running".bold(), " ".into()];
     if call.name == EXEC_COMMAND && call.subject.is_some() {
-        title.push(call.subject_or("").into());
-    } else {
-        title.extend(named(call));
+        return command_title(call, "Running", false);
     }
+    let mut title = vec!["Running".bold(), " ".into()];
+    title.extend(named(call));
     View::title(title, false)
 }
 
@@ -33,12 +33,15 @@ pub(super) fn running(call: &ToolCall) -> View {
 pub(super) fn called(call: &ToolCall, failed: bool) -> View {
     if call.name == EXEC_COMMAND && call.subject.is_some() {
         let verb = if call.by_user { "You ran" } else { "Ran" };
-        return View::title(
-            vec![verb.bold(), " ".into(), call.subject_or("").into()],
-            failed,
-        );
+        return command_title(call, verb, failed);
     }
     View::title(called_title(call, failed), failed)
+}
+
+fn command_title(call: &ToolCall, verb: &str, failed: bool) -> View {
+    let script = call.subject_or("");
+    let lines = highlight_code_to_lines(&script, "bash");
+    View::title(super::command::header(verb, &lines).0, failed)
 }
 
 pub(super) fn view(call: &ToolCall, failed: bool, lines: Vec<String>, extent: Extent) -> View {
@@ -76,7 +79,7 @@ pub(super) fn view(call: &ToolCall, failed: bool, lines: Vec<String>, extent: Ex
 
 fn called_title(call: &ToolCall, failed: bool) -> Vec<Span<'static>> {
     if !failed {
-        if let Some(title) = collaboration_title(call, false) {
+        if let Some(title) = operation_title(call, false) {
             return title;
         }
     }
@@ -95,7 +98,7 @@ fn named(call: &ToolCall) -> Vec<Span<'static>> {
     spans
 }
 
-fn collaboration_title(call: &ToolCall, running: bool) -> Option<Vec<Span<'static>>> {
+fn operation_title(call: &ToolCall, running: bool) -> Option<Vec<Span<'static>>> {
     let verb = match (call.name.as_str(), running) {
         ("spawn_agent", true) => "Starting agent",
         ("spawn_agent", false) => "Started agent",
@@ -107,6 +110,43 @@ fn collaboration_title(call: &ToolCall, running: bool) -> Option<Vec<Span<'stati
         ("wait_agent", false) => "Finished waiting",
         ("list_agents", true) => "Listing agents",
         ("list_agents", false) => "Agents",
+        ("write_stdin", true) => "Interacting with terminal",
+        ("write_stdin", false) => "Interacted with terminal",
+        ("resize_execution", true) => "Resizing terminal",
+        ("resize_execution", false) => "Resized terminal",
+        ("list_agent_memories", true) => "Listing memories",
+        ("list_agent_memories", false) => "Listed memories",
+        ("search_agent_memories", true) => "Searching memories",
+        ("search_agent_memories", false) => "Searched memories",
+        ("read_agent_memory", true) => "Reading memory",
+        ("read_agent_memory", false) => "Read memory",
+        ("append_agent_memory_note", true) => "Queuing memory note",
+        ("append_agent_memory_note", false) => "Queued memory note",
+        ("read_thread", true) => "Reading conversation",
+        ("read_thread", false) => "Read conversation",
+        ("compress", true) => "Compressing context",
+        ("compress", false) => "Compressed context",
+        ("decompress", true) => "Restoring context",
+        ("decompress", false) => "Restored context",
+        ("search_context", true) => "Searching context",
+        ("search_context", false) => "Searched context",
+        ("new_context", true) => "Starting new context",
+        ("new_context", false) => "Started new context",
+        ("acp_status", true) => "Reading context status",
+        ("acp_status", false) => "Read context status",
+        ("acp_cache", true) => "Managing context cache",
+        ("acp_cache", false) => "Managed context cache",
+        ("absorb", true) => "Absorbing content",
+        ("absorb", false) => "Absorbed content",
+        ("acp_retrieve", true) => "Retrieving stored content",
+        ("acp_retrieve", false) => "Retrieved stored content",
+        ("acp_rule", true) => "Managing context rules",
+        ("acp_rule", false) => "Managed context rules",
+        ("update_plan", true) => "Updating plan",
+        ("update_plan", false) => "Updated plan",
+        ("apply_patch", true) => "Editing files",
+        ("move_path", true) => "Moving path",
+        ("delete_path", true) => "Deleting path",
         _ => return None,
     };
     let mut title = vec![verb.bold()];

@@ -4,7 +4,31 @@ use ratatui::style::Color;
 
 use super::*;
 
-const CATEGORIES: [(&str, &str, &str, &str); 7] = [
+const CATEGORIES: [(&str, &str, &str, &str); 11] = [
+    (
+        "write_stdin",
+        "session 3",
+        "Interacting with terminals",
+        "Interacted with terminals",
+    ),
+    (
+        "read_agent_memory",
+        "MEMORY.md",
+        "Using memory",
+        "Used memory",
+    ),
+    (
+        "read_thread",
+        "session 70",
+        "Reading conversations",
+        "Read conversations",
+    ),
+    (
+        "search_context",
+        "build",
+        "Managing context",
+        "Managed context",
+    ),
     ("view_image", "diagram.png", "Viewing image", "Viewed image"),
     ("mcp__docs__lookup", "MCP docs", "Calling MCP", "Called MCP"),
     ("skills_read", "user:rust", "Using skills", "Used skills"),
@@ -138,6 +162,33 @@ fn image_details_show_media_metadata_and_plural_groups_keep_each_path() {
 fn discovery_aliases_and_web_goal_operations_stay_in_their_categories() {
     for (names, group) in [
         (
+            &["write_stdin", "resize_execution"][..],
+            ToolGroup::Terminals,
+        ),
+        (
+            &[
+                "list_agent_memories",
+                "search_agent_memories",
+                "read_agent_memory",
+                "append_agent_memory_note",
+            ][..],
+            ToolGroup::Memory,
+        ),
+        (&["read_thread"][..], ToolGroup::Conversations),
+        (
+            &[
+                "decompress",
+                "search_context",
+                "new_context",
+                "acp_status",
+                "acp_cache",
+                "absorb",
+                "acp_retrieve",
+                "acp_rule",
+            ][..],
+            ToolGroup::Context,
+        ),
+        (
             &[
                 "tool_list",
                 "search_tools",
@@ -174,6 +225,8 @@ fn discovery_aliases_and_web_goal_operations_stay_in_their_categories() {
         "plugin__view_image",
         "plugin__web_search",
         "plugin__update_plan",
+        "plugin__write_stdin",
+        "plugin__read_agent_memory",
         "goal_status",
         "exec_command",
     ] {
@@ -182,5 +235,55 @@ fn discovery_aliases_and_web_goal_operations_stay_in_their_categories() {
     assert_eq!(
         ToolGroup::for_name("mcp__docs__web_search"),
         Some(ToolGroup::Mcp)
+    );
+}
+
+#[test]
+fn terminal_interactions_group_polls_input_and_resize_without_hiding_failures() {
+    let mut cell = new_tool_call(
+        "poll".into(),
+        "write_stdin".into(),
+        Some("session 3".into()),
+    );
+    cell.finish("poll", command("", "building\n", None));
+    cell.join(new_tool_call(
+        "input".into(),
+        "write_stdin".into(),
+        Some("session 3 ← exit 7\\n".into()),
+    ));
+    cell.finish("input", command("exit 7\\n", "failed build\n", Some(7)));
+    cell.join(new_tool_call(
+        "resize".into(),
+        "resize_execution".into(),
+        Some("session 4 to 80×24".into()),
+    ));
+    assert!(render(&cell, 80).contains("Interacting with terminals · 1 failed"));
+    cell.finish(
+        "resize",
+        AgentToolDisplay::Text {
+            text: "resized".into(),
+        },
+    );
+    let compact = render(&cell, 80);
+    assert!(compact.contains("Wait for session 3"), "{compact}");
+    assert!(compact.contains("Send input to session 3"), "{compact}");
+    assert!(compact.contains("Resize session 4 to 80×24"), "{compact}");
+    assert!(
+        compact.contains("failed build") && compact.contains("exit 7"),
+        "{compact}"
+    );
+    let expanded = text(&cell.transcript_lines(80));
+    assert!(
+        expanded.contains("building") && expanded.contains("resized"),
+        "{expanded}"
+    );
+    assert_eq!(
+        cell.activity_ids(),
+        ["tool:poll", "tool:input", "tool:resize"]
+    );
+    assert_eq!(cell.transcript_animation_tick(), None);
+    assert_eq!(
+        cell.display_lines(80)[0].spans[0].style.fg,
+        Some(Color::Red)
     );
 }

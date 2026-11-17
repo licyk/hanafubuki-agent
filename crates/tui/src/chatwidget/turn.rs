@@ -66,6 +66,9 @@ impl ChatWidget {
                 text,
                 truncated,
             } => self.on_tool_output(&call_id, &text, truncated),
+            TurnUpdate::ToolExecution { call_id, status, exit_code } => {
+                self.on_tool_execution(&call_id, status, exit_code)
+            }
             TurnUpdate::ApprovalRequested(request) => {
                 self.bottom_pane.push_approval_request(request)
             }
@@ -197,12 +200,41 @@ impl ChatWidget {
     }
 
     /// What a running call's process printed goes to its entry, drawn at
-    /// the next frame. A call that finished shows what it returned: output
-    /// after that (a process going on in the background) is not added.
+    /// the next frame, including after the call yielded a background process.
     fn on_tool_output(&mut self, call_id: &str, text: &str, truncated: bool) {
-        if let Some((_, cell)) = self.running_tools.iter().find(|(id, _)| id == call_id) {
+        if let Some((_, cell)) = self
+            .running_tools
+            .iter()
+            .chain(&self.executing_tools)
+            .find(|(id, _)| id == call_id)
+        {
             cell.update(|cell| cell.push_output(call_id, text, truncated));
+            self.request_redraw();
         }
+    }
+
+    fn on_tool_execution(
+        &mut self,
+        call_id: &str,
+        status: hanafubuki_agent::AgentExecutionProgressStatus,
+        exit_code: Option<i32>,
+    ) {
+        let cell = self
+            .executing_tools
+            .iter()
+            .chain(&self.running_tools)
+            .chain(&self.awaiting_display)
+            .find(|(id, _)| id == call_id)
+            .map(|(_, cell)| cell.clone());
+        let Some(cell) = cell else { return };
+        cell.update(|cell| cell.execution_status(call_id, status, exit_code));
+        if status.is_terminal() {
+            self.executing_tools.retain(|(id, _)| id != call_id);
+            self.complete_settled_tool(cell);
+        } else if !self.executing_tools.iter().any(|(id, _)| id == call_id) {
+            self.executing_tools.push((call_id.to_string(), cell));
+        }
+        self.request_redraw();
     }
 
     /// The call keeps its place and shape, marked finished, until what it
@@ -256,6 +288,7 @@ impl ChatWidget {
         let same = |other: &Arc<LiveCell<ToolCallCell>>| Arc::ptr_eq(other, &cell);
         let unsettled = self.tool_group.as_ref().is_some_and(same)
             || self.running_tools.iter().any(|(_, other)| same(other))
+            || self.executing_tools.iter().any(|(_, other)| same(other))
             || self.awaiting_display.iter().any(|(_, other)| same(other));
         if !unsettled {
             self.complete_live_entry(cell);

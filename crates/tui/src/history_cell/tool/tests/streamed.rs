@@ -3,7 +3,7 @@
 
 use std::time::{Duration, Instant};
 
-use hanafubuki_agent::AgentToolCallDisplay;
+use hanafubuki_agent::{AgentExecutionProgressStatus, AgentToolCallDisplay};
 
 use super::{command, numbered, render, text};
 use crate::history_cell::tool::{new_tool_call, ToolCallCell};
@@ -123,4 +123,49 @@ fn a_running_command_counts_its_time_in_tenths() {
         cell.transcript_animation_tick().map(|tick| tick / 10),
         Some(4)
     );
+}
+
+#[test]
+fn a_yielded_command_keeps_its_stream_and_terminal_status_after_a_late_display() {
+    for (status, exit_code, ending) in [
+        (AgentExecutionProgressStatus::Exited, Some(0), "✓"),
+        (AgentExecutionProgressStatus::Exited, Some(7), "exit 7"),
+        (AgentExecutionProgressStatus::Cancelled, None, "cancelled"),
+        (AgentExecutionProgressStatus::TimedOut, None, "timed out"),
+    ] {
+        let mut cell = running("build");
+        cell.execution_status("call-1", AgentExecutionProgressStatus::Running, None);
+        cell.push_output("call-1", "first\n", false);
+        cell.complete("call-1", false);
+        cell.show(
+            "call-1",
+            AgentToolCallDisplay {
+                subject: None,
+                display: Some(command("build", "first\n", None)),
+            },
+        );
+        assert!(cell.transcript_animation_tick().is_some());
+        cell.push_output("call-1", "last\n", false);
+        let rendered = render(&cell, 60);
+        assert!(rendered.contains("Running build"), "{rendered}");
+        assert_eq!(rows(&rendered), ["  └ first", "    last"]);
+        cell.execution_status("call-1", status, exit_code);
+        // A display read in flight must not resurrect the yielded process or
+        // replace output that arrived after that tool result was committed.
+        cell.show(
+            "call-1",
+            AgentToolCallDisplay {
+                subject: None,
+                display: Some(command("build", "first\n", None)),
+            },
+        );
+        let rendered = text(&cell.transcript_lines(60));
+        assert!(rendered.contains("Ran build"), "{rendered}");
+        assert!(
+            rendered.contains("last") && rendered.contains(ending),
+            "{rendered}"
+        );
+        assert!(!rendered.contains("still running"), "{rendered}");
+        assert_eq!(cell.transcript_animation_tick(), None);
+    }
 }

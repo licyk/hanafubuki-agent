@@ -21,6 +21,10 @@ pub(crate) enum ToolGroup {
     Web,
     Goals,
     Questions,
+    Terminals,
+    Memory,
+    Conversations,
+    Context,
 }
 
 impl ToolGroup {
@@ -42,6 +46,14 @@ impl ToolGroup {
             | "cache_search" | "free_search_test" => Some(Self::Web),
             "create_goal" | "get_goal" | "update_goal" => Some(Self::Goals),
             "request_user_input" => Some(Self::Questions),
+            "write_stdin" | "resize_execution" => Some(Self::Terminals),
+            "list_agent_memories"
+            | "search_agent_memories"
+            | "read_agent_memory"
+            | "append_agent_memory_note" => Some(Self::Memory),
+            "read_thread" => Some(Self::Conversations),
+            "decompress" | "search_context" | "new_context" | "acp_status" | "acp_cache"
+            | "absorb" | "acp_retrieve" | "acp_rule" => Some(Self::Context),
             _ => None,
         }
     }
@@ -66,6 +78,14 @@ impl ToolGroup {
             (Self::Goals, false) => "Managed goal",
             (Self::Questions, true) => "Asking user",
             (Self::Questions, false) => "Asked user",
+            (Self::Terminals, true) => "Interacting with terminals",
+            (Self::Terminals, false) => "Interacted with terminals",
+            (Self::Memory, true) => "Using memory",
+            (Self::Memory, false) => "Used memory",
+            (Self::Conversations, true) => "Reading conversations",
+            (Self::Conversations, false) => "Read conversations",
+            (Self::Context, true) => "Managing context",
+            (Self::Context, false) => "Managed context",
         }
     }
 }
@@ -98,9 +118,11 @@ pub(super) fn lines(
 }
 
 fn failed(call: &ToolCall) -> bool {
-    call.outcome
-        .as_ref()
-        .is_some_and(|outcome| outcome.is_error)
+    call.outcome.as_ref().is_some_and(|outcome| {
+        outcome.is_error
+            || matches!(outcome.display.as_ref(),
+            Some(AgentToolDisplay::Command { exit_code: Some(code), .. }) if *code != 0)
+    })
 }
 
 /// A row per call, consecutive reads that did not fail in one.
@@ -126,7 +148,21 @@ fn rows(group: ToolGroup, calls: &[ToolCall], view_extent: Extent) -> Vec<Line<'
                 subjects.push(subject);
             }
         }
-        let verb = verb(&call.name);
+        let verb = match call
+            .outcome
+            .as_ref()
+            .and_then(|outcome| outcome.display.as_ref())
+        {
+            Some(AgentToolDisplay::Command { command, .. }) if call.name == "write_stdin" => {
+                if command.is_empty() {
+                    "Wait for"
+                } else {
+                    "Send input to"
+                }
+                .to_string()
+            }
+            _ => verb(&call.name),
+        };
         let mut row = vec![verb.clone().cyan()];
         if !subjects.is_empty() {
             row.push(if group == ToolGroup::Mcp { ": " } else { " " }.into());
@@ -189,6 +225,21 @@ fn verb(name: &str) -> String {
         "update_goal" => "Update goal",
         "request_user_input" => "Ask",
         "update_plan" => "Update plan",
+        "write_stdin" => "Interact with",
+        "resize_execution" => "Resize",
+        "list_agent_memories" => "List memories",
+        "search_agent_memories" => "Search memories",
+        "read_agent_memory" => "Read memory",
+        "append_agent_memory_note" => "Queue memory note",
+        "read_thread" => "Read conversation",
+        "decompress" => "Restore context",
+        "search_context" => "Search context",
+        "new_context" => "Start new context",
+        "acp_status" => "Read context status",
+        "acp_cache" => "Manage context cache",
+        "absorb" => "Absorb content",
+        "acp_retrieve" => "Retrieve stored content",
+        "acp_rule" => "Manage context rules",
         name => name,
     }
     .to_string()
@@ -197,7 +248,7 @@ fn verb(name: &str) -> String {
 /// How much a call found, or that it failed.
 fn extent(call: &ToolCall) -> Option<Span<'static>> {
     let outcome = call.outcome.as_ref()?;
-    if outcome.is_error {
+    if failed(call) {
         return Some(" (failed)".red());
     }
     let extent = match outcome.display.as_ref()? {

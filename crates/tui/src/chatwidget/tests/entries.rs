@@ -632,6 +632,15 @@ fn categorized_tool_runs_match_replay_in_fullscreen_and_scrollback() {
             ("update", "update_goal", "complete"),
             ("question-1", "request_user_input", "target"),
             ("question-2", "request_user_input", "scope"),
+            ("poll", "write_stdin", "session 3"),
+            ("resize", "resize_execution", "session 3 to 80×24"),
+            ("memory-list", "list_agent_memories", ""),
+            ("memory-read", "read_agent_memory", "MEMORY.md"),
+            ("memory-search", "search_agent_memories", "cargo"),
+            ("memory-note", "append_agent_memory_note", "remember"),
+            ("thread", "read_thread", "session 70"),
+            ("context", "search_context", "cargo"),
+            ("restore", "decompress", "block 1"),
             ("image-3", "view_image", "last.png"),
         ];
         let mut replay = Vec::new();
@@ -662,6 +671,10 @@ fn categorized_tool_runs_match_replay_in_fullscreen_and_scrollback() {
                 "• Searched the web",
                 "• Managed goal",
                 "• Asked user",
+                "• Interacted with terminals",
+                "• Used memory",
+                "• Read conversations",
+                "• Managed context",
                 "• Viewed image",
             ]
         );

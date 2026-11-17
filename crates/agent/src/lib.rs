@@ -194,7 +194,7 @@ pub use workspace_roots::{agent_workspace_roots_from, AgentWorkspaceRoots, Works
 
 /// What a running tool reports (`AgentEventKind::ExecutionProgress`'s
 /// `update`): a process's start, output and status.
-pub use hanafubuki_agent_contracts::AgentToolProgressUpdate;
+pub use hanafubuki_agent_contracts::{AgentExecutionProgressStatus, AgentToolProgressUpdate};
 /// What an interface shows of a tool call, from the tool's presenter
 /// (`AgentHandle::tool_display`, `present_tool_call`).
 pub use hanafubuki_agent_contracts::{

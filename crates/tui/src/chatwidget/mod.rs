@@ -81,6 +81,7 @@ pub(crate) struct ChatWidget {
     /// The tool calls that run, in the order they started, by call id with
     /// their entries.
     running_tools: Vec<(String, Arc<LiveCell<ToolCallCell>>)>,
+    executing_tools: Vec<(String, Arc<LiveCell<ToolCallCell>>)>,
     /// The calls that finished and wait for what they show
     /// (`TurnUpdate::ToolDisplayed`); their entries stay live until it
     /// arrives.
@@ -155,6 +156,7 @@ impl ChatWidget {
             frame_requester,
             bottom_pane,
             running_tools: Vec::new(),
+            executing_tools: Vec::new(),
             awaiting_display: Vec::new(),
             tool_group: None,
             live_thinking: Vec::new(),
@@ -448,6 +450,7 @@ impl ChatWidget {
     pub(crate) fn has_live_entries(&self) -> bool {
         !self.live_thinking.is_empty()
             || !self.running_tools.is_empty()
+            || !self.executing_tools.is_empty()
             || self
                 .work_entries
                 .values()

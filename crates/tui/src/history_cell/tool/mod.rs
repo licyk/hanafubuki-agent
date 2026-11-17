@@ -18,6 +18,7 @@
 
 mod command;
 mod content;
+mod execution;
 mod file_read;
 mod group;
 mod listing;
@@ -75,8 +76,9 @@ struct ToolCall {
     subject: Option<String>,
     start_time: Instant,
     outcome: Option<Outcome>,
-    /// What its process printed while it ran, until its display arrives.
+    /// What its process printed, retained when its result yields a session id.
     live: Option<LiveOutput>,
+    execution: Option<execution::Execution>,
     /// The person typed it (`!command`).
     by_user: bool,
 }
@@ -104,6 +106,7 @@ pub(crate) fn new_tool_call(
             start_time: Instant::now(),
             outcome: None,
             live: None,
+            execution: None,
             by_user: false,
         }],
     }
@@ -157,6 +160,11 @@ impl ToolCallCell {
     /// as they stood, failed, so no spinner or clock runs on.
     pub(crate) fn end_running(&mut self) {
         for call in &mut self.calls {
+            if call.outcome.is_none() {
+                if let Some(execution) = &mut call.execution {
+                    execution.interrupt(call.start_time.elapsed());
+                }
+            }
             call.outcome.get_or_insert(Outcome {
                 is_error: true,
                 display: None,
@@ -185,7 +193,16 @@ impl ToolCallCell {
             call.subject = shown.subject;
         }
         if let Some(outcome) = &mut call.outcome {
-            if shown.display.is_some() {
+            if shown.display.is_some()
+                && (call.execution.is_none()
+                    || matches!(
+                        shown.display.as_ref(),
+                        Some(AgentToolDisplay::Command {
+                            exit_code: Some(_),
+                            ..
+                        })
+                    ))
+            {
                 call.live = None;
             }
             outcome.display = shown.display;
@@ -292,7 +309,8 @@ impl HistoryCell for ToolCallCell {
         match &self.calls[..] {
             [call]
                 if call.name == EXEC_COMMAND
-                    && call.outcome.as_ref().is_none_or(|outcome| !outcome.shown) =>
+                    && (call.is_running()
+                        || call.outcome.as_ref().is_none_or(|outcome| !outcome.shown)) =>
             {
                 Some(ActivityDisclosure::Generic)
             }
@@ -307,7 +325,7 @@ impl HistoryCell for ToolCallCell {
 
     /// The spinner blinks while a call runs, and a command's clock counts.
     fn transcript_animation_tick(&self) -> Option<u64> {
-        let call = self.calls.iter().find(|call| call.outcome.is_none())?;
+        let call = self.calls.iter().find(|call| call.is_running())?;
         let period = if call.name == EXEC_COMMAND {
             CLOCK_TICK_MILLIS
         } else {
@@ -380,6 +398,9 @@ impl View {
 
 impl ToolCall {
     fn view(&self, extent: Extent) -> View {
+        if let Some(view) = self.execution_view(extent) {
+            return view;
+        }
         let failed = self
             .outcome
             .as_ref()
@@ -401,6 +422,9 @@ impl ToolCall {
         };
         let mut view = match &self.live {
             Some(live) => command::streamed(self, header, live, extent),
+            None if self.name == EXEC_COMMAND => {
+                command::streamed(self, header, &LiveOutput::default(), extent)
+            }
             None => header,
         };
         if self.outcome.as_ref().is_none_or(|outcome| !outcome.shown) {
@@ -415,7 +439,7 @@ impl ToolCall {
 
     /// The row a call shows under its header until its first rows come.
     fn placeholder(&self) -> Line<'static> {
-        let running_command = self.outcome.is_none() && self.name == EXEC_COMMAND;
+        let running_command = self.is_running() && self.name == EXEC_COMMAND;
         Line::from(
             if running_command {
                 "(running…)"
@@ -428,7 +452,7 @@ impl ToolCall {
 
     /// The time a running command has run so far, ` · 3.4s`.
     fn clock(&self) -> Option<Span<'static>> {
-        (self.outcome.is_none() && self.name == EXEC_COMMAND)
+        (self.is_running() && self.name == EXEC_COMMAND)
             .then(|| format!(" · {}", fmt_elapsed_tenths(self.start_time.elapsed())).dim())
     }
 
@@ -499,10 +523,12 @@ impl ToolCall {
     }
 
     fn bullet(&self, failed: bool) -> Span<'static> {
-        match &self.outcome {
-            None => spinner(Some(self.start_time), true),
-            Some(_) if failed => "•".red().bold(),
-            Some(_) => "•".green().bold(),
+        if self.is_running() {
+            spinner(Some(self.start_time), true)
+        } else if failed {
+            "•".red().bold()
+        } else {
+            "•".green().bold()
         }
     }
 

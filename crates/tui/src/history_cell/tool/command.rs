@@ -60,17 +60,8 @@ pub(super) fn view(call: &ToolCall, command: &Command, failed: bool, extent: Ext
         vec![verb.bold(), " ".into(), call.subject_or(&call.name).into()]
     } else {
         let verb = if call.by_user { "You ran" } else { "Ran" };
-        let mut title = vec![verb.bold(), " ".into()];
-        // A long command line is cut in the header, as a subject is.
-        let (first, was_cut) = clipped(
-            script_lines.first().cloned().unwrap_or_default(),
-            TITLE_COLUMNS,
-        );
-        title_cut = was_cut;
-        title.extend(first.spans);
-        if script_lines.len() > 1 {
-            title.push(" …".dim());
-        }
+        let (title, cut) = header(verb, &script_lines);
+        title_cut = cut;
         title
     };
 
@@ -110,6 +101,19 @@ pub(super) fn view(call: &ToolCall, command: &Command, failed: bool, extent: Ext
         details,
         hidden: hidden(output.len(), cut || title_cut || script_lines.len() > 1),
     }
+}
+
+pub(super) fn header(verb: &str, script_lines: &[Line<'static>]) -> (Vec<Span<'static>>, bool) {
+    let mut title = vec![verb.to_owned().bold(), " ".into()];
+    let (first, cut) = clipped(
+        script_lines.first().cloned().unwrap_or_default(),
+        TITLE_COLUMNS,
+    );
+    title.extend(first.spans);
+    if script_lines.len() > 1 {
+        title.push(" …".dim());
+    }
+    (title, cut)
 }
 
 /// `header` with what the call's process printed so far under it: the last

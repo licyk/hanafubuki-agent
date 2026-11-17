@@ -142,6 +142,11 @@ pub(crate) enum TurnUpdate {
         text: String,
         truncated: bool,
     },
+    ToolExecution {
+        call_id: String,
+        status: hanafubuki_agent::AgentExecutionProgressStatus,
+        exit_code: Option<i32>,
+    },
     ApprovalRequested(ApprovalRequest),
     /// Answered, by the person or by a policy; its overlay closes.
     ApprovalResolved(ApprovalRequestId),

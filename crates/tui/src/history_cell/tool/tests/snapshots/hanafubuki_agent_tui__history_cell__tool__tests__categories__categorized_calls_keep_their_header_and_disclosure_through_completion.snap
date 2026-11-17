@@ -2,6 +2,39 @@
 source: crates/tui/src/history_cell/tool/tests/categories.rs
 expression: "gallery.join(\"\\n\\n\")"
 ---
+• Interacted with terminals
+  └ Interact with session 3
+─── expanded (Some(Generic)) ───
+• Interacted with terminals
+  └ Interacted with terminal
+      session 3
+      Full result kept in
+      details
+
+• Used memory
+  └ Read memory MEMORY.md
+─── expanded (Some(Generic)) ───
+• Used memory
+  └ Read memory MEMORY.md
+      Full result kept in
+      details
+
+• Read conversations
+  └ Read conversation session 70
+─── expanded (Some(Generic)) ───
+• Read conversations
+  └ Read conversation session 70
+      Full result kept in
+      details
+
+• Managed context
+  └ Search context build
+─── expanded (Some(Generic)) ───
+• Managed context
+  └ Searched context build
+      Full result kept in
+      details
+
 • Viewed image
   └ View diagram.png
 ─── expanded (Some(Generic)) ───

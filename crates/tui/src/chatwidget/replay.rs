@@ -24,6 +24,7 @@ impl ChatWidget {
         self.user_shell = false;
         self.sync_pending_input();
         self.running_tools.clear();
+        self.executing_tools.clear();
         for (call_id, cell) in std::mem::take(&mut self.awaiting_display) {
             cell.update(|cell| {
                 cell.show(

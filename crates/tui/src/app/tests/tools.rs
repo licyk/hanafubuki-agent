@@ -46,6 +46,47 @@ fn a_running_commands_output_streams_into_its_entry_in_both_presentations() {
 }
 
 #[test]
+fn a_yielded_command_keeps_streaming_until_the_process_exits() {
+    let command = if cfg!(windows) {
+        "while (-not (Test-Path gate)) { Start-Sleep -Milliseconds 100 }; echo live-after-yield; [Console]::Out.Flush(); while (-not (Test-Path finish)) { Start-Sleep -Milliseconds 100 }; echo live-finished"
+    } else {
+        "while [ ! -e gate ]; do sleep 0.1; done; echo live-after-yield; while [ ! -e finish ]; do sleep 0.1; done; echo live-finished"
+    };
+    for mode in [TranscriptMode::Owned, TranscriptMode::Terminal] {
+        let mut harness = Harness::start_with(
+            vec![
+                tool_events(
+                    "exec_command",
+                    &serde_json::json!({
+                        "cmd": command, "yield_time_ms": 1
+                    })
+                    .to_string(),
+                ),
+                assistant_events("The command is in the background."),
+                assistant_events("The background command has finished."),
+            ],
+            true,
+            mode,
+        );
+        harness.type_and_submit("Run the command.");
+        harness.pump_until_screen_shows("Yes, proceed");
+        harness.key(KeyCode::Char('y'));
+        harness.pump_until_screen_shows("The command is in the background.");
+        harness.pump_until_turn_ends();
+        std::fs::write(harness.home.path().join("project/gate"), "").unwrap();
+        harness.pump_until("output after the tool returned", |harness| {
+            has_output_row(&harness.screen(), "live-after-yield")
+        });
+        assert!(harness.transcript().contains("Running while"));
+        std::fs::write(harness.home.path().join("project/finish"), "").unwrap();
+        harness.pump_until("the background command's final output", |harness| {
+            let transcript = harness.transcript();
+            transcript.contains("Ran while") && has_output_row(&transcript, "live-finished")
+        });
+    }
+}
+
+#[test]
 fn a_read_shows_its_path_and_text_live_and_replayed() {
     for mode in [TranscriptMode::Owned, TranscriptMode::Terminal] {
         let arguments = serde_json::json!({ "path": "notes.txt", "offset": 0, "maxBytes": null });
