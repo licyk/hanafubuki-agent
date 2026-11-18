@@ -167,6 +167,13 @@ impl ApprovalOverlay {
 }
 
 impl BottomPaneView for ApprovalOverlay {
+    fn pointer_key(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<ratatui::crossterm::event::KeyCode> {
+        self.list.pointer_key(mouse)
+    }
+
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         if self.try_handle_shortcut(&key_event) {
             return;

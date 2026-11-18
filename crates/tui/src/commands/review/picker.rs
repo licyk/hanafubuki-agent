@@ -154,6 +154,13 @@ impl ReviewPicker {
 }
 
 impl BottomPaneView for ReviewPicker {
+    fn pointer_key(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<ratatui::crossterm::event::KeyCode> {
+        self.view_mut().pointer_key(mouse)
+    }
+
     fn handle_key_event(&mut self, key: KeyEvent) {
         let esc = key.code == KeyCode::Esc && key.kind != KeyEventKind::Release;
         if esc && !matches!(self.page, Page::Presets(_)) {

@@ -222,6 +222,13 @@ impl MultiSelectPicker {
 }
 
 impl BottomPaneView for MultiSelectPicker {
+    fn pointer_key(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<ratatui::crossterm::event::KeyCode> {
+        self.state.pointer(mouse, KeyCode::Char(' '))
+    }
+
     fn handle_key_event(&mut self, key: KeyEvent) {
         if key.kind == KeyEventKind::Release {
             return;

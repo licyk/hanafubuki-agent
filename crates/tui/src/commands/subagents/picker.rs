@@ -79,6 +79,13 @@ fn list(
 }
 
 impl BottomPaneView for SubagentsPicker {
+    fn pointer_key(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<ratatui::crossterm::event::KeyCode> {
+        self.list.pointer_key(mouse)
+    }
+
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         self.list.handle_key_event(key_event);
     }

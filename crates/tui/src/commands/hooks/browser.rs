@@ -266,6 +266,13 @@ impl HooksBrowser {
 }
 
 impl BottomPaneView for HooksBrowser {
+    fn pointer_key(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<ratatui::crossterm::event::KeyCode> {
+        self.list.as_mut()?.pointer_key(mouse)
+    }
+
     fn handle_key_event(&mut self, key: KeyEvent) {
         if key.kind == KeyEventKind::Release {
             return;
