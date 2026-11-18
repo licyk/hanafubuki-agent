@@ -7,6 +7,7 @@ pub use outcomes::{Adoption, AdvisorStats, Validation};
 mod options;
 mod prompt;
 mod request;
+mod scout;
 mod tool;
 mod workspace;
 

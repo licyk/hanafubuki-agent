@@ -35,6 +35,7 @@ pub(super) struct AdvisorOptions {
     pub record_outcomes: bool,
     pub repeat_threshold: Option<usize>,
     pub gate_failure: super::gate::Failure,
+    pub scout: bool,
     pub history_chars: usize,
     pub activation_scope: ActivationScope,
     pub active: bool,
@@ -65,6 +66,7 @@ impl Default for AdvisorOptions {
             record_outcomes: false,
             repeat_threshold: None,
             gate_failure: Default::default(),
+            scout: false,
             history_chars: 15_000,
             activation_scope: ActivationScope::Persistent,
             active: false,
@@ -197,6 +199,11 @@ pub(crate) fn advisor_schema() -> PluginOptionSchema {
                     .map(|v| SettingChoice::new(v, v))
                     .into(),
             },
+        ),
+        (
+            "scout",
+            "Let the executor select evidence groups before active consultations",
+            SettingKind::Boolean,
         ),
         ("provider", "Advisor provider ID", text()),
         ("model", "Advisor model ID", text()),

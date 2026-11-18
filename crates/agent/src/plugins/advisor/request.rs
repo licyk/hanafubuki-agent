@@ -21,6 +21,7 @@ pub struct AdvisorAnswer {
     pub model: String,
     pub text: String,
     pub usage: Option<ModelUsage>,
+    pub scout_usage: Option<ModelUsage>,
 }
 
 impl AdvisorService {
@@ -184,15 +185,24 @@ impl AdvisorService {
         };
         let token = cancel.child();
         let request = async {
-            {
-                let mut counts = self.consultations.lock();
-                let used = counts.entry(id).or_default();
-                if opts.consultation_limit.is_some_and(|limit| *used >= limit) {
-                    return Err(ModelError::InvalidRequest(
-                        "Advisor consultation budget exhausted for this session".into(),
-                    ));
-                }
-                *used = used.saturating_add(1);
+            self.count_consultation(id, &opts)?;
+            let mut history = history;
+            let scout_usage =
+                if opts.scout && !opts.simple && self.active(id) && args.follow_up_to.is_none() {
+                    self.scout(
+                        &executor,
+                        &opts,
+                        &question,
+                        id,
+                        Arc::make_mut(&mut history),
+                        token.clone(),
+                    )
+                    .await?
+                } else {
+                    None
+                };
+            if token.is_cancelled() {
+                return Err(ModelError::Cancelled);
             }
             let primary = self
                 .sample(
@@ -204,7 +214,7 @@ impl AdvisorService {
                     token.clone(),
                 )
                 .await;
-            match primary {
+            let mut answer = match primary {
                 Err(error) if retryable(&error) && !token.is_cancelled() => {
                     let Some((fallback, backup)) = opts
                         .fallback_provider
@@ -222,9 +232,11 @@ impl AdvisorService {
                     })
                 }
                 other => other,
-            }
+            }?;
+            answer.scout_usage = scout_usage;
+            Ok((answer, history))
         };
-        let answer = tokio::select! {
+        let (answer, history) = tokio::select! {
             biased;
             _ = wait_for_cancellation(self.cancellation.clone()) => {token.cancel(); Err(AgentError::Cancelled)}
             _ = wait_for_cancellation(cancel) => Err(AgentError::Cancelled),
@@ -250,7 +262,23 @@ impl AdvisorService {
         Ok(answer)
     }
 
-    async fn sample(
+    fn count_consultation(
+        &self,
+        id: AgentSessionId,
+        opts: &AdvisorOptions,
+    ) -> Result<(), ModelError> {
+        let mut counts = self.consultations.lock();
+        let used = counts.entry(id).or_default();
+        if opts.consultation_limit.is_some_and(|limit| *used >= limit) {
+            return Err(ModelError::InvalidRequest(
+                "Advisor consultation budget exhausted for this session".into(),
+            ));
+        }
+        *used = used.saturating_add(1);
+        Ok(())
+    }
+
+    pub(super) async fn sample(
         &self,
         (provider, model): (&str, &str),
         opts: &AdvisorOptions,
@@ -350,6 +378,7 @@ impl AdvisorService {
                         model: model.into(),
                         text: text.join("\n"),
                         usage,
+                        scout_usage: None,
                     })
                 }
                 ModelEvent::ResponseIncomplete { reason, .. } => {
