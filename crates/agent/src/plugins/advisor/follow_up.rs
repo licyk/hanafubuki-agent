@@ -11,6 +11,7 @@ static NEXT: AtomicU64 = AtomicU64::new(1);
 #[derive(Clone)]
 pub(super) struct Previous {
     pub id: String,
+    pub target: (String, String),
     pub answer: String,
     pub prompt: String,
     pub evidence: Arc<Evidence>,
@@ -46,5 +47,12 @@ impl Previous {
 }
 
 pub(super) fn next_id() -> String {
-    format!("advice-{}", NEXT.fetch_add(1, Ordering::Relaxed))
+    format!(
+        "advice-{:x}-{:x}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    )
 }

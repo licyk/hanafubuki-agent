@@ -31,6 +31,11 @@ use parking_lot::RwLock;
 use crate::conversation_reader::AgentConversationReader;
 use options::{ActivationScope, AdvisorOptions};
 
+pub(crate) struct ExecutorPin {
+    pub target: Option<(String, String)>,
+    pub effort: Option<hanafubuki_agent_kernel::ModelReasoningEffort>,
+}
+
 pub(crate) struct AdvisorService {
     conversations: AgentConversationReader,
     workspace: workspace::AdvisorWorkspace,
@@ -92,6 +97,8 @@ pub(crate) fn advisor_plugin(
                 .register(Arc::new(prompt::Guidance(service.clone())))?;
             ctx.get::<hanafubuki_agent_contracts::ContextRendererRegistry>()?
                 .register(prompt::RENDERER)?;
+            ctx.get::<hanafubuki_agent_contracts::ObserverRegistry>()?
+                .register(service.clone() as Arc<dyn hanafubuki_agent_contracts::AgentObserver>)?;
             gate::register(&ctx, service.clone())?;
             ctx.get::<ToolSourceRegistry>()?
                 .register(Arc::new(tool::AdvisorSource::new(service.clone())?))?;
@@ -108,6 +115,7 @@ pub(crate) fn advisor_plugin(
             .with(hanafubuki_agent_contracts::PromptContributorRegistry::NAME)
             .with(hanafubuki_agent_contracts::ContextRendererRegistry::NAME)
             .with(hanafubuki_agent_contracts::ToolLifecycleHookRegistry::NAME)
+            .with(hanafubuki_agent_contracts::ObserverRegistry::NAME)
             .with(BlockingService::NAME)
             .with(ToolPresenterRegistry::NAME)
             .with(ToolSourceRegistry::NAME),
@@ -132,6 +140,27 @@ impl AdvisorService {
             }
     }
 
+    pub(crate) fn executor_pin(&self) -> Result<ExecutorPin, AgentError> {
+        let opts = self.options.read();
+        if opts.primary().is_none() {
+            return Err(AgentError::InvalidInput(
+                "Choose an Advisor provider and model in /advisor-settings first".into(),
+            ));
+        }
+        let target = match (&opts.executor_provider, &opts.executor_model) {
+            (Some(provider), Some(model)) => Some((provider.clone(), model.clone())),
+            (None, None) => None,
+            _ => {
+                return Err(AgentError::InvalidInput(
+                    "Choose both executor provider and model for a pinned executor".into(),
+                ))
+            }
+        };
+        Ok(ExecutorPin {
+            target,
+            effort: opts.executor_effort.clone(),
+        })
+    }
     pub(crate) fn activate(&self, id: AgentSessionId, active: bool) -> Result<bool, AgentError> {
         let options = self.options.read();
         if active && options.primary().is_none() {
@@ -153,5 +182,20 @@ impl AdvisorService {
             self.sessions.write().remove(&id);
         }
         Ok(false)
+    }
+}
+
+impl hanafubuki_agent_contracts::AgentObserver for AdvisorService {
+    fn id(&self) -> &str {
+        "advisor"
+    }
+    fn observe(&self, event: &hanafubuki_agent_contracts::AgentNotification) {
+        use hanafubuki_agent_contracts::AgentNotification;
+        if let AgentNotification::SessionArchived { session_id, .. } = event {
+            self.previous.lock().remove(session_id);
+            self.repeats.lock().remove(session_id);
+            self.proposals.lock().remove(session_id);
+            self.sessions.write().remove(session_id);
+        }
     }
 }

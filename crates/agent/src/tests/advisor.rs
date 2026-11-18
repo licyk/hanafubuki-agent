@@ -402,3 +402,104 @@ async fn model_settings_proposals_need_user_confirmation_and_scout_only_forwards
         .is_empty());
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn workspace_handoff_requires_a_named_tracked_file_and_transmits_only_selected_pixels() {
+    use hanafubuki_agent_config::{AgentModelImageInput, AgentModelOverrideSettings};
+    let reviewer = FakeServer::start(vec![
+        (assistant_events("Read `tracked.txt`."), Duration::ZERO),
+        (assistant_events("Reviewed."), Duration::ZERO),
+    ])
+    .await;
+    let (service, paths, _) = service_with_config("advisor-workspace", |_, config| {
+        configure_test_provider(config, &reviewer.base_url, None);
+        config
+            .mutate_providers(config.providers().unwrap().revision, |reg| {
+                reg.providers[0].models.insert(
+                    "review".into(),
+                    AgentModelOverrideSettings {
+                        image_input: AgentModelImageInput::Supported,
+                        ..Default::default()
+                    },
+                );
+                Ok(())
+            })
+            .unwrap();
+    });
+    let directory = tempfile::tempdir().unwrap();
+    let workspace = directory.path();
+    for (name, body) in [
+        ("tracked.txt", "tracked-body"),
+        ("secret.txt", "excluded-body"),
+    ] {
+        std::fs::write(workspace.join(name), body).unwrap();
+    }
+    image::DynamicImage::new_rgb8(3, 2)
+        .save(workspace.join("sample.png"))
+        .unwrap();
+    for args in [vec!["init", "-q"], vec!["add", "tracked.txt"]] {
+        assert!(std::process::Command::new("git")
+            .args(args)
+            .current_dir(workspace)
+            .status()
+            .unwrap()
+            .success());
+    }
+    service.start_plugins().await;
+    let id = service
+        .create_session_with_workspace(
+            AgentSessionMode::Default,
+            None,
+            workspace.to_string_lossy().into_owned(),
+        )
+        .await
+        .unwrap()
+        .id;
+    service
+        .write_setting_values(SettingsWrite {
+            changes: [
+                ("provider", json!("provider-1")),
+                ("model", json!("review")),
+                ("gitContext", json!("summary")),
+                ("untrackedFiles", json!(true)),
+                ("trackedFiles", json!(true)),
+                ("shareImages", json!(true)),
+            ]
+            .map(|(key, value)| SettingChange {
+                key: format!("pluginOptions.advisor.{key}"),
+                op: SettingWriteOp::Set(value),
+            })
+            .into(),
+        })
+        .await
+        .unwrap();
+    let mut request = AdvisorConsultation::default();
+    request.include_tracked_files.push("tracked.txt".into());
+    assert!(service
+        .consult_advisor_with(id, request.clone(), Default::default())
+        .await
+        .is_err());
+    service
+        .consult_advisor(id, "inspect".into(), Default::default())
+        .await
+        .unwrap();
+    request.include_untracked.push("sample.png".into());
+    service
+        .consult_advisor_with(id, request, Default::default())
+        .await
+        .unwrap();
+    let requests = reviewer.requests();
+    let summary = String::from_utf8_lossy(&requests[0].body);
+    assert!(summary.contains("tracked.txt") && !summary.contains("tracked-body"));
+    let body = String::from_utf8_lossy(&requests[1].body);
+    assert!(
+        body.contains("tracked-body")
+            && body.contains("data:image/png;base64,")
+            && !body.contains("excluded-body"),
+        "{body}"
+    );
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    std::fs::remove_dir_all(paths.app_data_dir).unwrap();
+}

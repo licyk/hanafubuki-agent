@@ -92,7 +92,17 @@ impl AgentToolSource for AdvisorSource {
     ) -> ToolFuture<'a, Result<ToolSourceContribution, AgentToolError>> {
         Box::pin(async move {
             Ok(ToolSourceContribution::from_tools(
-                if self.service.active(step.session_id) {
+                if self.service.active(step.session_id) && {
+                    let options = self.service.options.read();
+                    options.executor_models.is_empty()
+                        || self
+                            .service
+                            .conversations
+                            .executor_model(step.session_id)
+                            .is_ok_and(|(p, m)| {
+                                options.executor_models.contains(&format!("{p}/{m}"))
+                            })
+                } {
                     let mut tools = vec![self.tool.clone(), self.config.clone()];
                     if self.service.options.read().record_outcomes {
                         tools.push(self.outcome.clone());

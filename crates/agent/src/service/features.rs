@@ -95,6 +95,36 @@ impl AgentApplicationService {
         id: AgentSessionId,
         active: bool,
     ) -> Result<(), AgentError> {
+        if active {
+            let mut snapshot = self.snapshot(id)?;
+            if snapshot.origin.is_none() {
+                let pin = self.feature("advisor",|svc:Arc<crate::plugins::AdvisorService>|async move {svc.executor_pin()}).await?;
+                if let Some((provider_id, model)) = pin.target {
+                    if snapshot.provider_id != provider_id || snapshot.model != model {
+                        snapshot = self
+                            .set_session_model(crate::AgentSessionModelSelectionRequest {
+                                session_id: id,
+                                generation: snapshot.generation,
+                                revision: snapshot.revision,
+                                provider_id,
+                                model,
+                            })
+                            .await
+                            .map_err(AgentError::InvalidInput)?;
+                    }
+                }
+                if pin.effort.is_some() && pin.effort != snapshot.reasoning_effort {
+                    self.set_session_reasoning_effort(crate::AgentSessionReasoningEffortRequest {
+                        session_id: id,
+                        generation: snapshot.generation,
+                        revision: snapshot.revision,
+                        effort: pin.effort,
+                    })
+                    .await
+                    .map_err(AgentError::InvalidInput)?;
+                }
+            }
+        }
         let persistent = self
             .feature(
                 "advisor",

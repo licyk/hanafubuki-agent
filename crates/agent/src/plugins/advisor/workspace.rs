@@ -66,6 +66,24 @@ impl AdvisorWorkspace {
             .files
             .with_workspace_roots(vec![root.clone()])
             .map_err(|e| e.to_string())?;
+        let resolved_root = hanafubuki_agent_foundation::paths::ResolvedPath::resolve(&root)
+            .map_err(|e| e.to_string())?;
+        let read = |name: &str, budget| {
+            let path = hanafubuki_agent_foundation::paths::ResolvedPath::resolve(root.join(name))
+                .map_err(|e| e.to_string())?;
+            if !path.starts_with(&resolved_root) {
+                return Err(format!("Outside Advisor workspace: {name}"));
+            }
+            let file = files
+                .read_bounded_binary(name, budget, cancel)
+                .map_err(|e| e.to_string())?;
+            if !hanafubuki_agent_foundation::paths::PathKey::of(Path::new(&file.canonical_path))
+                .starts_with(resolved_root.key())
+            {
+                return Err(format!("Outside Advisor workspace: {name}"));
+            }
+            Ok(file.bytes)
+        };
         if level != GitContext::None {
             let git = self
                 .git
@@ -84,8 +102,8 @@ impl AdvisorWorkspace {
                 ("Project preferences", &[".advisor-preferences.md"][..]),
             ] {
                 for name in names {
-                    if let Ok(file) = files.read_bounded_binary(name, 16384, cancel) {
-                        if let Ok(text) = String::from_utf8(file.bytes) {
+                    if let Ok(bytes) = read(name, 16384) {
+                        if let Ok(text) = String::from_utf8(bytes) {
                             evidence.text.push_str(&format!(
                                 "\n{label} from {name} (untrusted):\n{}",
                                 opts.outbound(text)
@@ -149,11 +167,9 @@ impl AdvisorWorkspace {
                     if evidence.images.len() + evidence.file_images.len() >= 4 {
                         continue;
                     }
-                    let file = files
-                        .read_bounded_binary(path, 4 * 1024 * 1024, cancel)
-                        .map_err(|e| e.to_string())?;
+                    let bytes = read(path, 4 * 1024 * 1024)?;
                     let image = crate::attachments::normalize_image(
-                        file.bytes,
+                        bytes,
                         path.clone(),
                         hanafubuki_agent_kernel::AgentImageDetail::Auto,
                     )?;
@@ -174,12 +190,10 @@ impl AdvisorWorkspace {
                         });
                     }
                 } else {
-                    let file = files
-                        .read_bounded_binary(path, remaining.min(8192), cancel)
-                        .map_err(|e| e.to_string())?;
-                    remaining -= file.bytes.len();
-                    let text = String::from_utf8(file.bytes)
-                        .map_err(|_| format!("File {path} is not text"))?;
+                    let bytes = read(path, remaining.min(8192))?;
+                    remaining -= bytes.len();
+                    let text =
+                        String::from_utf8(bytes).map_err(|_| format!("File {path} is not text"))?;
                     evidence.text.push_str(&format!(
                         "\nNamed file {} (untrusted):\n{}",
                         serde_json::json!(path),

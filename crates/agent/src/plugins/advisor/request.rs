@@ -54,40 +54,8 @@ impl AdvisorService {
                 "Choose an Advisor provider and model in /advisor-settings first".into(),
             )
         })?;
-        let reader = self.conversations.clone();
-        let settings = opts.clone();
-        let reading = cancel.clone();
-        let workspace = self.workspace.clone();
-        let source = args.clone();
-        let (executor, mut history, root, trusted) = self
-            .blocking
-            .run("advisor conversation", move || {
-                let executor = reader.executor_model(id)?;
-                if !settings.executor_models.is_empty()
-                    && !settings
-                        .executor_models
-                        .contains(&format!("{}/{}", executor.0, executor.1))
-                {
-                    return Err(AgentError::InvalidInput(
-                        "The executor model is outside the Advisor allowlist".into(),
-                    ));
-                }
-                let root = match source.root {
-                    Some(root) => root,
-                    None => (workspace.directory)(id).map_err(AgentError::InvalidInput)?,
-                };
-                let trusted = reader
-                    .trusts_project(&root)
-                    .map_err(AgentError::InvalidInput)?;
-                Ok::<_, AgentError>((
-                    executor,
-                    conversation(&reader, id, &settings, &reading)?,
-                    root,
-                    trusted,
-                ))
-            })
-            .await
-            .map_err(|e| AgentError::Model(e.to_string()))??;
+        let (executor, mut history, root, trusted) =
+            self.initial_evidence(id, &opts, &args, &cancel).await?;
         let consult = |provider: &str, model: &str| {
             if opts.skip_same_model && executor.0 == provider && executor.1 == model {
                 Err(AgentError::InvalidInput(
@@ -97,35 +65,15 @@ impl AdvisorService {
                 Ok(())
             }
         };
-        consult(provider, model)?;
-        let prior = {
-            let mut previous = self.previous.lock();
-            previous.retain(|_, p| p.fresh());
-            previous
-                .get_mut(&id)
-                .filter(|p| {
-                    Arc::ptr_eq(&p.options, &opts)
-                        && p.root == PathKey::of(&root)
-                        && p.trusted == trusted
-                        && p.user_item == history.user_item
-                        && !(history.recent_tools.len() == 3
-                            && history
-                                .recent_tools
-                                .iter()
-                                .all(|n| !p.evidence.recent_tools.contains(n)))
-                })
-                .map(|p| {
-                    let allowed = !p.claimed
-                        && args
-                            .include_tracked_files
-                            .iter()
-                            .all(|path| !path.is_empty() && p.mentions(path));
-                    if allowed && !args.include_tracked_files.is_empty() {
-                        p.claimed = true
-                    }
-                    (p.clone(), allowed)
-                })
-        };
+
+        let prior = self.prior(
+            id,
+            &opts,
+            &root,
+            trusted,
+            &history,
+            &args.include_tracked_files,
+        );
         if !args.include_tracked_files.is_empty()
             && !prior.as_ref().is_some_and(|(_, allowed)| *allowed)
         {
@@ -135,7 +83,7 @@ impl AdvisorService {
             ));
         }
         let question = opts.outbound(args.question.clone());
-        let (prompt, history) = if let Some(key) = &args.follow_up_to {
+        let (prompt, history, previous_target) = if let Some(key) = &args.follow_up_to {
             if question.is_empty()
                 || args.draft.is_some()
                 || args.git_context.is_some()
@@ -156,7 +104,7 @@ impl AdvisorService {
                 p.prompt,
                 opts.outbound(p.answer)
             );
-            (prompt, p.evidence)
+            (prompt, p.evidence, Some(p.target))
         } else {
             let workspace = self.workspace.clone();
             let reader = self.conversations.clone();
@@ -181,8 +129,13 @@ impl AdvisorService {
                 .map_err(|e| AgentError::InvalidInput(e.to_string()))?
                 .map_err(AgentError::InvalidInput)?;
             let draft = opts.outbound(args.draft.unwrap_or_default());
-            (format!("Question: {question}\nExecutor draft (unverified): {draft}\nConversation evidence:\n"),Arc::new(history))
+            (format!("Question: {question}\nExecutor draft (unverified): {draft}\nConversation evidence:\n"),Arc::new(history),None)
         };
+        let (provider, model) = previous_target
+            .as_ref()
+            .map(|(p, m)| (p.as_str(), m.as_str()))
+            .unwrap_or((provider, model));
+        consult(provider, model)?;
         let token = cancel.child();
         let request = async {
             self.count_consultation(id, &opts)?;
@@ -215,7 +168,9 @@ impl AdvisorService {
                 )
                 .await;
             let mut answer = match primary {
-                Err(error) if retryable(&error) && !token.is_cancelled() => {
+                Err(error)
+                    if previous_target.is_none() && retryable(&error) && !token.is_cancelled() =>
+                {
                     let Some((fallback, backup)) = opts
                         .fallback_provider
                         .as_deref()
@@ -248,6 +203,7 @@ impl AdvisorService {
                 Previous {
                     id: answer.advice_id.clone(),
                     answer: answer.text.clone(),
+                    target: (answer.provider.clone(), answer.model.clone()),
                     prompt,
                     evidence: history.clone(),
                     created: std::time::Instant::now(),
@@ -260,6 +216,83 @@ impl AdvisorService {
             );
         }
         Ok(answer)
+    }
+
+    async fn initial_evidence(
+        &self,
+        id: AgentSessionId,
+        opts: &Arc<AdvisorOptions>,
+        args: &Consultation,
+        cancel: &CancellationToken,
+    ) -> Result<((String, String), Evidence, std::path::PathBuf, bool), AgentError> {
+        let reader = self.conversations.clone();
+        let settings = opts.clone();
+        let reading = cancel.clone();
+        let workspace = self.workspace.clone();
+        let source = args.clone();
+        self.blocking
+            .run("advisor conversation", move || {
+                let executor = reader.executor_model(id)?;
+                if !settings.executor_models.is_empty()
+                    && !settings
+                        .executor_models
+                        .contains(&format!("{}/{}", executor.0, executor.1))
+                {
+                    return Err(AgentError::InvalidInput(
+                        "The executor model is outside the Advisor allowlist".into(),
+                    ));
+                }
+                let root = match source.root {
+                    Some(root) => root,
+                    None => (workspace.directory)(id).map_err(AgentError::InvalidInput)?,
+                };
+                let trusted = reader
+                    .trusts_project(&root)
+                    .map_err(AgentError::InvalidInput)?;
+                Ok::<_, AgentError>((
+                    executor,
+                    conversation(&reader, id, &settings, &reading)?,
+                    root,
+                    trusted,
+                ))
+            })
+            .await
+            .map_err(|e| AgentError::Model(e.to_string()))?
+    }
+    fn prior(
+        &self,
+        id: AgentSessionId,
+        opts: &Arc<AdvisorOptions>,
+        root: &std::path::Path,
+        trusted: bool,
+        history: &Evidence,
+        files: &[String],
+    ) -> Option<(Previous, bool)> {
+        let mut previous = self.previous.lock();
+        previous.retain(|_, p| p.fresh());
+        previous
+            .get_mut(&id)
+            .filter(|p| {
+                Arc::ptr_eq(&p.options, opts)
+                    && p.root == PathKey::of(root)
+                    && p.trusted == trusted
+                    && p.user_item == history.user_item
+                    && !(history.recent_tools.len() == 3
+                        && history
+                            .recent_tools
+                            .iter()
+                            .all(|n| !p.evidence.recent_tools.contains(n)))
+            })
+            .map(|p| {
+                let allowed = !p.claimed
+                    && files
+                        .iter()
+                        .all(|path| !path.is_empty() && p.mentions(path));
+                if allowed && !files.is_empty() {
+                    p.claimed = true
+                }
+                (p.clone(), allowed)
+            })
     }
 
     fn count_consultation(
