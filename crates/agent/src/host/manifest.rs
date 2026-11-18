@@ -129,6 +129,11 @@ pub(crate) fn agent_plugin_manifest(
         ),
         AgentPluginRow::unconfigured(Capability, titles_plugin(inputs.titles)),
         AgentPluginRow::unconfigured(Capability, threads_plugin(inputs.conversations.clone())),
+        AgentPluginRow::from_settings(
+            Capability,
+            crate::plugins::advisor_plugin(inputs.conversations.clone()),
+            |settings| settings.options_value("advisor"),
+        ),
         AgentPluginRow::unconfigured(Capability, recap_plugin(inputs.conversations)),
         AgentPluginRow::unconfigured(Capability, goal_plugin(inputs.goals)),
         AgentPluginRow::from_settings(

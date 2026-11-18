@@ -33,6 +33,44 @@ pub(crate) struct AgentConversationReader {
 }
 
 impl AgentConversationReader {
+    pub(crate) fn executor_model(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<(String, String), AgentError> {
+        let snapshot = self.core.snapshot(session_id)?;
+        Ok((snapshot.provider_id, snapshot.model))
+    }
+
+    pub(crate) fn advisor_model(
+        &self,
+        provider_id: &str,
+        model: &str,
+    ) -> Result<(AgentSessionModel, hanafubuki_agent_kernel::ModelMetadata), String> {
+        let registry = self.config.providers()?;
+        let provider = resolve_settings_provider(&registry, provider_id)?;
+        let protocol = model_api_protocol(provider.definition.protocol);
+        let configured = crate::service::configured_model_facts(&provider.definition, None, model);
+        let metadata = self
+            .core
+            .model_metadata(
+                provider_id,
+                protocol,
+                &provider.definition.base_url,
+                model,
+                &configured,
+            )
+            .unwrap_or_default();
+        Ok((
+            AgentSessionModel {
+                model: model.into(),
+                protocol,
+                provider,
+                core: self.core.clone(),
+            },
+            metadata,
+        ))
+    }
+
     pub(crate) fn new(core: AgentService, config: AgentConfig) -> Self {
         Self { core, config }
     }

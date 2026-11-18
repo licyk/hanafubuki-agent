@@ -91,6 +91,11 @@ pub fn agent_plugin_descriptors() -> Vec<AgentPluginDescriptor> {
             "threads",
             "Reading conversations referenced by task mentions",
         ),
+        row(
+            "advisor",
+            "A second opinion from a model selected by the user",
+        )
+        .with_options(crate::plugins::advisor_schema()),
         row("recap", "Catch-ups on a session"),
         row(
             "goal",

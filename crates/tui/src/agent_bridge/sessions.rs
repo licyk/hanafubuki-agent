@@ -50,6 +50,8 @@ pub(crate) enum SessionCall {
     /// The session's last answer, for `/copy`.
     LastAnswer,
     Recap,
+    AdvisorManual(String),
+    AdvisorActive(bool),
     /// `/compression`: the panel, or with `cache` the cache report.
     Compression {
         cache: bool,
@@ -111,6 +113,7 @@ pub(crate) enum SessionReply {
     ExportedFile(PathBuf),
     LastAnswer(Option<String>),
     Recap(AgentRecap),
+    AdvisorMessage(String),
     /// The session's hierarchical compression; `None` when it has none.
     Compression {
         status: Option<Box<AgentCompressionStatus>>,
@@ -174,6 +177,9 @@ impl SessionCall {
             Self::ExportPath | Self::Export(_) => "export",
             Self::LastAnswer => "copy",
             Self::Recap => "recap",
+            Self::AdvisorManual(_) => "advisor-manual",
+            Self::AdvisorActive(true) => "advisor",
+            Self::AdvisorActive(false) => "advisor-off",
             Self::Compression { .. } => "compression",
             Self::Terminals => "ps",
             Self::StopTerminals => "stop",
@@ -205,6 +211,43 @@ impl SessionReply {
 }
 
 impl AgentBridge {
+    fn consult_advisor(&self, question: String) -> Result<Option<TurnUpdate>, String> {
+        let id = self.current_id()?;
+        self.spawn_session_call("advisor-manual", move |agent| async move {
+            let answer = agent
+                .consult_advisor(id, question, Default::default())
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok(SessionReply::AdvisorMessage(format!(
+                "Advisor ({}/{}): {}",
+                answer.provider, answer.model, answer.text
+            )))
+        });
+        Ok(None)
+    }
+
+    fn activate_advisor(&self, active: bool) -> Result<Option<TurnUpdate>, String> {
+        let id = self.current_id()?;
+        self.spawn_session_call(
+            if active { "advisor" } else { "advisor-off" },
+            move |agent| async move {
+                agent
+                    .set_advisor_active(id, active)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                Ok(SessionReply::AdvisorMessage(
+                    if active {
+                        "Advisor activated."
+                    } else {
+                        "Advisor deactivated."
+                    }
+                    .into(),
+                ))
+            },
+        );
+        Ok(None)
+    }
+
     pub(super) fn session_call(&mut self, call: SessionCall) -> Option<TurnUpdate> {
         let command = call.command();
         self.run_session_call(call)
@@ -297,6 +340,8 @@ impl AgentBridge {
                 };
                 reply(SessionReply::LastAnswer(answer))
             }
+            SessionCall::AdvisorManual(question) => return self.consult_advisor(question),
+            SessionCall::AdvisorActive(active) => return self.activate_advisor(active),
             SessionCall::Recap => {
                 let session_id = self.current_id()?;
                 self.spawn_session_call("recap", move |agent| async move {

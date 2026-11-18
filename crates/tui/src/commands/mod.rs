@@ -9,6 +9,7 @@
 //! command that panics is turned off for the rest of the run, and the chat
 //! goes on.
 
+mod advisor;
 mod agents;
 mod cd;
 mod clear;
@@ -91,7 +92,11 @@ pub(crate) use subagents::SUBAGENTS;
 pub(crate) use warnings::{show_warnings, WARNINGS};
 
 /// Every command, in presentation order: the most used first.
-pub(crate) static COMMANDS: [&CommandSpec; 53] = [
+pub(crate) static COMMANDS: [&CommandSpec; 57] = [
+    &advisor::ADVISOR,
+    &advisor::OFF,
+    &advisor::MANUAL,
+    &advisor::SETTINGS,
     &model::MODEL,
     &effort::EFFORT,
     &providers::PROVIDERS,
@@ -311,6 +316,7 @@ pub(crate) fn session_reply_command(reply: &SessionReply) -> Option<&'static Com
         | SessionReply::ExportedText(_)
         | SessionReply::ExportedFile(_) => &export::EXPORT,
         SessionReply::LastAnswer(_) => &copy::COPY,
+        SessionReply::AdvisorMessage(_) => &advisor::ADVISOR,
         SessionReply::Recap(_) => &recap::RECAP,
         SessionReply::Compression { .. } => &compression::COMPRESSION,
         SessionReply::Terminals(_) => &terminals::PS,
@@ -346,6 +352,9 @@ pub(crate) fn on_session_reply(context: &mut CommandContext<'_>, reply: SessionR
         | SessionReply::ExportedText(_)
         | SessionReply::ExportedFile(_) => export::on_reply(context, reply),
         SessionReply::LastAnswer(answer) => copy::on_reply(context, answer),
+        SessionReply::AdvisorMessage(text) => {
+            context.add_to_history(history_cell::new_info_event(text, None))
+        }
         SessionReply::Recap(recap) => recap::on_reply(context, recap),
         SessionReply::Compression { status, cache } => {
             compression::on_reply(context, status.map(|status| *status), cache)

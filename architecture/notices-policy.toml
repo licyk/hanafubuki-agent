@@ -2096,3 +2096,7 @@ notice = "crates/execution/src/snapshot.rs"
 path = "crates/mcp/src/stdio/environment.rs"
 markers = ["derived from OpenAI Codex 57a808a392 (Apache-2.0)", "Derived from OpenAI Codex 57a808a392 (Apache-2.0)"]
 notice = "crates/mcp/src/stdio/environment.rs"
+
+[[original]]
+path = "crates/tui/src/commands/advisor.rs"
+reason = "Native commands for explicit Advisor activation, one-off consultations and registry settings."

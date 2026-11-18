@@ -18,6 +18,7 @@ use fixtures::*;
 use sessions::approved_command;
 use tools::{configured_service, service_with, service_with_config};
 
+mod advisor;
 mod background_terminals;
 mod base_instructions;
 mod colour;

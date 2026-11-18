@@ -17,6 +17,49 @@ use crate::plugins::{
 };
 
 impl AgentApplicationService {
+    /// Consults the configured Advisor once, regardless of automatic activation.
+    pub async fn consult_advisor(
+        &self,
+        id: AgentSessionId,
+        question: String,
+        cancellation: hanafubuki_agent_foundation::cancellation::CancellationToken,
+    ) -> Result<crate::AdvisorAnswer, AgentError> {
+        self.feature(
+            "advisor",
+            |service: Arc<crate::plugins::AdvisorService>| async move {
+                service.consult(id, question, None, cancellation).await
+            },
+        )
+        .await
+    }
+
+    /// Changes activation in the configured scope; a session override never changes global settings.
+    pub async fn set_advisor_active(
+        &self,
+        id: AgentSessionId,
+        active: bool,
+    ) -> Result<(), AgentError> {
+        let persistent = self
+            .feature(
+                "advisor",
+                |service: Arc<crate::plugins::AdvisorService>| async move {
+                    service.activate(id, active)
+                },
+            )
+            .await?;
+        if persistent {
+            self.write_setting_values(hanafubuki_agent_config::SettingsWrite {
+                changes: vec![hanafubuki_agent_config::SettingChange {
+                    key: "pluginOptions.advisor.active".into(),
+                    op: hanafubuki_agent_config::SettingWriteOp::Set(active.into()),
+                }],
+            })
+            .await
+            .map_err(AgentError::InvalidInput)?;
+        }
+        Ok(())
+    }
+
     /// The subagents `parent` spawned, oldest first, each with its status
     /// and the start of its latest answer; `FeatureUnavailable` while the
     /// `subagents` plugin is not running.
