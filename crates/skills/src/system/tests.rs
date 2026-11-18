@@ -29,6 +29,7 @@ fn every_bundled_skill_parses() {
             .map(|skill| skill.entry.id.as_str().to_string())
             .collect::<Vec<_>>(),
         vec![
+            "system:advisor-flow".to_string(),
             "system:skill-creator".to_string(),
             "system:skill-manager".to_string()
         ]

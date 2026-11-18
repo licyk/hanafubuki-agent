@@ -19,6 +19,10 @@ use crate::model::SkillError;
 
 const BUNDLED_FILES: &[(&str, &[u8])] = &[
     (
+        "advisor-flow/SKILL.md",
+        include_bytes!("../system-skills/advisor-flow/SKILL.md"),
+    ),
+    (
         "skill-creator/SKILL.md",
         include_bytes!("../system-skills/skill-creator/SKILL.md"),
     ),
