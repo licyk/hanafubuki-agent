@@ -66,7 +66,7 @@ async fn live_history_snapshots_share_items_and_copy_only_the_pointer_vector_on_
         .set_session_turn_budget_policy(
             session.id,
             AgentTurnBudgetPolicy {
-                maximum_tool_invocations: 255,
+                maximum_tool_invocations: Some(255),
                 ..AgentTurnBudgetPolicy::default()
             },
         )

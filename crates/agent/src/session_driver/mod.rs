@@ -390,7 +390,7 @@ impl AgentSessionDriver {
     }
 
     /// Loads `session_id` and binds it to its Provider, its compaction
-    /// strategy and its wake policy as the settings now describe them, for
+    /// strategy, turn budget and wake policy as the settings now describe them, for
     /// a model operation. The kernel calls load history and wait for the
     /// session's staged commit, so they run on the blocking boundary.
     pub(crate) async fn activate_provider_session(
@@ -456,6 +456,7 @@ impl AgentSessionDriver {
                     configured_facts,
                     session_id,
                 )?;
+                core.set_session_turn_budget_policy(session_id, resolved.policy.turn_budget)?;
                 let changed = core.set_session_compaction_strategy(session_id, strategy)?;
                 Ok::<_, AgentError>((changed, core.snapshot(session_id)?))
             },

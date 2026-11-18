@@ -201,11 +201,18 @@ impl AgentService {
         let staged = {
             let mut guard = cell.lock_after_persistence().await?;
             let record = &mut *guard;
+            let Some(limit) = record
+                .settings
+                .budget_policy
+                .maximum_consecutive_stalled_steps
+            else {
+                exact_turn_mut(record, identity)?;
+                return Ok(());
+            };
             let previous = record.rollback_state();
-            let policy = record.settings.budget_policy;
             exact_turn_mut(record, identity)?
                 .no_progress
-                .observe_follow_up(digest, policy.maximum_consecutive_stalled_steps)
+                .observe_follow_up(digest, limit)
                 .map_err(map_no_progress_error)?;
             StagedPersistence::delta(&cell, record, previous)
         };

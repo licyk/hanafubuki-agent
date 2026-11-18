@@ -206,8 +206,9 @@ fn the_model_policy_saves_reasoning_context_and_a_custom_budget() {
     );
     harness.select_setting("Custom turn budget");
     harness.key(KeyCode::Enter);
-    harness.pump_until("the budget to be saved", |harness| {
+    harness.pump_until("the budget save reply", |harness| {
         harness.registry().model_policy.turn_budget.is_some()
+            && !harness.screen().contains("Saving…")
     });
 
     let policy = harness.registry().model_policy;
@@ -220,10 +221,39 @@ fn the_model_policy_saves_reasoning_context_and_a_custom_budget() {
     );
     // The budget starts from the Agent's.
     let budget = policy.turn_budget.unwrap();
-    assert_eq!(budget.maximum_cumulative_model_input_tokens, 8_000_000);
-    assert_eq!(budget.maximum_tool_invocations, 256);
+    assert_eq!(budget.maximum_cumulative_model_input_tokens, None);
+    assert_eq!(budget.maximum_tool_invocations, None);
     assert_eq!(budget.approval_timeout_seconds, 900);
+    harness.edit_setting("Tool calls", "32000");
+    harness.pump_until("the tool-call limit to be saved", |harness| {
+        harness
+            .registry()
+            .model_policy
+            .turn_budget
+            .unwrap()
+            .maximum_tool_invocations
+            == Some(32_000)
+    });
+    assert_eq!(
+        harness
+            .registry()
+            .model_policy
+            .turn_budget
+            .unwrap()
+            .maximum_tool_invocations,
+        Some(32_000)
+    );
     harness.select_setting("Tool calls");
+    harness.key(KeyCode::Char('r'));
+    harness.pump_until("the optional limit to be reset", |harness| {
+        harness
+            .registry()
+            .model_policy
+            .turn_budget
+            .unwrap()
+            .maximum_tool_invocations
+            .is_none()
+    });
 }
 
 /// Once the default model's listing names its reasoning levels, the model

@@ -10,7 +10,9 @@ pub(in crate::service) fn validate_history_append(
         .history
         .len()
         .saturating_add(items.len());
-    enforce_size("history items", item_count, limits.maximum_history_items)?;
+    if let Some(limit) = limits.maximum_history_items {
+        enforce_size("history items", item_count, limit)?;
+    }
     let appended_bytes = items.iter().fold(0usize, |total, item| {
         total.saturating_add(item.retained_bytes())
     });
@@ -35,7 +37,9 @@ pub(in crate::service) fn validate_persisted_history(
     config: &AgentSessionConfig,
     limits: AgentHardLimits,
 ) -> Result<(), AgentError> {
-    enforce_size("history items", history.len(), limits.maximum_history_items)?;
+    if let Some(limit) = limits.maximum_history_items {
+        enforce_size("history items", history.len(), limit)?;
+    }
     validate_turn_boundaries(history)?;
     validate_skill_context_groups(history)?;
     validate_world_state_history(history)?;

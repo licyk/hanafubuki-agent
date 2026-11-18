@@ -446,9 +446,9 @@ async fn the_model_policy_is_one_record() {
         SettingValue::Boolean(false)
     );
     assert_eq!(
-        record.values["turnBudget.maximumToolInvocations"],
-        SettingValue::Integer(256),
-        "the Agent's budget, to start from"
+        record.values.get("turnBudget.maximumToolInvocations"),
+        None,
+        "no cumulative tool-call limit by default"
     );
     service
         .run_settings_action(action(
@@ -456,7 +456,7 @@ async fn the_model_policy_is_one_record() {
             Some("policy"),
             "save",
             Some(4),
-            json!({"customTurnBudget": true, "turnBudget.maximumToolInvocations": 32}),
+            json!({"customTurnBudget": true, "turnBudget.maximumToolInvocations": 32_000}),
         ))
         .await
         .unwrap();
@@ -466,7 +466,7 @@ async fn the_model_policy_is_one_record() {
         .model_policy
         .turn_budget
         .unwrap();
-    assert_eq!(budget.maximum_tool_invocations, 32);
+    assert_eq!(budget.maximum_tool_invocations, Some(32_000));
     assert_eq!(budget.maximum_in_flight_tools, 8);
     service
         .run_settings_action(action(
@@ -474,6 +474,26 @@ async fn the_model_policy_is_one_record() {
             Some("policy"),
             "save",
             Some(5),
+            json!({"turnBudget.maximumToolInvocations": null}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        config
+            .providers()
+            .unwrap()
+            .model_policy
+            .turn_budget
+            .unwrap()
+            .maximum_tool_invocations,
+        None
+    );
+    service
+        .run_settings_action(action(
+            "modelPolicy",
+            Some("policy"),
+            "save",
+            Some(6),
             json!({"customTurnBudget": false}),
         ))
         .await

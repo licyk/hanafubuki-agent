@@ -7,10 +7,8 @@
 use hanafubuki_agent_config::{
     AgentImageInputPolicy, AgentModelPolicySettings, AgentProviderRegistrySettings,
     AgentRemoteCompactionCapability, AgentTurnBudgetSettings, SettingChoice, SettingCondition,
-    SettingKind, SettingSpec, SettingValue, SettingsGroup, MAX_AGENT_CONSECUTIVE_STALLED_STEPS,
-    MAX_AGENT_CUMULATIVE_MODEL_INPUT_TOKENS, MAX_AGENT_CUMULATIVE_MODEL_OUTPUT_TOKENS,
-    MAX_AGENT_HOOK_FRAGMENT_BYTES, MAX_AGENT_IDLE_TIMEOUT_SECONDS, MAX_AGENT_IN_FLIGHT_TOOLS,
-    MAX_AGENT_PENDING_INPUT_ITEMS, MAX_AGENT_TOOL_INVOCATIONS, MAX_AGENT_TOOL_OUTPUT_BYTES,
+    SettingKind, SettingSpec, SettingValue, SettingsGroup, MAX_AGENT_IDLE_TIMEOUT_SECONDS,
+    MAX_AGENT_IN_FLIGHT_TOOLS, MAX_AGENT_PENDING_INPUT_ITEMS,
 };
 use hanafubuki_agent_foundation::agent_settings::MAX_MODEL_REASONING_EFFORT_BYTES;
 use serde::{Deserialize, Serialize};
@@ -27,61 +25,37 @@ pub(super) const ID: &str = "modelPolicy";
 const POLICY: &str = "policy";
 const CUSTOM_BUDGET: &str = "customTurnBudget";
 /// The turn budget's fields: key, label and largest value.
-const BUDGET: [(&str, &str, u64); 11] = [
-    (
-        "maximumCumulativeModelInputTokens",
-        "Input tokens",
-        MAX_AGENT_CUMULATIVE_MODEL_INPUT_TOKENS,
-    ),
-    (
-        "maximumCumulativeModelOutputTokens",
-        "Output tokens",
-        MAX_AGENT_CUMULATIVE_MODEL_OUTPUT_TOKENS,
-    ),
-    (
-        "maximumToolInvocations",
-        "Tool calls",
-        MAX_AGENT_TOOL_INVOCATIONS,
-    ),
-    (
-        "maximumToolOutputBytes",
-        "Tool output bytes",
-        MAX_AGENT_TOOL_OUTPUT_BYTES,
-    ),
-    (
-        "maximumHookFragmentBytes",
-        "Hook fragment bytes",
-        MAX_AGENT_HOOK_FRAGMENT_BYTES,
-    ),
+const BUDGET: [(&str, &str, Option<u64>); 11] = [
+    ("maximumCumulativeModelInputTokens", "Input tokens", None),
+    ("maximumCumulativeModelOutputTokens", "Output tokens", None),
+    ("maximumToolInvocations", "Tool calls", None),
+    ("maximumToolOutputBytes", "Tool output bytes", None),
+    ("maximumHookFragmentBytes", "Hook fragment bytes", None),
     (
         "maximumPendingInputItems",
         "Pending inputs",
-        MAX_AGENT_PENDING_INPUT_ITEMS as u64,
+        Some(MAX_AGENT_PENDING_INPUT_ITEMS as u64),
     ),
     (
         "maximumInFlightTools",
         "Tools at once",
-        MAX_AGENT_IN_FLIGHT_TOOLS as u64,
+        Some(MAX_AGENT_IN_FLIGHT_TOOLS as u64),
     ),
-    (
-        "maximumConsecutiveStalledSteps",
-        "Stalled steps",
-        MAX_AGENT_CONSECUTIVE_STALLED_STEPS as u64,
-    ),
+    ("maximumConsecutiveStalledSteps", "Stalled steps", None),
     (
         "modelStreamIdleTimeoutSeconds",
         "Model idle seconds",
-        MAX_AGENT_IDLE_TIMEOUT_SECONDS,
+        Some(MAX_AGENT_IDLE_TIMEOUT_SECONDS),
     ),
     (
         "toolIdleTimeoutSeconds",
         "Tool idle seconds",
-        MAX_AGENT_IDLE_TIMEOUT_SECONDS,
+        Some(MAX_AGENT_IDLE_TIMEOUT_SECONDS),
     ),
     (
         "approvalTimeoutSeconds",
         "Approval seconds",
-        MAX_AGENT_IDLE_TIMEOUT_SECONDS,
+        Some(MAX_AGENT_IDLE_TIMEOUT_SECONDS),
     ),
 ];
 
@@ -183,6 +157,11 @@ fn fields(registry: &AgentProviderRegistrySettings) -> Vec<SettingSpec> {
     ]
     .into_iter()
     .chain(BUDGET.iter().map(|(key, label, maximum)| SettingSpec {
+        summary: if maximum.is_none() {
+            "Unset means unlimited; reset to remove the limit".into()
+        } else {
+            String::new()
+        },
         advanced: true,
         visible_if: Some(SettingCondition {
             key: CUSTOM_BUDGET.into(),
@@ -191,7 +170,7 @@ fn fields(registry: &AgentProviderRegistrySettings) -> Vec<SettingSpec> {
         ..SettingSpec::new(
             format!("turnBudget.{key}"),
             *label,
-            integer(Some(1), Some(*maximum as i64)),
+            integer(Some(1), maximum.map(|value| value as i64)),
         )
     }))
     .collect()

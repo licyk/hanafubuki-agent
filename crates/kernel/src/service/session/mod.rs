@@ -44,7 +44,7 @@ struct ForkScan {
     checkpoint_replacement: Vec<AgentHistoryItem>,
     history: Vec<AgentHistoryItem>,
     history_overflowed: bool,
-    maximum_history_items: usize,
+    maximum_history_items: Option<usize>,
     target_seen: bool,
     restored: Option<(String, Vec<crate::AgentImageAttachmentRef>)>,
 }
@@ -53,7 +53,7 @@ impl ForkScan {
     fn new(
         source: &SessionRecord,
         before_turn_id: AgentTurnId,
-        maximum_history_items: usize,
+        maximum_history_items: Option<usize>,
     ) -> Self {
         let (checkpoint_key, checkpoint_replacement) =
             match &source.conversation.model_context_boundary {
@@ -100,7 +100,9 @@ impl ForkScan {
                 .is_some_and(|key| key == (item.source_session_id, item.item_id))
             {
                 self.history = self.checkpoint_replacement.clone();
-                self.history_overflowed = self.history.len() > self.maximum_history_items;
+                self.history_overflowed = self
+                    .maximum_history_items
+                    .is_some_and(|limit| self.history.len() > limit);
                 continue;
             }
             // Transcript summaries mark completed compactions for display. The
@@ -108,7 +110,10 @@ impl ForkScan {
             if transcript && matches!(item.content, ConversationItem::CompactionSummary { .. }) {
                 continue;
             }
-            if self.history.len() < self.maximum_history_items {
+            if self
+                .maximum_history_items
+                .is_none_or(|limit| self.history.len() < limit)
+            {
                 self.history.push(item);
             } else {
                 self.history_overflowed = true;
@@ -120,10 +125,13 @@ impl ForkScan {
         let Some((restored_prompt, restored_images)) = self.restored.take() else {
             return Ok(None);
         };
-        if self.history_overflowed {
+        if let Some(limit) = self
+            .maximum_history_items
+            .filter(|_| self.history_overflowed)
+        {
             return Err(AgentError::LimitExceeded {
                 resource: "fork model history items",
-                limit: self.maximum_history_items,
+                limit,
             });
         }
         Ok(Some(ForkMaterial {

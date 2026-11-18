@@ -307,7 +307,7 @@ pub(in crate::service) fn assert_valid_limits(limits: AgentHardLimits) {
     assert!(limits.maximum_model_output_bytes > 0);
     assert!(limits.maximum_compaction_summary_bytes > 0);
     assert!(limits.maximum_compaction_summary_tokens > 0);
-    assert!(limits.maximum_history_items > 0);
+    assert!(limits.maximum_history_items.is_none_or(|limit| limit > 0));
     assert!(limits.maximum_history_bytes > 0);
     assert!(limits.event_buffer_capacity > 0);
     assert!(!limits.approval_timeout.is_zero());

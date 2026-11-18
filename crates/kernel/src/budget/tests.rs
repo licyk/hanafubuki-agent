@@ -11,7 +11,7 @@ fn default_policy_is_valid_and_below_platform_ceilings() {
 #[test]
 fn invalid_zero_and_above_ceiling_values_are_rejected() {
     let zero = AgentTurnBudgetPolicy {
-        maximum_tool_invocations: 0,
+        maximum_tool_invocations: Some(0),
         ..AgentTurnBudgetPolicy::default()
     };
     assert!(matches!(
@@ -38,8 +38,8 @@ fn invalid_zero_and_above_ceiling_values_are_rejected() {
 #[test]
 fn ledger_enforces_cumulative_resources_without_sampling_count_limit() {
     let policy = AgentTurnBudgetPolicy {
-        maximum_cumulative_model_input_tokens: 10,
-        maximum_cumulative_model_output_tokens: 5,
+        maximum_cumulative_model_input_tokens: Some(10),
+        maximum_cumulative_model_output_tokens: Some(5),
         ..AgentTurnBudgetPolicy::default()
     };
     let mut ledger = AgentTurnBudgetLedger::default();
@@ -58,7 +58,7 @@ fn ledger_enforces_cumulative_resources_without_sampling_count_limit() {
 #[test]
 fn failed_reservation_does_not_partially_mutate_ledger() {
     let policy = AgentTurnBudgetPolicy {
-        maximum_tool_invocations: 2,
+        maximum_tool_invocations: Some(2),
         ..AgentTurnBudgetPolicy::default()
     };
     let mut ledger = AgentTurnBudgetLedger::default();
@@ -71,7 +71,7 @@ fn failed_reservation_does_not_partially_mutate_ledger() {
 #[test]
 fn hook_pending_input_and_compaction_resources_share_the_turn_ledger() {
     let policy = AgentTurnBudgetPolicy {
-        maximum_hook_fragment_bytes: 8,
+        maximum_hook_fragment_bytes: Some(8),
         maximum_pending_input_items: 2,
         ..AgentTurnBudgetPolicy::default()
     };
@@ -109,4 +109,36 @@ fn reset_cumulative_model_usage_clears_only_the_cumulative_token_counters() {
             ..AgentTurnBudgetLedger::default()
         }
     );
+}
+
+#[test]
+fn default_budget_keeps_accounting_without_cumulative_limits() {
+    let policy = AgentTurnBudgetPolicy::default();
+    let mut ledger = AgentTurnBudgetLedger::default();
+    for _ in 0..300 {
+        ledger.record_model_usage(200_000, 10_000, policy).unwrap();
+        ledger.record_tool_invocations(1, policy).unwrap();
+        ledger.record_tool_output_bytes(1_000_000, policy).unwrap();
+        ledger.record_hook_fragment_bytes(100_000, policy).unwrap();
+    }
+    assert_eq!(ledger.cumulative_model_input_tokens, 60_000_000);
+    assert_eq!(ledger.cumulative_model_output_tokens, 3_000_000);
+    assert_eq!(ledger.tool_invocations, 300);
+    assert_eq!(ledger.tool_output_bytes, 300_000_000);
+    assert_eq!(ledger.hook_fragment_bytes, 30_000_000);
+    assert_eq!(policy.maximum_consecutive_stalled_steps, None);
+}
+
+#[test]
+fn explicit_cumulative_budgets_have_no_arbitrary_ceiling() {
+    let policy = AgentTurnBudgetPolicy {
+        maximum_cumulative_model_input_tokens: Some(u64::MAX),
+        maximum_cumulative_model_output_tokens: Some(u64::MAX),
+        maximum_tool_invocations: Some(u64::MAX),
+        maximum_tool_output_bytes: Some(u64::MAX),
+        maximum_hook_fragment_bytes: Some(u64::MAX),
+        maximum_consecutive_stalled_steps: Some(u32::MAX),
+        ..Default::default()
+    };
+    assert_eq!(policy.validate(), Ok(policy));
 }

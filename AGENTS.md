@@ -62,6 +62,47 @@ of each is `site/content/docs/<slug>.en.mdx`, its Chinese twin `<slug>.mdx`.
 - Prefer explicit Rust APIs and typed structs. Raw JSON is acceptable only at
   controlled patch/override boundaries, validated in Rust before use or persistence.
 
+### Avoid overengineering and overvalidation
+
+- A new check or limit must address a concrete correctness requirement,
+  protocol constraint or resource failure. Explain what it protects and why
+  its scope and threshold fit that requirement. A convenient round number,
+  a typical workload or a hypothetical misuse is not sufficient justification.
+  Prefer removing a redundant check or state transition over adding another
+  fallback, exception list or compatibility layer around it.
+- Long tasks are normal. Do not impose default whole-turn limits on cumulative
+  tokens, tool calls, tool output, hook contributions or elapsed time merely
+  to make a task finite. Optional budgets are disabled by default, represented
+  explicitly (`None`), and enforced only when configured. Do not add arbitrary
+  ceilings to user-selected budgets or fix an unjustified limit by raising it.
+- Keep accounting separate from enforcement. Cumulative usage across requests
+  is not the current context size; resending history must not trigger context
+  compaction or task termination by itself. Base context decisions on the
+  current request and the model's window. Do not reject histories or upstream
+  catalogs solely for exceeding an arbitrary item count when the entries are
+  otherwise usable and within the applicable resource constraints.
+- Repeated calls, unchanged arguments and long waits do not prove lack of
+  progress: polling may return new results each time. Do not enable heuristic
+  loop termination by default. An opt-in detector must document what it
+  actually observes and its false positives, rather than treating repetition
+  as certain failure.
+- Respect the producing platform's and protocol's valid inputs. Do not apply
+  a narrower invented grammar to inherited environment variables or usable
+  upstream fields, or duplicate validation already owned by the consuming
+  API without an additional requirement. Follow the decoding-by-input-source
+  rules below; unknown fields and unrelated bad entries must not invalidate
+  otherwise usable persisted or upstream data.
+- Keep limits that control actual retained bytes, concurrency, queued work or
+  operation inactivity when justified by the resource they bound. Approval,
+  identity, ownership, path containment and persistence integrity checks remain
+  necessary. Removing overvalidation does not mean removing these contracts.
+- When changing defaults, trace creation, activation and restoration as well
+  as the settings UI. A historical snapshot must not silently retain an
+  obsolete default where current configuration should govern; preserve
+  explicit user choices and provide a way to clear optional limits. Cover the
+  former failure with the real implementation, including valid workloads past
+  the old threshold and enforcement of explicitly configured limits.
+
 ## Rules every change needs
 
 - **Locks** a contained panic reaches do not poison. Every panic in the

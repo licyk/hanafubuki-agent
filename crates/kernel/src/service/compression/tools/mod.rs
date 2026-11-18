@@ -90,7 +90,7 @@ pub(in crate::service) fn compression_tool_output(
                 .settings
                 .budget_policy
                 .maximum_tool_output_bytes
-                .saturating_sub(used)
+                .map_or(u64::MAX, |limit| limit.saturating_sub(used))
         });
     let run = catch_panic(|| {
         panic_if_asked(&state);

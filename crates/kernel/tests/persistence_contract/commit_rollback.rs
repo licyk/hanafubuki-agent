@@ -536,7 +536,10 @@ fn session_mutation_waits_for_inflight_execution_progress_commit() {
     let mutation = thread::spawn(move || {
         mutation_service.set_session_turn_budget_policy(
             session_id,
-            hanafubuki_agent_kernel::AgentTurnBudgetPolicy::default(),
+            hanafubuki_agent_kernel::AgentTurnBudgetPolicy {
+                maximum_in_flight_tools: 4,
+                ..Default::default()
+            },
         )
     });
     thread::sleep(Duration::from_millis(50));

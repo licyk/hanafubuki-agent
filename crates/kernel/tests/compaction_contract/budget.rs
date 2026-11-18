@@ -39,8 +39,8 @@ async fn input_and_output_budget_pressure_are_not_context_pressure() {
                 .set_session_turn_budget_policy(
                     session.id,
                     AgentTurnBudgetPolicy {
-                        maximum_cumulative_model_input_tokens: 100,
-                        maximum_cumulative_model_output_tokens: 100,
+                        maximum_cumulative_model_input_tokens: Some(100),
+                        maximum_cumulative_model_output_tokens: Some(100),
                         ..Default::default()
                     },
                 )
@@ -60,13 +60,13 @@ async fn input_and_output_budget_pressure_are_not_context_pressure() {
 }
 
 #[tokio::test]
-async fn repeated_small_contexts_do_not_compact_at_the_cumulative_budget_threshold() {
+async fn default_budget_allows_long_repeated_tool_loops_without_context_pressure() {
     for strategy in [
         hanafubuki_agent_kernel::AgentCompactionStrategy::Standard,
         hanafubuki_agent_kernel::AgentCompactionStrategy::Background,
         hanafubuki_agent_kernel::AgentCompactionStrategy::Hierarchical,
     ] {
-        let responses = (0..35).map(|index| {
+        let responses = (0..520).map(|index| {
             let ScriptedResponse::Events(mut events) = tool_response_with_usage(184_999) else {
                 unreachable!()
             };
@@ -81,16 +81,16 @@ async fn repeated_small_contexts_do_not_compact_at_the_cumulative_budget_thresho
                 ) = event
                 {
                     call.call_id = format!("call-{index}");
-                    call.arguments = json!({"index": index});
+                    call.arguments = json!({});
                 }
             }
             ScriptedResponse::Events(events)
         });
         let model = ScriptedModel::new(responses.chain([response("answer", "Done", 185_100)]));
-        let tools = FakeTools::new((0..35).map(|index| {
+        let tools = FakeTools::new((0..520).map(|index| {
             FakeRegisteredExchange::success(
                 "list_instances",
-                json!({"index": index}),
+                json!({}),
                 json!({"instances": [index]}),
             )
         }))
@@ -110,9 +110,10 @@ async fn repeated_small_contexts_do_not_compact_at_the_cumulative_budget_thresho
         assert!(snapshot.compaction.is_none(), "{strategy:?}");
         assert_eq!(outcome.unwrap().final_answer, "Done", "{strategy:?}");
         let usage = snapshot.usage.unwrap();
-        assert_eq!(usage.cumulative_input_tokens, 6_660_065);
+        assert_eq!(usage.cumulative_input_tokens, 96_384_580);
         assert_eq!(usage.context_consumed_tokens, Some(185_100));
         assert_eq!(snapshot.context_window.window_number, 0);
-        assert_eq!(model.requests().len(), 36);
+        assert_eq!(model.requests().len(), 521);
+        assert!(service.test_model_context(session.id).unwrap().len() > 1_024);
     }
 }

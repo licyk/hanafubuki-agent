@@ -3,27 +3,21 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-pub const ABSOLUTE_MAX_CUMULATIVE_MODEL_INPUT_TOKENS: u64 = 100_000_000;
-pub const ABSOLUTE_MAX_CUMULATIVE_MODEL_OUTPUT_TOKENS: u64 = 10_000_000;
-pub const ABSOLUTE_MAX_TOOL_INVOCATIONS: u64 = 10_000;
-pub const ABSOLUTE_MAX_TOOL_OUTPUT_BYTES: u64 = 256 * 1024 * 1024;
-pub const ABSOLUTE_MAX_HOOK_FRAGMENT_BYTES: u64 = 16 * 1024 * 1024;
 pub const ABSOLUTE_MAX_PENDING_INPUT_ITEMS: usize = 1_024;
 pub const ABSOLUTE_MAX_IN_FLIGHT_TOOLS: usize = 64;
-pub const ABSOLUTE_MAX_CONSECUTIVE_STALLED_STEPS: u32 = 32;
 pub const ABSOLUTE_MAX_IDLE_TIMEOUT_SECONDS: u64 = 24 * 60 * 60;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentTurnBudgetPolicy {
-    pub maximum_cumulative_model_input_tokens: u64,
-    pub maximum_cumulative_model_output_tokens: u64,
-    pub maximum_tool_invocations: u64,
-    pub maximum_tool_output_bytes: u64,
-    pub maximum_hook_fragment_bytes: u64,
+    pub maximum_cumulative_model_input_tokens: Option<u64>,
+    pub maximum_cumulative_model_output_tokens: Option<u64>,
+    pub maximum_tool_invocations: Option<u64>,
+    pub maximum_tool_output_bytes: Option<u64>,
+    pub maximum_hook_fragment_bytes: Option<u64>,
     pub maximum_pending_input_items: usize,
     pub maximum_in_flight_tools: usize,
-    pub maximum_consecutive_stalled_steps: u32,
+    pub maximum_consecutive_stalled_steps: Option<u32>,
     pub model_stream_idle_timeout_seconds: u64,
     pub tool_idle_timeout_seconds: u64,
     pub approval_timeout_seconds: u64,
@@ -32,14 +26,14 @@ pub struct AgentTurnBudgetPolicy {
 impl Default for AgentTurnBudgetPolicy {
     fn default() -> Self {
         Self {
-            maximum_cumulative_model_input_tokens: 8_000_000,
-            maximum_cumulative_model_output_tokens: 1_000_000,
-            maximum_tool_invocations: 256,
-            maximum_tool_output_bytes: 16 * 1024 * 1024,
-            maximum_hook_fragment_bytes: 1024 * 1024,
+            maximum_cumulative_model_input_tokens: None,
+            maximum_cumulative_model_output_tokens: None,
+            maximum_tool_invocations: None,
+            maximum_tool_output_bytes: None,
+            maximum_hook_fragment_bytes: None,
             maximum_pending_input_items: 64,
             maximum_in_flight_tools: 8,
-            maximum_consecutive_stalled_steps: 4,
+            maximum_consecutive_stalled_steps: None,
             model_stream_idle_timeout_seconds: 120,
             tool_idle_timeout_seconds: 10 * 60,
             approval_timeout_seconds: 15 * 60,
@@ -49,31 +43,30 @@ impl Default for AgentTurnBudgetPolicy {
 
 impl AgentTurnBudgetPolicy {
     pub fn validate(self) -> Result<Self, AgentBudgetError> {
-        validate_nonzero_ceiling(
-            "maximum cumulative model input tokens",
-            self.maximum_cumulative_model_input_tokens,
-            ABSOLUTE_MAX_CUMULATIVE_MODEL_INPUT_TOKENS,
-        )?;
-        validate_nonzero_ceiling(
-            "maximum cumulative model output tokens",
-            self.maximum_cumulative_model_output_tokens,
-            ABSOLUTE_MAX_CUMULATIVE_MODEL_OUTPUT_TOKENS,
-        )?;
-        validate_nonzero_ceiling(
-            "maximum tool invocations",
-            self.maximum_tool_invocations,
-            ABSOLUTE_MAX_TOOL_INVOCATIONS,
-        )?;
-        validate_nonzero_ceiling(
-            "maximum tool output bytes",
-            self.maximum_tool_output_bytes,
-            ABSOLUTE_MAX_TOOL_OUTPUT_BYTES,
-        )?;
-        validate_nonzero_ceiling(
-            "maximum hook fragment bytes",
-            self.maximum_hook_fragment_bytes,
-            ABSOLUTE_MAX_HOOK_FRAGMENT_BYTES,
-        )?;
+        for (resource, value) in [
+            (
+                "maximum cumulative model input tokens",
+                self.maximum_cumulative_model_input_tokens,
+            ),
+            (
+                "maximum cumulative model output tokens",
+                self.maximum_cumulative_model_output_tokens,
+            ),
+            ("maximum tool invocations", self.maximum_tool_invocations),
+            ("maximum tool output bytes", self.maximum_tool_output_bytes),
+            (
+                "maximum hook fragment bytes",
+                self.maximum_hook_fragment_bytes,
+            ),
+            (
+                "maximum consecutive stalled steps",
+                self.maximum_consecutive_stalled_steps.map(u64::from),
+            ),
+        ] {
+            if let Some(value) = value {
+                validate_nonzero_ceiling(resource, value, u64::MAX)?;
+            }
+        }
         validate_nonzero_ceiling(
             "maximum pending input items",
             self.maximum_pending_input_items as u64,
@@ -83,11 +76,6 @@ impl AgentTurnBudgetPolicy {
             "maximum in-flight tools",
             self.maximum_in_flight_tools as u64,
             ABSOLUTE_MAX_IN_FLIGHT_TOOLS as u64,
-        )?;
-        validate_nonzero_ceiling(
-            "maximum consecutive stalled steps",
-            u64::from(self.maximum_consecutive_stalled_steps),
-            u64::from(ABSOLUTE_MAX_CONSECUTIVE_STALLED_STEPS),
         )?;
         validate_nonzero_ceiling(
             "model stream idle timeout seconds",
@@ -320,9 +308,11 @@ fn checked_add(resource: &'static str, current: u64, amount: u64) -> Result<u64,
         .ok_or(AgentBudgetError::Overflow { resource })
 }
 
-fn enforce(resource: &'static str, value: u64, limit: u64) -> Result<(), AgentBudgetError> {
-    if value > limit {
-        return Err(AgentBudgetError::Exhausted { resource, limit });
+fn enforce(resource: &'static str, value: u64, limit: Option<u64>) -> Result<(), AgentBudgetError> {
+    if let Some(limit) = limit {
+        if value > limit {
+            return Err(AgentBudgetError::Exhausted { resource, limit });
+        }
     }
     Ok(())
 }

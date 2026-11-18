@@ -213,6 +213,9 @@ impl AgentService {
         let mut guard = cell.lock_after_persistence_blocking()?;
         let record = &mut *guard;
         ensure_no_staged_commit(record)?;
+        if record.settings.budget_policy == policy {
+            return Ok(());
+        }
         if record
             .runtime
             .turn

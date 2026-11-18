@@ -63,9 +63,13 @@ pub(in crate::service) fn validate_context_window_checkpoint(
                 || !window_identity_matches(checkpoint.snapshot.target_window, window)
                 || checkpoint.snapshot.source_revision.value() > session_revision.value()
                 || checkpoint.replacement_history.is_empty()
-                || checkpoint.replacement_history.len() > limits.maximum_history_items
+                || limits
+                    .maximum_history_items
+                    .is_some_and(|limit| checkpoint.replacement_history.len() > limit)
                 || checkpoint.window_chain.len() < 2
-                || checkpoint.window_chain.len() > limits.maximum_history_items
+                || limits
+                    .maximum_history_items
+                    .is_some_and(|limit| checkpoint.window_chain.len() > limit)
                 || !checkpoint
                     .window_chain
                     .last()

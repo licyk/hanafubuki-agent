@@ -51,7 +51,7 @@ async fn cumulative_model_budget_rejects_response_commit_atomically() {
         .set_session_turn_budget_policy(
             session.id,
             AgentTurnBudgetPolicy {
-                maximum_cumulative_model_input_tokens: 10,
+                maximum_cumulative_model_input_tokens: Some(10),
                 ..AgentTurnBudgetPolicy::default()
             },
         )
@@ -101,7 +101,7 @@ async fn configured_context_window_does_not_reject_sampling_before_transport() {
 #[tokio::test]
 async fn history_limit_rejects_completed_items_without_partial_commit() {
     let limits = AgentHardLimits {
-        maximum_history_items: 1,
+        maximum_history_items: Some(1),
         ..FIRST_BATCH_HARD_LIMITS
     };
     let expected = request(vec![ModelInputItem::user_text("hello")]);
@@ -294,7 +294,7 @@ async fn no_progress_budget_stops_a_repeating_tool_loop_with_paired_outputs() {
         .set_session_turn_budget_policy(
             session.id,
             AgentTurnBudgetPolicy {
-                maximum_consecutive_stalled_steps: 1,
+                maximum_consecutive_stalled_steps: Some(1),
                 ..AgentTurnBudgetPolicy::default()
             },
         )

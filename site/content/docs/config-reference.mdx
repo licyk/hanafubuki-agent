@@ -305,21 +305,23 @@ requestHeaders = []
 | `remoteCompaction`             | `"disabled"`、`"responses_compact"`、`"responses_compact_v2"`                                                       | `"disabled"` | 用 Responses 的远程压缩代替本地摘要                                                                                                                                                                                                                                                                                                                             |
 | `turnBudget`                   | 表                                                                                                                  | 未设置       | 回合的限制，见下文                                                                                                                                                                                                                                                                                                                                              |
 
-`[modelPolicy.turnBudget]` 是可选的；写出时必须包含全部 11 个键，每个都是正整数：
+`[modelPolicy.turnBudget]` 是可选表。累计用量限制和重复步骤检查默认不设置；省略对应键即不启用。写入此表时，下列其余五个键必须提供。设置的限制必须是正整数。累计限制不再设置额外上限，范围由整数类型决定（`u64`，重复步骤阈值为 `u32`）。
 
-| 键                                   | 默认值  | 上限      | 含义                         |
-| ------------------------------------ | ------- | --------- | ---------------------------- |
-| `maximumCumulativeModelInputTokens`  | 8000000 | 100000000 | 一个回合累计的输入 token     |
-| `maximumCumulativeModelOutputTokens` | 1000000 | 10000000  | 一个回合累计的输出 token     |
-| `maximumToolInvocations`             | 256     | 10000     | 一个回合的工具调用次数       |
-| `maximumToolOutputBytes`             | 16 MiB  | 256 MiB   | 一个回合的工具输出总字节数   |
-| `maximumHookFragmentBytes`           | 1 MiB   | 16 MiB    | 插件钩子注入的内容字节数     |
-| `maximumPendingInputItems`           | 64      | 1024      | 等待处理的补充消息数         |
-| `maximumInFlightTools`               | 8       | 64        | 同时运行的工具调用数         |
-| `maximumConsecutiveStalledSteps`     | 4       | 32        | 连续没有进展的步骤数         |
-| `modelStreamIdleTimeoutSeconds`      | 120     | 86400     | 模型响应流多久没有数据算超时 |
-| `toolIdleTimeoutSeconds`             | 600     | 86400     | 工具多久没有进展算超时       |
-| `approvalTimeoutSeconds`             | 900     | 86400     | 审批最长等待时间             |
+设置中心通过 **Model policy → Custom turn budget** 提供这些字段。累计限制显示未设置时表示不限制；在该字段按 `r` 可重置。每个新回合开始前都会应用当前设置，恢复已保存的对话后也一样。用户明确配置的限制仍然有效。
+
+| 键                                   | 默认值 | 上限  | 含义                                                         |
+| ------------------------------------ | ------ | ----- | ------------------------------------------------------------ |
+| `maximumCumulativeModelInputTokens`  | 未设置 | 无    | 一个回合所有请求累计的输入 token                             |
+| `maximumCumulativeModelOutputTokens` | 未设置 | 无    | 一个回合所有请求累计的输出 token                             |
+| `maximumToolInvocations`             | 未设置 | 无    | 一个回合的工具调用次数                                       |
+| `maximumToolOutputBytes`             | 未设置 | 无    | 一个回合的工具输出累计字节数                                 |
+| `maximumHookFragmentBytes`           | 未设置 | 无    | 插件钩子注入的累计字节数                                     |
+| `maximumPendingInputItems`           | 64     | 1024  | 等待处理的补充消息数                                         |
+| `maximumInFlightTools`               | 8      | 64    | 同时运行的工具调用数                                         |
+| `maximumConsecutiveStalledSteps`     | 未设置 | 无    | 重复采样步骤数；轮询可能重复调用但返回不同结果，因此默认关闭 |
+| `modelStreamIdleTimeoutSeconds`      | 120    | 86400 | 模型响应流多久没有数据算超时                                 |
+| `toolIdleTimeoutSeconds`             | 600    | 86400 | 工具多久没有进展算超时                                       |
+| `approvalTimeoutSeconds`             | 900    | 86400 | 审批最长等待时间                                             |
 
 ### [[providers]] [#providers]
 

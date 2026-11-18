@@ -131,28 +131,22 @@ pub enum AgentRemoteCompactionCapability {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentTurnBudgetSettings {
-    pub maximum_cumulative_model_input_tokens: u64,
-    pub maximum_cumulative_model_output_tokens: u64,
-    pub maximum_tool_invocations: u64,
-    pub maximum_tool_output_bytes: u64,
-    pub maximum_hook_fragment_bytes: u64,
+    pub maximum_cumulative_model_input_tokens: Option<u64>,
+    pub maximum_cumulative_model_output_tokens: Option<u64>,
+    pub maximum_tool_invocations: Option<u64>,
+    pub maximum_tool_output_bytes: Option<u64>,
+    pub maximum_hook_fragment_bytes: Option<u64>,
     pub maximum_pending_input_items: usize,
     pub maximum_in_flight_tools: usize,
-    pub maximum_consecutive_stalled_steps: u32,
+    pub maximum_consecutive_stalled_steps: Option<u32>,
     pub model_stream_idle_timeout_seconds: u64,
     pub tool_idle_timeout_seconds: u64,
     pub approval_timeout_seconds: u64,
 }
 
 pub const DEFAULT_AGENT_AUTO_COMPACT_THRESHOLD_PERCENT: u8 = 80;
-pub const MAX_AGENT_CUMULATIVE_MODEL_INPUT_TOKENS: u64 = 100_000_000;
-pub const MAX_AGENT_CUMULATIVE_MODEL_OUTPUT_TOKENS: u64 = 10_000_000;
-pub const MAX_AGENT_TOOL_INVOCATIONS: u64 = 10_000;
-pub const MAX_AGENT_TOOL_OUTPUT_BYTES: u64 = 256 * 1024 * 1024;
-pub const MAX_AGENT_HOOK_FRAGMENT_BYTES: u64 = 16 * 1024 * 1024;
 pub const MAX_AGENT_PENDING_INPUT_ITEMS: usize = 1_024;
 pub const MAX_AGENT_IN_FLIGHT_TOOLS: usize = 64;
-pub const MAX_AGENT_CONSECUTIVE_STALLED_STEPS: u32 = 32;
 pub const MAX_AGENT_IDLE_TIMEOUT_SECONDS: u64 = 24 * 60 * 60;
 
 pub fn validate_agent_provider_registry(
@@ -277,32 +271,33 @@ fn validate_stable_id(label: &str, value: &str) -> Result<(), String> {
 }
 
 fn validate_agent_turn_budget(policy: AgentTurnBudgetSettings) -> Result<(), String> {
-    let values = [
+    for (name, value) in [
         (
             "maximumCumulativeModelInputTokens",
             policy.maximum_cumulative_model_input_tokens,
-            MAX_AGENT_CUMULATIVE_MODEL_INPUT_TOKENS,
         ),
         (
             "maximumCumulativeModelOutputTokens",
             policy.maximum_cumulative_model_output_tokens,
-            MAX_AGENT_CUMULATIVE_MODEL_OUTPUT_TOKENS,
         ),
-        (
-            "maximumToolInvocations",
-            policy.maximum_tool_invocations,
-            MAX_AGENT_TOOL_INVOCATIONS,
-        ),
-        (
-            "maximumToolOutputBytes",
-            policy.maximum_tool_output_bytes,
-            MAX_AGENT_TOOL_OUTPUT_BYTES,
-        ),
+        ("maximumToolInvocations", policy.maximum_tool_invocations),
+        ("maximumToolOutputBytes", policy.maximum_tool_output_bytes),
         (
             "maximumHookFragmentBytes",
             policy.maximum_hook_fragment_bytes,
-            MAX_AGENT_HOOK_FRAGMENT_BYTES,
         ),
+        (
+            "maximumConsecutiveStalledSteps",
+            policy.maximum_consecutive_stalled_steps.map(u64::from),
+        ),
+    ] {
+        if value == Some(0) {
+            return Err(format!(
+                "agentProviders.modelPolicy.turnBudget.{name} must be positive when set"
+            ));
+        }
+    }
+    let values = [
         (
             "maximumPendingInputItems",
             policy.maximum_pending_input_items as u64,
@@ -312,11 +307,6 @@ fn validate_agent_turn_budget(policy: AgentTurnBudgetSettings) -> Result<(), Str
             "maximumInFlightTools",
             policy.maximum_in_flight_tools as u64,
             MAX_AGENT_IN_FLIGHT_TOOLS as u64,
-        ),
-        (
-            "maximumConsecutiveStalledSteps",
-            u64::from(policy.maximum_consecutive_stalled_steps),
-            u64::from(MAX_AGENT_CONSECUTIVE_STALLED_STEPS),
         ),
         (
             "modelStreamIdleTimeoutSeconds",

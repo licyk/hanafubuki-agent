@@ -335,7 +335,7 @@ async fn a_restore_attaches_only_the_images_the_turn_has_room_for() {
         .set_session_turn_budget_policy(
             session.id,
             AgentTurnBudgetPolicy {
-                maximum_tool_output_bytes: 256_000,
+                maximum_tool_output_bytes: Some(256_000),
                 ..AgentTurnBudgetPolicy::default()
             },
         )

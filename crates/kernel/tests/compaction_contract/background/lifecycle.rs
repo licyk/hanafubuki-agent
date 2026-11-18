@@ -17,7 +17,7 @@ async fn cumulative_budget_pressure_does_not_block_window_driven_background_comp
         .set_session_turn_budget_policy(
             session.id,
             AgentTurnBudgetPolicy {
-                maximum_cumulative_model_input_tokens: 6_000,
+                maximum_cumulative_model_input_tokens: Some(6_000),
                 ..Default::default()
             },
         )
@@ -54,7 +54,7 @@ async fn usage_is_recorded_once_and_never_charged_to_a_turn() {
         .set_session_turn_budget_policy(
             session.id,
             AgentTurnBudgetPolicy {
-                maximum_cumulative_model_input_tokens: 800,
+                maximum_cumulative_model_input_tokens: Some(800),
                 ..AgentTurnBudgetPolicy::default()
             },
         )

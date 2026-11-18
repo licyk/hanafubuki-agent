@@ -15,7 +15,8 @@ pub struct AgentHardLimits {
     pub maximum_reasoning_text_bytes: usize,
     pub maximum_compaction_summary_bytes: usize,
     pub maximum_compaction_summary_tokens: u64,
-    pub maximum_history_items: usize,
+    /// No item-count limit when absent; retained history bytes remain bounded.
+    pub maximum_history_items: Option<usize>,
     pub maximum_history_bytes: usize,
     pub stream_idle_timeout: Duration,
     pub approval_timeout: Duration,
@@ -38,7 +39,7 @@ pub const FIRST_BATCH_HARD_LIMITS: AgentHardLimits = AgentHardLimits {
     maximum_reasoning_text_bytes: 256 * 1024,
     maximum_compaction_summary_bytes: 256 * 1024,
     maximum_compaction_summary_tokens: 64 * 1024,
-    maximum_history_items: 1_024,
+    maximum_history_items: None,
     maximum_history_bytes: 16 * 1024 * 1024,
     stream_idle_timeout: Duration::from_secs(120),
     approval_timeout: Duration::from_secs(15 * 60),

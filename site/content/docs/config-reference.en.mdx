@@ -305,21 +305,23 @@ One policy for every Provider.
 | `remoteCompaction`             | `"disabled"`, `"responses_compact"`, `"responses_compact_v2"`                                                               | `"disabled"` | Responses' remote compaction in place of a local summary                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `turnBudget`                   | table                                                                                                                       | unset        | A turn's limits (below)                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
-`[modelPolicy.turnBudget]` is optional; when written it must have all eleven keys, each a positive integer:
+`[modelPolicy.turnBudget]` is optional. Cumulative limits and the repeated-step check are unset by default; omitting those keys leaves them disabled. When the table is present, the other five keys below are required. A supplied limit is a positive integer. Cumulative limits have no additional ceiling beyond their integer type (`u64`; the repeated-step threshold is `u32`).
 
-| Key                                  | Default | Ceiling   | Means                                     |
-| ------------------------------------ | ------- | --------- | ----------------------------------------- |
-| `maximumCumulativeModelInputTokens`  | 8000000 | 100000000 | A turn's input tokens in all              |
-| `maximumCumulativeModelOutputTokens` | 1000000 | 10000000  | A turn's output tokens in all             |
-| `maximumToolInvocations`             | 256     | 10000     | A turn's tool calls                       |
-| `maximumToolOutputBytes`             | 16 MiB  | 256 MiB   | A turn's tool output, in bytes            |
-| `maximumHookFragmentBytes`           | 1 MiB   | 16 MiB    | What plugin hooks add, in bytes           |
-| `maximumPendingInputItems`           | 64      | 1024      | Steering messages waiting                 |
-| `maximumInFlightTools`               | 8       | 64        | Tool calls running at once                |
-| `maximumConsecutiveStalledSteps`     | 4       | 32        | Steps in a row without progress           |
-| `modelStreamIdleTimeoutSeconds`      | 120     | 86400     | How long the model's stream may be silent |
-| `toolIdleTimeoutSeconds`             | 600     | 86400     | How long a tool may make no progress      |
-| `approvalTimeoutSeconds`             | 900     | 86400     | How long an approval may wait             |
+The settings center exposes these fields under **Model policy → Custom turn budget**. An unset cumulative limit means unlimited; press `r` on that field to reset it. Current settings are applied before each new turn, including after resuming a saved conversation. Explicitly configured limits remain effective.
+
+| Key                                  | Default | Ceiling | Means                                                                                                          |
+| ------------------------------------ | ------- | ------- | -------------------------------------------------------------------------------------------------------------- |
+| `maximumCumulativeModelInputTokens`  | unset   | none    | A turn's input tokens across all requests                                                                      |
+| `maximumCumulativeModelOutputTokens` | unset   | none    | A turn's output tokens across all requests                                                                     |
+| `maximumToolInvocations`             | unset   | none    | A turn's tool calls                                                                                            |
+| `maximumToolOutputBytes`             | unset   | none    | A turn's cumulative tool output bytes                                                                          |
+| `maximumHookFragmentBytes`           | unset   | none    | Cumulative bytes added by plugin hooks                                                                         |
+| `maximumPendingInputItems`           | 64      | 1024    | Steering messages waiting                                                                                      |
+| `maximumInFlightTools`               | 8       | 64      | Tool calls running at once                                                                                     |
+| `maximumConsecutiveStalledSteps`     | unset   | none    | Repeated sampling steps; disabled by default because polling may repeat the same call while its result changes |
+| `modelStreamIdleTimeoutSeconds`      | 120     | 86400   | How long the model's stream may be silent                                                                      |
+| `toolIdleTimeoutSeconds`             | 600     | 86400   | How long a tool may make no progress                                                                           |
+| `approvalTimeoutSeconds`             | 900     | 86400   | How long an approval may wait                                                                                  |
 
 ### [[providers]] [#providers]
 
