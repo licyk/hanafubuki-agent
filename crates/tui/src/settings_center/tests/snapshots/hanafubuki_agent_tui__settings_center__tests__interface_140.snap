@@ -26,4 +26,4 @@ expression: "screen(&mut center, 140, 25)"
     Mermaid diagrams         [x] On                        ```mermaid fences drawn as text diagrams; off, shown as code
     Check for updates        [x] On                        At launch, asks GitHub at most once a day whether a newer release exists
 
-  ←/→ tab · / search · enter toggle · esc close
+  1/18 · ←/→ tab · / search · enter toggle · esc close

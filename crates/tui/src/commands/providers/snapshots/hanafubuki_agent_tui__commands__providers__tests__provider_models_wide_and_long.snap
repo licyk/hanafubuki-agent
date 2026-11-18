@@ -6,7 +6,7 @@ expression: rendered
 
   Choose the model
   Anthropic becomes the default; new sessions run this model.
-
+  2/3
   Type to search models
   Model                                                        Provider  Context  Thinking  Vision
   通义千问-编程-最新版本                                      Anthropic    32.8K  yes       ?
@@ -21,7 +21,7 @@ expression: rendered
 
   Choose the model
   Anthropic becomes the default; new sessions run this model.
-
+  2/3
   Type to search models
   Model                                    Provider  Context  Thinking  Vision
   通义千问-编程-最新版本                  Anthropic    32.8K  yes       ?
@@ -38,7 +38,7 @@ expression: rendered
   Choose the model
   Anthropic becomes the default; new sessions
   run this model.
-
+  2/3
   Type to search models
   通义千问-编程-最新版本  Anthropic
     context 32.8K · thinking yes · vision ?

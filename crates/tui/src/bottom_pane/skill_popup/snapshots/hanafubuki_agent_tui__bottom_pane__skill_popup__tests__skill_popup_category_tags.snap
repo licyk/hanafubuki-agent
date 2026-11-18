@@ -10,7 +10,7 @@ Buffer {
         "› Shared  [App]                 ",
         "  Shared  [Skill]               ",
         "                                ",
-        "  enter insert · esc close      ",
+        "  1/2 · enter insert · esc close",
     ],
     styles: [
         x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
@@ -22,11 +22,10 @@ Buffer {
         x: 8, y: 2, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
         x: 10, y: 2, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
         x: 17, y: 2, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
-        x: 2, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
-        x: 7, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
-        x: 17, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
-        x: 20, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
-        x: 26, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 8, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 13, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
+        x: 23, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 26, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
     ]
 }
 
@@ -38,7 +37,7 @@ Buffer {
         "› Shared  [App] Secondary details                                       ",
         "  Shared  [Skill] Secondary details                                     ",
         "                                                                        ",
-        "  enter insert · esc close                                              ",
+        "  1/2 · enter insert · esc close                                        ",
     ],
     styles: [
         x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
@@ -50,11 +49,11 @@ Buffer {
         x: 8, y: 2, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
         x: 10, y: 2, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
         x: 35, y: 2, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
-        x: 2, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
-        x: 7, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
-        x: 17, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
-        x: 20, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
-        x: 26, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 8, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 13, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
+        x: 23, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 26, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
+        x: 32, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
     ]
 }
 
@@ -66,7 +65,7 @@ Buffer {
         "› Shared mention with a …  [App]",
         "  Shared mention with …  [Skill]",
         "                                ",
-        "  enter insert · esc close      ",
+        "  1/2 · enter insert · esc close",
     ],
     styles: [
         x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
@@ -77,11 +76,10 @@ Buffer {
         x: 8, y: 2, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
         x: 25, y: 2, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
         x: 0, y: 3, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
-        x: 2, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
-        x: 7, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
-        x: 17, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
-        x: 20, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
-        x: 26, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 8, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 13, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
+        x: 23, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 26, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
     ]
 }
 
@@ -93,7 +91,7 @@ Buffer {
         "› Shared mention with a ver...  [App] Secondary details                 ",
         "  Shared mention with a ver...  [Skill] Secondary details               ",
         "                                                                        ",
-        "  enter insert · esc close                                              ",
+        "  1/2 · enter insert · esc close                                        ",
     ],
     styles: [
         x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
@@ -105,10 +103,10 @@ Buffer {
         x: 8, y: 2, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
         x: 32, y: 2, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
         x: 57, y: 2, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
-        x: 2, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
-        x: 7, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
-        x: 17, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
-        x: 20, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
-        x: 26, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 8, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 13, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
+        x: 23, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 26, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
+        x: 32, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
     ]
 }

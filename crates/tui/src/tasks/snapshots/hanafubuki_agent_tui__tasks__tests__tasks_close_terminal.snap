@@ -3,8 +3,8 @@ source: crates/tui/src/tasks/tests.rs
 expression: screen(&tasks)
 ---
 Background tasks
-
-Terminals · Tab switches section                            │ Details
+[A] Agents [T] Terminals
+Terminals · Tab switches section · 1/1                      │ Details
 › #12 cargo test --workspace · running · 3m02s · check_tests│cargo test --workspace
     Running tests                                           │in /work/repo · exit None
     test first ... ok                                       │
@@ -13,9 +13,9 @@ Terminals · Tab switches section                            │ Details
                         ┌ Confirm ─────────────────────────────────────────────────────────────┐
                         │Close terminal #12? Its agent is told it was stopped.                 │
                         │                                                                      │
-                        │› No, keep running    Yes, close                                      │
-                        │Tab chooses · Enter confirms · Esc cancels                            │
                         │                                                                      │
+                        │› No, keep running     Yes, close                                     │
+                        │Tab chooses · Enter confirms · Esc cancels                            │
                         └──────────────────────────────────────────────────────────────────────┘
                                                             │
                                                             │
@@ -24,4 +24,4 @@ Terminals · Tab switches section                            │ Details
                                                             │
                                                             │
 wake: on
-Enter inspect · x close · X stop terminals · r resume · Tab section · PgUp/PgDn details · Esc return
+Enter inspect   x close   X stop terminals   r resume   Esc return

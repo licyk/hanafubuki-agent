@@ -6,7 +6,7 @@ expression: rendered
 
   Select Model
   Switch the model of this session.
-
+  4/4
   Type to search models
   Model                                                        Provider  Context  Thinking  Vision
   claude-sonnet-4-5 (current)                                 Anthropic     200K  yes       yes
@@ -23,7 +23,7 @@ expression: rendered
 
   Select Model
   Switch the model of this session.
-
+  4/4
   Type to search models
   Model                                    Provider  Context  Thinking  Vision
   claude-sonnet-4-5 (current)             Anthropic     200K  yes       yes
@@ -41,7 +41,7 @@ expression: rendered
 
   Select Model
   Switch the model of this session.
-
+  4/4
   Type to search models
   claude-sonnet-4-5 (current)  Anthropic
     context 200K · thinking yes · vision yes

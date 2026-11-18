@@ -6,7 +6,7 @@ expression: rendered
 
   Choose the model
   Anthropic becomes the default; new sessions run this model.
-
+  2/4
   Type to search models
   Model                                                        Provider  Context  Thinking  Vision
   claude-sonnet-4-5                                           Anthropic     200K  yes       yes
@@ -21,7 +21,7 @@ expression: rendered
 
   Choose the model
   Anthropic becomes the default; new sessions run this model.
-
+  2/4
   Type to search models
   Model                                    Provider  Context  Thinking  Vision
   claude-sonnet-4-5                       Anthropic     200K  yes       yes
@@ -38,7 +38,7 @@ expression: rendered
   Choose the model
   Anthropic becomes the default; new sessions
   run this model.
-
+  2/4
   Type to search models
   claude-sonnet-4-5  Anthropic
     context 200K · thinking yes · vision yes

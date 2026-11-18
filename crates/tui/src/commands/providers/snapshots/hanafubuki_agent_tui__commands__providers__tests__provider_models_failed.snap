@@ -6,7 +6,7 @@ expression: at_widths(&picker)
 
   Choose the model
   Anthropic becomes the default; new sessions run this model.
-
+  1/1
   Type to search models
 › Enter a model id…  one the Provider does not list
 
@@ -16,7 +16,7 @@ expression: at_widths(&picker)
 
   Choose the model
   Anthropic becomes the default; new sessions run this model.
-
+  1/1
   Type to search models
 › Enter a model id…  one the Provider does not list
 
@@ -27,7 +27,7 @@ expression: at_widths(&picker)
   Choose the model
   Anthropic becomes the default; new sessions
   run this model.
-
+  1/1
   Type to search models
 › Enter a model id…  one the Provider does not
                      list

@@ -6,7 +6,7 @@ expression: at_widths(&view)
 
   Select Model
   Switch the model of this session.
-
+  1/7
   Type to search models
   Model                                                        Provider  Context  Thinking  Vision
 › claude-sonnet-4-5 (current)                                 Anthropic     200K  yes       yes
@@ -25,7 +25,7 @@ expression: at_widths(&view)
 
   Select Model
   Switch the model of this session.
-
+  1/7
   Type to search models
   Model                                    Provider  Context  Thinking  Vision
 › claude-sonnet-4-5 (current)             Anthropic     200K  yes       yes
@@ -44,7 +44,7 @@ expression: at_widths(&view)
 
   Select Model
   Switch the model of this session.
-
+  1/7
   Type to search models
 › claude-sonnet-4-5 (current)  Anthropic
     context 200K · thinking yes · vision yes

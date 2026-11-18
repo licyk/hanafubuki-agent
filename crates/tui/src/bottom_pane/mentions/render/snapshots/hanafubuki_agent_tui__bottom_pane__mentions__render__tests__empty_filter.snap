@@ -2,7 +2,7 @@
 source: crates/tui/src/bottom_pane/mentions/render/tests.rs
 expression: text(&buffer)
 ---
-  Mentions
+  Mentions · 0/0
   Files, directories, plugins, skills and tasks
 
    All Results   Filesystem Only   Plugins

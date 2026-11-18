@@ -6,7 +6,7 @@ expression: "screen(&chat, 80)"
                                                                                 
   Select Reasoning Effort                                                       
   The reasoning effort of gpt-5 in this session.                                
-                                                                                
+  3/5                                                                           
   1. low                                                                        
   2. medium (model default)                                                     
 › 3. high (current)                                                             

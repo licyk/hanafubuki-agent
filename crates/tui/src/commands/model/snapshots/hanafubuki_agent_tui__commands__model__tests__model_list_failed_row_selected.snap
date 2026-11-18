@@ -5,7 +5,7 @@ expression: "render(&view, 80)"
 
   Select Model
   Switch the model of this session.
-
+  8/8
   Type to search models
   Model                                    Provider  Context  Thinking  Vision
   claude-sonnet-4-5 (current)             Anthropic     200K  yes       yes

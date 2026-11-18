@@ -6,6 +6,6 @@ expression: "screen(&chat, 80)"
                                                                                 
   Select Reasoning Effort                                                       
   No reasoning levels are known for gpt-5: keep the default or type one.        
-                                                                                
+  1/2                                                                           
 › 1. Default (current)  unset: the Provider's default                           
   2. Custom…            type an effort

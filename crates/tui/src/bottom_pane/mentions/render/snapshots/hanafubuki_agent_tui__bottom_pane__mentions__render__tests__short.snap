@@ -2,7 +2,7 @@
 source: crates/tui/src/bottom_pane/mentions/render/tests.rs
 expression: text(&buffer)
 ---
-  Mentions
+  Mentions · 12/12
   Files, directories, plugins, skills
    All Results   Filesystem Only     ›
   Type to search mentions

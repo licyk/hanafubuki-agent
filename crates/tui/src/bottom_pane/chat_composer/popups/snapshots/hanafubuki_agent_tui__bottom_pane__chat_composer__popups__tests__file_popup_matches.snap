@@ -1,8 +1,8 @@
 ---
 source: crates/tui/src/bottom_pane/chat_composer/popups/tests.rs
-expression: terminal.backend()
+expression: "terminal.backend().to_string().replace('\\\\', \"/\")"
 ---
-"  Mentions                                                            "
+"  Mentions · 1/2                                                      "
 "  Files, directories, plugins, skills and tasks                       "
 "                                                                      "
 "   All Results   Filesystem Only   Plugins                            "

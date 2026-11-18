@@ -37,8 +37,8 @@ expression: harness.snapshot_screen()
                                                                │
                                                                │
                                                                │
-                                                               │
-› Ask the Agent to do anything                                 │› Ask the Agent to do anything
-                                                               │
-  Main agent · fixture-model · /project · Hello.               │  Side conversation · fixture-model
+                                                               │› Ask the Agent to do anything
+› Ask the Agent to do anything                                 │
+                                                               │  Side conversation · fixture-model
+  Main agent · fixture-model · /project · Hello.               │  · /project · Hello.
   ? for shortcuts                                              │  ← for agents · ? for shortcuts

@@ -5,7 +5,7 @@ expression: entry
 
   Choose the model
   Anthropic becomes the default; new sessions run this model.
-
+  4/4
   Type to search models
   Model                                    Provider  Context  Thinking  Vision
   claude-sonnet-4-5                       Anthropic     200K  yes       yes

@@ -11,4 +11,4 @@ expression: "render(&picker, 60)"
   [ ] c  the c
 
   a | b
-  space toggle · ←/→ move · enter confirm · esc cancel
+  Space toggle  ← earlier  → later  Enter confirm  Esc cance

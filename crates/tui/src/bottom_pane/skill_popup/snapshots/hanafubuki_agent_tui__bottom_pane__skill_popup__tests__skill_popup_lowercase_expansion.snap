@@ -11,7 +11,7 @@ Buffer {
         "  i̇x   [Skill]                                  ",
         "  İx   [Skill]                                  ",
         "                                                ",
-        "  enter insert · esc close                      ",
+        "  1/4 · enter insert · esc close                ",
     ],
     styles: [
         x: 0, y: 0, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
@@ -31,10 +31,10 @@ Buffer {
         x: 4, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
         x: 7, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
         x: 14, y: 4, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
-        x: 2, y: 6, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
-        x: 7, y: 6, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
-        x: 17, y: 6, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
-        x: 20, y: 6, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
-        x: 26, y: 6, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
+        x: 8, y: 6, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 13, y: 6, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
+        x: 23, y: 6, fg: Reset, bg: Reset, underline: Reset, modifier: BOLD,
+        x: 26, y: 6, fg: Reset, bg: Reset, underline: Reset, modifier: DIM,
+        x: 32, y: 6, fg: Reset, bg: Reset, underline: Reset, modifier: NONE,
     ]
 }
