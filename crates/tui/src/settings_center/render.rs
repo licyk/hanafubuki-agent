@@ -251,7 +251,13 @@ impl SettingsCenter {
         };
         render_list(&mut layout, &view, &mut list, body, buf, empty);
         let hint = hint.unwrap_or_else(|| editing_hint(&view, list.selected, "esc back"));
-        Line::from(hint.dim()).render(line(bottom), buf);
+        let total = view.iter().filter(|row| row.selectable).count();
+        let position = view
+            .iter()
+            .take(list.selected + 1)
+            .filter(|row| row.selectable)
+            .count();
+        Line::from(format!("{position}/{total} · {hint}").dim()).render(line(bottom), buf);
         drop(view);
         if let Some(state) = self.pages[top].list_mut() {
             *state = list;
