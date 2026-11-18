@@ -80,7 +80,15 @@ impl Tasks {
                         let indent = "  ".repeat(agent.depth.saturating_sub(1));
                         let elapsed = agent
                             .state_since
-                            .map(|start| elapsed(now.saturating_sub(u128::from(start))))
+                            .filter(|_| {
+                                matches!(
+                                    agent.status,
+                                    AgentSubagentState::Running | AgentSubagentState::Waiting
+                                )
+                            })
+                            .map(|start| {
+                                format!(" · {}", elapsed(now.saturating_sub(u128::from(start))))
+                            })
                             .unwrap_or_default();
                         let state = match agent.status {
                             AgentSubagentState::Running => "running",
@@ -117,7 +125,7 @@ impl Tasks {
                             .get(&agent.session_id)
                             .map_or("default", |detail| detail.role.as_str());
                         let line = format!(
-                            "{marker} {indent}{}  {state} · {elapsed} · {} · {role}",
+                            "{marker} {indent}{}  {state}{elapsed} · {} · {role}",
                             agent.title, agent.model
                         );
                         lines.push(if self.selected == index {
