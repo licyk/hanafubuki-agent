@@ -25,6 +25,27 @@ impl Tasks {
             "Background tasks"
         };
         Paragraph::new(title.bold()).render(areas[0], buffer);
+        let mut tabs =
+            Rect::new(area.x, area.y.saturating_add(1), area.width, 1).intersection(areas[0]);
+        for (section, label, shortcut) in [
+            (Section::Agents, "[A] Agents", 'a'),
+            (Section::Terminals, "[T] Terminals", 't'),
+        ] {
+            let width = tabs.width.min(label.len() as u16);
+            let tab = Rect { width, ..tabs };
+            let label = if self.section == section {
+                label.cyan().bold().reversed()
+            } else {
+                label.dim()
+            };
+            Paragraph::new(label).render(tab, buffer);
+            self.hits.borrow_mut().push((
+                tab,
+                super::Target::Key(ratatui::crossterm::event::KeyCode::Char(shortcut)),
+            ));
+            tabs.x = tabs.x.saturating_add(width + 1);
+            tabs.width = tabs.width.saturating_sub(width + 1);
+        }
         let body = Layout::default()
             .direction(if area.width >= 90 {
                 Direction::Horizontal
@@ -37,15 +58,21 @@ impl Tasks {
             Section::Agents => "Agents",
             Section::Terminals => "Terminals",
         };
-        let mut lines: Vec<Line> = vec![format!("{selected_section} · Tab switches section")
-            .bold()
-            .into()];
+        let mut lines: Vec<Line> = vec![format!(
+            "{selected_section} · Tab switches section · {}/{}",
+            usize::from(self.len() > 0) + self.selected,
+            self.len()
+        )
+        .bold()
+        .into()];
+        let mut rows = Vec::new();
         let mut selected_start = 0;
         let mut selected_end = 0;
         if let Some(view) = &self.view {
             match self.section {
                 Section::Agents => {
                     for (index, agent) in view.tasks.agents.iter().enumerate() {
+                        rows.push((lines.len(), index));
                         if index == self.selected {
                             selected_start = lines.len();
                         }
@@ -105,6 +132,7 @@ impl Tasks {
                 }
                 Section::Terminals => {
                     for (index, terminal) in view.tasks.terminals.iter().enumerate() {
+                        rows.push((lines.len(), index));
                         if index == self.selected {
                             selected_start = lines.len();
                         }
@@ -149,6 +177,20 @@ impl Tasks {
         let scroll = selected_end
             .saturating_sub(usize::from(body[0].height))
             .min(selected_start);
+        for y in 0..body[0].height {
+            let line = scroll + usize::from(y);
+            if line < lines.len() {
+                if let Some((_, index)) = rows.iter().rev().find(|(start, _)| *start <= line) {
+                    self.hits.borrow_mut().push((
+                        Rect::new(body[0].x, body[0].y + y, body[0].width, 1),
+                        super::Target::Row(*index),
+                    ));
+                }
+            }
+        }
+        self.hits
+            .borrow_mut()
+            .push((body[1], super::Target::Details));
         Paragraph::new(lines)
             .scroll((u16::try_from(scroll).unwrap_or(u16::MAX), 0))
             .render(body[0], buffer);
@@ -157,10 +199,28 @@ impl Tasks {
             .scroll((self.detail_scroll, 0))
             .block(Block::default().borders(Borders::LEFT).title(" Details "))
             .render(body[1], buffer);
-        let footer = vec![self.wake_line().into(), self.error.clone().unwrap_or_else(|| "Enter inspect · x close · X stop terminals · r resume · Tab section · PgUp/PgDn details · Esc return".into()).into()];
-        Paragraph::new(footer)
-            .wrap(Wrap { trim: false })
+        Paragraph::new(self.error.clone().unwrap_or_else(|| self.wake_line()))
             .render(areas[2], buffer);
+        let mut x = areas[2].x;
+        let mut y = areas[2].y.saturating_add(1);
+        use ratatui::crossterm::event::KeyCode;
+        for (label, key) in [
+            ("Enter inspect", KeyCode::Enter),
+            ("x close", KeyCode::Char('x')),
+            ("X stop terminals", KeyCode::Char('X')),
+            ("r resume", KeyCode::Char('r')),
+            ("Esc return", KeyCode::Esc),
+        ] {
+            let width = label.len() as u16;
+            if x > areas[2].x && x.saturating_add(width) > areas[2].right() {
+                x = areas[2].x;
+                y = y.saturating_add(1);
+            }
+            let rect = Rect::new(x, y, width, 1).intersection(areas[2]);
+            Paragraph::new(label).render(rect, buffer);
+            self.hits.borrow_mut().push((rect, super::Target::Key(key)));
+            x = x.saturating_add(width + 3);
+        }
         if let Some(confirm) = &self.confirmation {
             let width = area.width.min(72);
             let height = area.height.min(7);

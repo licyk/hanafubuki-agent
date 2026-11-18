@@ -51,6 +51,8 @@ enum Section {
 
 #[derive(Clone, Copy)]
 enum Target {
+    Row(usize),
+    Details,
     Key(ratatui::crossterm::event::KeyCode),
 }
 

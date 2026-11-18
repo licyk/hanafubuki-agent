@@ -25,8 +25,11 @@ impl Tasks {
         let selected = self.selected;
         match key.code {
             KeyCode::Esc => return Some(TaskAction::Leave),
-            KeyCode::Tab | KeyCode::BackTab => {
-                self.section = if self.section == Section::Agents {
+            KeyCode::Tab | KeyCode::BackTab | KeyCode::Char('a' | 't') => {
+                self.expanded = false;
+                self.section = if key.code == KeyCode::Char('t')
+                    || (key.code != KeyCode::Char('a') && self.section == Section::Agents)
+                {
                     Section::Terminals
                 } else {
                     Section::Agents
@@ -85,6 +88,12 @@ impl Tasks {
         mouse: ratatui::crossterm::event::MouseEvent,
     ) -> Option<TaskAction> {
         use ratatui::crossterm::event::{KeyModifiers, MouseButton, MouseEventKind};
+        let target = self
+            .hits
+            .borrow()
+            .iter()
+            .find(|(rect, _)| rect.contains((mouse.column, mouse.row).into()))
+            .map(|(_, target)| *target);
         let key = match mouse.kind {
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
                 if self.confirmation.is_some() =>
@@ -92,15 +101,30 @@ impl Tasks {
                 self.confirmation.as_mut()?.accepted = mouse.kind == MouseEventKind::ScrollDown;
                 return None;
             }
-            MouseEventKind::Down(MouseButton::Left) => {
-                let target = self
-                    .hits
-                    .borrow()
-                    .iter()
-                    .find(|(rect, _)| rect.contains((mouse.column, mouse.row).into()))
-                    .map(|(_, t)| *t)?;
-                match target {
-                    super::Target::Key(key) => key,
+            MouseEventKind::Down(MouseButton::Left) => match target? {
+                super::Target::Key(key) => key,
+                super::Target::Row(index) => {
+                    self.selected = index;
+                    self.expanded = false;
+                    self.detail_scroll = 0;
+                    return None;
+                }
+                super::Target::Details => KeyCode::Enter,
+            },
+            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
+                let down = mouse.kind == MouseEventKind::ScrollDown;
+                if matches!(target, Some(super::Target::Details)) {
+                    self.detail_scroll = if down {
+                        self.detail_scroll.saturating_add(1)
+                    } else {
+                        self.detail_scroll.saturating_sub(1)
+                    };
+                    return None;
+                }
+                if down {
+                    KeyCode::Down
+                } else {
+                    KeyCode::Up
                 }
             }
             _ => return None,
