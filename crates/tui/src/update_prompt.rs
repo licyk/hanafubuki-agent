@@ -129,6 +129,7 @@ fn choose<B: Backend<Error = io::Error> + Write>(
             _ => {}
         }
     }
+    tui.set_inline_mouse_capture(false)?;
     tui.leave()?;
     Ok(choice)
 }

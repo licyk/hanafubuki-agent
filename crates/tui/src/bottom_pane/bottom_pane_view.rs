@@ -79,3 +79,15 @@ pub(crate) trait BottomPaneView: Renderable {
         None
     }
 }
+
+impl super::BottomPane {
+    pub(crate) fn pointer_key(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<ratatui::crossterm::event::KeyCode> {
+        if let Some(view) = self.view_stack.last_mut() {
+            return view.pointer_key(mouse);
+        }
+        self.composer.pointer_key(mouse)
+    }
+}

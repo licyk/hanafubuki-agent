@@ -383,3 +383,17 @@ fn plan_tool_renders_once_with_its_steps_live_and_after_resume() {
         });
     }
 }
+
+#[test]
+fn clicking_a_filtered_slash_row_dispatches_the_command_in_both_modes() {
+    for mode in [
+        crate::transcript_mode::TranscriptMode::Owned,
+        crate::transcript_mode::TranscriptMode::Terminal,
+    ] {
+        let mut harness = Harness::start_with(Vec::new(), true, mode);
+        harness.type_text("/pw");
+        harness.pump_until_screen_shows("1/1");
+        harness.click_on("/pwd");
+        harness.pump_until_screen_shows("Current working directory:");
+    }
+}
