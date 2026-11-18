@@ -450,3 +450,21 @@ generation = 1
 | `credentials.键.generation` | 正整数，修改值时加一，让 Agent 知道凭据变了 |
 
 凭据键由 1–128 个字母、数字、`.`、`_`、`-` 组成。服务器引用了不存在的凭据时无法连接。
+
+## Advisor 选项 [#advisor]
+
+以下选项位于 `[pluginOptions.advisor]`，内置插件默认未激活。
+
+| 键                                                                      | 作用                                                                                                                           |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `provider`、`model`、`reasoningEffort`                                  | 主 Advisor 的提供商、模型及可选推理强度。                                                                                      |
+| `fallbackProvider`、`fallbackModel`、`skipSameModel`                    | 可选备用路由。默认跳过与 Executor 相同的模型路由。                                                                             |
+| `activationScope`、`active`                                             | 选择持久或会话激活，持久激活标志默认为关闭。                                                                                   |
+| `executorProvider`、`executorModel`、`executorEffort`、`executorModels` | 显式激活主会话时固定执行模型和强度，或限定允许的 provider/model。允许列表为空时接受全部。                                      |
+| `historyChars`、`gitChars`、`gitContext`                                | 历史默认 15,000 字符。Git 默认关闭。摘要提供路径和状态，完整模式包含差异。Git 默认最多 20,000 字符，同时受历史预算一半的约束。 |
+| `summaryTools`、`excludedTools`、`redactSecrets`                        | 按工具展示名称选择只提供摘要或完全排除的工具调用及结果。可选脱敏会处理外发文本中常见的凭证模式。                               |
+| `projectRules`、`trackedFiles`、`untrackedFiles`、`shareImages`         | 均默认关闭。可信项目可包含规则和偏好。传递受版本管理的文件需要前一次 Advisor 回复点名，未跟踪文件需在当前请求明确列出。        |
+| `simple`、`reviewStages`、`repeatThreshold`、`gateFailure`              | 仅自愿咨询模式、审查时机或自定义引导、可选重复阈值和失败策略（告警、阻止工具或阻止本会话）。                                   |
+| `consultationLimit`、`scout`、`recordOutcomes`                          | 默认无次数上限。显式预算中一次咨询及其回退合计一次。Scout 和本地反馈记录分别由用户开启。                                       |
+
+开启 `useModelWindow` 后根据选定 Advisor 的已知窗口读取历史；窗口未知时使用 `historyChars`。关闭 `useModelWindow` 并将 `historyChars` 设为零即可省略会话历史。两个可选整数支持重置，分别恢复不限咨询次数和关闭重复调用审查。

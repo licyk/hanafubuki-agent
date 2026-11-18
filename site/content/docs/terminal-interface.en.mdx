@@ -1076,3 +1076,11 @@ Turn it off with `tui.checkForUpdates = false` ([Configuration reference](/docs/
 - A click opens a link the way the terminal opens one, often with Ctrl or Cmd held. Fullscreen captures the mouse, so the terminal sees the click only with its bypass held, usually Shift, as for its own selection; a click the interface takes does what it does there (a selection, a disclosure control) and opens nothing. The interface opens no link itself.
 - Fullscreen uses the alternate screen and the mouse (SGR reporting).
 - In Scrollback, the pagers and the resume picker use the alternate screen, where the mouse wheel acts as the arrow keys; the transcript captures the mouse for its selection and its controls. Outside them, Scrollback captures clicks and the wheel (SGR reporting; on Windows the console's mouse input, which turns Quick Edit off while held) only while the tail shows a control, until the first turn of the wheel (`tui.scrollbackMouse`).
+
+## Ask an Advisor [#advisor]
+
+Open `/advisor-settings` (also `/advisor-models`) and choose a provider and model. Run `/advisor-manual Is the proposed fix sufficient?` for one answer in the transcript. Run `/advisor` to give the executor ongoing access. Use `/advisor-off` to withdraw access and clear a repeated-tool block. Session activation applies to the current conversation. Persistent activation also applies to subsequent conversations.
+
+When the executor proposes settings, `/advisor-settings review` shows each old and new value. Use the displayed apply or cancel command with its proposal ID. When outcome recording is enabled, `/advisor-stats` reports adoption and validation counts in the retained local records.
+
+Use `/status` for the current session's activation and consultation count. Add the `advisor` item in `/statusline` to keep the count and optional limit in the footer. The manual reply displays token usage when the provider reports it. Providers that omit usage or pricing leave those figures unknown.

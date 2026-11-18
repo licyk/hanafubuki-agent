@@ -450,3 +450,21 @@ A number out of range is brought into it.
 | `credentials.KEY.generation` | A positive integer; raise it when you change the value, so the Agent sees it changed |
 
 A credential key has 1–128 letters, digits, `.`, `_` or `-`. A server that refers to a credential that does not exist cannot connect.
+
+## Advisor options [#advisor]
+
+The settings below live in `[pluginOptions.advisor]`. The built-in plugin starts inactive.
+
+| Keys                                                                    | Effect                                                                                                                                                                                                              |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `provider`, `model`, `reasoningEffort`                                  | Primary Advisor route and optional effort.                                                                                                                                                                          |
+| `fallbackProvider`, `fallbackModel`, `skipSameModel`                    | Optional backup route. By default the Advisor skips the executor’s own route.                                                                                                                                       |
+| `activationScope`, `active`                                             | Choose persistent or session activation. The persistent flag defaults to false.                                                                                                                                     |
+| `executorProvider`, `executorModel`, `executorEffort`, `executorModels` | Pin the executor on explicit activation of a root conversation or restrict eligible provider/model pairs. An empty allowlist permits all.                                                                           |
+| `historyChars`, `gitChars`, `gitContext`                                | History defaults to 15,000 characters. Git is off by default. Summary includes changed paths and status. Full adds patches. Git uses at most 20,000 characters by default, also bounded by half the history budget. |
+| `summaryTools`, `excludedTools`, `redactSecrets`                        | Select tools by their projected names to summarize or omit their calls and results. Optional redaction covers common credential patterns in outbound text.                                                          |
+| `projectRules`, `trackedFiles`, `untrackedFiles`, `shareImages`         | Off by default. Trusted project instructions and preferences can be included. Tracked file handoff requires a preceding Advisor response naming the file. Untracked files must be explicitly named.                 |
+| `simple`, `reviewStages`, `repeatThreshold`, `gateFailure`              | Voluntary-only workflow, review stages or custom guidance, optional repeated-call threshold and failure policy (warn, block tool, block session).                                                                   |
+| `consultationLimit`, `scout`, `recordOutcomes`                          | No consultation limit by default. An explicit budget counts a consultation and its backup attempt once. Scout and local outcome recording are independently opt-in.                                                 |
+
+Enable `useModelWindow` to size history against the selected Advisor’s known window. When its window is unknown, `historyChars` applies. A value of zero for `historyChars` with `useModelWindow` off omits conversation history. For the two optional integers, reset restores unlimited consultations or disables repeated-call review.

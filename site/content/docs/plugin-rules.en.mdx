@@ -424,3 +424,9 @@ both approval preparation and execution. They must not mutate a shared service's
 roots to select a conversation. The scoped execution view retains the same process
 registry and receipts. Host-global package configuration and guest process grants
 remain host-global; a conversation binding does not reconfigure a running guest.
+
+## Advisor contributions [#advisor]
+
+The `advisor` capability registers a session-aware tool source. The plugin must be running, the primary provider and model configured, and activation explicitly enabled before the source advertises `ask_advisor` and `advisor_config`. The guidance contributor checks the actual step's tools. A settings proposal is a mutating tool call. Only the user-facing facade can confirm it. The optional outcome tool records adoption and validation.
+
+The repeated-tool hook compares consecutive tool names and arguments within one session. Polling can legitimately repeat them. Its threshold is unset by default. When enabled, a separate Advisor request returns a verdict: proceed allows the call, revise denies the call, and blocked or a malformed response uses the configured failure policy. Simple mode suppresses workflow guidance and automatic review.

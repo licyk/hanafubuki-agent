@@ -720,3 +720,14 @@ pixel, supported-format and normalization limits as selected images, then stages
 durable attachment. Preview it with `read_image_preview` and submit the returned
 reference through `DesktopAgentImageInput.attachment`. The host does not write into
 the attachment store or delete files when discarding a draft.
+
+## Consult and activate an Advisor [#advisor]
+
+Use the same settings catalog as standalone. Write `pluginOptions.advisor.provider` and `pluginOptions.advisor.model` together with `write_setting_values`. A host button may run one consultation or explicitly change activation.
+
+```rust
+let answer = agent.consult_advisor(session_id, question, cancellation).await?;
+agent.set_advisor_active(session_id, true).await?;
+```
+
+Use `consult_advisor_with` for a draft, file request or follow-up. Display the diff from `advisor_settings_proposal` before calling `confirm_advisor_settings` with the user’s decision.

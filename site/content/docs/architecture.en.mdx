@@ -432,3 +432,9 @@ Browser traffic passes through a bounded local HTTP/CONNECT proxy that validates
 Maintenance in the TUI is supplied through `TuiMaintenance` by the CLI; the terminal is released around the operation and reclaimed afterwards. The TUI does not depend on the update crate. Settings collections own Skills, hook definitions, role source files, explicit configuration layers and sandbox provisioning; plugin-defined settings retain their owner schema and secret masking.
 
 Successful manual update checks share the automatic checker’s cache and notify the running TUI through `TuiUpdateNotifier`. The session header is a live history cell; a notice updates it in place, including parked conversations. Fullscreen uses the cell revision to lay it out again; Scrollback schedules a transcript rewrite so an already printed header is refreshed too.
+
+## Advisor evidence and model requests [#advisor]
+
+A consultation reads the session transcript at a fixed revision, pairs tool calls with their results, applies the disclosure policy and sends a tool-free request through the selected provider. The reply identifies the answering model and the usage it reported. Eligible provider failures may try one configured backup. A cancellation stops the consultation. Follow-ups reuse the permitted evidence briefly in memory and are scoped to the conversation, workspace, trust and settings.
+
+Git evidence, named files, project rules and images have separate controls. The optional Scout sends the executor a numbered text preview of eligible evidence. Its selection is resolved locally. An invalid selection keeps the original evidence. Scout usage is reported separately. Only the final image-capable Advisor can receive the selected pixels.
