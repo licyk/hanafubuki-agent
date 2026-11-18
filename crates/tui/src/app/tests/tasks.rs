@@ -36,6 +36,7 @@ fn a_forked_agents_task_skips_inherited_messages_across_transcript_pages() {
         "The inherited worker finished.",
     );
     harness.type_and_submit("/tasks");
+    harness.pump_until_screen_shows("Agents · Tab switches section");
     let screen = harness.pump_until_screen_shows(assigned);
     assert!(!screen.contains("Inherited request 0"), "{screen}");
 }
