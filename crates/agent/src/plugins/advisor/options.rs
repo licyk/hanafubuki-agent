@@ -29,6 +29,9 @@ pub(super) struct AdvisorOptions {
     pub tracked_files: bool,
     pub untracked_files: bool,
     pub git_chars: usize,
+    pub simple: bool,
+    pub review_stages: Vec<String>,
+    pub consultation_limit: Option<usize>,
     pub history_chars: usize,
     pub activation_scope: ActivationScope,
     pub active: bool,
@@ -53,6 +56,9 @@ impl Default for AdvisorOptions {
             tracked_files: false,
             untracked_files: false,
             git_chars: 20_000,
+            simple: false,
+            review_stages: vec!["plan".into(), "failure".into(), "completion".into()],
+            consultation_limit: None,
             history_chars: 15_000,
             activation_scope: ActivationScope::Persistent,
             active: false,
@@ -138,6 +144,27 @@ pub(crate) fn advisor_schema() -> PluginOptionSchema {
         (
             "gitChars",
             "Maximum Git evidence characters",
+            SettingKind::Integer {
+                minimum: Some(0),
+                maximum: None,
+            },
+        ),
+        (
+            "simple",
+            "Offer voluntary consultations only",
+            SettingKind::Boolean,
+        ),
+        (
+            "reviewStages",
+            "Review guidance (plan, failure, completion or custom instructions)",
+            SettingKind::TextList {
+                maximum_items: None,
+                maximum_item_chars: None,
+            },
+        ),
+        (
+            "consultationLimit",
+            "Session consultation budget (reset for unlimited)",
             SettingKind::Integer {
                 minimum: Some(0),
                 maximum: None,

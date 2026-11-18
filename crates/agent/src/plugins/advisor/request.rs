@@ -184,6 +184,16 @@ impl AdvisorService {
         };
         let token = cancel.child();
         let request = async {
+            {
+                let mut counts = self.consultations.lock();
+                let used = counts.entry(id).or_default();
+                if opts.consultation_limit.is_some_and(|limit| *used >= limit) {
+                    return Err(ModelError::InvalidRequest(
+                        "Advisor consultation budget exhausted for this session".into(),
+                    ));
+                }
+                *used = used.saturating_add(1);
+            }
             let primary = self
                 .sample(
                     (provider, model),

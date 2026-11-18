@@ -73,6 +73,26 @@ async fn advisor_manual_and_model_calls_share_a_provider_only_after_explicit_act
         .await
         .unwrap();
     assert!(!advertised(3));
+    assert!(!String::from_utf8_lossy(&executor.requests()[3].body)
+        .contains("Advisor review preferences:"));
+    assert!(String::from_utf8_lossy(&executor.requests()[1].body)
+        .contains("Advisor review preferences:"));
+    service
+        .write_setting_values(SettingsWrite {
+            changes: vec![SettingChange {
+                key: "pluginOptions.advisor.consultationLimit".into(),
+                op: SettingWriteOp::Set(2.into()),
+            }],
+        })
+        .await
+        .unwrap();
+    let error = service
+        .consult_advisor(id, "again".into(), Default::default())
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("budget exhausted"), "{error}");
+    assert_eq!(advisor.requests().len(), 2);
+
     assert!(service
         .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
         .is_empty());

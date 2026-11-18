@@ -2,6 +2,7 @@
 mod follow_up;
 mod history;
 mod options;
+mod prompt;
 mod request;
 mod tool;
 mod workspace;
@@ -29,6 +30,7 @@ pub(crate) struct AdvisorService {
     workspace: workspace::AdvisorWorkspace,
     blocking: Arc<BlockingService>,
     options: RwLock<Arc<AdvisorOptions>>,
+    consultations: parking_lot::Mutex<HashMap<AgentSessionId, usize>>,
     previous: parking_lot::Mutex<HashMap<AgentSessionId, follow_up::Previous>>,
     sessions: RwLock<HashSet<AgentSessionId>>,
     cancellation: CancellationToken,
@@ -60,6 +62,7 @@ pub(crate) fn advisor_plugin(
                 blocking: ctx.get::<BlockingService>()?.arc().clone(),
                 options: RwLock::new(options),
                 sessions: RwLock::default(),
+                consultations: Default::default(),
                 previous: Default::default(),
                 cancellation,
             });
@@ -69,6 +72,10 @@ pub(crate) fn advisor_plugin(
                 *updated.options.write() = Arc::new(options.clone());
                 true
             })?;
+            ctx.get::<hanafubuki_agent_contracts::PromptContributorRegistry>()?
+                .register(Arc::new(prompt::Guidance(service.clone())))?;
+            ctx.get::<hanafubuki_agent_contracts::ContextRendererRegistry>()?
+                .register(prompt::RENDERER)?;
             ctx.get::<ToolSourceRegistry>()?
                 .register(Arc::new(tool::AdvisorSource::new(service.clone())?))?;
             ctx.get::<ToolPresenterRegistry>()?
@@ -81,6 +88,8 @@ pub(crate) fn advisor_plugin(
     .provides(["advisor"])
     .inject(
         Inject::new()
+            .with(hanafubuki_agent_contracts::PromptContributorRegistry::NAME)
+            .with(hanafubuki_agent_contracts::ContextRendererRegistry::NAME)
             .with(BlockingService::NAME)
             .with(ToolPresenterRegistry::NAME)
             .with(ToolSourceRegistry::NAME),
