@@ -48,6 +48,7 @@ async fn advisor_manual_and_model_calls_share_a_provider_only_after_explicit_act
     let advertised = |index: usize| {
         let body: serde_json::Value =
             serde_json::from_slice(&executor.requests()[index].body).unwrap();
+        assert!(!body["tools"].to_string().contains("advisor_config"));
         body["tools"].to_string().contains("ask_advisor")
     };
     assert!(!advertised(0));
@@ -363,19 +364,14 @@ async fn enabled_gate_reviews_repeated_calls_and_returns_revision_to_the_executo
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn model_settings_proposals_need_user_confirmation_and_scout_only_forwards_selected_evidence()
-{
+async fn scout_only_forwards_selected_evidence() {
     let executor = FakeServer::start(vec![
-        (
-            tool_events("advisor_config", r#"{"changes":{"scout":true}}"#),
-            Duration::ZERO,
-        ),
         (assistant_events("candidate review"), Duration::ZERO),
         (assistant_events("[0]"), Duration::ZERO),
     ])
     .await;
     let advisor = FakeServer::start(vec![(assistant_events("feedback"), Duration::ZERO)]).await;
-    let (service, paths, _) = service_with_config("advisor-config-scout", |_, config| {
+    let (service, paths, _) = service_with_config("advisor-scout", |_, config| {
         configure_test_provider(config, &executor.base_url, None);
         add_test_provider(config, "review", "Review", &advisor.base_url);
     });
@@ -387,12 +383,16 @@ async fn model_settings_proposals_need_user_confirmation_and_scout_only_forwards
         .id;
     service
         .write_setting_values(SettingsWrite {
-            changes: [("provider", "review"), ("model", "reviewer")]
-                .map(|(key, value)| SettingChange {
-                    key: format!("pluginOptions.advisor.{key}"),
-                    op: SettingWriteOp::Set(value.into()),
-                })
-                .into(),
+            changes: [
+                ("provider", json!("review")),
+                ("model", json!("reviewer")),
+                ("scout", json!(true)),
+            ]
+            .map(|(key, value)| SettingChange {
+                key: format!("pluginOptions.advisor.{key}"),
+                op: SettingWriteOp::Set(value),
+            })
+            .into(),
         })
         .await
         .unwrap();
@@ -401,23 +401,12 @@ async fn model_settings_proposals_need_user_confirmation_and_scout_only_forwards
         .start_turn(id, "selected evidence".to_string().into())
         .await
         .unwrap();
-    let proposal = service.advisor_settings_proposal(id).await.unwrap();
-    assert_eq!(proposal.changes[0].before, json!(false));
-    assert_eq!(proposal.changes[0].after, json!(true));
-    assert!(service
-        .confirm_advisor_settings(id, "different".into(), true)
-        .await
-        .is_err());
-    service
-        .confirm_advisor_settings(id, proposal.id, true)
-        .await
-        .unwrap();
     service
         .consult_advisor(id, "review".into(), Default::default())
         .await
         .unwrap();
     let requests = executor.requests();
-    let scout = String::from_utf8_lossy(&requests[2].body);
+    let scout = String::from_utf8_lossy(&requests[1].body);
     assert!(scout.contains("selected evidence") && scout.contains("candidate review"));
     let requests = advisor.requests();
     let body = String::from_utf8_lossy(&requests[0].body);

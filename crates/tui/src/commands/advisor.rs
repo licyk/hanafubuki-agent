@@ -35,14 +35,7 @@ pub(super) static SETTINGS: CommandSpec = CommandSpec {
     aliases: &["advisor-models"],
     description: "configure the advisor and its models",
     needs_session: false,
-    inline_args: true,
-    dispatch: |ctx, args| {
-        if args.trim().is_empty() {
-            open_settings(ctx, "pluginOptions.advisor")
-        } else {
-            ctx.session_call(SessionCall::AdvisorSettings(args.into()))
-        }
-    },
+    dispatch: |ctx, _| open_settings(ctx, "pluginOptions.advisor"),
     ..ADVISOR
 };
 pub(super) static STATS: CommandSpec = CommandSpec {

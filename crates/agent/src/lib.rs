@@ -138,11 +138,11 @@ pub use packages::{
     AgentPackageValidation, LOCAL_MARKETPLACE,
 };
 pub use plugins::{
-    AdvisorAdoption, AdvisorAnswer, AdvisorConsultation, AdvisorGitContext, AdvisorProposal,
-    AdvisorSessionStatus, AdvisorSettingDiff, AdvisorStats, AdvisorTrigger, AdvisorValidation,
-    AgentGoalBudgets, AgentRecap, AgentReviewCodeLocation, AgentReviewCommit, AgentReviewFinding,
-    AgentReviewLineRange, AgentReviewOutput, AgentReviewTarget, AgentReviewTargets,
-    AgentSubagentState, AgentSubagentStatus, MAXIMUM_GOAL_OBJECTIVE_CHARS,
+    AdvisorAdoption, AdvisorAnswer, AdvisorConsultation, AdvisorGitContext, AdvisorSessionStatus,
+    AdvisorStats, AdvisorTrigger, AdvisorValidation, AgentGoalBudgets, AgentRecap,
+    AgentReviewCodeLocation, AgentReviewCommit, AgentReviewFinding, AgentReviewLineRange,
+    AgentReviewOutput, AgentReviewTarget, AgentReviewTargets, AgentSubagentState,
+    AgentSubagentStatus, MAXIMUM_GOAL_OBJECTIVE_CHARS,
 };
 pub use roles::{
     AgentResolvedRole, AgentRoleCatalog, AgentRoleIssue, AgentRoleLink, AgentRoleSource,

@@ -705,4 +705,4 @@ let answer = agent.consult_advisor(session_id, question, cancellation).await?;
 agent.set_advisor_active(session_id, true).await?;
 ```
 
-需要提交草稿、具名文件或追问时使用 `consult_advisor_with`。先将 `advisor_settings_proposal` 的差异展示给用户，再把用户决定传给 `confirm_advisor_settings`。
+需要提交草稿、具名文件或追问时使用 `consult_advisor_with`。

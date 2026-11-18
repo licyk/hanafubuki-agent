@@ -91,7 +91,6 @@ fn called_title(call: &ToolCall, failed: bool) -> Vec<Span<'static>> {
     if failed {
         let title = match call.name.as_str() {
             "ask_advisor" => Some("Advisor consultation failed"),
-            "advisor_config" => Some("Advisor settings request failed"),
             "record_advisor_outcome" => Some("Advisor outcome recording failed"),
             _ => None,
         };
@@ -128,14 +127,6 @@ fn operation_title(call: &ToolCall, running: bool) -> Option<Vec<Span<'static>>>
         ("update_goal", false) => "Updated goal",
         ("ask_advisor", true) => "Consulting",
         ("ask_advisor", false) => "Consulted",
-        ("advisor_config", true) if call.subject.as_deref() == Some("settings proposal") => {
-            "Proposing Advisor settings changes"
-        }
-        ("advisor_config", false) if call.subject.as_deref() == Some("settings proposal") => {
-            "Proposed Advisor settings changes"
-        }
-        ("advisor_config", true) => "Reading Advisor settings",
-        ("advisor_config", false) => "Read Advisor settings",
         ("record_advisor_outcome", true) => "Recording Advisor outcome",
         ("record_advisor_outcome", false) => "Recorded Advisor outcome",
         ("spawn_agent", true) => "Starting agent",
@@ -190,7 +181,7 @@ fn operation_title(call: &ToolCall, running: bool) -> Option<Vec<Span<'static>>>
         _ => return None,
     };
     let mut title = vec![verb.bold()];
-    if call.subject.is_some() && call.name != "advisor_config" {
+    if call.subject.is_some() {
         title.extend([" ".into(), call.subject_or("").cyan()]);
     }
     Some(title)

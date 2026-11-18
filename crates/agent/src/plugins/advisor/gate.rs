@@ -62,7 +62,7 @@ impl ToolLifecycleHook for Gate {
             && self.0.active(call.session_id)
             && !matches!(
                 call.tool_name.as_str(),
-                "ask_advisor" | "record_advisor_outcome" | "advisor_config"
+                "ask_advisor" | "record_advisor_outcome"
             )
             && (phase == ToolLifecyclePhase::PreToolUse
                 || self

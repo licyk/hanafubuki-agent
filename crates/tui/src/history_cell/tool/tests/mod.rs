@@ -398,25 +398,13 @@ fn agent_tasks_are_previewed_but_the_full_request_is_kept_in_details() {
 }
 
 #[test]
-fn advisor_interactions_preview_the_reply_and_distinguish_settings_proposals() {
+fn advisor_interactions_preview_the_reply_and_recorded_outcome() {
     for (name, subject, running, completed) in [
         (
             "ask_advisor",
             "Advisor (follow-up)",
             "Consulting Advisor (follow-up)",
             "Consulted Advisor (follow-up)",
-        ),
-        (
-            "advisor_config",
-            "settings",
-            "Reading Advisor settings",
-            "Read Advisor settings",
-        ),
-        (
-            "advisor_config",
-            "settings proposal",
-            "Proposing Advisor settings changes",
-            "Proposed Advisor settings changes",
         ),
         (
             "record_advisor_outcome",

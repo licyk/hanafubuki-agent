@@ -1,6 +1,4 @@
 //! A tool-free second opinion on the current conversation.
-mod configuration;
-pub use configuration::{AdvisorProposal, AdvisorSettingDiff};
 mod follow_up;
 mod gate;
 mod history;
@@ -49,7 +47,6 @@ pub(crate) struct AdvisorService {
     workspace: workspace::AdvisorWorkspace,
     blocking: Arc<BlockingService>,
     options: RwLock<Arc<AdvisorOptions>>,
-    proposals: parking_lot::Mutex<HashMap<AgentSessionId, AdvisorProposal>>,
     repeats: parking_lot::Mutex<HashMap<AgentSessionId, gate::Repeated>>,
     ledger: Arc<outcomes::Ledger>,
     consultations: parking_lot::Mutex<HashMap<AgentSessionId, usize>>,
@@ -81,7 +78,6 @@ pub(crate) fn advisor_plugin(
             let stopping = cancellation.clone();
             ctx.defer("advisor requests", Disposer::new(move || stopping.cancel()))?;
             let service = Arc::new(AdvisorService {
-                proposals: Default::default(),
                 repeats: Default::default(),
                 ledger,
                 conversations,
@@ -95,7 +91,6 @@ pub(crate) fn advisor_plugin(
             });
             let updated = service.clone();
             ctx.on_update(move |options: &AdvisorOptions| {
-                updated.proposals.lock().clear();
                 updated.repeats.lock().clear();
                 updated.previous.lock().clear();
                 *updated.options.write() = Arc::new(options.clone());
@@ -189,7 +184,6 @@ impl AdvisorService {
             ));
         }
         if !active {
-            self.proposals.lock().remove(&id);
             self.repeats.lock().remove(&id);
             self.previous.lock().remove(&id);
         }
@@ -214,7 +208,6 @@ impl hanafubuki_agent_contracts::AgentObserver for AdvisorService {
         if let AgentNotification::SessionArchived { session_id, .. } = event {
             self.previous.lock().remove(session_id);
             self.repeats.lock().remove(session_id);
-            self.proposals.lock().remove(session_id);
             self.sessions.write().remove(session_id);
         }
     }
