@@ -18,7 +18,10 @@
 //! line ([`shortcut_overlay`]). Codex's footer also shows the context window left, the collaboration
 //! mode and its width-based collapse rules; those are not ported.
 
+mod goal;
 mod shortcut_overlay;
+
+pub(crate) use goal::GoalStatus;
 
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
@@ -46,6 +49,7 @@ pub(crate) struct FooterProps<'a> {
     pub(crate) navigation: Option<&'a [Line<'static>]>,
     /// Session information above the hints.
     pub(crate) status_line: Option<&'a Line<'static>>,
+    pub(crate) goal: Option<&'a GoalStatus>,
     /// A turn runs: a draft shows the key that queues it, and the
     /// shortcuts say that key queues.
     pub(crate) task_running: bool,
@@ -115,7 +119,7 @@ pub(crate) fn footer_height(props: FooterProps<'_>, width: u16) -> u16 {
     let rows = match props.mode {
         FooterMode::ShortcutOverlay => {
             shortcut_overlay::lines(&props, width.saturating_sub(FOOTER_INDENT_COLS as u16)).len()
-                + usize::from(props.status_line.is_some())
+                + usize::from(props.status_line.is_some() || goal_line(props).is_some())
         }
         _ => footer_lines(props).len(),
     };
@@ -134,20 +138,70 @@ pub(crate) fn render_footer(area: Rect, buf: &mut Buffer, props: FooterProps<'_>
             width: area.width - indent,
             ..area
         };
-        if let Some(status) = props.status_line {
-            buf.set_line(area.x, area.y, status, area.width);
+        if props.status_line.is_some() || goal_line(props).is_some() {
+            render_status_row(
+                area,
+                buf,
+                props.status_line.cloned().unwrap_or_default(),
+                goal_line(props),
+            );
             area.y = area.y.saturating_add(1);
             area.height = area.height.saturating_sub(1);
         }
         return shortcut_overlay::render(&props, area, buf);
     }
-    let lines = footer_lines(props);
+    let mut lines = footer_lines(props);
+    let goal = goal_line(props);
+    let first = if goal.is_some() && !lines.is_empty() {
+        Some(std::mem::take(&mut lines[0]))
+    } else {
+        None
+    };
     Paragraph::new(prefix_lines(
         lines,
         " ".repeat(FOOTER_INDENT_COLS).into(),
         " ".repeat(FOOTER_INDENT_COLS).into(),
     ))
     .render(area, buf);
+    if let Some(first) = first {
+        let indent = (FOOTER_INDENT_COLS as u16).min(area.width);
+        render_status_row(
+            Rect {
+                x: area.x + indent,
+                width: area.width - indent,
+                ..area
+            },
+            buf,
+            first,
+            goal,
+        );
+    }
+}
+
+fn goal_line(props: FooterProps<'_>) -> Option<Line<'static>> {
+    if matches!(
+        props.mode,
+        FooterMode::QuitShortcutReminder | FooterMode::EscHint
+    ) {
+        return None;
+    }
+    props.goal?.line(std::time::Instant::now())
+}
+
+fn render_status_row(
+    area: Rect,
+    buf: &mut Buffer,
+    left: Line<'static>,
+    right: Option<Line<'static>>,
+) {
+    let Some(right) = right else {
+        buf.set_line(area.x, area.y, &left, area.width);
+        return;
+    };
+    let right_width = right.width().min(usize::from(area.width)) as u16;
+    let left_width = area.width.saturating_sub(right_width).saturating_sub(2);
+    buf.set_line(area.x, area.y, &left, left_width);
+    buf.set_line(area.right() - right_width, area.y, &right, right_width);
 }
 
 /// Renders one line chosen by the composer (the history search's) in

@@ -220,7 +220,8 @@ fn each_reply_says_what_became_of_the_goal() {
         [
             Sent::Cell("• Goal paused /goal resume".to_string()),
             Sent::Cell("• The goal is complete; only an active goal pauses.".to_string()),
-            Sent::Cell("• Goal resumed It continues from your next message.".to_string()),
+            Sent::Cell("• Goal resumed".to_string()),
+            Sent::App(AppCommand::Submit("Ship the release".to_string())),
             Sent::Cell(
                 "• The goal's budget is spent, so it stays limited by budget. /goal edit gives it a new start"
                     .to_string()
@@ -230,4 +231,29 @@ fn each_reply_says_what_became_of_the_goal() {
             Sent::Cell("• No goal is set.".to_string()),
         ]
     );
+}
+
+#[test]
+fn setting_or_resuming_an_active_goal_starts_idle_work_but_never_duplicates_a_running_turn() {
+    for running in [false, true] {
+        let (mut chat, events) = chat(false);
+        if running {
+            chat.handle_turn_update(TurnUpdate::Started);
+        }
+        reply(&mut chat, GoalReply::Set(goal(AgentGoalStatus::Active)));
+        reply(&mut chat, GoalReply::Resumed(goal(AgentGoalStatus::Active)));
+        let submissions = sent(&events)
+            .into_iter()
+            .filter(|event| matches!(event, Sent::App(AppCommand::Submit(_))))
+            .count();
+        assert_eq!(submissions, if running { 0 } else { 2 });
+    }
+    let (mut chat, events) = chat(false);
+    reply(
+        &mut chat,
+        GoalReply::Resumed(goal(AgentGoalStatus::Complete)),
+    );
+    assert!(sent(&events)
+        .iter()
+        .all(|event| !matches!(event, Sent::App(AppCommand::Submit(_)))));
 }

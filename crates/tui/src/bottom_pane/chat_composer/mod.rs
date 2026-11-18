@@ -101,6 +101,7 @@ pub(crate) struct ChatComposer {
     is_task_running: bool,
     /// The status line the footer shows (`/statusline`).
     status_line: Option<Line<'static>>,
+    goal_status: super::footer::GoalStatus,
     navigation_footer: Option<Vec<Line<'static>>>,
     /// A newer release, on the right of the footer's row.
     /// Non-bracketed paste burst tracker (see `bottom_pane/paste_burst.rs`).
@@ -158,6 +159,7 @@ impl ChatComposer {
             placeholder_text,
             is_task_running: false,
             status_line: None,
+            goal_status: Default::default(),
             navigation_footer: None,
             paste_burst: PasteBurst::default(),
             footer_mode: FooterMode::ComposerEmpty,
@@ -739,7 +741,12 @@ impl ChatComposer {
     }
 
     pub fn set_task_running(&mut self, running: bool) {
+        self.goal_status.set_running(running, Instant::now());
         self.is_task_running = running;
+    }
+
+    pub(crate) fn set_goal(&mut self, goal: Option<&hanafubuki_agent::AgentGoal>) {
+        self.goal_status.update(goal, Instant::now());
     }
 
     pub(crate) fn set_navigation_footer(&mut self, lines: Option<Vec<Line<'static>>>) {

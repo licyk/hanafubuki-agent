@@ -517,6 +517,11 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    pub(crate) fn set_goal(&mut self, goal: Option<&hanafubuki_agent::AgentGoal>) {
+        self.composer.set_goal(goal);
+        self.request_redraw();
+    }
+
     /// What the session waits on while no turn runs, if anything.
     pub(crate) fn set_waiting(&mut self, waiting: Option<String>) {
         if self.waiting != waiting {

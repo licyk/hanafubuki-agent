@@ -26,7 +26,7 @@ pub(super) fn show(context: &mut CommandContext<'_>, goal: &AgentGoal) {
         )),
         AgentGoalStatus::Paused | AgentGoalStatus::Blocked => items.push(action(
             "Resume goal",
-            "continue it from the next message",
+            "continue working on it now",
             GoalCall::Resume,
         )),
         AgentGoalStatus::BudgetLimited | AgentGoalStatus::Complete => {}

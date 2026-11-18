@@ -5,7 +5,7 @@
 
 use std::time::Duration;
 
-use hanafubuki_agent::test_support::assistant_events;
+use hanafubuki_agent::test_support::{assistant_events, tool_events, HOLD};
 use hanafubuki_agent::{
     AgentGoalStatus, AgentSessionId, AgentSessionListRequest, AgentSessionOrigin,
     AgentSessionParentFilter, HookTrust,
@@ -155,9 +155,11 @@ fn esc_keeps_a_review_holding_messages_and_ctrl_c_cancels_it_into_the_composer()
 
 #[test]
 fn goal_sets_replaces_after_asking_and_pauses_the_sessions_goal() {
-    let mut harness = Harness::start(Vec::new());
-    harness.type_and_submit("/statusline goal --no-colors");
-    harness.pump_until_screen_shows("Updated for this session; it is not saved.");
+    let mut harness = Harness::start(vec![
+        [HOLD.as_bytes(), &assistant_events("Paused work.")].concat(),
+        tool_events("update_goal", r#"{"status":"complete"}"#),
+        assistant_events("Build fixed."),
+    ]);
     harness.type_and_submit("/goal --tokens 50k Ship the release");
     harness.pump_until_screen_shows("Goal set: Ship the release");
     let session_id = harness.app.bridge.session_id().unwrap();
@@ -174,8 +176,13 @@ fn goal_sets_replaces_after_asking_and_pauses_the_sessions_goal() {
     let set = goal(&harness);
     assert_eq!(set.objective, "Ship the release");
     assert_eq!(set.token_budget, Some(50_000));
-    // No turn runs, so no event: the status line takes the call's goal.
-    harness.pump_until_screen_shows("Goal: Ship the release (active)");
+    harness.pump_until_screen_shows("Pursuing goal");
+    harness.pump_until("goal starts without another user message", |harness| {
+        harness.server.requests().len() == 1
+    });
+    assert!(
+        String::from_utf8_lossy(&harness.server.requests()[0].body).contains("Ship the release")
+    );
 
     harness.type_and_submit("/goal Fix the build");
     harness.pump_until_screen_shows("Replace goal?");
@@ -183,11 +190,38 @@ fn goal_sets_replaces_after_asking_and_pauses_the_sessions_goal() {
     harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("Goal set: Fix the build");
     assert_eq!(goal(&harness).objective, "Fix the build");
+    assert_eq!(
+        harness.server.requests().len(),
+        1,
+        "replacing a running goal must not start another turn"
+    );
 
     harness.type_and_submit("/goal pause");
     harness.pump_until_screen_shows("Goal paused");
     assert_eq!(goal(&harness).status, AgentGoalStatus::Paused);
-    harness.pump_until_screen_shows("Goal: Fix the build (paused)");
+    harness.pump_until_screen_shows("Goal paused (/goal resume)");
+    harness.server.hold.notify_one();
+    harness.pump_until_turn_ends();
+
+    harness.type_and_submit("/goal resume");
+    harness.pump_until_screen_shows("Build fixed.");
+    harness.pump_until_turn_ends();
+    harness.pump_until_screen_shows("Goal achieved");
+    assert_eq!(goal(&harness).status, AgentGoalStatus::Complete);
+    assert_eq!(harness.server.requests().len(), 3);
+
+    harness.type_and_submit("/new");
+    harness.pump_until("new session clears the goal indicator", |harness| {
+        harness.app.bridge.session_id().is_none()
+    });
+    assert!(!harness.screen().contains("Goal achieved"));
+    harness.type_and_submit(&format!("/resume {}", session_id));
+    harness.pump_until_screen_shows("Goal achieved");
+    assert_eq!(
+        harness.server.requests().len(),
+        3,
+        "reopening a complete goal must not start work"
+    );
 }
 
 #[test]

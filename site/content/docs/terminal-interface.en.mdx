@@ -339,12 +339,12 @@ Esc goes back a page, and from a tab back to the center. Started with `--safe-mo
 
 ## Goals [#goal]
 
-`/goal OBJECTIVE` gives the session a goal ([Sessions](/docs/sessions#goals)); `/goal --tokens N OBJECTIVE` gives it a token budget too (`200000`, `200k`, `2m`). When the session's goal is not complete, a question asks first, **Replace goal?**, with keeping the current goal selected. The Agent pursues the goal from your next message; one set during a turn is taken up at that turn's next answer.
+`/goal OBJECTIVE` gives the session a goal ([Sessions](/docs/sessions#goals)); `/goal --tokens N OBJECTIVE` gives it a token budget too (`200000`, `200k`, `2m`). When the session's goal is not complete, a question asks first, **Replace goal?**, with keeping the current goal selected. When idle, setting or resuming an active goal immediately submits its objective through the normal message path and starts work. One set during a turn is taken up at that turn's next answer, without starting a second turn.
 
 - `/goal` alone shows the goal: its objective, status, tokens used (of the budget) and time used, with what can be done: **Pause goal** (an active goal) or **Resume goal** (a paused or blocked one), **Edit objective**, **Set token budget** and **Clear goal**. Without a goal it says so, with the usage.
 - `/goal pause`, `/goal resume` and `/goal clear` act at once; `/goal edit` opens a prompt filled with the objective. Editing the objective, or setting the budget, sets the goal again: its usage starts from zero.
 - Without a session, `/goal` creates one first. With the `goal` plugin off, it says goals are unavailable and why.
-- The [status line](#status-line)'s `goal` item shows the goal: read when a session opens, then updated by every `/goal` and, during a turn, by the session's events.
+- The footer automatically shows the goal at the right, even without `/statusline goal`: **Pursuing goal** with elapsed working time or explicit budget usage, **Goal paused**, **Goal stalled**, **Goal unmet** when its budget is spent, or **Goal achieved**. It updates from goal events and restored session state; elapsed time advances only during active work. `/new` and clearing the goal remove the indicator. The optional [status line](#status-line) `goal` item still shows the objective and status on the left.
 
 ## Hooks [#hooks]
 

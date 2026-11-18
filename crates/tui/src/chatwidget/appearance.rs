@@ -47,6 +47,13 @@ impl ChatWidget {
 
     /// The status line as the settings and the session have it now.
     pub(super) fn sync_status_line(&mut self) {
+        self.bottom_pane.set_goal(
+            self.appearance
+                .values_mut()
+                .status
+                .as_ref()
+                .and_then(|status| status.goal.as_ref()),
+        );
         self.bottom_pane
             .set_status_line(self.appearance.status_line());
     }

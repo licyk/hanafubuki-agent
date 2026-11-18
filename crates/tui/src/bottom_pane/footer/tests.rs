@@ -59,12 +59,38 @@ fn props(mode: FooterMode) -> FooterProps<'static> {
         use_shift_enter_hint: false,
         quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
         status_line: None,
+        goal: None,
         navigation: None,
         task_running: false,
         agents_hint: false,
         second_conversation: false,
         shell_command: false,
         wsl: false,
+    }
+}
+
+#[test]
+fn goal_is_right_aligned_with_or_without_a_custom_status_line() {
+    let mut goal = GoalStatus::default();
+    let value =
+        serde_json::from_value(serde_json::json!({"objective": "Run Python", "status": "active"}))
+            .unwrap();
+    goal.update(Some(&value), std::time::Instant::now());
+    let status = Line::from("custom status");
+    for status_line in [None, Some(&status)] {
+        let props = FooterProps {
+            goal: Some(&goal),
+            status_line,
+            ..props(FooterMode::ComposerEmpty)
+        };
+        let lines = rows(props, 100, footer_height(props, 100));
+        assert!(lines[0].ends_with("Pursuing goal (0s)"), "{lines:?}");
+        assert_eq!(lines[0].chars().count(), 100);
+        if status_line.is_some() {
+            assert!(lines[0].starts_with("  custom status"));
+        }
+        let narrow = rows(props, 24, footer_height(props, 24));
+        assert!(narrow[0].ends_with("Pursuing goal (0s)"), "{narrow:?}");
     }
 }
 

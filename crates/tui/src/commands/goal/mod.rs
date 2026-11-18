@@ -14,7 +14,7 @@ use hanafubuki_agent::{AgentGoal, AgentGoalBudgets, AgentGoalStatus};
 
 use super::{CommandContext, CommandSpec};
 use crate::agent_bridge::{GoalCall, GoalReply};
-use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
+use crate::app_event::{AgentCommand, AppCommand, AppEvent, AppEventSender, Op};
 use crate::bottom_pane::{SelectionItem, SelectionViewParams};
 use crate::commands::prompt::PromptView;
 use crate::history_cell;
@@ -71,13 +71,14 @@ pub(crate) fn on_reply(context: &mut CommandContext<'_>, reply: GoalReply) {
             let hint = if context.task_running() {
                 "The running turn turns to it at its next answer."
             } else {
-                "The Agent works toward it from your next message."
+                "Starting work now."
             };
             info(
                 context,
                 &format!("Goal set: {}", goal.objective),
                 Some(hint),
             );
+            start_if_idle(context, &goal);
         }
         GoalReply::Cleared(true) => info(context, "Goal cleared", None),
         GoalReply::Cleared(false) => info(context, "No goal is set.", None),
@@ -98,15 +99,23 @@ pub(crate) fn on_reply(context: &mut CommandContext<'_>, reply: GoalReply) {
                 "The goal's budget is spent, so it stays limited by budget.",
                 Some("/goal edit gives it a new start"),
             ),
-            _ => info(
-                context,
-                "Goal resumed",
-                Some("It continues from your next message."),
-            ),
+            AgentGoalStatus::Active => {
+                info(context, "Goal resumed", None);
+                start_if_idle(context, &goal);
+            }
+            status => info(context, &format!("Goal {}", status_label(status)), None),
         },
         GoalReply::Failed(error) => {
             context.add_to_history(history_cell::new_error_event(format!("/goal: {error}")))
         }
+    }
+}
+
+fn start_if_idle(context: &CommandContext<'_>, goal: &AgentGoal) {
+    if goal.status == AgentGoalStatus::Active && !context.task_running() {
+        context.send(AppEvent::Command(AppCommand::Submit(
+            goal.objective.clone(),
+        )));
     }
 }
 
