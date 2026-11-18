@@ -32,7 +32,7 @@ fn background_tasks_counts_and_pause_come_from_the_session_status() {
             Some("paused · 2 agents"),
         ),
     ] {
-        status.background = Some(AgentBackgroundStatus {
+        status.tree_background = Some(AgentBackgroundStatus {
             work: AgentBackgroundWork { agents, terminals },
             pending_wake_events: 0,
             wake,

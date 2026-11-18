@@ -370,6 +370,9 @@ impl BottomPaneView for PluginsBrowser {
         &mut self,
         mouse: ratatui::crossterm::event::MouseEvent,
     ) -> Option<ratatui::crossterm::event::KeyCode> {
+        if let Some(form) = &mut self.form {
+            return form.pointer_key(mouse);
+        }
         self.list.as_mut()?.pointer_key(mouse)
     }
 

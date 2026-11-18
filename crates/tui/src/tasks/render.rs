@@ -207,10 +207,14 @@ impl Tasks {
             .scroll((self.detail_scroll, 0))
             .block(Block::default().borders(Borders::LEFT).title(" Details "))
             .render(body[1], buffer);
-        Paragraph::new(self.error.clone().unwrap_or_else(|| self.wake_line()))
-            .render(areas[2], buffer);
-        let mut x = areas[2].x;
-        let mut y = areas[2].y.saturating_add(1);
+        self.render_actions(areas[2], buffer);
+        self.render_confirmation(area, buffer);
+    }
+
+    fn render_actions(&self, area: Rect, buffer: &mut Buffer) {
+        Paragraph::new(self.error.clone().unwrap_or_else(|| self.wake_line())).render(area, buffer);
+        let mut x = area.x;
+        let mut y = area.y.saturating_add(1);
         use ratatui::crossterm::event::KeyCode;
         for (label, key) in [
             ("Enter inspect", KeyCode::Enter),
@@ -220,15 +224,18 @@ impl Tasks {
             ("Esc return", KeyCode::Esc),
         ] {
             let width = label.len() as u16;
-            if x > areas[2].x && x.saturating_add(width) > areas[2].right() {
-                x = areas[2].x;
+            if x > area.x && x.saturating_add(width) > area.right() {
+                x = area.x;
                 y = y.saturating_add(1);
             }
-            let rect = Rect::new(x, y, width, 1).intersection(areas[2]);
+            let rect = Rect::new(x, y, width, 1).intersection(area);
             Paragraph::new(label).render(rect, buffer);
             self.hits.borrow_mut().push((rect, super::Target::Key(key)));
             x = x.saturating_add(width + 3);
         }
+    }
+
+    fn render_confirmation(&self, area: Rect, buffer: &mut Buffer) {
         if let Some(confirm) = &self.confirmation {
             let width = area.width.min(72);
             let height = area.height.min(7);

@@ -76,6 +76,7 @@ pub(crate) struct ResumePicker {
     error: Option<String>,
     selected: usize,
     scroll_top: usize,
+    list_area: Rect,
     query: String,
     view_rows: Option<usize>,
     /// Opened by `hanafubuki-agent resume`, before any session was shown.
@@ -98,6 +99,7 @@ impl ResumePicker {
             error: None,
             selected: 0,
             scroll_top: 0,
+            list_area: Rect::default(),
             query: String::new(),
             view_rows: None,
             at_startup,
@@ -112,6 +114,27 @@ impl ResumePicker {
     pub(crate) fn with_query(mut self, query: String) -> Self {
         self.set_query(query);
         self
+    }
+
+    pub(crate) fn pointer_key(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<ratatui::crossterm::event::KeyCode> {
+        use ratatui::crossterm::event::{MouseButton, MouseEventKind};
+        if !self.list_area.contains((mouse.column, mouse.row).into()) {
+            return None;
+        }
+        match mouse.kind {
+            MouseEventKind::ScrollUp => Some(KeyCode::Up),
+            MouseEventKind::ScrollDown => Some(KeyCode::Down),
+            MouseEventKind::Down(MouseButton::Left) => {
+                let index = self.scroll_top + usize::from(mouse.row - self.list_area.y);
+                self.rows.get(index)?;
+                self.selected = index;
+                Some(KeyCode::Enter)
+            }
+            _ => None,
+        }
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> Option<SessionSelection> {
@@ -338,6 +361,7 @@ impl ResumePicker {
             Constraint::Length(1),
         ])
         .areas(area);
+        self.list_area = list;
         self.update_view_rows(list.height as usize);
 
         // Header

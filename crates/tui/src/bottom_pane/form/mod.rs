@@ -109,6 +109,7 @@ pub(crate) struct FormView {
     items: Vec<FormItem>,
     /// The item with the focus.
     focus: usize,
+    hits: std::cell::RefCell<Vec<(ratatui::layout::Rect, usize)>>,
     /// What the command says under the form: a test's result, an error.
     status: Vec<Line<'static>>,
 }
@@ -120,6 +121,7 @@ impl FormView {
             subtitle: None,
             items,
             focus: 0,
+            hits: Default::default(),
             status: Vec::new(),
         }
     }
@@ -127,6 +129,32 @@ impl FormView {
     pub(crate) fn with_subtitle(mut self, subtitle: impl Into<String>) -> Self {
         self.subtitle = Some(subtitle.into());
         self
+    }
+
+    pub(crate) fn pointer_key(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<ratatui::crossterm::event::KeyCode> {
+        use ratatui::crossterm::event::{MouseButton, MouseEventKind};
+        let index = self
+            .hits
+            .borrow()
+            .iter()
+            .find(|(rect, _)| rect.contains((mouse.column, mouse.row).into()))?
+            .1;
+        match mouse.kind {
+            MouseEventKind::ScrollUp => Some(KeyCode::Up),
+            MouseEventKind::ScrollDown => Some(KeyCode::Down),
+            MouseEventKind::Down(MouseButton::Left) => {
+                self.focus = index;
+                Some(match self.items[index].kind {
+                    Kind::Action(_) => KeyCode::Enter,
+                    Kind::Toggle(_) | Kind::Choice { .. } => KeyCode::Char(' '),
+                    Kind::Text { .. } => KeyCode::Null,
+                })
+            }
+            _ => None,
+        }
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> FormEvent {

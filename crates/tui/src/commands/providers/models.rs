@@ -248,6 +248,7 @@ impl BottomPaneView for ModelPicker {
     ) -> Option<ratatui::crossterm::event::KeyCode> {
         match &mut self.stage {
             Stage::List(listed) => listed.list.pointer_key(mouse),
+            Stage::Entry(form) => form.pointer_key(mouse),
             _ => None,
         }
     }

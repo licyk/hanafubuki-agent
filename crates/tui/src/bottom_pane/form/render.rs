@@ -116,6 +116,17 @@ impl Renderable for FormView {
     fn render(&self, area: Rect, buf: &mut Buffer) {
         let (lines, _, focus_line) = self.layout(area.width);
         let scroll = Self::scroll(focus_line, lines.len(), area.height);
+        self.hits.borrow_mut().clear();
+        let mut row = 2 + usize::from(self.subtitle.is_some());
+        for (index, item) in self.items.iter().enumerate() {
+            if (scroll..scroll + usize::from(area.height)).contains(&row) {
+                self.hits.borrow_mut().push((
+                    Rect::new(area.x, area.y + (row - scroll) as u16, area.width, 1),
+                    index,
+                ));
+            }
+            row += 1 + usize::from(item.error.is_some());
+        }
         Paragraph::new(lines)
             .scroll((scroll as u16, 0))
             .render(area, buf);

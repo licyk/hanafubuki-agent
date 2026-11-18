@@ -376,6 +376,30 @@ impl App {
         tui: &mut Tui<B>,
         mouse: MouseEvent,
     ) {
+        use ratatui::crossterm::event::{
+            KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventKind,
+        };
+        if let Some(picker) = self.resume_picker.as_mut() {
+            if let Some(code) = picker.pointer_key(mouse) {
+                self.handle_key_event(tui, KeyEvent::new(code, KeyModifiers::NONE));
+            }
+            return;
+        }
+        if matches!(self.overlay, Some(Overlay::Static(_))) {
+            let viewport = tui.terminal.viewport_area;
+            let code = match mouse.kind {
+                MouseEventKind::ScrollDown => KeyCode::Down,
+                MouseEventKind::ScrollUp => KeyCode::Up,
+                MouseEventKind::Down(MouseButton::Left)
+                    if mouse.row == viewport.bottom().saturating_sub(2) =>
+                {
+                    KeyCode::Esc
+                }
+                _ => return,
+            };
+            self.handle_key_event(tui, KeyEvent::new(code, KeyModifiers::NONE));
+            return;
+        }
         if self.handle_tasks_mouse(tui, mouse)
             || self.handle_settings_mouse(tui, mouse)
             || self.handle_agents_mouse(tui, mouse)
@@ -454,8 +478,7 @@ impl App {
     ) {
         // The transcript view reads the pointer; the pager leaves the
         // wheel to the terminal, which turns it into arrow keys.
-        let capture_mouse = matches!(overlay, Overlay::Transcript(_));
-        self.enter_alt_screen(tui, capture_mouse);
+        self.enter_alt_screen(tui, true);
         self.overlay = Some(overlay);
         self.schedule_frame(Instant::now());
     }
@@ -493,7 +516,7 @@ impl App {
         tui: &mut Tui<B>,
         picker: ResumePicker,
     ) {
-        self.enter_alt_screen(tui, false);
+        self.enter_alt_screen(tui, true);
         self.resume_picker = Some(picker);
         self.load_picker_pages();
         self.schedule_frame(Instant::now());
