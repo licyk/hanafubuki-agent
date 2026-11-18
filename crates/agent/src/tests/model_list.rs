@@ -252,3 +252,65 @@ async fn one_providers_listing_answers_while_anothers_is_pending() {
     stop(&service);
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
+
+#[tokio::test]
+async fn more_than_32_providers_can_be_created_and_listed() {
+    let server = FakeServer::with_listings(
+        Vec::new(),
+        vec![FakeListing::ok(r#"{"data":[{"id":"listed-model"}]}"#); 65],
+    )
+    .await;
+    let (service, paths, config) = service_with_config("many-providers", |_, config| {
+        configure_test_provider(config, &server.base_url, None);
+        config
+            .mutate_providers(1, |registry| {
+                let template = registry.providers[0].clone();
+                registry.providers = (1..=64)
+                    .map(|index| hanafubuki_agent_config::AgentProviderSettings {
+                        id: format!("provider-{index}"),
+                        display_name: format!("Provider {index:02}"),
+                        ..template.clone()
+                    })
+                    .collect();
+                Ok(())
+            })
+            .unwrap();
+    });
+    let saved = service
+        .write_provider(AgentProviderWriteRequest {
+            expected_revision: config.providers().unwrap().revision,
+            provider_id: None,
+            provider: AgentProviderDraft {
+                display_name: "Provider 65".into(),
+                enabled: true,
+                protocol: AgentModelProtocol::Responses,
+                base_url: server.base_url.clone(),
+                api_token: None,
+                request_headers: Vec::new(),
+            },
+        })
+        .await
+        .unwrap();
+    assert_eq!(saved.providers.len(), 65);
+    assert_eq!(saved.providers.last().unwrap().id, "provider-65");
+    let results = service
+        .list_provider_models(AgentProviderModelCatalogRequest {
+            provider_ids: Some(
+                saved
+                    .providers
+                    .iter()
+                    .map(|provider| provider.id.clone())
+                    .collect(),
+            ),
+        })
+        .await
+        .unwrap();
+    assert_eq!(results.len(), 65);
+    assert_eq!(results.last().unwrap().provider_id, "provider-65");
+    assert!(results
+        .iter()
+        .all(|result| result.error.is_none() && result.models[0].entry.id == "listed-model"));
+    assert_eq!(server.listing_requests().len(), 65);
+    stop(&service);
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}

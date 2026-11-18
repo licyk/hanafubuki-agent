@@ -14,7 +14,6 @@ mod models;
 pub(crate) use decode::decode_registry;
 pub use models::{AgentModelImageInput, AgentModelOverrideSettings};
 
-pub const MAX_AGENT_PROVIDERS: usize = 32;
 pub const MAX_AGENT_PROVIDER_HEADERS: usize = 32;
 pub const MAX_AGENT_PROVIDER_CREDENTIAL_BYTES: usize = 64 * 1024;
 
@@ -152,11 +151,6 @@ pub const MAX_AGENT_IDLE_TIMEOUT_SECONDS: u64 = 24 * 60 * 60;
 pub fn validate_agent_provider_registry(
     registry: &AgentProviderRegistrySettings,
 ) -> Result<(), String> {
-    if registry.providers.len() > MAX_AGENT_PROVIDERS {
-        return Err(format!(
-            "agentProviders.providers must contain at most {MAX_AGENT_PROVIDERS} entries"
-        ));
-    }
     validate_agent_model_policy(&registry.model_policy)?;
     let mut provider_ids = std::collections::BTreeSet::new();
     for provider in &registry.providers {

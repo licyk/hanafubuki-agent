@@ -198,7 +198,6 @@ impl McpStreamableHttpConnection {
             &self.peer,
             server.list_timeout(),
             self.request_meta.as_ref(),
-            crate::MAX_MCP_TOOLS_PER_SERVER,
         )
         .await?;
         crate::catalog::build_tool_catalog(server, self.generation, tools)
@@ -238,7 +237,6 @@ impl McpStreamableHttpConnection {
             &self.peer,
             timeout,
             self.request_meta.as_ref(),
-            crate::listing::MAXIMUM_MCP_LIST_ITEMS,
         )
         .await
     }
@@ -265,7 +263,6 @@ impl McpStreamableHttpConnection {
             &self.peer,
             timeout,
             self.request_meta.as_ref(),
-            crate::listing::MAXIMUM_MCP_LIST_ITEMS,
         )
         .await
     }

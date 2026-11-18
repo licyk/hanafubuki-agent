@@ -118,13 +118,12 @@ fn rmcp_decodes_a_page_with_meta_and_a_bad_entry_as_a_tool_result() {
 }
 
 #[test]
-fn page_bounds_count_undecodable_entries_and_stay_strict() {
+fn large_pages_keep_valid_entries_and_enforce_byte_bounds() {
     let mut entries = vec![json!({"name": "bad", "inputSchema": 1})];
-    entries.extend((0..MAXIMUM_MCP_LIST_ITEMS).map(|index| tool(&format!("tool-{index}"))));
-    assert_eq!(
-        decode_page::<ListTools>(server_result(json!({ "tools": entries })), 0).unwrap_err(),
-        McpError::LimitExceeded
-    );
+    entries.extend((0..2_100).map(|index| tool(&format!("tool-{index}"))));
+    let page = decode_page::<ListTools>(server_result(json!({ "tools": entries })), 0).unwrap();
+    assert_eq!(page.items.len(), 2_100);
+    assert_eq!(page.undecodable, ["bad"]);
     assert_eq!(
         decode_page::<ListTools>(
             server_result(json!({
@@ -163,10 +162,7 @@ fn validate_page_rejects_unbounded_pages_and_cursors() {
         .unwrap_err(),
         McpError::LimitExceeded
     );
-    assert_eq!(
-        validate_page(&vec![json!(null); MAXIMUM_MCP_LIST_ITEMS + 1], None).unwrap_err(),
-        McpError::LimitExceeded
-    );
+    assert!(validate_page(&vec![json!(null); 2_100], None).is_ok());
     assert_eq!(
         validate_page(
             &[json!({"description": "x".repeat(MAXIMUM_MCP_PAGE_BYTES + 1)})],
@@ -177,28 +173,4 @@ fn validate_page_rejects_unbounded_pages_and_cursors() {
     );
 }
 
-/// The tool count is bounded once, while the listing is paged: a page that
-/// takes it past the bound fails the listing, and an undecodable entry
-/// counts like any other.
-#[test]
-fn a_listing_past_its_bound_fails_while_it_is_paged() {
-    let limit = crate::MAX_MCP_TOOLS_PER_SERVER;
-    let mut listing = McpListing {
-        items: vec![(); limit - 1],
-        undecodable: Vec::new(),
-    };
-    let page = |undecodable: &str, next_cursor: Option<&str>| McpListedPage {
-        items: Vec::new(),
-        undecodable: vec![undecodable.to_string()],
-        next_cursor: next_cursor.map(str::to_string),
-    };
-    assert_eq!(
-        listing.extend(page("#1", Some("next")), limit).unwrap(),
-        Some("next".to_string())
-    );
-    assert_eq!(listing.len(), limit);
-    assert_eq!(
-        listing.extend(page("#2", None), limit).unwrap_err(),
-        McpError::LimitExceeded
-    );
-}
+mod pagination;

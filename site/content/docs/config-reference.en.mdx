@@ -325,7 +325,7 @@ The settings center exposes these fields under **Model policy → Custom turn bu
 
 ### [[providers]] [#providers]
 
-At most 32.
+There is no Provider-count limit. All valid entries are kept when loading the file; a large registry does not trigger configuration repair. A batch model-list request runs at most 32 Provider requests concurrently and queues the rest.
 
 | Key              | Type and values                                                 | Means                                                                                                                                                |
 | ---------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -417,6 +417,8 @@ At most 64. A key a server leaves out takes the value in the last column, what `
 | `toolApprovalPolicies`       | A table of tool name to approval policy                     | `{}`         | One tool's approval policy                                           |
 | `exposurePolicy`             | `"direct"`, `"direct_model_only"`, `"deferred"`, `"hidden"` | `"deferred"` | How the tools are offered to the model                               |
 | `toolExposurePolicies`       | A table of tool name to exposure policy                     | `{}`         | One tool's exposure policy                                           |
+
+Tool filters and per-tool policy tables have no entry-count limit. Tool names, policy values and per-tool concurrency values are still validated; a tool cannot be both enabled and disabled.
 
 A number out of range is brought into it.
 

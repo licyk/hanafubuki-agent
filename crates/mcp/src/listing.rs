@@ -27,8 +27,6 @@ use serde_json::Value;
 
 use crate::McpError;
 
-pub(crate) const MAXIMUM_MCP_LIST_PAGES: usize = 100;
-pub(crate) const MAXIMUM_MCP_LIST_ITEMS: usize = 2_048;
 pub(crate) const MAXIMUM_MCP_CURSOR_BYTES: usize = 64 * 1024;
 pub(crate) const MAXIMUM_MCP_PAGE_BYTES: usize = 4 * 1024 * 1024;
 
@@ -41,19 +39,11 @@ pub(crate) struct McpListing<T> {
 }
 
 impl<T> McpListing<T> {
-    /// Adds one page, failing once the listing holds more than `limit`
-    /// entries, undecodable ones included, and returns the page's cursor.
-    pub(crate) fn extend(
-        &mut self,
-        page: McpListedPage<T>,
-        limit: usize,
-    ) -> Result<Option<String>, McpError> {
+    /// Adds one page and returns its cursor.
+    pub(crate) fn extend(&mut self, page: McpListedPage<T>) -> Option<String> {
         self.items.extend(page.items);
         self.undecodable.extend(page.undecodable);
-        if self.len() > limit {
-            return Err(McpError::LimitExceeded);
-        }
-        Ok(page.next_cursor)
+        page.next_cursor
     }
 
     /// Entries listed so far, undecodable ones included.
@@ -176,14 +166,11 @@ impl McpListMethod for ListResourceTemplates {
     }
 }
 
-/// Lists every page within `timeout`. The listing holds at most `limit`
-/// entries ([`McpListing::extend`]); this is where a server's tool count is
-/// bounded, and the catalog built from the listing does not check it again.
+/// Lists every page within `timeout`, rejecting cyclic cursors.
 pub(crate) async fn list_all<M: McpListMethod>(
     peer: &Peer<RoleClient>,
     timeout: Duration,
     request_meta: Option<&RequestMetaObject>,
-    limit: usize,
 ) -> Result<McpListing<M::Item>, McpError> {
     tokio::time::timeout(timeout, async {
         let mut listing = McpListing {
@@ -192,9 +179,9 @@ pub(crate) async fn list_all<M: McpListMethod>(
         };
         let mut cursor = None;
         let mut seen = HashSet::new();
-        for _ in 0..MAXIMUM_MCP_LIST_PAGES {
+        loop {
             let page = request_page::<M>(peer, cursor.take(), request_meta, listing.len()).await?;
-            let Some(next) = listing.extend(page, limit)? else {
+            let Some(next) = listing.extend(page) else {
                 return Ok(listing);
             };
             if !seen.insert(next.clone()) {
@@ -202,7 +189,6 @@ pub(crate) async fn list_all<M: McpListMethod>(
             }
             cursor = Some(next);
         }
-        Err(McpError::LimitExceeded)
     })
     .await
     .map_err(|_| McpError::Timeout)?
@@ -314,14 +300,13 @@ pub(crate) fn end_of_paging(next_cursor: Option<String>) -> Option<String> {
     next_cursor.filter(|cursor| !cursor.is_empty())
 }
 
-/// Bounds one page by its entries as listed (undecodable ones included);
+/// Bounds one page by its serialized bytes (undecodable entries included);
 /// `next_cursor` has already been through [`end_of_paging`].
 pub(crate) fn validate_page<T: Serialize>(
     items: &[T],
     next_cursor: Option<&str>,
 ) -> Result<(), McpError> {
-    if items.len() > MAXIMUM_MCP_LIST_ITEMS
-        || next_cursor.is_some_and(|cursor| cursor.len() > MAXIMUM_MCP_CURSOR_BYTES)
+    if next_cursor.is_some_and(|cursor| cursor.len() > MAXIMUM_MCP_CURSOR_BYTES)
         || serde_json::to_vec(items)
             .map_err(|_| McpError::Protocol("MCP page is not serializable".into()))?
             .len()

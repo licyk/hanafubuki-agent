@@ -339,3 +339,52 @@ fn dotted_server_ids_and_tool_names_are_sanitized_per_segment() {
     assert!(fitted.starts_with(&"a".repeat(100)));
     assert!(fitted[115..].starts_with('_'));
 }
+
+#[test]
+fn large_tool_filters_and_policy_maps_survive_repair_and_apply_to_the_catalog() {
+    let mut config = stdio_config();
+    let tools = (0..2_100)
+        .map(|index| {
+            let name = format!("tool-{index}");
+            config.enabled_tools.insert(name.clone());
+            config.disabled_tools.insert(format!("hidden-{index}"));
+            config
+                .tool_approval_policies
+                .insert(name.clone(), McpApprovalPolicy::Deny);
+            config
+                .tool_exposure_policies
+                .insert(name.clone(), McpExposurePolicy::Direct);
+            config.tool_maximum_concurrent_calls.insert(name.clone(), 2);
+            Tool::new(
+                name,
+                "A listed tool",
+                Map::from_iter([("type".into(), json!("object"))]),
+            )
+        })
+        .collect();
+    config.validate().unwrap();
+    let settings = McpSettings {
+        revision: 1,
+        servers: vec![config.clone()],
+        credentials: BTreeMap::new(),
+    };
+    assert_eq!(
+        repair_settings(serde_json::to_value(&settings).unwrap()),
+        (settings, Vec::new())
+    );
+    let catalog = build_tool_catalog(&config, McpConnectionGeneration([7; 32]), tools).unwrap();
+    assert_eq!(catalog.tools.len(), 2_100);
+    assert!(catalog.issues.is_empty());
+    assert!(catalog
+        .tools
+        .iter()
+        .all(
+            |tool| config.approval_policy_for(&tool.remote_name) == McpApprovalPolicy::Deny
+                && tool.exposure == McpExposurePolicy::Direct
+        ));
+    config.disabled_tools.insert("tool-2099".into());
+    assert!(
+        config.validate().is_err(),
+        "conflicting filters remain invalid"
+    );
+}

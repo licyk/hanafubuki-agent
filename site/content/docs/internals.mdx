@@ -539,7 +539,7 @@ Provider 的错误是否拒绝了请求的推理参数，由 `hanafubuki-agent-m
 - **重连。** 每台服务器一个重启窗口（`McpManager::with_reconnect_policy`）；状态带有 `reconnect`（下一次尝试，用完后为空）。如果外部的连接、刷新或断开先到一步，重连就不再开始；关闭开始之后才完成的重连会释放它的进程，而不是装上它。stdio 服务器的原因会说明它是怎么结束的（`the MCP server process exited with code 3`）。
 - **panic。** 工具调用的客户端路径中的 panic 让这次调用得到 "the tool failed with an internal error"，`McpManager::fail_after_panic` 退役该连接并像上面一样重连服务器（以 "the MCP client panicked during a tool call: `<message>`" 进入 `failed`，诊断代码 `tool_call_panicked`）。
 - **身份。** 工具的代次是服务器配置、其凭据代次以及工具自己的目录条目和策略的摘要。未改变的服务器重连后它不变，所以会话对该工具的 `AllowForSession` 在重连后依然有效；改变服务器的设置、凭据的 `generation` 或工具本身，才会重新询问。
-- **目录。** 从分页的 `tools/list` 结果逐个工具构建。被跳过的工具（无效或过大的 schema、无法编码的名字、清理后重复的名字，例如 `my.tool` 变成 `my_tool`）是一个 `McpCatalogIssue`，作为警告记录，带工具名（每次列表最多 16 个），并附一条 `tool_discovery_partial` 摘要。每台服务器 2048 个工具的上限保持严格，计入无法解码的条目，只检查一次；`nextCursor: ""` 结束分页；超过 4 MiB 的页或过大的游标是错误。调用按原始的远程名字发出。
+- **目录。** 从分页的 `tools/list` 结果逐个工具构建。被跳过的工具（无效或过大的 schema、无法编码的名字、清理后重复的名字，例如 `my.tool` 变成 `my_tool`）是一个 `McpCatalogIssue`，作为警告记录，带工具名（每次列表最多 16 个），并附一条 `tool_discovery_partial` 摘要。工具、资源和资源模板列表不限制条目总数或页数。整个列表仍受配置的超时约束；重复游标会被拒绝，`nextCursor: ""` 结束分页。超过 4 MiB 的页（包括无法解码的条目）或超过 64 KiB 的游标仍然是错误。调用按原始的远程名字发出。
 - **列表与读取。** `tools/list`、两种资源列表和 `resources/read` 都通过 `Peer::send_request` 请求（`listing.rs`、`request::read_resource`），所以 rmcp 的类型化结构拒绝的结果以 `ServerResult::CustomResult` 到达，并逐个条目解码：无法解码的工具是 `tool_skipped_undecodable` 目录问题；无法解码的资源或模板被略去，并记一条 `resource_skipped_undecodable` 或 `resource_template_skipped_undecodable` 警告（每次列表最多 16 条），计入 `resource_discovery_partial`；无法解码的读取条目是文本 `[unsupported MCP content: resource]`。这些请求绕过 rmcp 的响应缓存。
 - **输出。** 带参数的 MIME 类型存为它的基本类型，接受没有填充的 base64，两者都以规范形式保存（`canonical_media_type`、`canonical_base64`）。
 

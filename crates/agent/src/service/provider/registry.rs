@@ -8,11 +8,14 @@ use crate::{
 };
 use hanafubuki_agent_config::{
     validate_agent_model_policy, AgentModelOverrideSettings, AgentModelPolicySettings,
-    AgentProviderRegistrySettings, AgentProviderSettings, AgentSettings, MAX_AGENT_PROVIDERS,
+    AgentProviderRegistrySettings, AgentProviderSettings, AgentSettings,
 };
 use hanafubuki_agent_kernel::{AgentError, AgentSessionId, ModelCatalogEntry, ModelMetadata};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::Ordering;
+
+// Preserve the previous maximum request fan-out without limiting saved Providers.
+const MAX_CONCURRENT_PROVIDER_LISTINGS: usize = 32;
 
 impl AgentApplicationService {
     pub(in crate::service) async fn load_provider_settings(
@@ -62,7 +65,7 @@ impl AgentApplicationService {
     }
 
     /// The model listing of each Provider asked for (every enabled one when
-    /// none is named), each read live and at once, sorted by name: each
+    /// none is named), read live with bounded concurrency, sorted by name: each
     /// model with what is known of it ([`AgentListedModel`]), or why the
     /// Provider was not listed. `providers.toml` is read once.
     pub async fn list_provider_models(
@@ -74,9 +77,6 @@ impl AgentApplicationService {
         }
         let settings = self.load_provider_settings().await?;
         let provider_ids = if let Some(provider_ids) = request.provider_ids {
-            if provider_ids.len() > MAX_AGENT_PROVIDERS {
-                return Err("too many Agent Providers requested".into());
-            }
             let mut unique = BTreeSet::new();
             for provider_id in &provider_ids {
                 if !unique.insert(provider_id.clone()) {
@@ -98,34 +98,41 @@ impl AgentApplicationService {
             .map(|provider| (provider.id.clone(), provider.display_name.clone()))
             .collect::<BTreeMap<_, _>>();
         let mut tasks = tokio::task::JoinSet::new();
-        for provider_id in provider_ids {
-            let service = self.clone();
-            let display_name = names
-                .get(&provider_id)
-                .cloned()
-                .unwrap_or_else(|| provider_id.clone());
-            let resolved = resolve_settings_provider(&settings, &provider_id);
-            tasks.spawn(async move {
-                let result = async {
-                    let resolved = resolved?;
-                    let entries = service.provider_models(&resolved).await?;
-                    Ok::<_, String>(service.with_facts(&resolved.definition, entries))
-                }
-                .await;
-                let (models, error) = match result {
-                    Ok(models) => (models, None),
-                    Err(error) => (Vec::new(), Some(error)),
-                };
-                AgentProviderModelCatalogResult {
-                    provider_id,
-                    display_name,
-                    models,
-                    error,
-                }
-            });
-        }
+        let mut provider_ids = provider_ids.into_iter();
         let mut results = Vec::new();
-        while let Some(result) = tasks.join_next().await {
+        loop {
+            while tasks.len() < MAX_CONCURRENT_PROVIDER_LISTINGS {
+                let Some(provider_id) = provider_ids.next() else {
+                    break;
+                };
+                let service = self.clone();
+                let display_name = names
+                    .get(&provider_id)
+                    .cloned()
+                    .unwrap_or_else(|| provider_id.clone());
+                let resolved = resolve_settings_provider(&settings, &provider_id);
+                tasks.spawn(async move {
+                    let result = async {
+                        let resolved = resolved?;
+                        let entries = service.provider_models(&resolved).await?;
+                        Ok::<_, String>(service.with_facts(&resolved.definition, entries))
+                    }
+                    .await;
+                    let (models, error) = match result {
+                        Ok(models) => (models, None),
+                        Err(error) => (Vec::new(), Some(error)),
+                    };
+                    AgentProviderModelCatalogResult {
+                        provider_id,
+                        display_name,
+                        models,
+                        error,
+                    }
+                });
+            }
+            let Some(result) = tasks.join_next().await else {
+                break;
+            };
             results.push(
                 result.map_err(|_| "Agent Provider model catalog worker failed".to_string())?,
             );
@@ -280,14 +287,7 @@ impl AgentApplicationService {
                     }
                     provider_id
                 }
-                None => {
-                    if registry.providers.len() >= MAX_AGENT_PROVIDERS {
-                        return Err(format!(
-                            "at most {MAX_AGENT_PROVIDERS} Agent Providers are supported"
-                        ));
-                    }
-                    allocate_provider_id(registry)
-                }
+                None => allocate_provider_id(registry),
             };
             let mut definition = draft.into_settings(provider_id.clone());
             match registry
@@ -471,10 +471,9 @@ fn allocate_provider_id(registry: &AgentProviderRegistrySettings) -> String {
         .iter()
         .map(|provider| provider.id.as_str())
         .collect::<BTreeSet<_>>();
-    // The caller allows fewer than `MAX_AGENT_PROVIDERS` Providers, so one of
-    // these `MAX_AGENT_PROVIDERS + 1` candidates is unused.
-    (1..=MAX_AGENT_PROVIDERS + 1)
+    // Among one more candidate than existing ids, at least one is unused.
+    (1..=used.len() + 1)
         .map(|index| format!("provider-{index}"))
         .find(|candidate| !used.contains(candidate.as_str()))
-        .expect("one identifier is free below the Provider ceiling")
+        .expect("one identifier is free among these candidates")
 }

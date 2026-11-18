@@ -5,7 +5,7 @@ use serde_json::{Map, Value};
 use super::models::decode_models;
 use super::{
     validate_agent_model_policy, validate_agent_provider, AgentModelPolicySettings,
-    AgentProviderRegistrySettings, AgentProviderSettings, MAX_AGENT_PROVIDERS,
+    AgentProviderRegistrySettings, AgentProviderSettings,
 };
 use crate::fields::{read_member, read_object, FieldRead, Fields};
 
@@ -77,9 +77,6 @@ fn decode_providers(fields: &mut Fields<'_>) -> Vec<AgentProviderSettings> {
                 ..provider
             });
         let message = match provider {
-            Some(_) if providers.len() >= MAX_AGENT_PROVIDERS => {
-                "the Provider registry holds too many Providers; this one was dropped"
-            }
             Some(provider) if !ids.insert(provider.id.clone()) => {
                 "a second Provider with the same id was dropped"
             }

@@ -10,7 +10,6 @@ pub const MAX_MCP_SERVERS: usize = 64;
 pub const MAX_MCP_ARGUMENTS: usize = 256;
 pub const MAX_MCP_ENVIRONMENT_ENTRIES: usize = 256;
 pub const MAX_MCP_HEADERS: usize = 128;
-pub const MAX_MCP_FILTERS: usize = 512;
 pub const MAX_MCP_FIELD_BYTES: usize = 16 * 1024;
 pub const MAX_MCP_TIMEOUT_SECONDS: u64 = 24 * 60 * 60;
 pub const MAX_MCP_CONCURRENT_CALLS: usize = 64;
@@ -165,10 +164,6 @@ impl McpServerConfig {
                 "maximum concurrent MCP calls must be between 1 and {MAX_MCP_CONCURRENT_CALLS}"
             )));
         }
-        if self.enabled_tools.len() > MAX_MCP_FILTERS || self.disabled_tools.len() > MAX_MCP_FILTERS
-        {
-            return Err(McpError::InvalidConfig("too many tool filters".into()));
-        }
         if self
             .enabled_tools
             .iter()
@@ -176,14 +171,6 @@ impl McpServerConfig {
         {
             return Err(McpError::InvalidConfig(
                 "a tool cannot be both enabled and disabled".into(),
-            ));
-        }
-        if self.tool_approval_policies.len() > MAX_MCP_FILTERS
-            || self.tool_exposure_policies.len() > MAX_MCP_FILTERS
-            || self.tool_maximum_concurrent_calls.len() > MAX_MCP_FILTERS
-        {
-            return Err(McpError::InvalidConfig(
-                "too many per-tool MCP policy overrides".into(),
             ));
         }
         for tool in self

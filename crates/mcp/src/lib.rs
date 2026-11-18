@@ -28,14 +28,14 @@ pub use capabilities::{
 };
 pub use catalog::{
     McpCatalogIssue, McpCatalogIssueKind, McpToolBinding, McpToolCatalog, McpToolHints,
-    MAX_MCP_CATALOG_ISSUE_NAME_BYTES, MAX_MCP_TOOLS_PER_SERVER, MAX_MCP_TOOL_DESCRIPTION_BYTES,
+    MAX_MCP_CATALOG_ISSUE_NAME_BYTES, MAX_MCP_TOOL_DESCRIPTION_BYTES,
 };
 pub use client_adapter::{build_mcp_http_client, McpHttpProxyPolicy};
 pub use config::{
     McpApprovalPolicy, McpExposurePolicy, McpOAuthPolicy, McpProtocolMode, McpServerConfig,
     McpServerDefaults, McpStdioConfig, McpStreamableHttpConfig, McpTransportConfig,
     MAX_MCP_ARGUMENTS, MAX_MCP_CONCURRENT_CALLS, MAX_MCP_ENVIRONMENT_ENTRIES, MAX_MCP_FIELD_BYTES,
-    MAX_MCP_FILTERS, MAX_MCP_HEADERS, MAX_MCP_SERVERS, MAX_MCP_TIMEOUT_SECONDS,
+    MAX_MCP_HEADERS, MAX_MCP_SERVERS, MAX_MCP_TIMEOUT_SECONDS,
 };
 pub use connection::{McpConnectionPhase, McpReconnectStatus, McpServerStatus};
 pub use credentials::{

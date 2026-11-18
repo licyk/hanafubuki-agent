@@ -715,3 +715,25 @@ broken = 3
         "the written file reads clean"
     );
 }
+
+#[test]
+fn a_large_provider_registry_round_trips_without_repair_or_dropped_entries() {
+    let directory = tempfile::tempdir().unwrap();
+    let config = AgentConfig::new(directory.path());
+    let saved = config
+        .mutate_providers(0, |registry| {
+            registry.providers = (1..=65)
+                .map(|index| provider(&format!("provider-{index}")))
+                .collect();
+            registry.default_provider_id = Some("provider-65".into());
+            Ok(())
+        })
+        .unwrap();
+    let path = directory.path().join(AGENT_PROVIDERS_FILE);
+    let original = fs::read(&path).unwrap();
+    let reopened = AgentConfig::new(directory.path());
+    assert_eq!(reopened.providers().unwrap(), saved);
+    assert!(reopened.recoveries().is_empty());
+    assert_eq!(fs::read(path).unwrap(), original);
+    assert!(recovered(directory.path()).is_empty());
+}

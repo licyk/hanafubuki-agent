@@ -12,7 +12,6 @@ use crate::{
     McpServerId,
 };
 
-pub const MAX_MCP_TOOLS_PER_SERVER: usize = 2048;
 pub const MAX_MCP_TOOL_DESCRIPTION_BYTES: usize = 16 * 1024;
 pub const MAX_MCP_CATALOG_ISSUE_NAME_BYTES: usize = 256;
 
@@ -128,9 +127,7 @@ pub struct McpToolCatalog {
 /// Builds the catalog tool by tool: a listed tool that did not decode or
 /// cannot be represented is skipped, an over-long description is truncated,
 /// and of two tools with the same encoded name the first in listing order is
-/// kept. The listing it is built from is already bounded to
-/// [`MAX_MCP_TOOLS_PER_SERVER`] entries while it is paged
-/// (`listing::list_all`).
+/// kept. Page byte bounds are checked by `listing::list_all`.
 pub(crate) fn build_tool_catalog(
     config: &McpServerConfig,
     connection_generation: McpConnectionGeneration,
