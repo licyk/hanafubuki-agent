@@ -44,16 +44,16 @@ pub(super) fn render_popup(
     empty_message: &str,
     search_mode: SearchMode,
     query: &str,
-) {
+) -> Vec<(usize, Rect)> {
     state.hits.borrow_mut().clear();
     ratatui::widgets::Clear.render(area, buf);
     if area.is_empty() {
-        return;
+        return Vec::new();
     }
     // At very short heights, retain the selected result before adding controls.
     if area.height < 4 {
         render_rows(area, buf, rows, state, empty_message);
-        return;
+        return Vec::new();
     }
 
     let content = Rect {
@@ -102,7 +102,7 @@ pub(super) fn render_popup(
         .iter()
         .position(|mode| *mode == search_mode)
         .unwrap_or_default();
-    render_filled_tab_bar(&modes.map(SearchMode::label), active, inset(tabs), buf);
+    let tab_hits = render_filled_tab_bar(&modes.map(SearchMode::label), active, inset(tabs), buf);
     let query = if query.is_empty() {
         "Type to search mentions"
     } else {
@@ -133,6 +133,7 @@ pub(super) fn render_popup(
         }),
         buf,
     );
+    tab_hits
 }
 
 fn render_rows(

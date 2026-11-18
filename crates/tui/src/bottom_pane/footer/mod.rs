@@ -172,20 +172,7 @@ fn wrapped_footer(props: FooterProps<'_>, width: u16) -> Vec<Line<'static>> {
             if line.width() <= usize::from(width) {
                 return vec![line];
             }
-            crate::bottom_pane::selection_popup_common::wrap_styled_line(&line, width)
-                .into_iter()
-                .map(|line| {
-                    Line::from(
-                        line.spans
-                            .into_iter()
-                            .map(|span| {
-                                ratatui::text::Span::styled(span.content.into_owned(), span.style)
-                            })
-                            .collect::<Vec<_>>(),
-                    )
-                    .style(line.style)
-                })
-                .collect()
+            crate::wrapping::word_wrap_lines([line], usize::from(width))
         })
         .collect()
 }

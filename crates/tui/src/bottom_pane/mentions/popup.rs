@@ -23,6 +23,7 @@ pub(crate) struct Popup {
     candidates: Vec<Candidate>,
     rows: Vec<SearchResult>,
     search_mode: SearchMode,
+    tabs: std::cell::RefCell<Vec<(usize, Rect)>>,
     state: ScrollState,
 }
 
@@ -31,6 +32,31 @@ impl Popup {
         &mut self,
         mouse: ratatui::crossterm::event::MouseEvent,
     ) -> Option<ratatui::crossterm::event::KeyCode> {
+        use ratatui::crossterm::event::{KeyCode, MouseButton, MouseEventKind};
+        if let Some((index, _)) = self
+            .tabs
+            .borrow()
+            .iter()
+            .find(|(_, rect)| rect.contains((mouse.column, mouse.row).into()))
+        {
+            let mode = [
+                SearchMode::Results,
+                SearchMode::FilesystemOnly,
+                SearchMode::Tools,
+            ][*index];
+            return match mouse.kind {
+                MouseEventKind::ScrollUp => Some(KeyCode::Left),
+                MouseEventKind::ScrollDown => Some(KeyCode::Right),
+                MouseEventKind::Down(MouseButton::Left) if mode != self.search_mode => {
+                    Some(if mode == self.search_mode.next() {
+                        KeyCode::Right
+                    } else {
+                        KeyCode::Left
+                    })
+                }
+                _ => None,
+            };
+        }
         self.state
             .pointer(mouse, ratatui::crossterm::event::KeyCode::Enter)
     }
@@ -43,6 +69,7 @@ impl Popup {
             candidates,
             rows: Vec::new(),
             search_mode: SearchMode::Results,
+            tabs: Default::default(),
             state: ScrollState::new(),
         };
         popup.refresh_rows();
@@ -124,7 +151,7 @@ impl Popup {
 
 impl Widget for &Popup {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        render_popup(
+        *self.tabs.borrow_mut() = render_popup(
             area,
             buf,
             &self.rows,
