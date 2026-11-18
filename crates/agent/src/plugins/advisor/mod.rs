@@ -18,7 +18,7 @@ pub use request::AdvisorAnswer;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-pub use workspace::{Consultation, GitContext};
+pub use workspace::{AdvisorTrigger, Consultation, GitContext};
 
 use hanafubuki_agent_contracts::{
     BlockingService, Register, ToolPresenterRegistry, ToolSourceRegistry,

@@ -17,6 +17,15 @@ pub enum GitContext {
     Full,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AdvisorTrigger {
+    #[default]
+    Manual,
+    ExecutorRequested,
+    RepeatedToolCall,
+}
+
 #[derive(Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Consultation {
@@ -28,6 +37,8 @@ pub struct Consultation {
     pub include_untracked: Vec<String>,
     #[serde(skip)]
     pub(super) root: Option<PathBuf>,
+    #[serde(skip)]
+    pub(super) trigger: AdvisorTrigger,
 }
 
 #[derive(Clone)]
@@ -87,7 +98,13 @@ impl AdvisorWorkspace {
         if level != GitContext::None {
             let git = self
                 .git
-                .workspace_changes(&root, level == GitContext::Full)
+                .workspace_changes(
+                    &root,
+                    level == GitContext::Full,
+                    &files
+                        .repository_exclusions(&resolved_root)
+                        .map_err(|e| e.to_string())?,
+                )
                 .unwrap_or_else(|e| format!("Git evidence unavailable: {e}"));
             let limit = opts.git_chars.min(opts.history_chars / 2);
             let git = opts.outbound(git);

@@ -35,6 +35,7 @@ const LABELS: [&str; 10] = [
 
 #[derive(Debug)]
 pub(crate) struct StatusHistoryCell {
+    advisor: Option<hanafubuki_agent::AdvisorSessionStatus>,
     model: String,
     reasoning_effort: Option<String>,
     /// The effort a request carries in place of the configured one, when
@@ -77,6 +78,7 @@ pub(crate) fn new_status_output(report: &StatusReport) -> StatusHistoryCell {
             .as_ref()
             .map(|effort| effort.as_str().to_string()),
         reasoning_sent,
+        advisor: report.advisor.clone(),
         provider: report.provider.clone(),
         roots: report.roots.clone(),
         permission_mode: report.permission_mode,
@@ -169,6 +171,21 @@ impl HistoryCell for StatusHistoryCell {
         }
         lines.push(formatter.line("Model", model_spans));
         lines.push(formatter.line("Provider", vec![Span::from(self.provider.clone())]));
+        if let Some(a) = self
+            .advisor
+            .as_ref()
+            .filter(|a| a.active || a.consultations > 0)
+        {
+            let budget = a.limit.map(|n| format!(" of {n}")).unwrap_or_default();
+            lines.push(formatter.line(
+                "Advisor",
+                vec![Span::from(format!(
+                    "{} · {}{budget} consultations",
+                    if a.active { "active" } else { "inactive" },
+                    a.consultations
+                ))],
+            ));
+        }
         let mut roots = self.roots.iter().map(|root| {
             let root = root.to_string_lossy();
             if root.width() > value_width {

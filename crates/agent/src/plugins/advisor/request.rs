@@ -1,4 +1,4 @@
-use super::follow_up::{next_id, Previous};
+use super::follow_up::{next_id, DisclosureScope, Previous};
 use super::history::{conversation, Evidence};
 use super::Consultation;
 use super::{AdvisorOptions, AdvisorService};
@@ -22,6 +22,12 @@ pub struct AdvisorAnswer {
     pub text: String,
     pub usage: Option<ModelUsage>,
     pub scout_usage: Option<ModelUsage>,
+}
+
+pub(super) struct SampleInput<'a> {
+    pub prompt: &'a str,
+    pub evidence: &'a Evidence,
+    pub consultation: Option<&'a mut bool>,
 }
 
 impl AdvisorService {
@@ -54,7 +60,7 @@ impl AdvisorService {
                 "Choose an Advisor provider and model in /advisor-settings first".into(),
             )
         })?;
-        let (executor, mut history, root, trusted) =
+        let (executor, mut history, root, scope) =
             self.initial_evidence(id, &opts, &args, &cancel).await?;
         let consult = |provider: &str, model: &str| {
             if opts.skip_same_model && executor.0 == provider && executor.1 == model {
@@ -70,7 +76,7 @@ impl AdvisorService {
             id,
             &opts,
             &root,
-            trusted,
+            scope,
             &history,
             &args.include_tracked_files,
         );
@@ -138,7 +144,19 @@ impl AdvisorService {
         consult(provider, model)?;
         let token = cancel.child();
         let request = async {
-            self.count_consultation(id, &opts)?;
+            if opts.consultation_limit.is_some_and(|limit| {
+                self.consultations
+                    .lock()
+                    .get(&id)
+                    .copied()
+                    .unwrap_or_default()
+                    >= limit
+            }) {
+                return Err(ModelError::InvalidRequest(
+                    "Advisor consultation budget exhausted for this session".into(),
+                ));
+            }
+            let mut started = false;
             let mut history = history;
             let scout_usage =
                 if opts.scout && !opts.simple && self.active(id) && args.follow_up_to.is_none() {
@@ -161,9 +179,12 @@ impl AdvisorService {
                 .sample(
                     (provider, model),
                     &opts,
-                    &prompt,
                     id,
-                    &history,
+                    SampleInput {
+                        prompt: &prompt,
+                        evidence: &history,
+                        consultation: Some(&mut started),
+                    },
                     token.clone(),
                 )
                 .await;
@@ -182,7 +203,7 @@ impl AdvisorService {
                     {
                         return Err(error);
                     }
-                    self.sample((fallback, backup), &opts, &prompt,id, &history, token.clone()).await.map_err(|second| {
+                    self.sample((fallback, backup), &opts,id, SampleInput {prompt:&prompt,evidence:&history,consultation:Some(&mut started)}, token.clone()).await.map_err(|second| {
                         ModelError::Protocol(format!("Advisor {provider}/{model}: {error}; fallback {fallback}/{backup}: {second}"))
                     })
                 }
@@ -198,6 +219,14 @@ impl AdvisorService {
             result = request => result.map_err(|e|match e {ModelError::Cancelled=>AgentError::Cancelled, other=>AgentError::Model(other.to_string())}),
         }?;
         if Arc::ptr_eq(&opts, &self.options.read()) {
+            if opts.record_outcomes {
+                self.ledger
+                    .issued
+                    .lock()
+                    .entry(id)
+                    .or_default()
+                    .insert(answer.advice_id.clone(), args.trigger);
+            }
             self.previous.lock().insert(
                 id,
                 Previous {
@@ -208,7 +237,7 @@ impl AdvisorService {
                     evidence: history.clone(),
                     created: std::time::Instant::now(),
                     root: PathKey::of(&root),
-                    trusted,
+                    scope,
                     options: opts,
                     user_item: history.user_item,
                     claimed: false,
@@ -224,14 +253,31 @@ impl AdvisorService {
         opts: &Arc<AdvisorOptions>,
         args: &Consultation,
         cancel: &CancellationToken,
-    ) -> Result<((String, String), Evidence, std::path::PathBuf, bool), AgentError> {
+    ) -> Result<
+        (
+            (String, String),
+            Evidence,
+            std::path::PathBuf,
+            DisclosureScope,
+        ),
+        AgentError,
+    > {
         let reader = self.conversations.clone();
-        let settings = opts.clone();
+        let mut settings = opts.as_ref().clone();
         let reading = cancel.clone();
         let workspace = self.workspace.clone();
         let source = args.clone();
         self.blocking
             .run("advisor conversation", move || {
+                if settings.use_model_window {
+                    if let Some(window) = settings
+                        .primary()
+                        .and_then(|(p, m)| reader.advisor_model(p, m).ok())
+                        .and_then(|(_, facts)| facts.context_window)
+                    {
+                        settings.history_chars = token_budget_bytes(window.value);
+                    }
+                }
                 let executor = reader.executor_model(id)?;
                 if !settings.executor_models.is_empty()
                     && !settings
@@ -249,11 +295,16 @@ impl AdvisorService {
                 let trusted = reader
                     .trusts_project(&root)
                     .map_err(AgentError::InvalidInput)?;
+                let scope = DisclosureScope {
+                    trigger: source.trigger,
+                    trusted,
+                    permissions: reader.advisor_permissions(id)?,
+                };
                 Ok::<_, AgentError>((
                     executor,
                     conversation(&reader, id, &settings, &reading)?,
                     root,
-                    trusted,
+                    scope,
                 ))
             })
             .await
@@ -264,7 +315,7 @@ impl AdvisorService {
         id: AgentSessionId,
         opts: &Arc<AdvisorOptions>,
         root: &std::path::Path,
-        trusted: bool,
+        scope: DisclosureScope,
         history: &Evidence,
         files: &[String],
     ) -> Option<(Previous, bool)> {
@@ -275,7 +326,7 @@ impl AdvisorService {
             .filter(|p| {
                 Arc::ptr_eq(&p.options, opts)
                     && p.root == PathKey::of(root)
-                    && p.trusted == trusted
+                    && p.scope == scope
                     && p.user_item == history.user_item
                     && !(history.recent_tools.len() == 3
                         && history
@@ -315,11 +366,20 @@ impl AdvisorService {
         &self,
         (provider, model): (&str, &str),
         opts: &AdvisorOptions,
-        prompt: &str,
         id: AgentSessionId,
-        evidence: &Evidence,
+        input: SampleInput<'_>,
         cancel: CancellationToken,
     ) -> Result<AdvisorAnswer, ModelError> {
+        let SampleInput {
+            prompt,
+            evidence,
+            consultation,
+        } = input;
+        let instructions = if consultation.is_some() {
+            INSTRUCTIONS
+        } else {
+            "Select evidence groups from numbered untrusted previews. Return only a JSON array of group IDs."
+        };
         let reader = self.conversations.clone();
         let target = (provider.to_string(), model.to_string());
         let (session, facts) = self
@@ -341,7 +401,7 @@ impl AdvisorService {
         let start = history.ceil_char_boundary(
             history
                 .len()
-                .saturating_sub(window.saturating_sub(prompt.len() + INSTRUCTIONS.len())),
+                .saturating_sub(window.saturating_sub(prompt.len() + instructions.len())),
         );
         let mut input = vec![hanafubuki_agent_kernel::ModelUserContent::InputText {
             text: format!("{prompt}{}", &history[start..]),
@@ -379,7 +439,7 @@ impl AdvisorService {
         }
         let request = ModelRequest {
             model: model.into(),
-            instructions: INSTRUCTIONS.into(),
+            instructions: instructions.into(),
             input: vec![ModelInputItem::UserMessage { content: input }],
             tools: vec![],
             tool_choice: ModelToolChoice::None,
@@ -397,6 +457,15 @@ impl AdvisorService {
         let session = session
             .model_session()
             .map_err(ModelError::InvalidRequest)?;
+        if cancel.is_cancelled() {
+            return Err(ModelError::Cancelled);
+        }
+        if let Some(started) = consultation {
+            if !*started {
+                self.count_consultation(id, opts)?;
+                *started = true;
+            }
+        }
         let mut stream = session.stream(request, cancel).await?;
         let mut text = Vec::new();
         while let Some(event) = stream.next().await {

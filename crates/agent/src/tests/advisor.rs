@@ -503,3 +503,89 @@ async fn workspace_handoff_requires_a_named_tracked_file_and_transmits_only_sele
         .is_empty());
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn session_activation_is_local_and_a_cancelled_manual_request_preserves_the_fallback_allowance(
+) {
+    let server = FakeServer::start(vec![(assistant_events("backup answer"), Duration::ZERO)]).await;
+    let (service, paths) = configured_service("advisor-fallback", &server.base_url);
+    service.start_plugins().await;
+    let first = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap()
+        .id;
+    let second = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap()
+        .id;
+    service
+        .write_setting_values(SettingsWrite {
+            changes: [
+                ("provider", json!("unavailable")),
+                ("model", json!("primary")),
+                ("fallbackProvider", json!("provider-1")),
+                ("fallbackModel", json!("backup")),
+                ("activationScope", json!("session")),
+                ("consultationLimit", json!(1)),
+            ]
+            .map(|(k, v)| SettingChange {
+                key: format!("pluginOptions.advisor.{k}"),
+                op: SettingWriteOp::Set(v),
+            })
+            .into(),
+        })
+        .await
+        .unwrap();
+    service.set_advisor_active(first, true).await.unwrap();
+    assert!(service.advisor_session_status(first).unwrap().active);
+    assert!(!service.advisor_session_status(second).unwrap().active);
+    let cancel = hanafubuki_agent_contracts::CancellationToken::default();
+    cancel.cancel();
+    assert!(matches!(
+        service
+            .consult_advisor(second, "cancel".into(), cancel)
+            .await,
+        Err(hanafubuki_agent_kernel::AgentError::Cancelled)
+    ));
+    assert_eq!(
+        service
+            .advisor_session_status(second)
+            .unwrap()
+            .consultations,
+        0
+    );
+    let answer = service
+        .consult_advisor(second, "one-off".into(), Default::default())
+        .await
+        .unwrap();
+    assert_eq!(answer.model, "backup");
+    assert_eq!(server.requests().len(), 1);
+    let status = service.advisor_session_status(second).unwrap();
+    assert_eq!(status.consultations, 1);
+    assert!(!status.active);
+    service
+        .write_setting_values(SettingsWrite {
+            changes: vec![SettingChange {
+                key: "pluginOptions.advisor.consultationLimit".into(),
+                op: SettingWriteOp::Reset,
+            }],
+        })
+        .await
+        .unwrap();
+    assert_eq!(service.advisor_session_status(second).unwrap().limit, None);
+    service
+        .set_plugin_enabled("advisor".into(), false)
+        .await
+        .unwrap();
+    assert!(service
+        .consult_advisor(second, "after disabling".into(), Default::default())
+        .await
+        .is_err());
+    assert_eq!(server.requests().len(), 1);
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    std::fs::remove_dir_all(paths.app_data_dir).unwrap();
+}

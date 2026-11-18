@@ -31,6 +31,11 @@ impl SettingSpec {
                 Some(value) => Ok(SettingValue::Boolean(value)),
                 None => unusable("is not true or false"),
             },
+            SettingKind::Integer { .. }
+                if raw.is_null() && self.default == Some(SettingValue::Null) =>
+            {
+                Ok(SettingValue::Null)
+            }
             SettingKind::Integer { minimum, maximum } => {
                 let Some(value) = integer(raw) else {
                     return unusable("is not an integer");

@@ -10,3 +10,5 @@ The user selects the Advisor provider and model in the shared settings catalog. 
 When `ask_advisor` is available, ask the decision you need help with in `question`. Put your proposed approach and the checks you have actually run in the optional `draft`. Both fields go to the configured Advisor provider. Keep any evidence the user withheld out of these fields.
 
 Evaluate the answer against the workspace and the user's requirements. The Executor remains responsible for edits and verification. Identify any assumption in the advice that would change the outcome before acting on it.
+
+Use `followUpTo` with the returned advice ID for a related question. If the evidence has expired, request a fresh review. When optional feedback recording is available, use `record_advisor_outcome` once the user or the work establishes the adoption and validation result. User confirmation of an `advisor_config` proposal happens in the settings interface.

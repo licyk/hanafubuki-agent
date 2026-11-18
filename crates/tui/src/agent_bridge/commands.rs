@@ -43,6 +43,7 @@ pub(crate) struct RoleChoices {
 /// What `/status` shows.
 #[derive(Debug)]
 pub(crate) struct StatusReport {
+    pub(crate) advisor: Option<hanafubuki_agent::AdvisorSessionStatus>,
     pub(crate) session: AgentSessionRuntimeSnapshot,
     /// The session's Provider, by its name.
     pub(crate) provider: String,
@@ -191,6 +192,7 @@ impl AgentBridge {
                         );
                     Ok(Some(AgentReply::Update(Box::new(
                         TurnUpdate::StatusReport(Box::new(StatusReport {
+                            advisor: agent.advisor_session_status(session.id),
                             session,
                             provider,
                             permission_mode,

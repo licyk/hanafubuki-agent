@@ -72,21 +72,30 @@ impl GitQueries {
     }
 
     /// Limits review evidence to the selected workspace, including when it is a repository subdirectory.
-    pub fn workspace_changes(&self, cwd: &Path, patch: bool) -> Result<String, WorktreeError> {
-        let mut text = git_text(
-            &self.executor,
-            cwd,
-            &["status", "--porcelain", "--untracked-files=all", "--", "."],
-        )?;
+    pub fn workspace_changes(
+        &self,
+        cwd: &Path,
+        patch: bool,
+        excluded: &[String],
+    ) -> Result<String, WorktreeError> {
+        let exclusions = excluded
+            .iter()
+            .map(|p| format!(":(exclude,literal){p}"))
+            .collect::<Vec<_>>();
+        let query = |flags: Vec<&str>| {
+            let mut args: Vec<&_> = flags.iter().copied().chain(["--", "."]).collect();
+            args.extend(exclusions.iter().map(String::as_str));
+            git_text(&self.executor, cwd, &args)
+        };
+        let mut text = query(vec!["status", "--porcelain", "--untracked-files=all"])?;
         if patch {
             for staged in [false, true] {
                 let mut args = vec!["diff", "--relative", "--no-ext-diff", "--no-textconv"];
                 if staged {
                     args.push("--cached");
                 }
-                args.extend(["--", "."]);
                 text.push('\n');
-                text.push_str(&git_text(&self.executor, cwd, &args)?);
+                text.push_str(&query(args)?);
             }
         }
         Ok(text)

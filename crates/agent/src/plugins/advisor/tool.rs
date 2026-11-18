@@ -38,7 +38,7 @@ impl AdvisorSource {
         let name = "record_advisor_outcome";
         let outcome=sourced(service.clone(),name,ToolDescriptor {
             name:ToolName::parse(name).map_err(kardia_core::Error::new)?,
-            description:"Record the adoption and validation of the latest Advisor response in this conversation.".into(),
+            description:"Record the adoption and validation of an Advisor response in this conversation.".into(),
             input_schema:json!({"type":"object","properties":{"adviceId":{"type":"string"},"adoption":{"enum":["followed","not-followed","unknown"]},"validationStatus":{"enum":["passed","failed","not-run","unknown"]}},"required":["adviceId","adoption","validationStatus"],"additionalProperties":false}),
             exposure:ToolExposure::Direct,execution_class:ToolExecutionClass::Exclusive,effect:ToolEffect::Mutating,
             action:AgentActivityAction::fixed(name),memory_effect:AgentMemoryContextEffect::None,timeout:None,
@@ -151,20 +151,17 @@ impl AgentToolHandler for AskAdvisor {
             if self.descriptor.action.as_str() == "record_advisor_outcome" {
                 let feedback: super::outcomes::Feedback = serde_json::from_value(call.arguments)
                     .map_err(|e| AgentToolError::Failed(e.to_string()))?;
-                if !self.service.options.read().record_outcomes
-                    || !self
-                        .service
-                        .previous
-                        .lock()
-                        .get(&id)
-                        .is_some_and(|p| p.id == feedback.advice_id)
-                {
-                    return Err(AgentToolError::Failed("Recording is disabled or the advice ID does not match the latest consultation.".into()));
+                if !self.service.options.read().record_outcomes {
+                    return Err(AgentToolError::Failed(
+                        "Advisor outcome recording is disabled".into(),
+                    ));
                 }
                 let ledger = self.service.ledger.clone();
                 self.service
                     .blocking
-                    .run("record advisor outcome", move || ledger.record(feedback))
+                    .run("record advisor outcome", move || {
+                        ledger.record(id, feedback)
+                    })
                     .await
                     .map_err(|e| AgentToolError::Failed(e.to_string()))?
                     .map_err(AgentToolError::Failed)?;
@@ -172,6 +169,7 @@ impl AgentToolHandler for AskAdvisor {
             }
             let mut args: Consultation = serde_json::from_value(call.arguments)
                 .map_err(|e| AgentToolError::Failed(e.to_string()))?;
+            args.trigger = super::AdvisorTrigger::ExecutorRequested;
             args.root = call
                 .turn
                 .get::<hanafubuki_agent_contracts::TurnWorkspace>()

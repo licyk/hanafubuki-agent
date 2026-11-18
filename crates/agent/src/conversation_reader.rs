@@ -33,6 +33,20 @@ pub(crate) struct AgentConversationReader {
 }
 
 impl AgentConversationReader {
+    pub(crate) fn advisor_permissions(
+        &self,
+        id: AgentSessionId,
+    ) -> Result<(crate::AgentPermissionMode, Option<crate::AgentSandboxMode>), AgentError> {
+        let defaults = self.config.settings().map_err(AgentError::Persistence)?;
+        Ok((
+            self.core
+                .session_permission_mode(id)?
+                .unwrap_or(defaults.permission_mode),
+            self.core
+                .session_sandbox_mode(id)?
+                .or(defaults.sandbox_mode),
+        ))
+    }
     pub(crate) fn trusts_project(&self, directory: &std::path::Path) -> Result<bool, String> {
         self.config.trusts_project(directory)
     }
@@ -61,7 +75,13 @@ impl AgentConversationReader {
         let registry = self.config.providers()?;
         let provider = resolve_settings_provider(&registry, provider_id)?;
         let protocol = model_api_protocol(provider.definition.protocol);
-        let configured = crate::service::configured_model_facts(&provider.definition, None, model);
+        let mut configured =
+            crate::service::configured_model_facts(&provider.definition, None, model);
+        if registry.model_policy.input_capabilities.image_input
+            == hanafubuki_agent_config::AgentImageInputPolicy::Disabled
+        {
+            configured.image_input = Some(false);
+        }
         let metadata = self
             .core
             .model_metadata(

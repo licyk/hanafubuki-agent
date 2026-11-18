@@ -8,6 +8,13 @@ use std::time::{Duration, Instant};
 
 static NEXT: AtomicU64 = AtomicU64::new(1);
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) struct DisclosureScope {
+    pub trigger: super::AdvisorTrigger,
+    pub trusted: bool,
+    pub permissions: (crate::AgentPermissionMode, Option<crate::AgentSandboxMode>),
+}
+
 #[derive(Clone)]
 pub(super) struct Previous {
     pub id: String,
@@ -17,7 +24,7 @@ pub(super) struct Previous {
     pub evidence: Arc<Evidence>,
     pub created: Instant,
     pub root: PathKey,
-    pub trusted: bool,
+    pub scope: DisclosureScope,
     pub options: Arc<AdvisorOptions>,
     pub user_item: Option<u64>,
     pub claimed: bool,

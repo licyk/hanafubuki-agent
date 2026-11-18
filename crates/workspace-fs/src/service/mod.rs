@@ -65,6 +65,29 @@ impl WorkspaceFsService {
         })
     }
 
+    /// Protected subtrees to omit when a repository query reads the workspace outside this service.
+    pub fn repository_exclusions(
+        &self,
+        root: &hanafubuki_agent_foundation::paths::ResolvedPath,
+    ) -> Result<Vec<String>, WorkspaceFsError> {
+        let policy = self.policy();
+        policy.ensure_unprotected(root)?;
+        let depth = root.native().components().count();
+        Ok(policy
+            .protected_roots()
+            .iter()
+            .filter(|p| p.starts_with(root))
+            .map(|p| {
+                p.native()
+                    .components()
+                    .skip(depth)
+                    .map(|c| c.as_os_str().to_string_lossy())
+                    .collect::<Vec<_>>()
+                    .join("/")
+            })
+            .collect())
+    }
+
     fn policy(&self) -> Arc<WorkspaceFsPolicy> {
         self.policy.read().clone()
     }

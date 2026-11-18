@@ -35,9 +35,12 @@ impl AdvisorService {
             .sample(
                 (&executor.0, &executor.1),
                 opts,
-                &prompt,
                 id,
-                &brief,
+                super::request::SampleInput {
+                    prompt: &prompt,
+                    evidence: &brief,
+                    consultation: None,
+                },
                 cancel.clone(),
             )
             .await;

@@ -5,12 +5,22 @@ fn reports_retained_feedback_and_skips_an_unreadable_line() {
     let path = dir.path().join("outcomes.jsonl");
     std::fs::write(&path, b"broken\n").unwrap();
     let ledger = Ledger::new(path.clone());
+    let id = AgentSessionId::new(1);
     ledger
-        .record(Feedback {
-            advice_id: "private-id".into(),
-            adoption: Adoption::Followed,
-            validation_status: Validation::Passed,
-        })
+        .issued
+        .lock()
+        .entry(id)
+        .or_default()
+        .insert("private-id".into(), AdvisorTrigger::Manual);
+    ledger
+        .record(
+            id,
+            Feedback {
+                advice_id: "private-id".into(),
+                adoption: Adoption::Followed,
+                validation_status: Validation::Passed,
+            },
+        )
         .unwrap();
     let stats = ledger.stats().unwrap();
     assert_eq!((stats.total, stats.malformed), (1, 1));

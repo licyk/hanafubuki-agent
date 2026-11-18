@@ -39,6 +39,7 @@ pub(super) struct AdvisorOptions {
     pub executor_provider: Option<String>,
     pub executor_model: Option<String>,
     pub executor_effort: Option<ModelReasoningEffort>,
+    pub use_model_window: bool,
     pub history_chars: usize,
     pub activation_scope: ActivationScope,
     pub active: bool,
@@ -73,6 +74,7 @@ impl Default for AdvisorOptions {
             executor_provider: None,
             executor_model: None,
             executor_effort: None,
+            use_model_window: false,
             history_chars: 15_000,
             activation_scope: ActivationScope::Persistent,
             active: false,
@@ -222,6 +224,11 @@ pub(crate) fn advisor_schema() -> PluginOptionSchema {
             "Pin executor reasoning effort on activation",
             text(),
         ),
+        (
+            "useModelWindow",
+            "Use the Advisor context window for conversation history",
+            SettingKind::Boolean,
+        ),
         ("provider", "Advisor provider ID", text()),
         ("model", "Advisor model ID", text()),
         ("fallbackProvider", "Fallback provider ID", text()),
@@ -259,7 +266,11 @@ pub(crate) fn advisor_schema() -> PluginOptionSchema {
     .into_iter()
     .map(|(key, label, kind)| {
         let mut spec = SettingSpec::new(key, label, kind);
-        spec.default = spec.check(&defaults[key]).ok();
+        spec.default = if defaults[key].is_null() {
+            Some(hanafubuki_agent_config::SettingValue::Null)
+        } else {
+            spec.check(&defaults[key]).ok()
+        };
         spec
     })
     .collect();

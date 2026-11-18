@@ -84,6 +84,11 @@ pub(super) fn conversation(
                     user_item.get_or_insert(item.item_id.value());
                     (format!("user: {text}"), images)
                 }
+                ConversationItem::CompactionSummary { summary, .. }
+                    if opts.excluded_tools.is_empty() && opts.summary_tools.is_empty() =>
+                {
+                    (format!("Conversation summary: {summary}"), Vec::new())
+                }
                 ConversationItem::AssistantMessage { text, .. } => {
                     (format!("assistant: {text}"), Vec::new())
                 }

@@ -109,7 +109,18 @@ impl ToolLifecycleHook for Gate {
                 state.count = 0;
             }
             let question=format!("The executor proposes repeating tool {} with identical arguments. Polling can produce new results. Review the available evidence and return only JSON with decision (proceed, revise or blocked) and a short reason.",call.tool_name);
-            let answer = self.0.manual(id, question, cancel.clone()).await;
+            let answer = self
+                .0
+                .consult(
+                    id,
+                    super::Consultation {
+                        question,
+                        trigger: super::AdvisorTrigger::RepeatedToolCall,
+                        ..Default::default()
+                    },
+                    cancel.clone(),
+                )
+                .await;
             if cancel.is_cancelled() {
                 return Err(hanafubuki_agent_contracts::ToolLifecycleHookError::Cancelled);
             }
