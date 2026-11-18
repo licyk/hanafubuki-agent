@@ -1,4 +1,5 @@
 //! A tool-free second opinion on the current conversation.
+mod history;
 mod options;
 mod request;
 mod tool;

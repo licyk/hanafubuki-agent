@@ -1,5 +1,5 @@
+use super::history::{conversation, Evidence};
 use super::{AdvisorOptions, AdvisorService};
-use crate::conversation_reader::ConversationMessage;
 use crate::plugins::wait_for_cancellation;
 use hanafubuki_agent_contracts::token_budget_bytes;
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
@@ -8,7 +8,6 @@ use hanafubuki_agent_kernel::{
     ModelOutputItem, ModelReasoningConfig, ModelRequest, ModelToolChoice, ModelUsage,
 };
 use serde::Serialize;
-use std::ops::ControlFlow;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -34,35 +33,22 @@ impl AdvisorService {
             )
         })?;
         let reader = self.conversations.clone();
-        let history_budget = opts.history_chars;
+        let settings = opts.clone();
+        let reading = cancel.clone();
         let (executor, history) = self
             .blocking
             .run("advisor conversation", move || {
                 let executor = reader.executor_model(id)?;
-                let mut remaining = history_budget;
-                let mut history = Vec::new();
-                if remaining > 0 {
-                    reader.visit_messages(id, |msg| {
-                        let (role, text) = match msg {
-                            ConversationMessage::User(text) => ("user", text),
-                            ConversationMessage::Assistant(text) => ("assistant", text),
-                        };
-                        let cut = text
-                            .char_indices()
-                            .nth(remaining)
-                            .map_or(text.len(), |(i, _)| i);
-                        let excerpt = &text[..cut];
-                        remaining = remaining.saturating_sub(excerpt.chars().count());
-                        history.push(format!("{role}: {excerpt}"));
-                        if remaining == 0 {
-                            ControlFlow::Break(())
-                        } else {
-                            ControlFlow::Continue(())
-                        }
-                    })?;
+                if !settings.executor_models.is_empty()
+                    && !settings
+                        .executor_models
+                        .contains(&format!("{}/{}", executor.0, executor.1))
+                {
+                    return Err(AgentError::InvalidInput(
+                        "The executor model is outside the Advisor allowlist".into(),
+                    ));
                 }
-                history.reverse();
-                Ok::<_, AgentError>((executor, history.join("\n")))
+                Ok::<_, AgentError>((executor, conversation(&reader, id, &settings, &reading)?))
             })
             .await
             .map_err(|e| AgentError::Model(e.to_string()))??;
@@ -80,10 +66,18 @@ impl AdvisorService {
             "Question: {question}\nExecutor draft (unverified): {}\nConversation evidence:\n",
             draft.as_deref().unwrap_or("")
         );
+        let prompt = opts.outbound(prompt);
         let token = cancel.child();
         let request = async {
             let primary = self
-                .sample(provider, model, &opts, &prompt, &history, token.clone())
+                .sample(
+                    (provider, model),
+                    &opts,
+                    &prompt,
+                    id,
+                    &history,
+                    token.clone(),
+                )
                 .await;
             match primary {
                 Err(error) if retryable(&error) && !token.is_cancelled() => {
@@ -98,7 +92,7 @@ impl AdvisorService {
                     {
                         return Err(error);
                     }
-                    self.sample(fallback, backup, &opts, &prompt, &history, token.clone()).await.map_err(|second| {
+                    self.sample((fallback, backup), &opts, &prompt,id, &history, token.clone()).await.map_err(|second| {
                         ModelError::Protocol(format!("Advisor {provider}/{model}: {error}; fallback {fallback}/{backup}: {second}"))
                     })
                 }
@@ -115,11 +109,11 @@ impl AdvisorService {
 
     async fn sample(
         &self,
-        provider: &str,
-        model: &str,
+        (provider, model): (&str, &str),
         opts: &AdvisorOptions,
         prompt: &str,
-        history: &str,
+        id: AgentSessionId,
+        evidence: &Evidence,
         cancel: CancellationToken,
     ) -> Result<AdvisorAnswer, ModelError> {
         let reader = self.conversations.clone();
@@ -139,18 +133,49 @@ impl AdvisorService {
             .context_window
             .map(|s| token_budget_bytes(s.value))
             .unwrap_or(usize::MAX);
+        let history = &evidence.text;
         let start = history.ceil_char_boundary(
             history
                 .len()
                 .saturating_sub(window.saturating_sub(prompt.len() + INSTRUCTIONS.len())),
         );
+        let mut input = vec![hanafubuki_agent_kernel::ModelUserContent::InputText {
+            text: format!("{prompt}{}", &history[start..]),
+        }];
+        if !evidence.images.is_empty() {
+            if facts.image_input.is_some_and(|f| f.value) {
+                let reader = self.conversations.clone();
+                let images = evidence.images.clone();
+                let content = self
+                    .blocking
+                    .run("advisor images", move || {
+                        images
+                            .iter()
+                            .map(|image| {
+                                reader.image(id, image).map(|data| {
+                                    hanafubuki_agent_kernel::ModelUserContent::InputImage {
+                                        mime_type: image.mime_type.clone(),
+                                        data,
+                                        detail: hanafubuki_agent_kernel::ModelImageDetail::Auto,
+                                    }
+                                })
+                            })
+                            .collect::<Result<Vec<_>, _>>()
+                    })
+                    .await
+                    .map_err(|e| ModelError::InvalidRequest(e.to_string()))?
+                    .map_err(|e| ModelError::InvalidRequest(e.to_string()))?;
+                input.extend(content);
+            } else {
+                input.push(hanafubuki_agent_kernel::ModelUserContent::InputText {
+                    text: "Image pixels withheld for this model.".into(),
+                });
+            }
+        }
         let request = ModelRequest {
             model: model.into(),
             instructions: INSTRUCTIONS.into(),
-            input: vec![ModelInputItem::user_text(format!(
-                "{prompt}{}",
-                &history[start..]
-            ))],
+            input: vec![ModelInputItem::UserMessage { content: input }],
             tools: vec![],
             tool_choice: ModelToolChoice::None,
             parallel_tool_calls: false,

@@ -134,3 +134,78 @@ async fn live_advisor_routes_a_manual_question_to_the_selected_model() {
         .is_empty());
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn advisor_tool_history_applies_disclosure_policy_before_sending() {
+    let executor = FakeServer::start(vec![
+        (
+            tool_events("list_agents", "{}"),
+            Duration::ZERO,
+        ),
+        (assistant_events("first turn complete"), Duration::ZERO),
+    ])
+    .await;
+    let advisor = FakeServer::start(vec![(assistant_events("reviewed"), Duration::ZERO); 2]).await;
+    let (service, paths, _) = service_with_config("advisor-disclosure", |_, config| {
+        configure_test_provider(config, &executor.base_url, None);
+        add_test_provider(config, "second", "Second", &advisor.base_url);
+    });
+    service.start_plugins().await;
+    let id = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap()
+        .id;
+    service
+        .start_turn(id, "Review token=secret-marker".to_owned().into())
+        .await
+        .unwrap();
+    let mut changes = vec![];
+    for (key, value) in [
+        ("provider", json!("second")),
+        ("model", json!("advisor")),
+        ("redactSecrets", json!(true)),
+        ("summaryTools", json!(["list_agents"])),
+    ] {
+        changes.push(SettingChange {
+            key: format!("pluginOptions.advisor.{key}"),
+            op: SettingWriteOp::Set(value),
+        });
+    }
+    service
+        .write_setting_values(SettingsWrite { changes })
+        .await
+        .unwrap();
+    service
+        .consult_advisor(id, "password=private-question".into(), Default::default())
+        .await
+        .unwrap();
+    let request = String::from_utf8(advisor.requests()[0].body.clone()).unwrap();
+    assert!(
+        !request.contains("secret-marker") && !request.contains("private-question"),
+        "{request}"
+    );
+    assert!(request.contains("result parts"), "{request}");
+    service
+        .write_setting_values(SettingsWrite {
+            changes: vec![SettingChange {
+                key: "pluginOptions.advisor.excludedTools".into(),
+                op: SettingWriteOp::Set(json!(["list_agents"])),
+            }],
+        })
+        .await
+        .unwrap();
+    service
+        .consult_advisor(id, "check again".into(), Default::default())
+        .await
+        .unwrap();
+    let request = String::from_utf8(advisor.requests()[1].body.clone()).unwrap();
+    assert!(
+        !request.contains("list_agents"),
+        "{request}"
+    );
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    std::fs::remove_dir_all(paths.app_data_dir).unwrap();
+}

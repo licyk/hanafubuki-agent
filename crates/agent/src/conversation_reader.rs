@@ -33,6 +33,14 @@ pub(crate) struct AgentConversationReader {
 }
 
 impl AgentConversationReader {
+    pub(crate) fn image(
+        &self,
+        id: AgentSessionId,
+        image: &hanafubuki_agent_kernel::AgentImageAttachmentRef,
+    ) -> Result<Vec<u8>, AgentError> {
+        self.core.read_image_attachment(id, image)
+    }
+
     pub(crate) fn executor_model(
         &self,
         session_id: AgentSessionId,
