@@ -97,6 +97,9 @@ impl App {
             }
             self.run_settings_requests(tui);
             self.schedule_frame(Instant::now());
+        } else if self.chat_widget.handle_picker_mouse(mouse) {
+            self.queue_settings_page_check();
+            self.schedule_frame(Instant::now());
         }
         true
     }

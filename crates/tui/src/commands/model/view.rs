@@ -461,6 +461,16 @@ impl Renderable for Heading {
 }
 
 impl BottomPaneView for ModelListView {
+    fn pointer_key(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<ratatui::crossterm::event::KeyCode> {
+        match &mut self.state {
+            State::Listing(listing) => listing.list.pointer_key(mouse),
+            _ => None,
+        }
+    }
+
     fn handle_key_event(&mut self, key: KeyEvent) {
         let State::Listing(listing) = &mut self.state else {
             self.complete = key.code == KeyCode::Esc;

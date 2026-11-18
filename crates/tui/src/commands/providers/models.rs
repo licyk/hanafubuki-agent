@@ -242,6 +242,16 @@ impl Renderable for Heading {
 }
 
 impl BottomPaneView for ModelPicker {
+    fn pointer_key(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<ratatui::crossterm::event::KeyCode> {
+        match &mut self.stage {
+            Stage::List(listed) => listed.list.pointer_key(mouse),
+            _ => None,
+        }
+    }
+
     fn handle_key_event(&mut self, key: KeyEvent) {
         match &mut self.stage {
             Stage::Listing => self.complete = key.code == KeyCode::Esc,

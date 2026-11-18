@@ -371,6 +371,13 @@ impl ListSelectionView {
 }
 
 impl BottomPaneView for ListSelectionView {
+    fn pointer_key(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<ratatui::crossterm::event::KeyCode> {
+        self.state.pointer(mouse, KeyCode::Enter)
+    }
+
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event {
             // Some terminals (or configurations) send Control key chords as
@@ -542,15 +549,17 @@ impl Renderable for ListSelectionView {
             rows_width.saturating_add(1),
         );
         let facts_header = self.facts_header(&rows, outer_content_area.width);
-        let [header_area, _, search_area, facts_header_area, list_area] = Layout::vertical([
-            Constraint::Max(header_height),
-            Constraint::Max(1),
-            Constraint::Length(if self.is_searchable { 1 } else { 0 }),
-            Constraint::Length(u16::from(facts_header.is_some())),
-            Constraint::Length(rows_height),
-        ])
-        .areas(content_area);
+        let [header_area, position_area, search_area, facts_header_area, list_area] =
+            Layout::vertical([
+                Constraint::Max(header_height),
+                Constraint::Max(1),
+                Constraint::Length(if self.is_searchable { 1 } else { 0 }),
+                Constraint::Length(u16::from(facts_header.is_some())),
+                Constraint::Length(rows_height),
+            ])
+            .areas(content_area);
 
+        Line::from(self.state.position(rows.len()).dim()).render(position_area, buf);
         if header_area.height < header_height {
             let [header_area, elision_area] =
                 Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(header_area);
