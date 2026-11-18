@@ -11,6 +11,9 @@ use hanafubuki_agent_tool_contracts::{ToolOutput, ToolOutputContent};
 
 #[derive(Clone, Default)]
 pub(super) struct Evidence {
+    pub user_item: Option<u64>,
+    pub recent_tools: Vec<u64>,
+    pub file_images: Vec<hanafubuki_agent_kernel::ModelUserContent>,
     pub text: String,
     pub images: Vec<AgentImageAttachmentRef>,
 }
@@ -31,6 +34,8 @@ pub(super) fn conversation(
     opts: &AdvisorOptions,
     cancel: &CancellationToken,
 ) -> Result<Evidence, AgentError> {
+    let mut user_item = None;
+    let mut recent_tools = Vec::new();
     let mut groups = Vec::new();
     let mut images = Vec::new();
     let mut image_bytes = 0;
@@ -38,7 +43,7 @@ pub(super) fn conversation(
     let mut remaining = opts.history_chars;
     let mut cursor = None;
     let mut revision = None;
-    while remaining > 0 {
+    loop {
         if cancel.is_cancelled() {
             return Err(AgentError::Cancelled);
         }
@@ -50,9 +55,33 @@ pub(super) fn conversation(
             through_revision: revision,
         })?;
         for item in page.items {
+            if remaining == 0 {
+                match &item.content {
+                    ConversationItem::UserMessage { .. }
+                    | ConversationItem::SteeringMessage { .. } => {
+                        user_item.get_or_insert(item.item_id.value());
+                    }
+                    ConversationItem::ToolOutput { call_id, .. } => {
+                        pending.insert(call_id.clone(), None);
+                    }
+                    ConversationItem::ToolCall { call_id, name, .. }
+                        if name != "ask_advisor"
+                            && pending.remove(call_id).is_some()
+                            && recent_tools.len() < 3 =>
+                    {
+                        recent_tools.push(item.item_id.value())
+                    }
+                    _ => {}
+                }
+                if user_item.is_some() || recent_tools.len() >= 3 {
+                    return Ok(finish(groups, images, user_item, recent_tools));
+                }
+                continue;
+            }
             let (text, attachments) = match item.content {
                 ConversationItem::UserMessage { text, images }
                 | ConversationItem::SteeringMessage { text, images, .. } => {
+                    user_item.get_or_insert(item.item_id.value());
                     (format!("user: {text}"), images)
                 }
                 ConversationItem::AssistantMessage { text, .. } => {
@@ -64,7 +93,7 @@ pub(super) fn conversation(
                     images,
                     ..
                 } => {
-                    pending.insert(call_id, (output, images));
+                    pending.insert(call_id, Some((output, images)));
                     continue;
                 }
                 ConversationItem::ToolCall {
@@ -74,8 +103,11 @@ pub(super) fn conversation(
                     arguments,
                     ..
                 } => {
-                    let result = pending.remove(&call_id);
+                    let result = pending.remove(&call_id).flatten();
                     let name = flattened_tool_call_name(namespace.as_deref(), &name);
+                    if name != "ask_advisor" && result.is_some() && recent_tools.len() < 3 {
+                        recent_tools.push(item.item_id.value());
+                    }
                     if opts.excluded_tools.iter().any(|n| n == name.as_ref())
                         || name == "ask_advisor"
                     {
@@ -125,9 +157,6 @@ pub(super) fn conversation(
             }
             remaining = remaining.saturating_sub(text.chars().count() + 1);
             groups.push(text);
-            if remaining == 0 {
-                break;
-            }
         }
         cursor = page.older_cursor;
         if cursor.is_none() {
@@ -135,11 +164,23 @@ pub(super) fn conversation(
         }
         revision = Some(page.through_revision);
     }
+    Ok(finish(groups, images, user_item, recent_tools))
+}
+
+fn finish(
+    mut groups: Vec<String>,
+    images: Vec<AgentImageAttachmentRef>,
+    user_item: Option<u64>,
+    recent_tools: Vec<u64>,
+) -> Evidence {
     groups.reverse();
-    Ok(Evidence {
+    Evidence {
+        user_item,
+        recent_tools,
+        file_images: Vec::new(),
         text: groups.join("\n"),
         images,
-    })
+    }
 }
 
 fn result_text(output: &ToolOutput) -> String {

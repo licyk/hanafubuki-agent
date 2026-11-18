@@ -71,6 +71,43 @@ impl GitQueries {
         Ok(sections.join("\n\n"))
     }
 
+    /// Limits review evidence to the selected workspace, including when it is a repository subdirectory.
+    pub fn workspace_changes(&self, cwd: &Path, patch: bool) -> Result<String, WorktreeError> {
+        let mut text = git_text(
+            &self.executor,
+            cwd,
+            &["status", "--porcelain", "--untracked-files=all", "--", "."],
+        )?;
+        if patch {
+            for staged in [false, true] {
+                let mut args = vec!["diff", "--relative", "--no-ext-diff", "--no-textconv"];
+                if staged {
+                    args.push("--cached");
+                }
+                args.extend(["--", "."]);
+                text.push('\n');
+                text.push_str(&git_text(&self.executor, cwd, &args)?);
+            }
+        }
+        Ok(text)
+    }
+
+    /// Tests one literal path, including spaces and Git pathspec metacharacters.
+    pub fn listed_file(
+        &self,
+        cwd: &Path,
+        path: &str,
+        tracked: bool,
+    ) -> Result<bool, WorktreeError> {
+        let mut args = vec!["--literal-pathspecs", "ls-files", "-z"];
+        if !tracked {
+            args.extend(["--others", "--exclude-standard"]);
+        }
+        args.extend(["--", path]);
+        let result = git(&self.executor, cwd, &args)?;
+        Ok(result.strip_suffix(&[0]) == Some(path.as_bytes()))
+    }
+
     /// The local branches by name, the default one (`main`, else `master`)
     /// first.
     pub fn local_branches(&self, cwd: &Path) -> Result<Vec<String>, WorktreeError> {

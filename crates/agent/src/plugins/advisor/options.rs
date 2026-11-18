@@ -24,6 +24,11 @@ pub(super) struct AdvisorOptions {
     pub executor_models: Vec<String>,
     pub share_images: bool,
     pub redact_secrets: bool,
+    pub git_context: super::workspace::GitContext,
+    pub project_rules: bool,
+    pub tracked_files: bool,
+    pub untracked_files: bool,
+    pub git_chars: usize,
     pub history_chars: usize,
     pub activation_scope: ActivationScope,
     pub active: bool,
@@ -43,6 +48,11 @@ impl Default for AdvisorOptions {
             executor_models: Vec::new(),
             share_images: false,
             redact_secrets: false,
+            git_context: Default::default(),
+            project_rules: false,
+            tracked_files: false,
+            untracked_files: false,
+            git_chars: 20_000,
             history_chars: 15_000,
             activation_scope: ActivationScope::Persistent,
             active: false,
@@ -100,6 +110,38 @@ pub(crate) fn advisor_schema() -> PluginOptionSchema {
             "redactSecrets",
             "Redact common credential patterns before sending text",
             SettingKind::Boolean,
+        ),
+        (
+            "gitContext",
+            "Maximum Git evidence",
+            SettingKind::Choice {
+                values: ["none", "summary", "full"]
+                    .map(|v| SettingChoice::new(v, v))
+                    .into(),
+            },
+        ),
+        (
+            "projectRules",
+            "Share trusted project rules and preferences",
+            SettingKind::Boolean,
+        ),
+        (
+            "trackedFiles",
+            "Allow a named tracked file requested by the Advisor",
+            SettingKind::Boolean,
+        ),
+        (
+            "untrackedFiles",
+            "Allow explicitly named untracked files",
+            SettingKind::Boolean,
+        ),
+        (
+            "gitChars",
+            "Maximum Git evidence characters",
+            SettingKind::Integer {
+                minimum: Some(0),
+                maximum: None,
+            },
         ),
         ("provider", "Advisor provider ID", text()),
         ("model", "Advisor model ID", text()),

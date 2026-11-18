@@ -1,17 +1,22 @@
+use super::follow_up::{next_id, Previous};
 use super::history::{conversation, Evidence};
+use super::Consultation;
 use super::{AdvisorOptions, AdvisorService};
 use crate::plugins::wait_for_cancellation;
 use hanafubuki_agent_contracts::token_budget_bytes;
 use hanafubuki_agent_foundation::cancellation::CancellationToken;
+use hanafubuki_agent_foundation::paths::PathKey;
 use hanafubuki_agent_kernel::{
     request_reasoning_effort, AgentError, AgentSessionId, ModelError, ModelEvent, ModelInputItem,
     ModelOutputItem, ModelReasoningConfig, ModelRequest, ModelToolChoice, ModelUsage,
 };
 use serde::Serialize;
+use std::sync::Arc;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AdvisorAnswer {
+    pub advice_id: String,
     pub provider: String,
     pub model: String,
     pub text: String,
@@ -19,11 +24,27 @@ pub struct AdvisorAnswer {
 }
 
 impl AdvisorService {
-    pub(crate) async fn consult(
+    pub(crate) async fn manual(
         &self,
         id: AgentSessionId,
         question: String,
-        draft: Option<String>,
+        cancel: CancellationToken,
+    ) -> Result<AdvisorAnswer, AgentError> {
+        self.consult(
+            id,
+            Consultation {
+                question,
+                ..Default::default()
+            },
+            cancel,
+        )
+        .await
+    }
+
+    pub(crate) async fn consult(
+        &self,
+        id: AgentSessionId,
+        args: Consultation,
         cancel: CancellationToken,
     ) -> Result<AdvisorAnswer, AgentError> {
         let opts = self.options.read().clone();
@@ -35,7 +56,9 @@ impl AdvisorService {
         let reader = self.conversations.clone();
         let settings = opts.clone();
         let reading = cancel.clone();
-        let (executor, history) = self
+        let workspace = self.workspace.clone();
+        let source = args.clone();
+        let (executor, mut history, root, trusted) = self
             .blocking
             .run("advisor conversation", move || {
                 let executor = reader.executor_model(id)?;
@@ -48,7 +71,19 @@ impl AdvisorService {
                         "The executor model is outside the Advisor allowlist".into(),
                     ));
                 }
-                Ok::<_, AgentError>((executor, conversation(&reader, id, &settings, &reading)?))
+                let root = match source.root {
+                    Some(root) => root,
+                    None => (workspace.directory)(id).map_err(AgentError::InvalidInput)?,
+                };
+                let trusted = reader
+                    .trusts_project(&root)
+                    .map_err(AgentError::InvalidInput)?;
+                Ok::<_, AgentError>((
+                    executor,
+                    conversation(&reader, id, &settings, &reading)?,
+                    root,
+                    trusted,
+                ))
             })
             .await
             .map_err(|e| AgentError::Model(e.to_string()))??;
@@ -62,11 +97,91 @@ impl AdvisorService {
             }
         };
         consult(provider, model)?;
-        let prompt = format!(
-            "Question: {question}\nExecutor draft (unverified): {}\nConversation evidence:\n",
-            draft.as_deref().unwrap_or("")
-        );
-        let prompt = opts.outbound(prompt);
+        let prior = {
+            let mut previous = self.previous.lock();
+            previous.retain(|_, p| p.fresh());
+            previous
+                .get_mut(&id)
+                .filter(|p| {
+                    Arc::ptr_eq(&p.options, &opts)
+                        && p.root == PathKey::of(&root)
+                        && p.trusted == trusted
+                        && p.user_item == history.user_item
+                        && !(history.recent_tools.len() == 3
+                            && history
+                                .recent_tools
+                                .iter()
+                                .all(|n| !p.evidence.recent_tools.contains(n)))
+                })
+                .map(|p| {
+                    let allowed = !p.claimed
+                        && args
+                            .include_tracked_files
+                            .iter()
+                            .all(|path| !path.is_empty() && p.mentions(path));
+                    if allowed && !args.include_tracked_files.is_empty() {
+                        p.claimed = true
+                    }
+                    (p.clone(), allowed)
+                })
+        };
+        if !args.include_tracked_files.is_empty()
+            && !prior.as_ref().is_some_and(|(_, allowed)| *allowed)
+        {
+            return Err(AgentError::InvalidInput(
+                "Tracked file handoff requires an unconsumed Advisor response naming each file"
+                    .into(),
+            ));
+        }
+        let question = opts.outbound(args.question.clone());
+        let (prompt, history) = if let Some(key) = &args.follow_up_to {
+            if question.is_empty()
+                || args.draft.is_some()
+                || args.git_context.is_some()
+                || !args.include_untracked.is_empty()
+                || !args.include_tracked_files.is_empty()
+            {
+                return Err(AgentError::InvalidInput(
+                    "Follow up with a question only".into(),
+                ));
+            }
+            let (p, _) = prior.filter(|(p, _)| &p.id == key).ok_or_else(|| {
+                AgentError::InvalidInput(
+                    "Advisor follow-up expired; request a fresh consultation".into(),
+                )
+            })?;
+            let prompt = format!(
+                "{}\nPrevious advice: {}\nFollow-up: {question}\nOriginal evidence:\n",
+                p.prompt,
+                opts.outbound(p.answer)
+            );
+            (prompt, p.evidence)
+        } else {
+            let workspace = self.workspace.clone();
+            let reader = self.conversations.clone();
+            let settings = opts.clone();
+            let reading = cancel.clone();
+            let mut source = args.clone();
+            source.root = Some(root.clone());
+            let history = self
+                .blocking
+                .run("advisor workspace evidence", move || {
+                    workspace.contribute(
+                        id,
+                        &settings,
+                        &source,
+                        &reader,
+                        &mut history,
+                        &reading,
+                    )?;
+                    Ok::<_, String>(history)
+                })
+                .await
+                .map_err(|e| AgentError::InvalidInput(e.to_string()))?
+                .map_err(AgentError::InvalidInput)?;
+            let draft = opts.outbound(args.draft.unwrap_or_default());
+            (format!("Question: {question}\nExecutor draft (unverified): {draft}\nConversation evidence:\n"),Arc::new(history))
+        };
         let token = cancel.child();
         let request = async {
             let primary = self
@@ -99,12 +214,30 @@ impl AdvisorService {
                 other => other,
             }
         };
-        tokio::select! {
+        let answer = tokio::select! {
             biased;
             _ = wait_for_cancellation(self.cancellation.clone()) => {token.cancel(); Err(AgentError::Cancelled)}
             _ = wait_for_cancellation(cancel) => Err(AgentError::Cancelled),
             result = request => result.map_err(|e|match e {ModelError::Cancelled=>AgentError::Cancelled, other=>AgentError::Model(other.to_string())}),
+        }?;
+        if Arc::ptr_eq(&opts, &self.options.read()) {
+            self.previous.lock().insert(
+                id,
+                Previous {
+                    id: answer.advice_id.clone(),
+                    answer: answer.text.clone(),
+                    prompt,
+                    evidence: history.clone(),
+                    created: std::time::Instant::now(),
+                    root: PathKey::of(&root),
+                    trusted,
+                    options: opts,
+                    user_item: history.user_item,
+                    claimed: false,
+                },
+            );
         }
+        Ok(answer)
     }
 
     async fn sample(
@@ -142,7 +275,7 @@ impl AdvisorService {
         let mut input = vec![hanafubuki_agent_kernel::ModelUserContent::InputText {
             text: format!("{prompt}{}", &history[start..]),
         }];
-        if !evidence.images.is_empty() {
+        if !evidence.images.is_empty() || !evidence.file_images.is_empty() {
             if facts.image_input.is_some_and(|f| f.value) {
                 let reader = self.conversations.clone();
                 let images = evidence.images.clone();
@@ -166,6 +299,7 @@ impl AdvisorService {
                     .map_err(|e| ModelError::InvalidRequest(e.to_string()))?
                     .map_err(|e| ModelError::InvalidRequest(e.to_string()))?;
                 input.extend(content);
+                input.extend(evidence.file_images.iter().cloned());
             } else {
                 input.push(hanafubuki_agent_kernel::ModelUserContent::InputText {
                     text: "Image pixels withheld for this model.".into(),
@@ -201,6 +335,7 @@ impl AdvisorService {
                 } => text.push(part),
                 ModelEvent::ResponseCompleted { usage, .. } if !text.is_empty() => {
                     return Ok(AdvisorAnswer {
+                        advice_id: next_id(),
                         provider: provider.into(),
                         model: model.into(),
                         text: text.join("\n"),

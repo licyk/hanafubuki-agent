@@ -115,7 +115,7 @@ pub(crate) fn agent_plugin_manifest(
             },
         ),
         AgentPluginRow::unconfigured(Capability, workspace_fs_plugin(inputs.files.clone())),
-        AgentPluginRow::unconfigured(Capability, view_image_plugin(inputs.files)),
+        AgentPluginRow::unconfigured(Capability, view_image_plugin(inputs.files.clone())),
         AgentPluginRow::from_settings(
             Capability,
             execution_plugin(inputs.executions),
@@ -131,7 +131,13 @@ pub(crate) fn agent_plugin_manifest(
         AgentPluginRow::unconfigured(Capability, threads_plugin(inputs.conversations.clone())),
         AgentPluginRow::from_settings(
             Capability,
-            crate::plugins::advisor_plugin(inputs.conversations.clone()),
+            crate::plugins::advisor_plugin(
+                inputs.conversations.clone(),
+                inputs.git.clone(),
+                inputs.files,
+                inputs.working_directory.clone(),
+                inputs.user_instructions_dir.clone(),
+            ),
             |settings| settings.options_value("advisor"),
         ),
         AgentPluginRow::unconfigured(Capability, recap_plugin(inputs.conversations)),

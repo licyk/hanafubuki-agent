@@ -18,8 +18,10 @@ mod view_image;
 #[cfg(test)]
 pub(crate) mod tests;
 
-pub use advisor::AdvisorAnswer;
 pub(crate) use advisor::{advisor_plugin, advisor_schema, AdvisorService};
+pub use advisor::{
+    AdvisorAnswer, Consultation as AdvisorConsultation, GitContext as AdvisorGitContext,
+};
 pub(crate) use context::{permission_mode_plugin, workspace_context_plugin};
 pub(crate) use goal::{goal_plugin, GoalService, GOAL_PLUGIN};
 pub use goal::{AgentGoalBudgets, MAXIMUM_GOAL_OBJECTIVE_CHARS};

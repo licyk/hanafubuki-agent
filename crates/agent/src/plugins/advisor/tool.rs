@@ -1,4 +1,5 @@
 use super::AdvisorService;
+use super::Consultation;
 use hanafubuki_agent_approval::{ApprovalAction, AuthorizedAction, PermissionRequirement};
 use hanafubuki_agent_contracts::{
     AgentActivityAction, AgentMemoryContextEffect, AgentToolError, AgentToolHandler,
@@ -8,7 +9,6 @@ use hanafubuki_agent_contracts::{
 use hanafubuki_agent_tool_contracts::{
     ToolExecutionClass, ToolExposure, ToolGeneration, ToolId, ToolName, ToolProviderId,
 };
-use serde::Deserialize;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
@@ -24,7 +24,7 @@ impl AdvisorSource {
         let descriptor = ToolDescriptor {
             name: ToolName::parse(name).map_err(kardia_core::Error::new)?,
             description:"Ask the configured Advisor for an independent second opinion on the current conversation. Optionally supply a specific question and an unverified draft.".into(),
-            input_schema:json!({"type":"object","properties":{"question":{"type":"string"},"draft":{"type":"string"}},"additionalProperties":false}),
+            input_schema:json!({"type":"object","properties":{"question":{"type":"string"},"draft":{"type":"string"},"followUpTo":{"type":"string"},"gitContext":{"type":"string","enum":["none","summary","full"]},"includeTrackedFiles":{"type":"array","items":{"type":"string"}},"includeUntracked":{"type":"array","items":{"type":"string"}}},"additionalProperties":false}),
             exposure: ToolExposure::Direct,
             execution_class: ToolExecutionClass::ConcurrentRead,
             effect: ToolEffect::ReadOnly,
@@ -75,13 +75,6 @@ struct AskAdvisor {
     descriptor: ToolDescriptor,
     service: Arc<AdvisorService>,
 }
-#[derive(Deserialize, Default)]
-#[serde(default)]
-struct Arguments {
-    question: String,
-    draft: Option<String>,
-}
-
 impl AgentToolHandler for AskAdvisor {
     fn descriptor(&self) -> &ToolDescriptor {
         &self.descriptor
@@ -102,11 +95,15 @@ impl AgentToolHandler for AskAdvisor {
             if !self.service.active(id) {
                 return Err(AgentToolError::Failed("Advisor is inactive".into()));
             }
-            let args: Arguments = serde_json::from_value(call.arguments)
+            let mut args: Consultation = serde_json::from_value(call.arguments)
                 .map_err(|e| AgentToolError::Failed(e.to_string()))?;
+            args.root = call
+                .turn
+                .get::<hanafubuki_agent_contracts::TurnWorkspace>()
+                .and_then(|w| w.roots.first().cloned());
             let result = self
                 .service
-                .consult(id, args.question, args.draft, call.cancellation)
+                .consult(id, args, call.cancellation)
                 .await
                 .map_err(|e| AgentToolError::Failed(e.to_string()))?;
             Ok(ToolResult::success(json!(result)))

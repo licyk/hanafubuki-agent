@@ -1,14 +1,17 @@
 //! A tool-free second opinion on the current conversation.
+mod follow_up;
 mod history;
 mod options;
 mod request;
 mod tool;
+mod workspace;
 
 pub(crate) use options::advisor_schema;
 pub use request::AdvisorAnswer;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+pub use workspace::{Consultation, GitContext};
 
 use hanafubuki_agent_contracts::{
     BlockingService, Register, ToolPresenterRegistry, ToolSourceRegistry,
@@ -23,14 +26,29 @@ use options::{ActivationScope, AdvisorOptions};
 
 pub(crate) struct AdvisorService {
     conversations: AgentConversationReader,
+    workspace: workspace::AdvisorWorkspace,
     blocking: Arc<BlockingService>,
     options: RwLock<Arc<AdvisorOptions>>,
+    previous: parking_lot::Mutex<HashMap<AgentSessionId, follow_up::Previous>>,
     sessions: RwLock<HashSet<AgentSessionId>>,
     cancellation: CancellationToken,
 }
 
-pub(crate) fn advisor_plugin(conversations: AgentConversationReader) -> PluginDef {
+pub(crate) fn advisor_plugin(
+    conversations: AgentConversationReader,
+    git: hanafubuki_agent_worktree::GitQueries,
+    files: hanafubuki_agent_workspace_fs::WorkspaceFsService,
+    directory: hanafubuki_agent_plugin_hooks::WorkingDirectory,
+    user_directory: std::path::PathBuf,
+) -> PluginDef {
+    let workspace = workspace::AdvisorWorkspace {
+        git,
+        files,
+        directory,
+        user_directory,
+    };
     PluginDef::typed(move |ctx: Context, options: Arc<AdvisorOptions>| {
+        let workspace = workspace.clone();
         let conversations = conversations.clone();
         async move {
             let cancellation = CancellationToken::default();
@@ -38,13 +56,16 @@ pub(crate) fn advisor_plugin(conversations: AgentConversationReader) -> PluginDe
             ctx.defer("advisor requests", Disposer::new(move || stopping.cancel()))?;
             let service = Arc::new(AdvisorService {
                 conversations,
+                workspace,
                 blocking: ctx.get::<BlockingService>()?.arc().clone(),
                 options: RwLock::new(options),
                 sessions: RwLock::default(),
+                previous: Default::default(),
                 cancellation,
             });
             let updated = service.clone();
             ctx.on_update(move |options: &AdvisorOptions| {
+                updated.previous.lock().clear();
                 *updated.options.write() = Arc::new(options.clone());
                 true
             })?;

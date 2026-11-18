@@ -138,10 +138,7 @@ async fn live_advisor_routes_a_manual_question_to_the_selected_model() {
 #[tokio::test(flavor = "multi_thread")]
 async fn advisor_tool_history_applies_disclosure_policy_before_sending() {
     let executor = FakeServer::start(vec![
-        (
-            tool_events("list_agents", "{}"),
-            Duration::ZERO,
-        ),
+        (tool_events("list_agents", "{}"), Duration::ZERO),
         (assistant_events("first turn complete"), Duration::ZERO),
     ])
     .await;
@@ -200,10 +197,64 @@ async fn advisor_tool_history_applies_disclosure_policy_before_sending() {
         .await
         .unwrap();
     let request = String::from_utf8(advisor.requests()[1].body.clone()).unwrap();
-    assert!(
-        !request.contains("list_agents"),
-        "{request}"
-    );
+    assert!(!request.contains("list_agents"), "{request}");
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    std::fs::remove_dir_all(paths.app_data_dir).unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_follow_up_reuses_evidence_only_until_new_input() {
+    let server = FakeServer::start(vec![
+        (assistant_events("primary evidence"), Duration::ZERO),
+        (assistant_events("first opinion"), Duration::ZERO),
+        (assistant_events("second opinion"), Duration::ZERO),
+        (assistant_events("new input acknowledged"), Duration::ZERO),
+    ])
+    .await;
+    let (service, paths) = configured_service("advisor-follow-up", &server.base_url);
+    let id = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap()
+        .id;
+    service
+        .write_setting_values(SettingsWrite {
+            changes: [("provider", "provider-1"), ("model", "second-model")]
+                .map(|(k, v)| SettingChange {
+                    key: format!("pluginOptions.advisor.{k}"),
+                    op: SettingWriteOp::Set(v.into()),
+                })
+                .into(),
+        })
+        .await
+        .unwrap();
+    service
+        .start_turn(id, "unique evidence".to_owned().into())
+        .await
+        .unwrap();
+    let answer = service
+        .consult_advisor(id, "review".into(), Default::default())
+        .await
+        .unwrap();
+    let follow = |key: String| {
+        let mut args = AdvisorConsultation::default();
+        args.follow_up_to = Some(key);
+        args.question = "Which assumption?".into();
+        service.consult_advisor_with(id, args, Default::default())
+    };
+    let second = follow(answer.advice_id).await.unwrap();
+    let body = String::from_utf8(server.requests()[2].body.clone()).unwrap();
+    for part in ["unique evidence", "first opinion", "Which assumption?"] {
+        assert!(body.contains(part), "{body}")
+    }
+    service
+        .start_turn(id, "another question".to_string().into())
+        .await
+        .unwrap();
+    assert!(follow(second.advice_id).await.is_err());
+    assert_eq!(server.requests().len(), 4);
     assert!(service
         .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
         .is_empty());

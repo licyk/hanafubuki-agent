@@ -16,6 +16,11 @@ pub enum SettingsLayer {
 }
 
 impl AgentConfig {
+    /// The user's explicit trust decision for a workspace used by a side request.
+    pub fn trusts_project(&self, directory: &std::path::Path) -> Result<bool, String> {
+        Ok(crate::layers::is_trusted(&self.user_document()?, directory))
+    }
+
     /// The current project's target, including a configuration file not yet created.
     pub fn project_configuration_source(&self) -> Result<Option<ConfigLayerSource>, String> {
         let Some(project) = self

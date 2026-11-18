@@ -27,7 +27,23 @@ impl AgentApplicationService {
         self.feature(
             "advisor",
             |service: Arc<crate::plugins::AdvisorService>| async move {
-                service.consult(id, question, None, cancellation).await
+                service.manual(id, question, cancellation).await
+            },
+        )
+        .await
+    }
+
+    /// Sends an explicit user consultation, with any requested disclosure narrowed by the current settings.
+    pub async fn consult_advisor_with(
+        &self,
+        id: AgentSessionId,
+        request: crate::AdvisorConsultation,
+        cancellation: hanafubuki_agent_contracts::CancellationToken,
+    ) -> Result<crate::AdvisorAnswer, AgentError> {
+        self.feature(
+            "advisor",
+            |advisor: Arc<crate::plugins::AdvisorService>| async move {
+                advisor.consult(id, request, cancellation).await
             },
         )
         .await

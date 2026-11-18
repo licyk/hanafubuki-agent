@@ -33,6 +33,10 @@ pub(crate) struct AgentConversationReader {
 }
 
 impl AgentConversationReader {
+    pub(crate) fn trusts_project(&self, directory: &std::path::Path) -> Result<bool, String> {
+        self.config.trusts_project(directory)
+    }
+
     pub(crate) fn image(
         &self,
         id: AgentSessionId,
