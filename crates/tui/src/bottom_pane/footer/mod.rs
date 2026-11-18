@@ -121,7 +121,7 @@ pub(crate) fn footer_height(props: FooterProps<'_>, width: u16) -> u16 {
             shortcut_overlay::lines(&props, width.saturating_sub(FOOTER_INDENT_COLS as u16)).len()
                 + usize::from(props.status_line.is_some())
         }
-        _ => footer_lines(props).len(),
+        _ => wrapped_footer(props, width).len(),
     };
     rows as u16
 }
@@ -145,37 +145,49 @@ pub(crate) fn render_footer(area: Rect, buf: &mut Buffer, props: FooterProps<'_>
         }
         return shortcut_overlay::render(&props, area, buf, goal_line(props));
     }
-    let mut lines = footer_lines(props);
-    let goal = goal_line(props);
-    let hint_row = lines.len().saturating_sub(1);
-    let hint = if goal.is_some()
-        && lines.len() > usize::from(props.status_line.is_some())
-        && hint_row < usize::from(area.height)
-    {
-        Some(std::mem::take(&mut lines[hint_row]))
-    } else {
-        None
-    };
+    let lines = wrapped_footer(props, area.width);
     Paragraph::new(prefix_lines(
         lines,
         " ".repeat(FOOTER_INDENT_COLS).into(),
         " ".repeat(FOOTER_INDENT_COLS).into(),
     ))
     .render(area, buf);
-    if let (Some(hint), Some(goal)) = (hint, goal) {
-        let indent = (FOOTER_INDENT_COLS as u16).min(area.width);
-        render_footer_row(
-            Rect {
-                x: area.x + indent,
-                y: area.y + hint_row as u16,
-                width: area.width - indent,
-                height: 1,
-            },
-            buf,
-            hint,
-            goal,
-        );
+}
+
+fn wrapped_footer(props: FooterProps<'_>, width: u16) -> Vec<Line<'static>> {
+    let width = width.saturating_sub(FOOTER_INDENT_COLS as u16).max(1);
+    let mut lines = footer_lines(props);
+    if let (Some(hint), Some(goal)) = (lines.last_mut(), goal_line(props)) {
+        let used = hint.width() + goal.width();
+        if used + 2 <= usize::from(width) {
+            hint.push_span(" ".repeat(usize::from(width) - used));
+            hint.spans.extend(goal.spans);
+        } else {
+            lines.push(goal);
+        }
     }
+    lines
+        .into_iter()
+        .flat_map(|line| {
+            if line.width() <= usize::from(width) {
+                return vec![line];
+            }
+            crate::bottom_pane::selection_popup_common::wrap_styled_line(&line, width)
+                .into_iter()
+                .map(|line| {
+                    Line::from(
+                        line.spans
+                            .into_iter()
+                            .map(|span| {
+                                ratatui::text::Span::styled(span.content.into_owned(), span.style)
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                    .style(line.style)
+                })
+                .collect()
+        })
+        .collect()
 }
 
 fn goal_line(props: FooterProps<'_>) -> Option<Line<'static>> {

@@ -93,14 +93,14 @@ fn goal_is_right_aligned_on_the_hint_row_without_shortening_the_status_line() {
         }
         let narrow = rows(props, 24, footer_height(props, 24));
         assert!(
-            narrow[hint_row].ends_with("Pursuing goal (0s)"),
+            narrow.last().unwrap().ends_with("Pursuing goal (0s)"),
             "{narrow:?}"
         );
         let without_goal = FooterProps {
             goal: None,
             ..props
         };
-        assert_eq!(footer_height(props, 24), footer_height(without_goal, 24));
+        assert!(footer_height(props, 24) > footer_height(without_goal, 24));
         if status_line.is_some() {
             assert_eq!(narrow[0], rows(without_goal, 24, 1)[0]);
             assert_eq!(rows(props, 24, 1), rows(without_goal, 24, 1));
