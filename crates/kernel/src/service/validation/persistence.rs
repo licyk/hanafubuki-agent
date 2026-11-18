@@ -234,11 +234,12 @@ pub(in crate::service) fn validate_permission_review_state(
 }
 
 pub(in crate::service) fn validate_persisted_message_state(
-    session_id: AgentSessionId,
-    next_message_id: u64,
-    turn: Option<&PersistedAgentTurn>,
+    runtime: &PersistedAgentRuntimeState,
     history: &[ConversationItem],
+    store: &dyn crate::AgentHistoryStore,
 ) -> Result<(), AgentError> {
+    let session_id = runtime.id;
+    let next_message_id = runtime.next_message_id;
     let mut message_ids = HashSet::new();
     let mut maximum_message_id = 0u64;
     for item in history {
@@ -259,7 +260,7 @@ pub(in crate::service) fn validate_persisted_message_state(
         )));
     }
 
-    let Some(turn) = turn else {
+    let Some(turn) = runtime.turn.as_ref() else {
         return Ok(());
     };
     turn.reasoning.validate().map_err(|error| {
@@ -291,48 +292,52 @@ pub(in crate::service) fn validate_persisted_message_state(
     }
     match (turn.phase, turn.final_answer_message_id) {
         (AgentTurnPhase::Completed, Some(final_id)) => {
-            let turn_start = history
-                .iter()
-                .rposition(|item| {
-                    matches!(item, ConversationItem::TurnStart { turn_id } if *turn_id == turn.id)
-                })
-                .or_else(|| {
-                    // Mid-turn compaction removes the opening boundary;
-                    // its continuation still owns the final answer.
-                    (!history.iter().any(|item| {
-                        matches!(item, ConversationItem::TurnStart { .. })
-                    }) && history.iter().any(|item| {
-                        matches!(
-                            item,
-                            ConversationItem::CompactionSummary { .. }
-                                | ConversationItem::ProviderCompaction { .. }
-                        )
-                    }))
-                    .then_some(0)
-                })
-                .ok_or_else(|| {
-                    AgentError::Persistence(format!(
-                        "Agent session {} is missing its latest turn boundary",
-                        session_id
-                    ))
-                })?;
-            // A protocol without phases (Chat Completions, Anthropic
-            // Messages) answers with no phase, as a turn completes on.
-            if !history[turn_start..].iter().any(|item| {
-                matches!(
-                    item,
+            let is_final = |item: &ConversationItem| {
+                matches!(item,
                     ConversationItem::AssistantMessage {
-                        message_id,
-                        phase: None | Some(AgentMessagePhase::FinalAnswer),
-                        ..
+                        message_id, phase: None | Some(AgentMessagePhase::FinalAnswer), ..
                     } if *message_id == final_id
                 )
-            }) {
-                return Err(AgentError::Persistence(format!(
-                    "Agent session {} has a dangling final answer message id {}",
-                    session_id, final_id
-                )));
+            };
+            let start = history.iter().rposition(|item| {
+                matches!(item,
+                ConversationItem::TurnStart { turn_id } if *turn_id == turn.id)
+            });
+            if start.is_some_and(|i| history[i..].iter().any(is_final)) {
+                return Ok(());
             }
+            // Compaction may have replaced the turn boundary or the answer in model context.
+            // The canonical transcript still owns the original turn and message IDs.
+            if matches!(
+                runtime.model_context_boundary,
+                crate::AgentModelContextBoundary::Compacted { .. }
+            ) && final_id.value() < next_message_id
+            {
+                let mut cursor = None;
+                loop {
+                    let page = store
+                        .list_turn_items_page(crate::AgentTurnPageRequest {
+                            session_id,
+                            turn_id: turn.id,
+                            page_size: crate::AGENT_TRANSCRIPT_PAGE_SIZE_MAX,
+                            direction: crate::AgentHistorySortDirection::Descending,
+                            through_revision: Some(runtime.revision),
+                            cursor,
+                        })
+                        .map_err(history_store_error)?;
+                    if page.items.iter().any(|item| is_final(&item.content)) {
+                        return Ok(());
+                    }
+                    cursor = page.older_cursor;
+                    if cursor.is_none() {
+                        break;
+                    }
+                }
+            }
+            return Err(AgentError::Persistence(format!(
+                "Agent session {} has a dangling final answer message id {}",
+                session_id, final_id
+            )));
         }
         (AgentTurnPhase::Completed, None) => {
             return Err(AgentError::Persistence(format!(

@@ -37,9 +37,12 @@ impl AgentApplicationService {
         input: AgentTurnInput,
     ) -> Result<AgentTurnOutcome, AgentError> {
         self.host.ensure_started().await;
-        self.driver
-            .run_turn(session_id, input, Arc::new(crate::session_driver::Discard))
-            .await
+        // Keep the sampling and tool loop's future off the embedding caller's stack.
+        Box::pin(
+            self.driver
+                .run_turn(session_id, input, Arc::new(crate::session_driver::Discard)),
+        )
+        .await
     }
 
     pub async fn submit_turn_with_sink(

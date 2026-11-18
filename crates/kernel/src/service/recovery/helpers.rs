@@ -20,12 +20,7 @@ impl AgentService {
         normalize_session_config(&mut runtime.config);
         validate_session_config(&runtime.config, self.inner.limits)?;
         validate_persisted_history(contents, &runtime.config, self.inner.limits)?;
-        validate_persisted_message_state(
-            runtime.id,
-            runtime.next_message_id,
-            runtime.turn.as_ref(),
-            contents,
-        )?;
+        validate_persisted_message_state(runtime, contents, &self.inner.history_store)?;
         validate_persisted_usage(runtime.usage, &runtime.config)?;
         validate_persisted_compaction(runtime.compaction.as_ref(), runtime.revision)?;
         validate_context_window_checkpoint(

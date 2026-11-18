@@ -115,7 +115,8 @@ impl AgentService {
             model.clone(),
         );
         let repaired = repair_after_restart(&mut record)?;
-        let cell = self.register_recovered(record)?;
+        self.advance_recovered_ids(&record);
+        let cell = self.inner.sessions.insert(record, &self.inner.accepting)?;
         if repaired {
             if let Err(error) = self.persist_current_conversation(&cell, false) {
                 self.remove_unpersisted_session(&cell);
@@ -127,32 +128,6 @@ impl AgentService {
         }
         report.interrupted_executions.extend(executions);
         Ok(())
-    }
-
-    /// Adds a recovered session and moves the turn and compaction id
-    /// counters past every id it used.
-    fn register_recovered(&self, record: SessionRecord) -> Result<Arc<SessionCell>, AgentError> {
-        for turn_id in recorded_turn_ids(&record) {
-            self.inner.next_turn_id.fetch_max(
-                turn_id
-                    .value()
-                    .checked_add(1)
-                    .expect("agent turn id exhausted"),
-                Ordering::AcqRel,
-            );
-        }
-        if let Some(compaction) = &record.runtime.compaction {
-            self.inner.next_compaction_id.fetch_max(
-                compaction
-                    .snapshot
-                    .id
-                    .value()
-                    .checked_add(1)
-                    .expect("agent compaction id exhausted"),
-                Ordering::AcqRel,
-            );
-        }
-        self.inner.sessions.insert(record, &self.inner.accepting)
     }
 }
 

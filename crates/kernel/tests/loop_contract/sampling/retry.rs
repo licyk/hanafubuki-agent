@@ -1,6 +1,35 @@
 use super::*;
 
 #[tokio::test]
+async fn streamed_rate_limit_retries_only_before_output() {
+    for (events_before_refusal, should_retry) in [(0, true), (1, true), (3, false)] {
+        let mut refused = deterministic_assistant_events("partial");
+        refused.truncate(events_before_refusal);
+        refused.push(Err(ModelError::Remote {
+            status: None,
+            code: Some("rate_limited".into()),
+            message: "waiting for provider capacity".into(),
+            request_id: None,
+        }));
+        let model = ScriptedEventModel::new([refused, deterministic_assistant_events("recovered")]);
+        let service = AgentService::new(
+            Arc::new(model.clone()),
+            FakeTools::new([]).await.registries(),
+        );
+        let session = service.create_session(config()).unwrap();
+        let result = service.start_turn(session.id, "hello".to_string()).await;
+        if should_retry {
+            assert_eq!(result.unwrap().final_answer, "recovered");
+            let requests = model.requests();
+            assert_eq!(requests[0], requests[1]);
+        } else {
+            assert!(result.unwrap_err().to_string().contains("rate_limited"));
+            assert_eq!(model.requests().len(), 1);
+        }
+    }
+}
+
+#[tokio::test]
 async fn response_stream_retry_reuses_turn_session_without_duplicate_history() {
     let expected = request(vec![ModelInputItem::user_text("hello")]);
     let inner = FakeModelTransport::new([FakeModelExchange::new(

@@ -9,6 +9,17 @@ pub(super) fn stream_event(
 ) -> Result<ModelEvent, AgentError> {
     match event {
         Ok(event) => Ok(event),
+        Err(
+            ref error @ ModelError::Remote {
+                status: None | Some(429),
+                code: Some(ref code),
+                ..
+            },
+        ) if !response.saw_output_item
+            && matches!(code.as_str(), "rate_limited" | "rate_limit_exceeded") =>
+        {
+            Err(AgentError::ModelStreamInterrupted(error.to_string()))
+        }
         Err(ModelError::StreamInterrupted(message)) if response.started_response_id.is_none() => {
             Err(AgentError::ModelStreamInterrupted(message))
         }

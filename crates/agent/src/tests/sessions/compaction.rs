@@ -325,3 +325,52 @@ async fn an_anthropic_cache_read_counts_toward_the_compaction_threshold() {
     );
     finish(service, paths);
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn compacting_a_reopened_idle_session_allocates_a_fresh_id() {
+    let server = FakeServer::start(vec![
+        (
+            assistant_events(&"first answer ".repeat(100)),
+            Duration::ZERO,
+        ),
+        (assistant_events("first summary"), Duration::ZERO),
+        (
+            assistant_events(&"second answer ".repeat(100)),
+            Duration::ZERO,
+        ),
+        (assistant_events("second summary"), Duration::ZERO),
+    ])
+    .await;
+    let (service, paths, config) = service_with_config("distinct-compaction-ids", |_, config| {
+        configure_test_provider(config, &server.base_url, None);
+    });
+    let id = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap()
+        .id;
+    service
+        .start_turn(id, "first question".to_string().into())
+        .await
+        .unwrap();
+    let before = service.snapshot(id).unwrap();
+    let first = service
+        .compact_session(id, before.generation, before.revision)
+        .await
+        .unwrap();
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    let service = reopen_service(config, test_host(&paths), &paths);
+    service
+        .start_turn(id, "second question".to_string().into())
+        .await
+        .unwrap();
+    let before = service.snapshot(id).unwrap();
+    let second = service
+        .compact_session(id, before.generation, before.revision)
+        .await
+        .unwrap();
+    assert!(second.compaction.id.value() > first.compaction.id.value());
+    finish(service, paths);
+}

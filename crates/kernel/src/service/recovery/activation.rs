@@ -44,17 +44,8 @@ impl AgentService {
             )));
         }
         let record = self.persisted_record(runtime, model_context, &history_contents, model);
-        // An idle fork may have no own turn yet, but inherits turn boundaries.
-        let next_turn_id = recorded_turn_ids(&record)
-            .map(|turn| turn.value().saturating_add(1))
-            .max();
-        if self.inner.sessions.insert_if_absent(record) {
-            if let Some(next_turn_id) = next_turn_id {
-                self.inner
-                    .next_turn_id
-                    .fetch_max(next_turn_id, Ordering::AcqRel);
-            }
-        }
+        self.advance_recovered_ids(&record);
+        self.inner.sessions.insert_if_absent(record);
         Ok(())
     }
 }
