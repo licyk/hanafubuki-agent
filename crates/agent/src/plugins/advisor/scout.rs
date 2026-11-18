@@ -1,6 +1,6 @@
 use super::{history::Evidence, AdvisorOptions, AdvisorService};
 use hanafubuki_agent_contracts::CancellationToken;
-use hanafubuki_agent_kernel::{AgentSessionId, ModelError, ModelUsage};
+use hanafubuki_agent_kernel::{ModelError, ModelUsage};
 use std::collections::BTreeSet;
 
 impl AdvisorService {
@@ -9,8 +9,8 @@ impl AdvisorService {
         executor: &(String, String),
         opts: &AdvisorOptions,
         question: &str,
-        id: AgentSessionId,
         evidence: &mut Evidence,
+        send: &mut super::request::ConsultationSend,
         cancel: CancellationToken,
     ) -> Result<Option<ModelUsage>, ModelError> {
         let groups = evidence.text.lines().collect::<Vec<_>>();
@@ -35,11 +35,11 @@ impl AdvisorService {
             .sample(
                 (&executor.0, &executor.1),
                 opts,
-                id,
                 super::request::SampleInput {
                     prompt: &prompt,
                     evidence: &brief,
-                    consultation: None,
+                    send,
+                    scout: true,
                 },
                 cancel.clone(),
             )

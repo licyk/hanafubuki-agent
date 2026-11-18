@@ -266,6 +266,7 @@ pub(crate) fn advisor_schema() -> PluginOptionSchema {
     .into_iter()
     .map(|(key, label, kind)| {
         let mut spec = SettingSpec::new(key, label, kind);
+        spec.reasoning_effort = matches!(key, "reasoningEffort" | "executorEffort");
         spec.default = if defaults[key].is_null() {
             Some(hanafubuki_agent_config::SettingValue::Null)
         } else {

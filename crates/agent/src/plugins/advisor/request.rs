@@ -27,7 +27,14 @@ pub struct AdvisorAnswer {
 pub(super) struct SampleInput<'a> {
     pub prompt: &'a str,
     pub evidence: &'a Evidence,
-    pub consultation: Option<&'a mut bool>,
+    pub send: &'a mut ConsultationSend,
+    pub scout: bool,
+}
+
+pub(super) struct ConsultationSend {
+    pub session: AgentSessionId,
+    handoff: Option<String>,
+    started: bool,
 }
 
 impl AdvisorService {
@@ -72,22 +79,24 @@ impl AdvisorService {
             }
         };
 
-        let prior = self.prior(
-            id,
-            &opts,
-            &root,
-            scope,
-            &history,
-            &args.include_tracked_files,
-        );
-        if !args.include_tracked_files.is_empty()
-            && !prior.as_ref().is_some_and(|(_, allowed)| *allowed)
-        {
-            return Err(AgentError::InvalidInput(
-                "Tracked file handoff requires an unconsumed Advisor response naming each file"
-                    .into(),
-            ));
-        }
+        let prior = self.prior(id, &opts, &root, scope, &history);
+        let handoff = if args.include_tracked_files.is_empty() {
+            None
+        } else {
+            let grant = prior.as_ref().filter(|grant| {
+                !grant.claimed && args.include_tracked_files.iter().all(|path| grant.mentions(path))
+            }).ok_or_else(|| {
+                AgentError::InvalidInput(
+                    "Tracked file handoff requires an unconsumed Advisor response naming each file".into()
+                )
+            })?;
+            Some(grant.id.clone())
+        };
+        let mut send = ConsultationSend {
+            session: id,
+            handoff,
+            started: false,
+        };
         let question = opts.outbound(args.question.clone());
         let (prompt, history, previous_target) = if let Some(key) = &args.follow_up_to {
             if question.is_empty()
@@ -100,7 +109,7 @@ impl AdvisorService {
                     "Follow up with a question only".into(),
                 ));
             }
-            let (p, _) = prior.filter(|(p, _)| &p.id == key).ok_or_else(|| {
+            let p = prior.filter(|p| &p.id == key).ok_or_else(|| {
                 AgentError::InvalidInput(
                     "Advisor follow-up expired; request a fresh consultation".into(),
                 )
@@ -144,19 +153,6 @@ impl AdvisorService {
         consult(provider, model)?;
         let token = cancel.child();
         let request = async {
-            if opts.consultation_limit.is_some_and(|limit| {
-                self.consultations
-                    .lock()
-                    .get(&id)
-                    .copied()
-                    .unwrap_or_default()
-                    >= limit
-            }) {
-                return Err(ModelError::InvalidRequest(
-                    "Advisor consultation budget exhausted for this session".into(),
-                ));
-            }
-            let mut started = false;
             let mut history = history;
             let scout_usage =
                 if opts.scout && !opts.simple && self.active(id) && args.follow_up_to.is_none() {
@@ -164,8 +160,8 @@ impl AdvisorService {
                         &executor,
                         &opts,
                         &question,
-                        id,
                         Arc::make_mut(&mut history),
+                        &mut send,
                         token.clone(),
                     )
                     .await?
@@ -179,11 +175,11 @@ impl AdvisorService {
                 .sample(
                     (provider, model),
                     &opts,
-                    id,
                     SampleInput {
                         prompt: &prompt,
                         evidence: &history,
-                        consultation: Some(&mut started),
+                        send: &mut send,
+                        scout: false,
                     },
                     token.clone(),
                 )
@@ -203,7 +199,7 @@ impl AdvisorService {
                     {
                         return Err(error);
                     }
-                    self.sample((fallback, backup), &opts,id, SampleInput {prompt:&prompt,evidence:&history,consultation:Some(&mut started)}, token.clone()).await.map_err(|second| {
+                    self.sample((fallback, backup), &opts, SampleInput {prompt:&prompt,evidence:&history,send:&mut send,scout:false}, token.clone()).await.map_err(|second| {
                         ModelError::Protocol(format!("Advisor {provider}/{model}: {error}; fallback {fallback}/{backup}: {second}"))
                     })
                 }
@@ -317,48 +313,51 @@ impl AdvisorService {
         root: &std::path::Path,
         scope: DisclosureScope,
         history: &Evidence,
-        files: &[String],
-    ) -> Option<(Previous, bool)> {
+    ) -> Option<Previous> {
         let mut previous = self.previous.lock();
         previous.retain(|_, p| p.fresh());
         previous
-            .get_mut(&id)
+            .get(&id)
             .filter(|p| {
                 Arc::ptr_eq(&p.options, opts)
                     && p.root == PathKey::of(root)
                     && p.scope == scope
                     && p.user_item == history.user_item
-                    && !(history.recent_tools.len() == 3
-                        && history
-                            .recent_tools
-                            .iter()
-                            .all(|n| !p.evidence.recent_tools.contains(n)))
             })
-            .map(|p| {
-                let allowed = !p.claimed
-                    && files
-                        .iter()
-                        .all(|path| !path.is_empty() && p.mentions(path));
-                if allowed && !files.is_empty() {
-                    p.claimed = true
-                }
-                (p.clone(), allowed)
-            })
+            .cloned()
     }
 
-    fn count_consultation(
+    fn begin_send(
         &self,
-        id: AgentSessionId,
         opts: &AdvisorOptions,
+        send: &mut ConsultationSend,
+        scout: bool,
     ) -> Result<(), ModelError> {
         let mut counts = self.consultations.lock();
-        let used = counts.entry(id).or_default();
-        if opts.consultation_limit.is_some_and(|limit| *used >= limit) {
+        let used = counts.entry(send.session).or_default();
+        let first = !scout && !send.started;
+        if !send.started && opts.consultation_limit.is_some_and(|limit| *used >= limit) {
             return Err(ModelError::InvalidRequest(
                 "Advisor consultation budget exhausted for this session".into(),
             ));
         }
-        *used = used.saturating_add(1);
+        if let Some(key) = send.handoff.as_deref() {
+            let mut previous = self.previous.lock();
+            let grant = previous
+                .get_mut(&send.session)
+                .filter(|p| p.id == key && !p.claimed && p.fresh())
+                .ok_or_else(|| {
+                    ModelError::InvalidRequest(
+                        "Advisor file handoff expired or already used".into(),
+                    )
+                })?;
+            grant.claimed = true;
+            send.handoff = None;
+        }
+        if first {
+            *used = used.saturating_add(1);
+            send.started = true;
+        }
         Ok(())
     }
 
@@ -366,16 +365,17 @@ impl AdvisorService {
         &self,
         (provider, model): (&str, &str),
         opts: &AdvisorOptions,
-        id: AgentSessionId,
         input: SampleInput<'_>,
         cancel: CancellationToken,
     ) -> Result<AdvisorAnswer, ModelError> {
         let SampleInput {
             prompt,
             evidence,
-            consultation,
+            send,
+            scout,
         } = input;
-        let instructions = if consultation.is_some() {
+        let id = send.session;
+        let instructions = if !scout {
             INSTRUCTIONS
         } else {
             "Select evidence groups from numbered untrusted previews. Return only a JSON array of group IDs."
@@ -460,12 +460,7 @@ impl AdvisorService {
         if cancel.is_cancelled() {
             return Err(ModelError::Cancelled);
         }
-        if let Some(started) = consultation {
-            if !*started {
-                self.count_consultation(id, opts)?;
-                *started = true;
-            }
-        }
+        self.begin_send(opts, send, scout)?;
         let mut stream = session.stream(request, cancel).await?;
         let mut text = Vec::new();
         while let Some(event) = stream.next().await {

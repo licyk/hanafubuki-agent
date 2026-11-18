@@ -54,7 +54,7 @@ impl WorkspaceFsService {
             }
             bytes.extend_from_slice(&chunk[..read]);
             if bytes.len() > max_bytes {
-                return Err(WorkspaceFsError::InvalidRequest(format!(
+                return Err(WorkspaceFsError::LimitExceeded(format!(
                     "binary file exceeds {max_bytes} bytes"
                 )));
             }
@@ -79,7 +79,7 @@ impl WorkspaceFsService {
             crate::resolver::resolve_existing(&self.policy(), path, Some(WorkspacePathKind::File))?;
         revalidate_existing(&file)?;
         if file.identity.size > max_bytes as u64 {
-            return Err(WorkspaceFsError::InvalidRequest(format!(
+            return Err(WorkspaceFsError::LimitExceeded(format!(
                 "binary file exceeds {max_bytes} bytes"
             )));
         }

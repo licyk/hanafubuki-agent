@@ -226,14 +226,27 @@ async fn advisor_tool_history_applies_disclosure_policy_before_sending() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_follow_up_reuses_evidence_only_until_new_input() {
-    let server = FakeServer::start(vec![
+    let calls = tool_calls_events(&[
+        ("call-a", "list_agents", "{}"),
+        ("call-b", "list_agents", "{}"),
+        ("call-c", "list_agents", "{}"),
+    ]);
+    let executor = FakeServer::start(vec![
+        ([HOLD.as_bytes(), &calls].concat(), Duration::ZERO),
         (assistant_events("primary evidence"), Duration::ZERO),
-        (assistant_events("first opinion"), Duration::ZERO),
-        (assistant_events("second opinion"), Duration::ZERO),
         (assistant_events("new input acknowledged"), Duration::ZERO),
     ])
     .await;
-    let (service, paths) = configured_service("advisor-follow-up", &server.base_url);
+    let server = FakeServer::start(vec![
+        (assistant_events("first opinion"), Duration::ZERO),
+        (assistant_events("second opinion"), Duration::ZERO),
+    ])
+    .await;
+    let (service, paths, _) = service_with_config("advisor-follow-up", |_, config| {
+        configure_test_provider(config, &executor.base_url, None);
+        add_test_provider(config, "review", "Review", &server.base_url);
+    });
+    service.start_plugins().await;
     let id = service
         .create_session(AgentSessionMode::Default, None)
         .await
@@ -241,7 +254,7 @@ async fn a_follow_up_reuses_evidence_only_until_new_input() {
         .id;
     service
         .write_setting_values(SettingsWrite {
-            changes: [("provider", "provider-1"), ("model", "second-model")]
+            changes: [("provider", "review"), ("model", "second-model")]
                 .map(|(k, v)| SettingChange {
                     key: format!("pluginOptions.advisor.{k}"),
                     op: SettingWriteOp::Set(v.into()),
@@ -250,14 +263,31 @@ async fn a_follow_up_reuses_evidence_only_until_new_input() {
         })
         .await
         .unwrap();
-    service
-        .start_turn(id, "unique evidence".to_owned().into())
+    let review = async {
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while executor.requests().is_empty() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
         .await
         .unwrap();
-    let answer = service
-        .consult_advisor(id, "review".into(), Default::default())
-        .await
-        .unwrap();
+        let answer = service
+            .consult_advisor(id, "review".into(), Default::default())
+            .await
+            .unwrap();
+        executor.hold.notify_one();
+        answer
+    };
+    let (turn, answer) = tokio::join!(
+        service.start_turn(id, "unique evidence".to_owned().into()),
+        review
+    );
+    turn.unwrap();
+    let requests = executor.requests();
+    let completed = String::from_utf8_lossy(&requests[1].body);
+    for id in ["call-a", "call-b", "call-c"] {
+        assert!(completed.contains(id), "{completed}");
+    }
     let follow = |key: String| {
         let mut args = AdvisorConsultation::default();
         args.follow_up_to = Some(key);
@@ -265,7 +295,7 @@ async fn a_follow_up_reuses_evidence_only_until_new_input() {
         service.consult_advisor_with(id, args, Default::default())
     };
     let second = follow(answer.advice_id).await.unwrap();
-    let body = String::from_utf8(server.requests()[2].body.clone()).unwrap();
+    let body = String::from_utf8(server.requests()[1].body.clone()).unwrap();
     for part in ["unique evidence", "first opinion", "Which assumption?"] {
         assert!(body.contains(part), "{body}")
     }
@@ -274,7 +304,7 @@ async fn a_follow_up_reuses_evidence_only_until_new_input() {
         .await
         .unwrap();
     assert!(follow(second.advice_id).await.is_err());
-    assert_eq!(server.requests().len(), 4);
+    assert_eq!(server.requests().len(), 2);
     assert!(service
         .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
         .is_empty());
@@ -434,6 +464,7 @@ async fn workspace_handoff_requires_a_named_tracked_file_and_transmits_only_sele
     ] {
         std::fs::write(workspace.join(name), body).unwrap();
     }
+    std::fs::write(workspace.join("large.txt"), "withheld-marker".repeat(700)).unwrap();
     image::DynamicImage::new_rgb8(3, 2)
         .save(workspace.join("sample.png"))
         .unwrap();
@@ -483,7 +514,13 @@ async fn workspace_handoff_requires_a_named_tracked_file_and_transmits_only_sele
         .consult_advisor(id, "inspect".into(), Default::default())
         .await
         .unwrap();
-    request.include_untracked.push("sample.png".into());
+    request.include_untracked.push("missing.txt".into());
+    assert!(service
+        .consult_advisor_with(id, request.clone(), Default::default())
+        .await
+        .is_err());
+    assert_eq!(reviewer.requests().len(), 1);
+    request.include_untracked = vec!["large.txt".into(), "sample.png".into()];
     service
         .consult_advisor_with(id, request, Default::default())
         .await
@@ -495,6 +532,9 @@ async fn workspace_handoff_requires_a_named_tracked_file_and_transmits_only_sele
     assert!(
         body.contains("tracked-body")
             && body.contains("data:image/png;base64,")
+            && body.contains("large.txt")
+            && body.contains("omitted")
+            && !body.contains("withheld-marker")
             && !body.contains("excluded-body"),
         "{body}"
     );
@@ -584,6 +624,64 @@ async fn session_activation_is_local_and_a_cancelled_manual_request_preserves_th
         .await
         .is_err());
     assert_eq!(server.requests().len(), 1);
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    std::fs::remove_dir_all(paths.app_data_dir).unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn malformed_stored_efforts_preserve_the_configured_reviewer() {
+    let server = FakeServer::start(vec![(assistant_events("reviewed"), Duration::ZERO)]).await;
+    let (service, paths, _) = service_with_config("advisor-invalid-effort", |paths, config| {
+        std::fs::create_dir_all(&paths.config_dir).unwrap();
+        std::fs::write(
+            paths.config_dir.join("config.toml"),
+            r#"[pluginOptions.advisor]
+provider = "provider-1"
+model = "review"
+reasoningEffort = "bad value"
+executorEffort = "none"
+futureField = true
+"#,
+        )
+        .unwrap();
+        configure_test_provider(config, &server.base_url, None);
+    });
+    service.start_plugins().await;
+    let id = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap()
+        .id;
+    let answer = service
+        .consult_advisor(id, "question".into(), Default::default())
+        .await
+        .unwrap();
+    assert_eq!(answer.model, "review");
+    let options = service
+        .plugin_status()
+        .into_iter()
+        .find(|s| s.name == "advisor")
+        .unwrap()
+        .options
+        .unwrap();
+    for key in ["reasoningEffort", "executorEffort"] {
+        assert!(
+            options.issues.iter().any(|i| i.contains(key)),
+            "{:?}",
+            options.issues
+        );
+        assert!(service
+            .write_setting_values(SettingsWrite {
+                changes: vec![SettingChange {
+                    key: format!("pluginOptions.advisor.{key}"),
+                    op: SettingWriteOp::Set(json!("bad value")),
+                }]
+            })
+            .await
+            .is_err());
+    }
     assert!(service
         .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
         .is_empty());

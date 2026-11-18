@@ -32,6 +32,9 @@ pub struct SettingSpec {
     /// More, shown below the row when it is selected.
     pub help: Option<String>,
     pub kind: SettingKind,
+    /// The text editor accepts provider-specific effort IDs, parsed by the shared model policy.
+    #[serde(skip)]
+    pub reasoning_effort: bool,
     /// What it is when nothing usable sets it; `None` when it has none.
     pub default: Option<SettingValue>,
     pub apply: SettingApply,
@@ -56,6 +59,7 @@ impl SettingSpec {
             summary: String::new(),
             help: None,
             kind,
+            reasoning_effort: false,
             default: None,
             apply: SettingApply::Live,
             advanced: false,

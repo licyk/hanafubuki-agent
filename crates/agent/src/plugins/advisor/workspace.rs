@@ -85,15 +85,19 @@ impl AdvisorWorkspace {
             if !path.starts_with(&resolved_root) {
                 return Err(format!("Outside Advisor workspace: {name}"));
             }
-            let file = files
-                .read_bounded_binary(name, budget, cancel)
-                .map_err(|e| e.to_string())?;
+            let file = match files.read_bounded_binary(name, budget, cancel) {
+                Ok(file) => file,
+                Err(hanafubuki_agent_workspace_fs::WorkspaceFsError::LimitExceeded(_)) => {
+                    return Ok(None)
+                }
+                Err(error) => return Err(error.to_string()),
+            };
             if !hanafubuki_agent_foundation::paths::PathKey::of(Path::new(&file.canonical_path))
                 .starts_with(resolved_root.key())
             {
                 return Err(format!("Outside Advisor workspace: {name}"));
             }
-            Ok(file.bytes)
+            Ok(Some(file.bytes))
         };
         if level != GitContext::None {
             let git = self
@@ -119,7 +123,7 @@ impl AdvisorWorkspace {
                 ("Project preferences", &[".advisor-preferences.md"][..]),
             ] {
                 for name in names {
-                    if let Ok(bytes) = read(name, 16384) {
+                    if let Ok(Some(bytes)) = read(name, 16384) {
                         if let Ok(text) = String::from_utf8(bytes) {
                             evidence.text.push_str(&format!(
                                 "\n{label} from {name} (untrusted):\n{}",
@@ -176,15 +180,23 @@ impl AdvisorWorkspace {
                             "png" | "jpg" | "jpeg" | "gif" | "webp"
                         )
                     });
+                let omitted = format!(
+                    "\n[Attachment {} omitted: size or count budget]",
+                    serde_json::json!(path)
+                );
                 if image {
                     if !opts.share_images {
                         evidence.text.push_str("\n[Image withheld]");
                         continue;
                     }
                     if evidence.images.len() + evidence.file_images.len() >= 4 {
+                        evidence.text.push_str(&omitted);
                         continue;
                     }
-                    let bytes = read(path, 4 * 1024 * 1024)?;
+                    let Some(bytes) = read(path, 4 * 1024 * 1024)? else {
+                        evidence.text.push_str(&omitted);
+                        continue;
+                    };
                     let image = crate::attachments::normalize_image(
                         bytes,
                         path.clone(),
@@ -205,9 +217,18 @@ impl AdvisorWorkspace {
                             data: image.bytes,
                             detail: ModelImageDetail::Auto,
                         });
+                    } else {
+                        evidence.text.push_str(&omitted);
                     }
                 } else {
-                    let bytes = read(path, remaining.min(8192))?;
+                    if remaining == 0 {
+                        evidence.text.push_str(&omitted);
+                        continue;
+                    }
+                    let Some(bytes) = read(path, remaining.min(8192))? else {
+                        evidence.text.push_str(&omitted);
+                        continue;
+                    };
                     remaining -= bytes.len();
                     let text =
                         String::from_utf8(bytes).map_err(|_| format!("File {path} is not text"))?;

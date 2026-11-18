@@ -26,6 +26,12 @@ impl SettingSpec {
     /// number out of range is a problem that carries its clamped value.
     pub fn read(&self, raw: &Value) -> Result<SettingValue, SettingProblem> {
         let unusable = |reason: &str| Err(SettingProblem::Unusable(reason.to_string()));
+        if self.reasoning_effort {
+            if let Some(text) = raw.as_str() {
+                crate::agent_settings::ModelReasoningEffort::parse(text)
+                    .map_err(SettingProblem::Unusable)?;
+            }
+        }
         match &self.kind {
             SettingKind::Boolean => match raw.as_bool() {
                 Some(value) => Ok(SettingValue::Boolean(value)),
