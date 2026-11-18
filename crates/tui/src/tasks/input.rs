@@ -80,6 +80,34 @@ impl Tasks {
         None
     }
 
+    pub(crate) fn mouse(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<TaskAction> {
+        use ratatui::crossterm::event::{KeyModifiers, MouseButton, MouseEventKind};
+        let key = match mouse.kind {
+            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
+                if self.confirmation.is_some() =>
+            {
+                self.confirmation.as_mut()?.accepted = mouse.kind == MouseEventKind::ScrollDown;
+                return None;
+            }
+            MouseEventKind::Down(MouseButton::Left) => {
+                let target = self
+                    .hits
+                    .borrow()
+                    .iter()
+                    .find(|(rect, _)| rect.contains((mouse.column, mouse.row).into()))
+                    .map(|(_, t)| *t)?;
+                match target {
+                    super::Target::Key(key) => key,
+                }
+            }
+            _ => return None,
+        };
+        self.key(KeyEvent::new(key, KeyModifiers::NONE))
+    }
+
     fn confirm_close(&mut self) {
         let Some(view) = &self.view else {
             return;

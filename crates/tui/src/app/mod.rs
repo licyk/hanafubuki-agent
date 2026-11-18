@@ -376,7 +376,7 @@ impl App {
         tui: &mut Tui<B>,
         mouse: MouseEvent,
     ) {
-        if self.workspace.tasks.is_some()
+        if self.handle_tasks_mouse(tui, mouse)
             || self.handle_settings_mouse(tui, mouse)
             || self.handle_agents_mouse(tui, mouse)
         {

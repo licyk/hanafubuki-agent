@@ -82,7 +82,32 @@ impl App {
             return false;
         };
         let root = tasks.root;
-        match tasks.key(key) {
+        let action = tasks.key(key);
+        self.apply_tasks_action(tui, root, action);
+        true
+    }
+
+    pub(crate) fn handle_tasks_mouse<B: Backend<Error = io::Error> + Write>(
+        &mut self,
+        tui: &mut Tui<B>,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> bool {
+        let Some(tasks) = self.workspace.tasks.as_mut() else {
+            return false;
+        };
+        let root = tasks.root;
+        let action = tasks.mouse(mouse);
+        self.apply_tasks_action(tui, root, action);
+        true
+    }
+
+    fn apply_tasks_action<B: Backend<Error = io::Error> + Write>(
+        &mut self,
+        tui: &mut Tui<B>,
+        root: AgentSessionId,
+        action: Option<TaskAction>,
+    ) {
+        match action {
             Some(TaskAction::Leave) => {
                 self.workspace.tasks = None;
                 self.leave_alt_screen(tui);
@@ -98,7 +123,6 @@ impl App {
             None => {}
         }
         self.schedule_frame(Instant::now());
-        true
     }
 
     pub(crate) fn draw_tasks<B: Backend<Error = io::Error> + Write>(

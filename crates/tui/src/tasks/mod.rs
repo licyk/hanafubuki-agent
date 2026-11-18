@@ -49,6 +49,11 @@ enum Section {
     Terminals,
 }
 
+#[derive(Clone, Copy)]
+enum Target {
+    Key(ratatui::crossterm::event::KeyCode),
+}
+
 struct Confirmation {
     action: TaskAction,
     question: String,
@@ -58,6 +63,7 @@ struct Confirmation {
 pub(crate) struct Tasks {
     pub(crate) root: AgentSessionId,
     pub(crate) view: Option<TaskView>,
+    hits: std::cell::RefCell<Vec<(ratatui::layout::Rect, Target)>>,
     section: Section,
     selected: usize,
     expanded: bool,
@@ -73,6 +79,7 @@ impl Tasks {
         Self {
             root,
             view: None,
+            hits: Default::default(),
             section: Section::Agents,
             selected: 0,
             expanded: false,

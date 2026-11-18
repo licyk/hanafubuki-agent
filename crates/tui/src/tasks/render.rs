@@ -11,6 +11,7 @@ use super::{Section, Tasks};
 
 impl Tasks {
     pub(crate) fn render(&self, area: Rect, buffer: &mut Buffer, now: u128) {
+        self.hits.borrow_mut().clear();
         Clear.render(area, buffer);
         let areas = Layout::vertical([
             Constraint::Length(2),
@@ -170,20 +171,33 @@ impl Tasks {
                 height,
             );
             Clear.render(modal, buffer);
-            let choices = if confirm.accepted {
-                "No    › Yes, close"
-            } else {
-                "› No, keep running    Yes, close"
-            };
-            Paragraph::new(vec![
-                confirm.question.clone().into(),
-                "".into(),
-                choices.into(),
-                "Tab chooses · Enter confirms · Esc cancels".dim().into(),
+            let block = Block::bordered().title(" Confirm ");
+            let inner = block.inner(modal);
+            block.render(modal, buffer);
+            let [question, choices, help] = Layout::vertical([
+                Constraint::Min(1),
+                Constraint::Length(1),
+                Constraint::Length(1),
             ])
-            .wrap(Wrap { trim: false })
-            .block(Block::bordered().title(" Confirm "))
-            .render(modal, buffer);
+            .areas(inner);
+            Paragraph::new(confirm.question.as_str())
+                .wrap(Wrap { trim: false })
+                .render(question, buffer);
+            self.hits.borrow_mut().clear();
+            let [no, yes] =
+                Layout::horizontal([Constraint::Max(21), Constraint::Min(0)]).areas(choices);
+            for (rect, label, active, key) in [
+                (no, "No, keep running", !confirm.accepted, 'n'),
+                (yes, "Yes, close", confirm.accepted, 'y'),
+            ] {
+                let marker = if active { "› " } else { "  " };
+                Paragraph::new(format!("{marker}{label}")).render(rect, buffer);
+                self.hits.borrow_mut().push((
+                    rect,
+                    super::Target::Key(ratatui::crossterm::event::KeyCode::Char(key)),
+                ));
+            }
+            Paragraph::new("Tab chooses · Enter confirms · Esc cancels".dim()).render(help, buffer);
         }
     }
 
