@@ -210,3 +210,48 @@ fn enter_on_a_provider_that_failed_lists_it_again() {
     assert_eq!(harness.server.listing_requests().len(), 2);
     assert!(!screen.contains("not listed:"), "{screen}");
 }
+
+#[test]
+fn a_session_model_can_answer_with_no_global_model() {
+    let mut harness = Harness::start_configured(
+        vec![
+            (br#"{"data":[{"id":"Agents-A1"}]}"#.to_vec(), Duration::ZERO),
+            (
+                hanafubuki_agent::test_support::assistant_events("Session model answered."),
+                Duration::ZERO,
+            ),
+        ],
+        true,
+        TranscriptMode::Owned,
+        |config| {
+            config
+                .mutate_providers(1, |registry| {
+                    registry.model_policy.model.clear();
+                    Ok(())
+                })
+                .unwrap();
+        },
+    );
+    harness.pump_until_screen_shows("Settings › Providers");
+    harness.leave_settings();
+    harness.type_and_submit("/model");
+    harness.pump_until_screen_shows("Agents-A1");
+    harness.key(KeyCode::Enter);
+    harness.pump_until("the session model to change", |h| {
+        h.transcript().contains("Model changed to Agents-A1")
+    });
+    harness.type_and_submit("Which model is answering?");
+    harness.pump_until("a reply or the setup prompt", |h| {
+        let transcript = h.transcript();
+        transcript.contains("Session model answered.")
+            || transcript.contains("your message is kept")
+    });
+    assert!(harness.transcript().contains("Session model answered."));
+    assert!(harness.registry().model_policy.model.is_empty());
+    let requests = harness.server.requests();
+    let body: serde_json::Value = serde_json::from_slice(&requests.last().unwrap().body).unwrap();
+    assert_eq!(body["model"], "Agents-A1");
+    harness.pump_until_turn_ends();
+    harness.type_and_submit("/new");
+    harness.pump_until_screen_shows("Settings › Providers");
+}

@@ -184,6 +184,8 @@ impl ChatWidget {
                 commands::on_model_list(context, update)
             }),
             TurnUpdate::ModelChanged(model) => {
+                self.session_open = true;
+                self.setup_needed = false;
                 self.appearance.values_mut().model = model.clone();
                 self.sync_status_line();
                 self.add_to_history(history_cell::new_info_event(
