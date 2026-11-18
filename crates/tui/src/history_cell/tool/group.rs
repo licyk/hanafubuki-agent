@@ -183,7 +183,9 @@ fn rows(group: ToolGroup, calls: &[ToolCall], view_extent: Extent) -> Vec<Line<'
                 2
             }),
         ));
-        if group != ToolGroup::Exploration && failed(call) {
+        if group != ToolGroup::Exploration
+            && (failed(call) || matches!(group, ToolGroup::Questions | ToolGroup::Goals))
+        {
             rows.extend(prefix_lines(
                 call.view(view_extent.nested()).preview,
                 "  ".into(),

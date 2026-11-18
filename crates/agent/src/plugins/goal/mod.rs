@@ -9,6 +9,7 @@
 //! its session).
 
 mod context;
+mod presenter;
 mod runtime;
 mod templates;
 mod tools;
@@ -19,9 +20,9 @@ use hanafubuki_agent_contracts::{
     AgentContinuationContext, AgentContinuationHook, AgentContinuationHookDecision,
     AgentContinuationHookError, AgentContinuationHookFailurePolicy, AgentContinuationHookFuture,
     AgentContinuationHookGeneration, AgentContinuationHookId, AgentContinuationHookProviderId,
-    AgentContinuationHookRegistration, ArgumentSubjects, BlockingService, CancellationToken,
-    ContextRegistry, ContextRendererRegistry, ContinuationHookRegistry, Register,
-    ToolPresenterRegistry, ToolRegistry,
+    AgentContinuationHookRegistration, BlockingService, CancellationToken, ContextRegistry,
+    ContextRendererRegistry, ContinuationHookRegistry, Register, ToolPresenterRegistry,
+    ToolRegistry,
 };
 use hanafubuki_agent_kernel::{AgentError, AgentGoal, AgentGoalOrigin, AgentSessionId};
 use kardia_core::{Context, Inject, PluginDef, Service};
@@ -54,10 +55,7 @@ pub(crate) fn goal_plugin(goals: AgentGoalApplication) -> PluginDef {
                 registry.register(Arc::new(tool))?;
             }
             ctx.get::<ToolPresenterRegistry>()?
-                .register(Arc::new(ArgumentSubjects::new(&[
-                    ("create_goal", "objective"),
-                    ("update_goal", "status"),
-                ])))?;
+                .register(Arc::new(presenter::GoalPresenter))?;
             ctx.get::<ContextRegistry>()?
                 .register(Arc::new(GoalContext(runtime.clone())))?;
             ctx.get::<ContextRendererRegistry>()?

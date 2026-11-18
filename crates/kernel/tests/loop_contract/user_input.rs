@@ -437,6 +437,17 @@ async fn structured_user_input_pauses_exact_turn_and_resumes_with_tool_output() 
 
     let outcome = turn_task.await.unwrap().unwrap();
     assert_eq!(outcome.final_answer, "focused plan ready");
+    let display = service
+        .tool_display(session.id, "call-question")
+        .unwrap()
+        .unwrap();
+    assert_eq!(display.subject.as_deref(), Some("Scope"));
+    assert_eq!(
+        display.display,
+        Some(hanafubuki_agent_contracts::AgentToolDisplay::Text {
+            text: "Choose a scope → Focused".into()
+        })
+    );
     let snapshot = test_session_view(&service, session.id).unwrap();
     assert!(snapshot.pending_user_input.is_none());
     assert_eq!(

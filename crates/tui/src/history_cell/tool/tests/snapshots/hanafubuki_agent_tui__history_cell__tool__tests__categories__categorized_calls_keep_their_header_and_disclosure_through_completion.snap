@@ -82,18 +82,20 @@ expression: "gallery.join(\"\\n\\n\")"
 
 • Managed goal
   └ Create goal Fix the bug
+      Full result kept in
+      details
 ─── expanded (Some(Generic)) ───
 • Managed goal
-  └ Called create_goal: Fix the
-      bug
+  └ Created goal Fix the bug
       Full result kept in
       details
 
 • Asked user
   └ Ask Choose a target
+      Full result kept in
+      details
 ─── expanded (Some(Generic)) ───
 • Asked user
-  └ Called request_user_input:
-      Choose a target
+  └ Asked user Choose a target
       Full result kept in
       details

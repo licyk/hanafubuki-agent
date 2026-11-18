@@ -34,6 +34,8 @@ mod executions;
 mod features;
 mod goal;
 #[cfg(target_os = "linux")]
+mod goal_display;
+#[cfg(target_os = "linux")]
 mod golden;
 #[cfg(unix)]
 mod hooks;

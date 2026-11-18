@@ -45,14 +45,24 @@ fn command_title(call: &ToolCall, verb: &str, failed: bool) -> View {
 }
 
 pub(super) fn view(call: &ToolCall, failed: bool, lines: Vec<String>, extent: Extent) -> View {
+    let summary = matches!(
+        call.name.as_str(),
+        "request_user_input" | "create_goal" | "get_goal" | "update_goal"
+    );
     let shown = if call.name == COMPRESS {
         1
+    } else if summary {
+        5
     } else {
         PREVIEW_LINES
     };
     let mut preview = Vec::new();
     let mut cut = false;
     for line in lines.iter().take(shown) {
+        if summary {
+            preview.extend(wrapped(Line::from(line.clone()).dim(), extent.columns, ""));
+            continue;
+        }
         let (row, was_cut) = clipped(Line::from(line.clone()).dim(), extent.columns);
         cut |= was_cut;
         preview.push(row);
@@ -100,6 +110,14 @@ fn named(call: &ToolCall) -> Vec<Span<'static>> {
 
 fn operation_title(call: &ToolCall, running: bool) -> Option<Vec<Span<'static>>> {
     let verb = match (call.name.as_str(), running) {
+        ("request_user_input", true) => "Asking user",
+        ("request_user_input", false) => "Asked user",
+        ("create_goal", true) => "Creating goal",
+        ("create_goal", false) => "Created goal",
+        ("get_goal", true) => "Reading goal",
+        ("get_goal", false) => "Read goal",
+        ("update_goal", true) => "Updating goal",
+        ("update_goal", false) => "Updated goal",
         ("spawn_agent", true) => "Starting agent",
         ("spawn_agent", false) => "Started agent",
         ("send_message" | "followup_task", true) => "Interacting with",

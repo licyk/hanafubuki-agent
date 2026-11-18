@@ -82,7 +82,10 @@ fn categorized_calls_keep_their_header_and_disclosure_through_completion() {
                 }),
             },
         );
-        assert!(!render(&cell, 80).contains("Full result"));
+        assert_eq!(
+            render(&cell, 80).contains("Full result"),
+            matches!(name, "create_goal" | "request_user_input")
+        );
         assert!(text(&cell.transcript_lines(80)).starts_with(&format!("• {completed}\n  └ ")));
         assert!(text(&cell.transcript_lines(80)).contains("Full result kept in details"));
         assert!(text(&cell.raw_lines()).contains("Full result kept in details"));
@@ -286,4 +289,37 @@ fn terminal_interactions_group_polls_input_and_resize_without_hiding_failures() 
         cell.display_lines(80)[0].spans[0].style.fg,
         Some(Color::Red)
     );
+}
+
+#[test]
+fn completed_questions_and_goals_show_wrapped_summaries_without_expanding() {
+    for (tool, summary) in [
+        ("request_user_input", "请选择需要修改的项目范围以继续下一步 → 仅此功能\n运行测试？ → 运行"),
+        ("update_goal", "Status: complete\nGoal: 修复终端工具状态显示并验证恢复会话\nTokens: 250 / 1000 · 750 remaining\nTime: 42s used"),
+    ] {
+        let cell = shown(tool, None, AgentToolDisplay::Text { text: summary.into() });
+        let collapsed = render(&cell, 36);
+        for expected in if tool == "request_user_input" { vec!["仅此功能", "运行测试？", "运行"] } else { vec!["Status: complete", "Tokens: 250", "Time: 42s used"] } {
+            assert!(collapsed.contains(expected), "{collapsed}");
+        }
+        assert_eq!(cell.transcript_animation_tick(), None);
+        assert_eq!(cell.activity_disclosure(36), Some(ActivityDisclosure::Generic));
+        let expanded = text(&cell.transcript_lines(120));
+        for line in summary.lines() {
+            assert!(expanded.contains(line), "{expanded}");
+        }
+    }
+}
+
+#[test]
+fn long_goal_summaries_keep_the_remaining_text_in_details() {
+    let cell = shown(
+        "get_goal",
+        None,
+        AgentToolDisplay::Text { text: numbered(8) },
+    );
+    let collapsed = render(&cell, 80);
+    assert!(collapsed.contains("line 5"));
+    assert!(!collapsed.contains("line 6"));
+    assert!(text(&cell.transcript_lines(80)).contains("line 8"));
 }
