@@ -103,12 +103,20 @@ fn choose<B: Backend<Error = io::Error> + Write>(
     events: &Receiver<AppEvent>,
     screen: &mut UpdatePromptScreen,
 ) -> io::Result<TuiUpdateChoice> {
+    tui.set_inline_mouse_capture(true)?;
     screen.draw(tui)?;
     // What the input thread read before the screen was drawn was typed
     // before it appeared.
     while events.try_recv().is_ok() {}
     let mut choice = TuiUpdateChoice::Skip;
     while let Ok(event) = events.recv() {
+        let event = match event {
+            AppEvent::Mouse(mouse) => match screen.mouse_key(mouse) {
+                Some(code) => AppEvent::Key(KeyEvent::new(code, KeyModifiers::NONE)),
+                None => continue,
+            },
+            other => other,
+        };
         match event {
             AppEvent::Key(key) => match screen.handle_key(key) {
                 Some(chosen) => {
@@ -127,6 +135,7 @@ fn choose<B: Backend<Error = io::Error> + Write>(
 
 struct UpdatePromptScreen {
     prompt: TuiUpdatePrompt,
+    rows: std::cell::RefCell<Vec<(Rect, usize)>>,
     /// The index in [`CHOICES`] of the highlighted row.
     highlighted: usize,
 }
@@ -136,6 +145,25 @@ impl UpdatePromptScreen {
         Self {
             prompt,
             highlighted: 0,
+            rows: Default::default(),
+        }
+    }
+
+    fn mouse_key(&mut self, mouse: ratatui::crossterm::event::MouseEvent) -> Option<KeyCode> {
+        use ratatui::crossterm::event::{MouseButton, MouseEventKind};
+        match mouse.kind {
+            MouseEventKind::ScrollUp => Some(KeyCode::Up),
+            MouseEventKind::ScrollDown => Some(KeyCode::Down),
+            MouseEventKind::Down(MouseButton::Left) => {
+                self.highlighted = self
+                    .rows
+                    .borrow()
+                    .iter()
+                    .find(|(rect, _)| rect.contains((mouse.column, mouse.row).into()))?
+                    .1;
+                Some(KeyCode::Enter)
+            }
+            _ => None,
         }
     }
 
@@ -178,6 +206,7 @@ impl UpdatePromptScreen {
     /// notes and the options share what the hint leaves: the options take
     /// at least a row, the highlighted option's first.
     fn render(&self, area: Rect, buf: &mut Buffer) {
+        self.rows.borrow_mut().clear();
         Clear.render(area, buf);
         // The insets need four columns.
         if area.width < 5 {
@@ -194,6 +223,7 @@ impl UpdatePromptScreen {
             prompt.release_notes.clone().dim().underlined(),
         ]));
         let options = OptionList {
+            hits: &self.rows,
             labels: [
                 prompt.update_now.as_str(),
                 "Skip",
@@ -288,6 +318,7 @@ fn allocate(parts: &[(bool, u16)], height: u16) -> Vec<u16> {
 /// The numbered options, wrapped under their labels, between a blank row
 /// above and one below that show `↑` and `↓` when options are out of view.
 struct OptionList<'a> {
+    hits: &'a std::cell::RefCell<Vec<(Rect, usize)>>,
     labels: [&'a str; 3],
     highlighted: usize,
 }
@@ -336,6 +367,14 @@ impl Renderable for OptionList<'_> {
                 > usize::from(body.height)
         {
             first += 1;
+        }
+        let mut y = body.y;
+        for (index, lines) in rows.iter().enumerate().skip(first) {
+            let height = (lines.len() as u16).min(body.bottom().saturating_sub(y));
+            self.hits
+                .borrow_mut()
+                .push((Rect::new(body.x, y, body.width, height), index));
+            y += height;
         }
         let lines: Vec<&Line> = rows[first..].iter().flatten().collect();
         let shown = lines.len().min(usize::from(body.height));
