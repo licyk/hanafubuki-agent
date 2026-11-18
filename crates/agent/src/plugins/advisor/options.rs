@@ -33,6 +33,8 @@ pub(super) struct AdvisorOptions {
     pub review_stages: Vec<String>,
     pub consultation_limit: Option<usize>,
     pub record_outcomes: bool,
+    pub repeat_threshold: Option<usize>,
+    pub gate_failure: super::gate::Failure,
     pub history_chars: usize,
     pub activation_scope: ActivationScope,
     pub active: bool,
@@ -61,6 +63,8 @@ impl Default for AdvisorOptions {
             review_stages: vec!["plan".into(), "failure".into(), "completion".into()],
             consultation_limit: None,
             record_outcomes: false,
+            repeat_threshold: None,
+            gate_failure: Default::default(),
             history_chars: 15_000,
             activation_scope: ActivationScope::Persistent,
             active: false,
@@ -176,6 +180,23 @@ pub(crate) fn advisor_schema() -> PluginOptionSchema {
             "recordOutcomes",
             "Record adoption and verification outcomes locally",
             SettingKind::Boolean,
+        ),
+        (
+            "repeatThreshold",
+            "Review after consecutive identical tool calls (reset to disable)",
+            SettingKind::Integer {
+                minimum: Some(2),
+                maximum: None,
+            },
+        ),
+        (
+            "gateFailure",
+            "When automatic review is blocked or unavailable",
+            SettingKind::Choice {
+                values: ["warn", "blockTool", "blockSession"]
+                    .map(|v| SettingChoice::new(v, v))
+                    .into(),
+            },
         ),
         ("provider", "Advisor provider ID", text()),
         ("model", "Advisor model ID", text()),

@@ -280,3 +280,56 @@ async fn a_follow_up_reuses_evidence_only_until_new_input() {
         .is_empty());
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn enabled_gate_reviews_repeated_calls_and_returns_revision_to_the_executor() {
+    let executor = FakeServer::start(vec![
+        (tool_events("list_agents", "{}"), Duration::ZERO),
+        (tool_events("list_agents", "{}"), Duration::ZERO),
+        (assistant_events("done"), Duration::ZERO),
+    ])
+    .await;
+    let advisor = FakeServer::start(vec![(
+        assistant_events(r#"{"decision":"revise","reason":"Use the first inventory."}"#),
+        Duration::ZERO,
+    )])
+    .await;
+    let (service, paths, _) = service_with_config("advisor-gate", |_, config| {
+        configure_test_provider(config, &executor.base_url, None);
+        add_test_provider(config, "review", "Review", &advisor.base_url);
+    });
+    service.start_plugins().await;
+    let id = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap()
+        .id;
+    service
+        .write_setting_values(SettingsWrite {
+            changes: [
+                ("provider", json!("review")),
+                ("model", json!("reviewer")),
+                ("repeatThreshold", json!(2)),
+            ]
+            .map(|(key, value)| SettingChange {
+                key: format!("pluginOptions.advisor.{key}"),
+                op: SettingWriteOp::Set(value),
+            })
+            .into(),
+        })
+        .await
+        .unwrap();
+    service.set_advisor_active(id, true).await.unwrap();
+    service
+        .start_turn(id, "check inventory".to_string().into())
+        .await
+        .unwrap();
+    assert_eq!(advisor.requests().len(), 1);
+    assert!(
+        String::from_utf8_lossy(&executor.requests()[2].body).contains("Use the first inventory.")
+    );
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    std::fs::remove_dir_all(paths.app_data_dir).unwrap();
+}

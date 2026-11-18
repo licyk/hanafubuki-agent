@@ -1,5 +1,6 @@
 //! A tool-free second opinion on the current conversation.
 mod follow_up;
+mod gate;
 mod history;
 mod outcomes;
 pub use outcomes::{Adoption, AdvisorStats, Validation};
@@ -32,6 +33,7 @@ pub(crate) struct AdvisorService {
     workspace: workspace::AdvisorWorkspace,
     blocking: Arc<BlockingService>,
     options: RwLock<Arc<AdvisorOptions>>,
+    repeats: parking_lot::Mutex<HashMap<AgentSessionId, gate::Repeated>>,
     ledger: Arc<outcomes::Ledger>,
     consultations: parking_lot::Mutex<HashMap<AgentSessionId, usize>>,
     previous: parking_lot::Mutex<HashMap<AgentSessionId, follow_up::Previous>>,
@@ -62,6 +64,7 @@ pub(crate) fn advisor_plugin(
             let stopping = cancellation.clone();
             ctx.defer("advisor requests", Disposer::new(move || stopping.cancel()))?;
             let service = Arc::new(AdvisorService {
+                repeats: Default::default(),
                 ledger,
                 conversations,
                 workspace,
@@ -74,6 +77,7 @@ pub(crate) fn advisor_plugin(
             });
             let updated = service.clone();
             ctx.on_update(move |options: &AdvisorOptions| {
+                updated.repeats.lock().clear();
                 updated.previous.lock().clear();
                 *updated.options.write() = Arc::new(options.clone());
                 true
@@ -82,6 +86,7 @@ pub(crate) fn advisor_plugin(
                 .register(Arc::new(prompt::Guidance(service.clone())))?;
             ctx.get::<hanafubuki_agent_contracts::ContextRendererRegistry>()?
                 .register(prompt::RENDERER)?;
+            gate::register(&ctx, service.clone())?;
             ctx.get::<ToolSourceRegistry>()?
                 .register(Arc::new(tool::AdvisorSource::new(service.clone())?))?;
             ctx.get::<ToolPresenterRegistry>()?
@@ -96,6 +101,7 @@ pub(crate) fn advisor_plugin(
         Inject::new()
             .with(hanafubuki_agent_contracts::PromptContributorRegistry::NAME)
             .with(hanafubuki_agent_contracts::ContextRendererRegistry::NAME)
+            .with(hanafubuki_agent_contracts::ToolLifecycleHookRegistry::NAME)
             .with(BlockingService::NAME)
             .with(ToolPresenterRegistry::NAME)
             .with(ToolSourceRegistry::NAME),
@@ -126,6 +132,10 @@ impl AdvisorService {
             return Err(AgentError::InvalidInput(
                 "Choose an Advisor provider and model in /advisor-settings first".into(),
             ));
+        }
+        if !active {
+            self.repeats.lock().remove(&id);
+            self.previous.lock().remove(&id);
         }
         if options.activation_scope == ActivationScope::Persistent {
             return Ok(true);
