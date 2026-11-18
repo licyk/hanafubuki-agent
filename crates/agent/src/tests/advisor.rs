@@ -93,9 +93,7 @@ async fn advisor_manual_and_model_calls_share_a_provider_only_after_explicit_act
     assert!(error.to_string().contains("budget exhausted"), "{error}");
     assert_eq!(advisor.requests().len(), 2);
 
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    shutdown_service(service).await;
     let reopened = reopen_service(config, test_host(&paths), &paths);
     reopened.start_plugins().await;
     let display = reopened.tool_display(id, "call-tool").unwrap().unwrap();
@@ -103,9 +101,7 @@ async fn advisor_manual_and_model_calls_share_a_provider_only_after_explicit_act
     assert!(
         matches!(display.display, Some(AgentToolDisplay::Text { text }) if text.contains("Model: second/visual/reviewer") && text.contains("Question: Which colour?") && text.contains("Advice: advisor green"))
     );
-    assert!(reopened
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    shutdown_service(reopened).await;
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
 
@@ -159,9 +155,7 @@ async fn live_advisor_routes_a_manual_question_to_the_selected_model() {
         .unwrap();
     assert!(answer.text.contains(&marker), "{answer:?}");
     assert_eq!(answer.model, reviewer);
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    shutdown_service(service).await;
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
 
@@ -228,9 +222,7 @@ async fn advisor_tool_history_applies_disclosure_policy_before_sending() {
         .unwrap();
     let request = String::from_utf8(advisor.requests()[1].body.clone()).unwrap();
     assert!(!request.contains("list_agents"), "{request}");
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    shutdown_service(service).await;
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
 
@@ -315,9 +307,7 @@ async fn a_follow_up_reuses_evidence_only_until_new_input() {
         .unwrap();
     assert!(follow(second.advice_id).await.is_err());
     assert_eq!(server.requests().len(), 2);
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    shutdown_service(service).await;
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
 
@@ -368,9 +358,7 @@ async fn enabled_gate_reviews_repeated_calls_and_returns_revision_to_the_executo
     assert!(
         String::from_utf8_lossy(&executor.requests()[2].body).contains("Use the first inventory.")
     );
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    shutdown_service(service).await;
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
 
@@ -437,9 +425,7 @@ async fn model_settings_proposals_need_user_confirmation_and_scout_only_forwards
         body.contains("selected evidence") && !body.contains("candidate review"),
         "{body}"
     );
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    shutdown_service(service).await;
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
 
@@ -548,9 +534,7 @@ async fn workspace_handoff_requires_a_named_tracked_file_and_transmits_only_sele
             && !body.contains("excluded-body"),
         "{body}"
     );
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    shutdown_service(service).await;
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
 
@@ -634,9 +618,7 @@ async fn session_activation_is_local_and_a_cancelled_manual_request_preserves_th
         .await
         .is_err());
     assert_eq!(server.requests().len(), 1);
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    shutdown_service(service).await;
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
 
@@ -692,8 +674,6 @@ futureField = true
             .await
             .is_err());
     }
-    assert!(service
-        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
-        .is_empty());
+    shutdown_service(service).await;
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }

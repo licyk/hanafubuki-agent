@@ -47,3 +47,22 @@ impl MountedSkills {
             })
     }
 }
+
+pub(super) async fn shutdown_service(service: AgentApplicationService) {
+    let deadline = Instant::now() + TEST_SHUTDOWN_DEADLINE;
+    let stopping = service.clone();
+    assert!(
+        tokio::task::spawn_blocking(move || stopping.stop_accepting_and_cancel_turns(deadline))
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    service.shutdown_mcp(deadline).await.unwrap();
+    assert!(service.shutdown_plugins(deadline).await.is_empty());
+    assert!(
+        tokio::task::spawn_blocking(move || service.shutdown_workers_after_mcp(deadline))
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}

@@ -56,7 +56,7 @@ async fn live_hoshimi_small_context_tool_loop_does_not_compact_on_cumulative_usa
             "data_dir": paths.app_data_dir,
         })
     );
-    shutdown(service).await;
+    shutdown_service(service).await;
     let outcome = result.unwrap().unwrap();
     assert!(outcome.final_answer.contains("CONTEXT_BUDGET_OK"));
     assert_eq!(calls, 36);
@@ -120,7 +120,7 @@ async fn live_hoshimi_reported_context_and_images_compact_at_threshold() {
         let before = service.core.snapshot(session.id).unwrap();
         assert!(before.usage.unwrap().context_estimated_tokens.unwrap() > 1_000_000);
         assert!(before.compaction.is_none());
-        shutdown(service).await;
+        shutdown_service(service).await;
 
         let service = reopen_service(config, test_host(&paths), &paths);
         service
@@ -186,7 +186,7 @@ async fn live_hoshimi_reported_context_and_images_compact_at_threshold() {
                 .id,
             compact.id
         );
-        shutdown(service).await;
+        shutdown_service(service).await;
     }
 }
 
@@ -246,23 +246,4 @@ async fn exchange(
         assert!(outcome.final_answer.contains("CONTEXT_PROBE_OK"));
     }
     usage.last_response_input_tokens
-}
-
-async fn shutdown(service: AgentApplicationService) {
-    let deadline = Instant::now() + TEST_SHUTDOWN_DEADLINE;
-    let stopping = service.clone();
-    assert!(
-        tokio::task::spawn_blocking(move || stopping.stop_accepting_and_cancel_turns(deadline))
-            .await
-            .unwrap()
-            .is_empty()
-    );
-    service.shutdown_mcp(deadline).await.unwrap();
-    assert!(service.shutdown_plugins(deadline).await.is_empty());
-    assert!(
-        tokio::task::spawn_blocking(move || service.shutdown_workers_after_mcp(deadline))
-            .await
-            .unwrap()
-            .is_empty()
-    );
 }
