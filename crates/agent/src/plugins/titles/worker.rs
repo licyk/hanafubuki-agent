@@ -127,7 +127,8 @@ async fn title_turn(
             "Agent automatic title dropped: the session's title changed session={session_id}"
         ),
         Err(error) => {
-            log::debug!("Agent automatic title commit failed session={session_id}: {error}")
+            log::debug!("Agent automatic title commit failed session={session_id}: {error}");
+            return false;
         }
     }
     true

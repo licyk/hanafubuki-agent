@@ -22,7 +22,9 @@ pub(super) fn provisional_agent_title(prompt: &str) -> Option<String> {
         normalized
             .chars()
             .take(AUTOMATIC_AGENT_TITLE_MAX_CHARS)
-            .collect(),
+            .collect::<String>()
+            .trim_end()
+            .to_owned(),
     )
 }
 
