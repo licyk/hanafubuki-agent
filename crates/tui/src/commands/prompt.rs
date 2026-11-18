@@ -34,6 +34,7 @@ pub(crate) type PromptCheck = fn(&str) -> Result<(), String>;
 const INDENT: u16 = 2;
 
 pub(crate) struct PromptView {
+    buttons: crate::bottom_pane::ActionButtons,
     title: String,
     placeholder: String,
     field: TextField,
@@ -58,6 +59,7 @@ impl PromptView {
         Self {
             title: title.into(),
             placeholder: placeholder.into(),
+            buttons: Default::default(),
             field: TextField::new("", false),
             note: None,
             suggestion: None,
@@ -135,6 +137,10 @@ impl PromptView {
 }
 
 impl BottomPaneView for PromptView {
+    fn pointer_key(&mut self, mouse: ratatui::crossterm::event::MouseEvent) -> Option<KeyCode> {
+        self.buttons.key(mouse)
+    }
+
     fn handle_key_event(&mut self, key: KeyEvent) {
         if key.kind == KeyEventKind::Release {
             return;
@@ -190,7 +196,24 @@ impl BottomPaneView for PromptView {
 
 impl Renderable for PromptView {
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        Paragraph::new(self.lines(area.width).0).render(area, buf);
+        let (mut lines, _) = self.lines(area.width);
+        lines.pop();
+        let buttons = Rect::new(
+            area.x + 2,
+            area.y.saturating_add(lines.len() as u16),
+            area.width.saturating_sub(2),
+            1,
+        )
+        .intersection(area);
+        Paragraph::new(lines).render(area, buf);
+        let mut actions = vec![
+            ("Enter confirm", KeyCode::Enter),
+            ("Esc cancel", KeyCode::Esc),
+        ];
+        if self.suggestion.is_some() {
+            actions.push(("Tab use suggestion", KeyCode::Tab));
+        }
+        self.buttons.render(buttons, buf, &actions);
     }
 
     fn desired_height(&self, width: u16) -> u16 {

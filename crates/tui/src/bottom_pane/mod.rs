@@ -17,6 +17,7 @@
 //! Some UI is time-based rather than input-based, such as the transient "press again to quit"
 //! hint. The pane schedules redraws so those hints can expire even when the UI is otherwise idle.
 
+mod actions;
 mod approval_overlay;
 mod bottom_pane_view;
 mod chat_composer;
@@ -64,6 +65,7 @@ use crate::render::renderable::RenderableItem;
 use crate::status_indicator_widget::StatusIndicatorWidget;
 use crate::tui::FrameRequester;
 use crate::user_message::{MessageImage, UserMessage};
+pub(crate) use actions::ActionButtons;
 use approval_overlay::ApprovalOverlay;
 pub(crate) use bottom_pane_view::BottomPaneView;
 use chat_composer::ChatComposer;

@@ -28,6 +28,7 @@ pub(super) enum Capture {
 }
 
 pub(super) struct KeymapCapture {
+    buttons: crate::bottom_pane::ActionButtons,
     action: Action,
     capture: Capture,
     /// The new binding is added to the action's keys, not put in their
@@ -43,6 +44,7 @@ impl KeymapCapture {
     pub(super) fn new(action: Action, capture: Capture, add: bool, tx: AppEventSender) -> Self {
         Self {
             action,
+            buttons: Default::default(),
             capture,
             add,
             first: None,
@@ -111,6 +113,10 @@ impl KeymapCapture {
 }
 
 impl BottomPaneView for KeymapCapture {
+    fn pointer_key(&mut self, mouse: ratatui::crossterm::event::MouseEvent) -> Option<KeyCode> {
+        self.buttons.key(mouse)
+    }
+
     fn handle_key_event(&mut self, key: KeyEvent) {
         if key.kind != KeyEventKind::Press {
             return;
@@ -149,9 +155,16 @@ impl BottomPaneView for KeymapCapture {
 impl Renderable for KeymapCapture {
     fn render(&self, area: Rect, buf: &mut Buffer) {
         let content = render_menu_surface(area, buf);
+        let [body, buttons] = ratatui::layout::Layout::vertical([
+            ratatui::layout::Constraint::Fill(1),
+            ratatui::layout::Constraint::Length(1),
+        ])
+        .areas(content);
         Paragraph::new(self.lines())
             .wrap(Wrap { trim: false })
-            .render(content, buf);
+            .render(body, buf);
+        self.buttons
+            .render(buttons, buf, &[("Esc cancel", KeyCode::Esc)]);
     }
 
     fn desired_height(&self, width: u16) -> u16 {
@@ -161,6 +174,6 @@ impl Renderable for KeymapCapture {
             .iter()
             .map(|line| (line.width() as u16).div_ceil(width).max(1))
             .sum();
-        rows + 2
+        rows + 3
     }
 }

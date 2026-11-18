@@ -41,6 +41,7 @@ pub(crate) type ConfirmCallback = Box<dyn Fn(&[String])>;
 pub(crate) type CancelCallback = Box<dyn Fn()>;
 
 pub(crate) struct MultiSelectPicker {
+    buttons: super::ActionButtons,
     title: String,
     subtitle: Option<String>,
     items: Vec<MultiSelectItem>,
@@ -62,6 +63,7 @@ impl MultiSelectPicker {
         let mut state = ScrollState::new();
         state.clamp_selection(items.len());
         Self {
+            buttons: Default::default(),
             title,
             subtitle,
             items,
@@ -226,7 +228,9 @@ impl BottomPaneView for MultiSelectPicker {
         &mut self,
         mouse: ratatui::crossterm::event::MouseEvent,
     ) -> Option<ratatui::crossterm::event::KeyCode> {
-        self.state.pointer(mouse, KeyCode::Char(' '))
+        self.buttons
+            .key(mouse)
+            .or_else(|| self.state.pointer(mouse, KeyCode::Char(' ')))
     }
 
     fn handle_key_event(&mut self, key: KeyEvent) {
@@ -304,7 +308,27 @@ impl Renderable for MultiSelectPicker {
             width: footer_area.width.saturating_sub(2),
             ..footer_area
         };
+        let buttons = Rect::new(
+            footer_area.x,
+            footer_area.y.saturating_add(footer.len() as u16 - 1),
+            footer_area.width,
+            1,
+        )
+        .intersection(footer_area);
+        let mut footer = footer;
+        footer.pop();
         Paragraph::new(footer).render(footer_area, buf);
+        self.buttons.render(
+            buttons,
+            buf,
+            &[
+                ("Space toggle", KeyCode::Char(' ')),
+                ("← earlier", KeyCode::Left),
+                ("→ later", KeyCode::Right),
+                ("Enter confirm", KeyCode::Enter),
+                ("Esc cancel", KeyCode::Esc),
+            ],
+        );
     }
 }
 

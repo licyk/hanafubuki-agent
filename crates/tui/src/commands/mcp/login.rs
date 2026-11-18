@@ -18,6 +18,7 @@ use crate::commands::CommandReply;
 use crate::render::renderable::Renderable;
 
 pub(super) struct LoginView {
+    buttons: crate::bottom_pane::ActionButtons,
     server_id: McpServerId,
     tx: AppEventSender,
     url: Option<String>,
@@ -30,6 +31,7 @@ impl LoginView {
     pub(super) fn new(server_id: McpServerId, tx: AppEventSender) -> Self {
         Self {
             server_id,
+            buttons: Default::default(),
             tx,
             url: None,
             error: None,
@@ -74,6 +76,10 @@ impl LoginView {
 }
 
 impl BottomPaneView for LoginView {
+    fn pointer_key(&mut self, mouse: ratatui::crossterm::event::MouseEvent) -> Option<KeyCode> {
+        self.buttons.key(mouse)
+    }
+
     fn handle_key_event(&mut self, key: KeyEvent) {
         if key.kind == KeyEventKind::Release {
             return;
@@ -112,14 +118,25 @@ impl BottomPaneView for LoginView {
 
 impl Renderable for LoginView {
     fn render(&self, area: Rect, buf: &mut Buffer) {
+        let [body, buttons] = ratatui::layout::Layout::vertical([
+            ratatui::layout::Constraint::Fill(1),
+            ratatui::layout::Constraint::Length(1),
+        ])
+        .areas(area);
         Paragraph::new(self.lines())
             .wrap(Wrap { trim: false })
-            .render(area, buf);
+            .render(body, buf);
+        let mut actions = vec![("Esc close", KeyCode::Esc)];
+        if self.url.is_some() {
+            actions.push(("c copy address", KeyCode::Char('c')));
+        }
+        self.buttons.render(buttons, buf, &actions);
     }
 
     fn desired_height(&self, width: u16) -> u16 {
         Paragraph::new(self.lines())
             .wrap(Wrap { trim: false })
             .line_count(width.max(1)) as u16
+            + 1
     }
 }
