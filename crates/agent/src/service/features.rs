@@ -81,6 +81,16 @@ impl AgentApplicationService {
         Ok(())
     }
 
+    pub fn advisor_session_status(
+        &self,
+        id: AgentSessionId,
+    ) -> Option<crate::AdvisorSessionStatus> {
+        self.host
+            .service::<crate::plugins::AdvisorService>("advisor")
+            .ok()
+            .map(|service| service.status(id))
+    }
+
     pub async fn advisor_stats(&self) -> Result<crate::AdvisorStats, AgentError> {
         self.feature(
             "advisor",

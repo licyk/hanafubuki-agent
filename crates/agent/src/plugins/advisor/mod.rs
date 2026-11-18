@@ -31,6 +31,13 @@ use parking_lot::RwLock;
 use crate::conversation_reader::AgentConversationReader;
 use options::{ActivationScope, AdvisorOptions};
 
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct AdvisorSessionStatus {
+    pub active: bool,
+    pub consultations: usize,
+    pub limit: Option<usize>,
+}
+
 pub(crate) struct ExecutorPin {
     pub target: Option<(String, String)>,
     pub effort: Option<hanafubuki_agent_kernel::ModelReasoningEffort>,
@@ -130,6 +137,18 @@ impl AdvisorService {
             .await
             .map_err(|e| AgentError::InvalidInput(e.to_string()))?
             .map_err(AgentError::InvalidInput)
+    }
+    pub(crate) fn status(&self, id: AgentSessionId) -> AdvisorSessionStatus {
+        AdvisorSessionStatus {
+            active: self.active(id),
+            consultations: self
+                .consultations
+                .lock()
+                .get(&id)
+                .copied()
+                .unwrap_or_default(),
+            limit: self.options.read().consultation_limit,
+        }
     }
     fn active(&self, id: AgentSessionId) -> bool {
         let options = self.options.read();

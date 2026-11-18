@@ -19,6 +19,7 @@ use crate::app_event::AppEvent;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct SessionStatus {
+    pub(crate) advisor: Option<hanafubuki_agent::AdvisorSessionStatus>,
     pub(crate) session_id: AgentSessionId,
     pub(crate) title: Option<String>,
     pub(crate) agent_label: String,
@@ -84,6 +85,7 @@ impl AgentBridge {
         });
         let root = self.workspace_roots().into_iter().next();
         Some(TurnUpdate::SessionStatus(Box::new(SessionStatus {
+            advisor: self.agent.advisor_session_status(session_id),
             session_id,
             agent_label: match snapshot.origin {
                 Some(hanafubuki_agent::AgentSessionOrigin::Side) => "Side conversation".to_string(),

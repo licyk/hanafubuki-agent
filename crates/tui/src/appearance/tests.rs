@@ -67,6 +67,7 @@ fn goal(objective: &str) -> AgentGoal {
 /// A session with every value known.
 fn status() -> SessionStatus {
     SessionStatus {
+        advisor: None,
         agent_label: "Main agent".to_string(),
         session_id: AgentSessionId::new(7),
         title: Some("Fix the build".to_string()),

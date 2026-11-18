@@ -293,6 +293,17 @@ impl SurfaceValues {
                 let state = format!("{:?}", goal.status).to_lowercase();
                 format!("Goal: {objective}{ellipsis} ({state})")
             }),
+            StatusLineItem::Advisor => status
+                .and_then(|s| s.advisor.as_ref())
+                .filter(|a| a.active || a.consultations > 0)
+                .map(|a| {
+                    let budget = a.limit.map(|n| format!("/{n}")).unwrap_or_default();
+                    format!(
+                        "Advisor {}{budget}{}",
+                        a.consultations,
+                        if a.active { "" } else { " (off)" }
+                    )
+                }),
             StatusLineItem::Role => status
                 .and_then(|status| status.role.clone())
                 .map(|role| format!("Role: {role}")),

@@ -222,8 +222,18 @@ impl AgentBridge {
                 .consult_advisor(id, question, Default::default())
                 .await
                 .map_err(|e| e.to_string())?;
+            let usage = answer
+                .usage
+                .as_ref()
+                .map(|u| format!(" · {} in / {} out", u.input_tokens, u.output_tokens))
+                .unwrap_or_default();
+            let scout = answer
+                .scout_usage
+                .as_ref()
+                .map(|u| format!(" · Scout {} in / {} out", u.input_tokens, u.output_tokens))
+                .unwrap_or_default();
             Ok(SessionReply::AdvisorMessage(format!(
-                "Advisor ({}/{}): {}",
+                "Advisor ({}/{}){usage}{scout}\n{}",
                 answer.provider, answer.model, answer.text
             )))
         });
