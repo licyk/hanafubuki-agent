@@ -222,7 +222,7 @@ impl SurfaceValues {
             }
             StatusLineItem::Reasoning => effort,
             StatusLineItem::BackgroundTasks => {
-                let background = status.and_then(|status| status.background.as_ref())?;
+                let background = status.and_then(|status| status.tree_background.as_ref())?;
                 let mut parts = Vec::new();
                 if background.work.agents > 0 {
                     parts.push(format!(

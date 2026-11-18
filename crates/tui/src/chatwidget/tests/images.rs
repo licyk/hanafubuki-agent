@@ -112,6 +112,7 @@ fn a_message_with_images_a_model_does_not_read_stays_in_the_composer() {
         compression: None,
         role: None,
         images_refused: Some("reported".to_string()),
+        tree_background: None,
         background: None,
     })));
     let image = pasted(directory.path(), "a.png");

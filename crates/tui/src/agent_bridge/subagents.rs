@@ -103,7 +103,7 @@ impl AgentBridge {
 
     /// The shown session's tree changed: what it waits on is sent again,
     /// and its subagents are read again for the open list.
-    pub(super) fn tree_changed(&mut self, root: AgentSessionId) {
+    pub(crate) fn tree_changed(&mut self, root: AgentSessionId) {
         let Some(session) = self.session_id else {
             return;
         };
@@ -209,7 +209,7 @@ impl From<AgentSubagentStatus> for NavigationAgent {
     }
 }
 
-fn navigation_root(
+pub(super) fn navigation_root(
     agent: &AgentHandle,
     mut session: AgentSessionId,
 ) -> Result<AgentSessionId, AgentError> {

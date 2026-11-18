@@ -90,6 +90,7 @@ fn status() -> SessionStatus {
         }),
         role: Some("explorer".to_string()),
         images_refused: None,
+        tree_background: None,
         background: None,
     }
 }

@@ -48,6 +48,17 @@ impl App {
                 Route::Workspace(WorkspaceEvent::OpenChild(self.main_session_id().unwrap()))
             }
             // All conversations hear of the Agent's state and keep streaming.
+            AppEvent::AgentBackground(hanafubuki_agent::AgentBackgroundEvent::Changed { root }) => {
+                if self.workspace.second.is_some() {
+                    self.on_parked(|app| app.bridge.tree_changed(root));
+                }
+                if self.workspace.child.is_some() {
+                    self.swap_parent();
+                    self.bridge.tree_changed(root);
+                    self.swap_parent();
+                }
+                Route::Here(event)
+            }
             AppEvent::AgentStatusChanged | AppEvent::CommitTick => {
                 if self.workspace.second.is_some() {
                     self.on_parked(|app| app.conversation_tick(&event));

@@ -41,6 +41,7 @@ pub(crate) struct SessionStatus {
     /// message with one); `None` when it sends them, or nothing says.
     pub(crate) images_refused: Option<String>,
     /// What its background work holds open, and whether it is woken for it.
+    pub(crate) tree_background: Option<AgentBackgroundStatus>,
     pub(crate) background: Option<AgentBackgroundStatus>,
 }
 
@@ -84,6 +85,14 @@ impl AgentBridge {
             (done, plan.plan.len())
         });
         let root = self.workspace_roots().into_iter().next();
+        let background = self.agent.background_status(session_id).ok();
+        let tree_background = if snapshot.parent_session_id.is_some() {
+            super::subagents::navigation_root(&self.agent, session_id)
+                .ok()
+                .and_then(|root| self.agent.background_status(root).ok())
+        } else {
+            background
+        };
         Some(TurnUpdate::SessionStatus(Box::new(SessionStatus {
             advisor: self.agent.advisor_session_status(session_id),
             session_id,
@@ -119,7 +128,8 @@ impl AgentBridge {
             role: snapshot.role,
             images_refused: (!snapshot.input_capabilities.image_input)
                 .then(|| self.images_refused_because(session_id)),
-            background: self.agent.background_status(session_id).ok(),
+            tree_background,
+            background,
         })))
     }
 
