@@ -143,3 +143,51 @@ fn terminal_selection_stays_visible_with_silent_and_mixed_output_rows() {
         }
     }
 }
+
+#[test]
+fn mouse_switches_sections_and_confirms_at_stable_button_positions() {
+    use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+    let mut tasks = fixture();
+    let pointer = |kind, column, row| MouseEvent {
+        kind,
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    };
+    screen(&tasks);
+    tasks.mouse(pointer(MouseEventKind::Down(MouseButton::Left), 13, 1));
+    assert!(screen(&tasks).contains("Terminals · Tab switches section · 1/1"));
+    press(&mut tasks, KeyCode::Char('x'));
+    let before = screen(&tasks);
+    let (y, row) = before
+        .lines()
+        .enumerate()
+        .find(|(_, row)| row.contains("No, keep running"))
+        .unwrap();
+    let column = |line: &str, label: &str| line[..line.find(label).unwrap()].chars().count() as u16;
+    let x = column(row, "Yes, close");
+    tasks.mouse(pointer(MouseEventKind::ScrollDown, x, y as u16));
+    let after = screen(&tasks);
+    let selected = after.lines().nth(y).unwrap();
+    assert!(selected.contains("› Yes, close"));
+    assert_eq!(column(selected, "Yes, close"), x);
+    assert_eq!(
+        column(selected, "No, keep running"),
+        column(row, "No, keep running")
+    );
+    assert!(matches!(
+        tasks.mouse(pointer(
+            MouseEventKind::Down(MouseButton::Left),
+            x,
+            y as u16
+        )),
+        Some(TaskAction::CloseTerminal(_))
+    ));
+}
+
+#[test]
+fn idle_agents_have_no_running_clock() {
+    let mut tasks = fixture();
+    tasks.view.as_mut().unwrap().tasks.agents[0].status = AgentSubagentState::Idle;
+    assert!(screen(&tasks).contains("explore_api  idle · test-model"));
+}
