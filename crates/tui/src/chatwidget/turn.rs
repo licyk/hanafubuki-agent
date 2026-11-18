@@ -27,6 +27,7 @@ impl ChatWidget {
             self.finish_message();
         }
         match update {
+            TurnUpdate::RestoreElapsed(started) => self.bottom_pane.restore_elapsed(started),
             TurnUpdate::Started => self.on_task_started(),
             TurnUpdate::ReasoningStarted(reasoning_id) => self.on_reasoning_started(reasoning_id),
             TurnUpdate::ReasoningDelta {

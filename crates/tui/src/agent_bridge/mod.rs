@@ -104,6 +104,7 @@ pub(crate) enum TurnUpdate {
         candidates: Vec<crate::bottom_pane::mentions::Candidate>,
     },
     Started,
+    RestoreElapsed(u128),
     ReasoningStarted(AgentReasoningId),
     ReasoningDelta {
         reasoning_id: AgentReasoningId,

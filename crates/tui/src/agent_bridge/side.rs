@@ -39,6 +39,7 @@ pub(crate) struct OpenedChild {
     pub(crate) parent_title: String,
     after: Option<AgentEventSequence>,
     running: Option<AgentTurnAccepted>,
+    clocks: Option<(u128, hanafubuki_agent::AgentReasoningSnapshot)>,
     waiting: Vec<ApprovalRequest>,
 }
 
@@ -121,6 +122,11 @@ impl AgentBridge {
             .ok()
             .and_then(|parent| parent.title)
             .map_or_else(|| parent.to_string(), |title| title.value);
+        let clocks = snapshot
+            .turn
+            .as_ref()
+            .filter(|turn| !turn.phase.is_terminal())
+            .map(|turn| (turn.created_at, turn.reasoning));
         let running = snapshot
             .turn
             .filter(|turn| !turn.phase.is_terminal())
@@ -147,6 +153,7 @@ impl AgentBridge {
             parent_title,
             after,
             running,
+            clocks,
             waiting,
         })
     }
@@ -187,6 +194,10 @@ impl AgentBridge {
         }
         if let Some(session_id) = session_id {
             updates.extend(self.follow(session_id, child.after, child.running));
+            if let Some((started, reasoning)) = child.clocks {
+                updates.push(TurnUpdate::RestoreElapsed(started));
+                updates.push(TurnUpdate::Reasoning(reasoning));
+            }
             updates.extend(child.waiting.into_iter().map(TurnUpdate::ApprovalRequested));
         }
         updates

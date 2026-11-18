@@ -499,6 +499,12 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    pub(crate) fn restore_elapsed(&mut self, started: u128) {
+        if let Some(status) = self.status.as_mut() {
+            status.restore_elapsed(started);
+        }
+    }
+
     /// The turn's thinking time, for the status line.
     pub(crate) fn update_reasoning(&mut self, reasoning: &AgentReasoningSnapshot) {
         if let Some(status) = self.status.as_mut() {

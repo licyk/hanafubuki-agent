@@ -157,6 +157,16 @@ impl StatusIndicatorWidget {
         }
     }
 
+    pub(crate) fn restore_elapsed(&mut self, started: u128) {
+        let epoch = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default();
+        self.elapsed_running = epoch.saturating_sub(Duration::from_millis(
+            u64::try_from(started).unwrap_or(u64::MAX),
+        ));
+        self.last_resume_at = Instant::now();
+    }
+
     pub(crate) fn interrupt(&self) {
         self.app_event_tx.send(AppEvent::Op(Op::Interrupt));
     }
