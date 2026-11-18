@@ -1,6 +1,8 @@
 //! A tool-free second opinion on the current conversation.
 mod follow_up;
 mod history;
+mod outcomes;
+pub use outcomes::{Adoption, AdvisorStats, Validation};
 mod options;
 mod prompt;
 mod request;
@@ -30,6 +32,7 @@ pub(crate) struct AdvisorService {
     workspace: workspace::AdvisorWorkspace,
     blocking: Arc<BlockingService>,
     options: RwLock<Arc<AdvisorOptions>>,
+    ledger: Arc<outcomes::Ledger>,
     consultations: parking_lot::Mutex<HashMap<AgentSessionId, usize>>,
     previous: parking_lot::Mutex<HashMap<AgentSessionId, follow_up::Previous>>,
     sessions: RwLock<HashSet<AgentSessionId>>,
@@ -47,9 +50,11 @@ pub(crate) fn advisor_plugin(
         git,
         files,
         directory,
-        user_directory,
     };
     PluginDef::typed(move |ctx: Context, options: Arc<AdvisorOptions>| {
+        let ledger = Arc::new(outcomes::Ledger::new(
+            user_directory.join("advisor-outcomes.jsonl"),
+        ));
         let workspace = workspace.clone();
         let conversations = conversations.clone();
         async move {
@@ -57,6 +62,7 @@ pub(crate) fn advisor_plugin(
             let stopping = cancellation.clone();
             ctx.defer("advisor requests", Disposer::new(move || stopping.cancel()))?;
             let service = Arc::new(AdvisorService {
+                ledger,
                 conversations,
                 workspace,
                 blocking: ctx.get::<BlockingService>()?.arc().clone(),
@@ -97,6 +103,14 @@ pub(crate) fn advisor_plugin(
 }
 
 impl AdvisorService {
+    pub(crate) async fn stats(&self) -> Result<AdvisorStats, AgentError> {
+        let ledger = self.ledger.clone();
+        self.blocking
+            .run("advisor outcomes", move || ledger.stats())
+            .await
+            .map_err(|e| AgentError::InvalidInput(e.to_string()))?
+            .map_err(AgentError::InvalidInput)
+    }
     fn active(&self, id: AgentSessionId) -> bool {
         let options = self.options.read();
         options.primary().is_some()

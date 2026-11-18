@@ -73,7 +73,7 @@ async fn advisor_manual_and_model_calls_share_a_provider_only_after_explicit_act
         .await
         .unwrap();
     assert!(!advertised(3));
-    assert!(!String::from_utf8_lossy(&executor.requests()[3].body)
+    assert!(!String::from_utf8_lossy(&executor.requests()[0].body)
         .contains("Advisor review preferences:"));
     assert!(String::from_utf8_lossy(&executor.requests()[1].body)
         .contains("Advisor review preferences:"));

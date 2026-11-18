@@ -16,6 +16,7 @@ use std::sync::Arc;
 pub(super) struct AdvisorSource {
     service: Arc<AdvisorService>,
     tool: SourcedTool,
+    outcome: SourcedTool,
 }
 
 impl AdvisorSource {
@@ -32,21 +33,40 @@ impl AdvisorSource {
             memory_effect: AgentMemoryContextEffect::None,
             timeout: None,
         };
-        let generation = ToolGeneration(Sha256::digest(descriptor.input_schema.to_string()).into());
-        let tool = SourcedTool {
-            handler: Arc::new(AskAdvisor {
-                descriptor,
-                service: service.clone(),
-            }),
-            provider_id: ToolProviderId::parse("advisor").map_err(kardia_core::Error::new)?,
-            tool_id: ToolId::parse(name).map_err(kardia_core::Error::new)?,
-            generation,
-            namespace_description: None,
-            subject: Some("Advisor".into()),
-            trust: ToolSourceTrust::Optional,
-        };
-        Ok(Self { service, tool })
+        let tool = sourced(service.clone(), name, descriptor)?;
+        let name = "record_advisor_outcome";
+        let outcome=sourced(service.clone(),name,ToolDescriptor {
+            name:ToolName::parse(name).map_err(kardia_core::Error::new)?,
+            description:"Record the adoption and validation of the latest Advisor response in this conversation.".into(),
+            input_schema:json!({"type":"object","properties":{"adviceId":{"type":"string"},"adoption":{"enum":["followed","not-followed","unknown"]},"validationStatus":{"enum":["passed","failed","not-run","unknown"]}},"required":["adviceId","adoption","validationStatus"],"additionalProperties":false}),
+            exposure:ToolExposure::Direct,execution_class:ToolExecutionClass::Exclusive,effect:ToolEffect::Mutating,
+            action:AgentActivityAction::fixed(name),memory_effect:AgentMemoryContextEffect::None,timeout:None,
+        })?;
+        Ok(Self {
+            service,
+            tool,
+            outcome,
+        })
     }
+}
+fn sourced(
+    service: Arc<AdvisorService>,
+    name: &str,
+    descriptor: ToolDescriptor,
+) -> Result<SourcedTool, kardia_core::Error> {
+    let generation = ToolGeneration(Sha256::digest(descriptor.input_schema.to_string()).into());
+    Ok(SourcedTool {
+        handler: Arc::new(AskAdvisor {
+            descriptor,
+            service: service.clone(),
+        }),
+        provider_id: ToolProviderId::parse("advisor").map_err(kardia_core::Error::new)?,
+        tool_id: ToolId::parse(name).map_err(kardia_core::Error::new)?,
+        generation,
+        namespace_description: None,
+        subject: Some("Advisor".into()),
+        trust: ToolSourceTrust::Optional,
+    })
 }
 
 impl AgentToolSource for AdvisorSource {
@@ -63,7 +83,11 @@ impl AgentToolSource for AdvisorSource {
         Box::pin(async move {
             Ok(ToolSourceContribution::from_tools(
                 if self.service.active(step.session_id) {
-                    vec![self.tool.clone()]
+                    let mut tools = vec![self.tool.clone()];
+                    if self.service.options.read().record_outcomes {
+                        tools.push(self.outcome.clone());
+                    }
+                    tools
                 } else {
                     vec![]
                 },
@@ -95,6 +119,28 @@ impl AgentToolHandler for AskAdvisor {
             if !self.service.active(id) {
                 return Err(AgentToolError::Failed("Advisor is inactive".into()));
             }
+            if self.descriptor.action.as_str() == "record_advisor_outcome" {
+                let feedback: super::outcomes::Feedback = serde_json::from_value(call.arguments)
+                    .map_err(|e| AgentToolError::Failed(e.to_string()))?;
+                if !self.service.options.read().record_outcomes
+                    || !self
+                        .service
+                        .previous
+                        .lock()
+                        .get(&id)
+                        .is_some_and(|p| p.id == feedback.advice_id)
+                {
+                    return Err(AgentToolError::Failed("Recording is disabled or the advice ID does not match the latest consultation.".into()));
+                }
+                let ledger = self.service.ledger.clone();
+                self.service
+                    .blocking
+                    .run("record advisor outcome", move || ledger.record(feedback))
+                    .await
+                    .map_err(|e| AgentToolError::Failed(e.to_string()))?
+                    .map_err(AgentToolError::Failed)?;
+                return Ok(ToolResult::success(json!({"recorded":true})));
+            }
             let mut args: Consultation = serde_json::from_value(call.arguments)
                 .map_err(|e| AgentToolError::Failed(e.to_string()))?;
             args.root = call
@@ -115,7 +161,7 @@ pub(super) struct AdvisorPresenter;
 
 impl hanafubuki_agent_contracts::AgentToolPresenter for AdvisorPresenter {
     fn tools(&self) -> &[&'static str] {
-        &["ask_advisor"]
+        &["ask_advisor", "record_advisor_outcome"]
     }
     fn subject(&self, _: &str, args: &serde_json::Value) -> Option<String> {
         args.get("question")

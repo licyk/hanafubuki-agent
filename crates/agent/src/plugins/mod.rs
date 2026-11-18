@@ -20,7 +20,8 @@ pub(crate) mod tests;
 
 pub(crate) use advisor::{advisor_plugin, advisor_schema, AdvisorService};
 pub use advisor::{
-    AdvisorAnswer, Consultation as AdvisorConsultation, GitContext as AdvisorGitContext,
+    Adoption as AdvisorAdoption, AdvisorAnswer, AdvisorStats, Consultation as AdvisorConsultation,
+    GitContext as AdvisorGitContext, Validation as AdvisorValidation,
 };
 pub(crate) use context::{permission_mode_plugin, workspace_context_plugin};
 pub(crate) use goal::{goal_plugin, GoalService, GOAL_PLUGIN};

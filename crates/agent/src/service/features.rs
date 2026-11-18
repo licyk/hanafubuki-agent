@@ -49,6 +49,14 @@ impl AgentApplicationService {
         .await
     }
 
+    pub async fn advisor_stats(&self) -> Result<crate::AdvisorStats, AgentError> {
+        self.feature(
+            "advisor",
+            |advisor: Arc<crate::plugins::AdvisorService>| async move { advisor.stats().await },
+        )
+        .await
+    }
+
     /// Changes activation in the configured scope; a session override never changes global settings.
     pub async fn set_advisor_active(
         &self,

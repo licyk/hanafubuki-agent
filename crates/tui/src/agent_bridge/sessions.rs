@@ -51,6 +51,7 @@ pub(crate) enum SessionCall {
     LastAnswer,
     Recap,
     AdvisorManual(String),
+    AdvisorStats,
     AdvisorActive(bool),
     /// `/compression`: the panel, or with `cache` the cache report.
     Compression {
@@ -177,6 +178,7 @@ impl SessionCall {
             Self::ExportPath | Self::Export(_) => "export",
             Self::LastAnswer => "copy",
             Self::Recap => "recap",
+            Self::AdvisorStats => "advisor-stats",
             Self::AdvisorManual(_) => "advisor-manual",
             Self::AdvisorActive(true) => "advisor",
             Self::AdvisorActive(false) => "advisor-off",
@@ -339,6 +341,13 @@ impl AgentBridge {
                     None => None,
                 };
                 reply(SessionReply::LastAnswer(answer))
+            }
+            SessionCall::AdvisorStats => {
+                self.spawn_session_call("advisor-stats",|agent|async move {
+                    let s=agent.advisor_stats().await.map_err(|e|e.to_string())?;
+                    Ok(SessionReply::AdvisorMessage(format!("{} retained outcomes\nAdoption: {}\nValidation: {}\nUnreadable records: {}",s.total,serde_json::json!(s.adoption),serde_json::json!(s.validation),s.malformed)))
+                });
+                return Ok(None);
             }
             SessionCall::AdvisorManual(question) => return self.consult_advisor(question),
             SessionCall::AdvisorActive(active) => return self.activate_advisor(active),

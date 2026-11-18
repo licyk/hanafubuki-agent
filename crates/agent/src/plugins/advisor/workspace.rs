@@ -35,7 +35,6 @@ pub(super) struct AdvisorWorkspace {
     pub git: GitQueries,
     pub files: WorkspaceFsService,
     pub directory: WorkingDirectory,
-    pub user_directory: PathBuf,
 }
 
 impl AdvisorWorkspace {

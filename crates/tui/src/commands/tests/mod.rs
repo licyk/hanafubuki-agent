@@ -31,6 +31,11 @@ fn the_table_keeps_the_presentation_order() {
     assert_eq!(
         names,
         [
+            "advisor",
+            "advisor-off",
+            "advisor-manual",
+            "advisor-settings",
+            "advisor-stats",
             "model",
             "effort",
             "providers",
@@ -98,6 +103,11 @@ fn availability_follows_the_spec() {
     assert_eq!(
         during_task,
         [
+            "advisor",
+            "advisor-off",
+            "advisor-manual",
+            "advisor-settings",
+            "advisor-stats",
             // Refused during a turn by its dispatch, with a hint.
             "effort",
             "providers",
@@ -144,6 +154,9 @@ fn availability_follows_the_spec() {
     assert_eq!(
         needs_session,
         [
+            "advisor",
+            "advisor-off",
+            "advisor-manual",
             "model",
             "effort",
             "mode",
@@ -164,6 +177,7 @@ fn availability_follows_the_spec() {
     assert_eq!(
         inline_args,
         [
+            "advisor-manual",
             "model",
             "effort",
             "providers",

@@ -68,6 +68,11 @@ fn quit_hidden_in_empty_filter_but_shown_for_prefix() {
 #[test]
 fn the_unfiltered_list_is_the_registry_in_order() {
     let mut expected = vec![
+        "advisor",
+        "advisor-off",
+        "advisor-manual",
+        "advisor-settings",
+        "advisor-stats",
         "model",
         "effort",
         "providers",

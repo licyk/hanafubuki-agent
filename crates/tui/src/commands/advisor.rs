@@ -38,3 +38,10 @@ pub(super) static SETTINGS: CommandSpec = CommandSpec {
     dispatch: |ctx, _| open_settings(ctx, "pluginOptions.advisor"),
     ..ADVISOR
 };
+pub(super) static STATS: CommandSpec = CommandSpec {
+    name: "advisor-stats",
+    description: "show retained Advisor feedback",
+    needs_session: false,
+    dispatch: |ctx, _| ctx.session_call(SessionCall::AdvisorStats),
+    ..ADVISOR
+};

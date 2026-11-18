@@ -537,18 +537,17 @@ fn text_after_a_command_that_takes_none_is_sent_as_a_message() {
 #[test]
 fn a_command_turned_off_is_not_offered_and_says_so_when_typed() {
     let (mut composer, rx) = composer();
-    composer.disable_command("diff");
-    type_chars_humanlike(&mut composer, &['/', 'd', 'i']);
+    composer.disable_command("pwd");
+    type_chars_humanlike(&mut composer, &['/', 'p', 'w', 'd']);
     assert!(
         !matches!(composer.active_popup, ActivePopup::Command(_)),
-        "no command left to offer for /di"
+        "no command left to offer for /pwd"
     );
-    type_chars_humanlike(&mut composer, &['f', 'f']);
     assert_eq!(enter(&mut composer), InputResult::None);
     assert!(composer.textarea.is_empty());
     let said = std::iter::from_fn(|| rx.try_recv().ok()).any(|event| {
         matches!(event, AppEvent::InsertHistoryCell(cell)
-            if cell.display_lines(80).iter().any(|line| line.to_string().contains("'/diff' is turned off")))
+            if cell.display_lines(80).iter().any(|line| line.to_string().contains("'/pwd' is turned off")))
     });
     assert!(said);
 }
