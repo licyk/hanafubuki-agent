@@ -183,32 +183,3 @@ impl AgentToolHandler for AskAdvisor {
         })
     }
 }
-
-pub(super) struct AdvisorPresenter;
-
-impl hanafubuki_agent_contracts::AgentToolPresenter for AdvisorPresenter {
-    fn tools(&self) -> &[&'static str] {
-        &["ask_advisor", "record_advisor_outcome", "advisor_config"]
-    }
-    fn subject(&self, _: &str, args: &serde_json::Value) -> Option<String> {
-        args.get("question")
-            .and_then(|v| v.as_str())
-            .map(str::to_owned)
-    }
-    fn display(
-        &self,
-        _: &str,
-        _: &serde_json::Value,
-        output: &hanafubuki_agent_tool_contracts::ToolOutput,
-    ) -> Option<hanafubuki_agent_contracts::AgentToolDisplay> {
-        let answer = hanafubuki_agent_contracts::structured_output(output)?;
-        Some(hanafubuki_agent_contracts::AgentToolDisplay::Text {
-            text: format!(
-                "{}/{}\n{}",
-                answer["provider"].as_str()?,
-                answer["model"].as_str()?,
-                answer["text"].as_str()?
-            ),
-        })
-    }
-}

@@ -396,3 +396,50 @@ fn agent_tasks_are_previewed_but_the_full_request_is_kept_in_details() {
     assert!(!render(&cell, 80).contains("MESSAGE_END"));
     assert!(text(&cell.transcript_lines(80)).contains("MESSAGE_END"));
 }
+
+#[test]
+fn advisor_interactions_preview_the_reply_and_distinguish_settings_proposals() {
+    for (name, subject, running, completed) in [
+        (
+            "ask_advisor",
+            "Advisor (follow-up)",
+            "Consulting Advisor (follow-up)",
+            "Consulted Advisor (follow-up)",
+        ),
+        (
+            "advisor_config",
+            "settings",
+            "Reading Advisor settings",
+            "Read Advisor settings",
+        ),
+        (
+            "advisor_config",
+            "settings proposal",
+            "Proposing Advisor settings changes",
+            "Proposed Advisor settings changes",
+        ),
+        (
+            "record_advisor_outcome",
+            "advice-1",
+            "Recording Advisor outcome advice-1",
+            "Recorded Advisor outcome advice-1",
+        ),
+    ] {
+        let mut cell = new_tool_call("call-1".into(), name.into(), Some(subject.into()));
+        assert!(render(&cell, 80).contains(running));
+        cell.finish(
+            "call-1",
+            AgentToolDisplay::Text {
+                text: "Model: reviewer\nQuestion: verify?\nAdvice: check the counter\nFINAL_DETAIL"
+                    .into(),
+            },
+        );
+        let preview = render(&cell, 80);
+        assert!(
+            preview.contains(completed) && !preview.contains("FINAL_DETAIL"),
+            "{preview}"
+        );
+        assert!(cell.activity_disclosure(80).is_some());
+        assert!(text(&cell.transcript_lines(80)).contains("FINAL_DETAIL"));
+    }
+}

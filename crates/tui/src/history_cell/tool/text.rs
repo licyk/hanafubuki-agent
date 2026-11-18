@@ -88,10 +88,18 @@ pub(super) fn view(call: &ToolCall, failed: bool, lines: Vec<String>, extent: Ex
 }
 
 fn called_title(call: &ToolCall, failed: bool) -> Vec<Span<'static>> {
-    if !failed {
-        if let Some(title) = operation_title(call, false) {
-            return title;
+    if failed {
+        let title = match call.name.as_str() {
+            "ask_advisor" => Some("Advisor consultation failed"),
+            "advisor_config" => Some("Advisor settings request failed"),
+            "record_advisor_outcome" => Some("Advisor outcome recording failed"),
+            _ => None,
+        };
+        if let Some(title) = title {
+            return vec![title.bold()];
         }
+    } else if let Some(title) = operation_title(call, false) {
+        return title;
     }
     let mut title = vec![if failed { "Failed" } else { "Called" }.bold(), " ".into()];
     title.extend(named(call));
@@ -118,6 +126,18 @@ fn operation_title(call: &ToolCall, running: bool) -> Option<Vec<Span<'static>>>
         ("get_goal", false) => "Read goal",
         ("update_goal", true) => "Updating goal",
         ("update_goal", false) => "Updated goal",
+        ("ask_advisor", true) => "Consulting",
+        ("ask_advisor", false) => "Consulted",
+        ("advisor_config", true) if call.subject.as_deref() == Some("settings proposal") => {
+            "Proposing Advisor settings changes"
+        }
+        ("advisor_config", false) if call.subject.as_deref() == Some("settings proposal") => {
+            "Proposed Advisor settings changes"
+        }
+        ("advisor_config", true) => "Reading Advisor settings",
+        ("advisor_config", false) => "Read Advisor settings",
+        ("record_advisor_outcome", true) => "Recording Advisor outcome",
+        ("record_advisor_outcome", false) => "Recorded Advisor outcome",
         ("spawn_agent", true) => "Starting agent",
         ("spawn_agent", false) => "Started agent",
         ("send_message", true) => "Sending message to",
@@ -170,7 +190,7 @@ fn operation_title(call: &ToolCall, running: bool) -> Option<Vec<Span<'static>>>
         _ => return None,
     };
     let mut title = vec![verb.bold()];
-    if call.subject.is_some() {
+    if call.subject.is_some() && call.name != "advisor_config" {
         title.extend([" ".into(), call.subject_or("").cyan()]);
     }
     Some(title)

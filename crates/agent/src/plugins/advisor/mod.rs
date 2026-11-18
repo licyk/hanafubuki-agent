@@ -7,6 +7,7 @@ mod history;
 mod outcomes;
 pub use outcomes::{Adoption, AdvisorStats, Validation};
 mod options;
+mod presenter;
 mod prompt;
 mod request;
 mod scout;
@@ -110,7 +111,7 @@ pub(crate) fn advisor_plugin(
             ctx.get::<ToolSourceRegistry>()?
                 .register(Arc::new(tool::AdvisorSource::new(service.clone())?))?;
             ctx.get::<ToolPresenterRegistry>()?
-                .register(Arc::new(tool::AdvisorPresenter))?;
+                .register(Arc::new(presenter::AdvisorPresenter))?;
             ctx.provide_arc_as("advisor", service)?;
             Ok(())
         }

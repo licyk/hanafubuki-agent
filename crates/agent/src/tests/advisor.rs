@@ -19,7 +19,7 @@ async fn advisor_manual_and_model_calls_share_a_provider_only_after_explicit_act
         (assistant_events("advisor green"), Duration::ZERO),
     ])
     .await;
-    let (service, paths, _) = service_with_config("advisor-activation", |_, config| {
+    let (service, paths, config) = service_with_config("advisor-activation", |_, config| {
         configure_test_provider(config, &executor.base_url, None);
         add_test_provider(config, "second", "Second", &advisor.base_url);
     });
@@ -94,6 +94,16 @@ async fn advisor_manual_and_model_calls_share_a_provider_only_after_explicit_act
     assert_eq!(advisor.requests().len(), 2);
 
     assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    let reopened = reopen_service(config, test_host(&paths), &paths);
+    reopened.start_plugins().await;
+    let display = reopened.tool_display(id, "call-tool").unwrap().unwrap();
+    assert_eq!(display.subject.as_deref(), Some("Advisor"));
+    assert!(
+        matches!(display.display, Some(AgentToolDisplay::Text { text }) if text.contains("Model: second/visual/reviewer") && text.contains("Question: Which colour?") && text.contains("Advice: advisor green"))
+    );
+    assert!(reopened
         .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
         .is_empty());
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
