@@ -52,6 +52,7 @@ pub(crate) enum SessionCall {
     Recap,
     AdvisorManual(String),
     AdvisorStats,
+    AdvisorSettings(String),
     AdvisorActive(bool),
     /// `/compression`: the panel, or with `cache` the cache report.
     Compression {
@@ -178,6 +179,7 @@ impl SessionCall {
             Self::ExportPath | Self::Export(_) => "export",
             Self::LastAnswer => "copy",
             Self::Recap => "recap",
+            Self::AdvisorSettings(_) => "advisor-settings",
             Self::AdvisorStats => "advisor-stats",
             Self::AdvisorManual(_) => "advisor-manual",
             Self::AdvisorActive(true) => "advisor",
@@ -228,6 +230,45 @@ impl AgentBridge {
         Ok(None)
     }
 
+    fn advisor_settings(&self, args: String) -> Result<Option<TurnUpdate>, String> {
+        let id = self.current_id()?;
+        self.spawn_session_call("advisor-settings", move |agent| async move {
+            let text = match args.split_whitespace().collect::<Vec<_>>().as_slice() {
+                ["review"] => {
+                    let p = agent
+                        .advisor_settings_proposal(id)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    let changes = p
+                        .changes
+                        .iter()
+                        .map(|c| format!("{}: {} → {}", c.key, c.before, c.after))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    format!(
+                        "{changes}\n/advisor-settings apply {}\n/advisor-settings cancel {}",
+                        p.id, p.id
+                    )
+                }
+                [op @ ("apply" | "cancel"), key] => {
+                    agent
+                        .confirm_advisor_settings(id, key.to_string(), *op == "apply")
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    if *op == "apply" {
+                        "Advisor settings saved.".into()
+                    } else {
+                        "Advisor changes cancelled.".into()
+                    }
+                }
+                _ => {
+                    return Err("Use /advisor-settings review to inspect a proposed change.".into())
+                }
+            };
+            Ok(SessionReply::AdvisorMessage(text))
+        });
+        Ok(None)
+    }
     fn activate_advisor(&self, active: bool) -> Result<Option<TurnUpdate>, String> {
         let id = self.current_id()?;
         self.spawn_session_call(
@@ -342,6 +383,7 @@ impl AgentBridge {
                 };
                 reply(SessionReply::LastAnswer(answer))
             }
+            SessionCall::AdvisorSettings(args) => return self.advisor_settings(args),
             SessionCall::AdvisorStats => {
                 self.spawn_session_call("advisor-stats",|agent|async move {
                     let s=agent.advisor_stats().await.map_err(|e|e.to_string())?;

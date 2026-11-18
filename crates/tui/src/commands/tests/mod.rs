@@ -178,6 +178,7 @@ fn availability_follows_the_spec() {
         inline_args,
         [
             "advisor-manual",
+            "advisor-settings",
             "model",
             "effort",
             "providers",

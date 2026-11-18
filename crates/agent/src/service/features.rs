@@ -49,6 +49,38 @@ impl AgentApplicationService {
         .await
     }
 
+    pub async fn advisor_settings_proposal(
+        &self,
+        id: AgentSessionId,
+    ) -> Result<crate::AdvisorProposal, AgentError> {
+        self.feature(
+            "advisor",
+            |svc: Arc<crate::plugins::AdvisorService>| async move { svc.proposal(id) },
+        )
+        .await
+    }
+    pub async fn confirm_advisor_settings(
+        &self,
+        id: AgentSessionId,
+        proposal: String,
+        accept: bool,
+    ) -> Result<(), AgentError> {
+        let write = self
+            .feature(
+                "advisor",
+                |svc: Arc<crate::plugins::AdvisorService>| async move {
+                    svc.resolve_proposal(id, &proposal, accept)
+                },
+            )
+            .await?;
+        if let Some(write) = write {
+            self.write_setting_values(write)
+                .await
+                .map_err(AgentError::InvalidInput)?;
+        }
+        Ok(())
+    }
+
     pub async fn advisor_stats(&self) -> Result<crate::AdvisorStats, AgentError> {
         self.feature(
             "advisor",

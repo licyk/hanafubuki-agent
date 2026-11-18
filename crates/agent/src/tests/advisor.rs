@@ -333,3 +333,72 @@ async fn enabled_gate_reviews_repeated_calls_and_returns_revision_to_the_executo
         .is_empty());
     std::fs::remove_dir_all(paths.app_data_dir).unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn model_settings_proposals_need_user_confirmation_and_scout_only_forwards_selected_evidence()
+{
+    let executor = FakeServer::start(vec![
+        (
+            tool_events("advisor_config", r#"{"changes":{"scout":true}}"#),
+            Duration::ZERO,
+        ),
+        (assistant_events("candidate review"), Duration::ZERO),
+        (assistant_events("[0]"), Duration::ZERO),
+    ])
+    .await;
+    let advisor = FakeServer::start(vec![(assistant_events("feedback"), Duration::ZERO)]).await;
+    let (service, paths, _) = service_with_config("advisor-config-scout", |_, config| {
+        configure_test_provider(config, &executor.base_url, None);
+        add_test_provider(config, "review", "Review", &advisor.base_url);
+    });
+    service.start_plugins().await;
+    let id = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap()
+        .id;
+    service
+        .write_setting_values(SettingsWrite {
+            changes: [("provider", "review"), ("model", "reviewer")]
+                .map(|(key, value)| SettingChange {
+                    key: format!("pluginOptions.advisor.{key}"),
+                    op: SettingWriteOp::Set(value.into()),
+                })
+                .into(),
+        })
+        .await
+        .unwrap();
+    service.set_advisor_active(id, true).await.unwrap();
+    service
+        .start_turn(id, "selected evidence".to_string().into())
+        .await
+        .unwrap();
+    let proposal = service.advisor_settings_proposal(id).await.unwrap();
+    assert_eq!(proposal.changes[0].before, json!(false));
+    assert_eq!(proposal.changes[0].after, json!(true));
+    assert!(service
+        .confirm_advisor_settings(id, "different".into(), true)
+        .await
+        .is_err());
+    service
+        .confirm_advisor_settings(id, proposal.id, true)
+        .await
+        .unwrap();
+    service
+        .consult_advisor(id, "review".into(), Default::default())
+        .await
+        .unwrap();
+    let requests = executor.requests();
+    let scout = String::from_utf8_lossy(&requests[2].body);
+    assert!(scout.contains("selected evidence") && scout.contains("candidate review"));
+    let requests = advisor.requests();
+    let body = String::from_utf8_lossy(&requests[0].body);
+    assert!(
+        body.contains("selected evidence") && !body.contains("candidate review"),
+        "{body}"
+    );
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    std::fs::remove_dir_all(paths.app_data_dir).unwrap();
+}
