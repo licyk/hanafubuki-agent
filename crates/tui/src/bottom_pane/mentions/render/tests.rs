@@ -67,6 +67,7 @@ fn live_picker_frame_snapshots() {
             &ScrollState {
                 selected_idx: Some(selected),
                 scroll_top: 0,
+                ..Default::default()
             },
             "no matches",
             SearchMode::Results,
@@ -91,6 +92,7 @@ fn selection_covers_the_row_and_empty_filter_clears_previous_results() {
         &ScrollState {
             selected_idx: Some(0),
             scroll_top: 0,
+            ..Default::default()
         },
         "no matches",
         SearchMode::Results,
@@ -202,6 +204,7 @@ fn long_mentions_leave_room_for_distinguishing_parent_paths() {
             &ScrollState {
                 selected_idx: Some(first_file),
                 scroll_top: first_file,
+                ..Default::default()
             },
             "no matches",
         );

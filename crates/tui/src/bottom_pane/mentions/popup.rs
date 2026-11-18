@@ -27,6 +27,13 @@ pub(crate) struct Popup {
 }
 
 impl Popup {
+    pub(crate) fn pointer_key(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<ratatui::crossterm::event::KeyCode> {
+        self.state
+            .pointer(mouse, ratatui::crossterm::event::KeyCode::Enter)
+    }
     pub(crate) fn new(candidates: Vec<Candidate>, query: &str) -> Self {
         let mut file_search = FileSearch::default();
         file_search.set_query(query);

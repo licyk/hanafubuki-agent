@@ -191,6 +191,16 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    pub(crate) fn pointer_key(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<ratatui::crossterm::event::KeyCode> {
+        if let Some(view) = self.view_stack.last_mut() {
+            return view.pointer_key(mouse);
+        }
+        self.composer.pointer_key(mouse)
+    }
+
     pub(crate) fn handle_key_event(&mut self, key_event: KeyEvent) -> InputResult {
         // If a modal/view is active, handle it here; otherwise forward to composer.
         if let Some(view) = self.view_stack.last_mut() {

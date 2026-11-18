@@ -92,6 +92,13 @@ pub(crate) struct SkillPopup {
 }
 
 impl SkillPopup {
+    pub(crate) fn pointer_key(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<ratatui::crossterm::event::KeyCode> {
+        self.state
+            .pointer(mouse, ratatui::crossterm::event::KeyCode::Enter)
+    }
     pub(crate) fn new(mentions: Vec<MentionItem>) -> Self {
         Self {
             query: String::new(),
@@ -216,7 +223,9 @@ impl Widget for &SkillPopup {
                 width: hint_area.width.saturating_sub(2),
                 height: hint_area.height,
             };
-            skill_popup_hint_line().render(hint_area, buf);
+            let mut hint = Line::from(format!("{} · ", self.state.position(self.filtered().len())));
+            hint.spans.extend(skill_popup_hint_line().spans);
+            hint.render(hint_area, buf);
         }
     }
 }

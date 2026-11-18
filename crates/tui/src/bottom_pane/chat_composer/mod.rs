@@ -137,6 +137,17 @@ enum ActivePopup {
 }
 
 impl ChatComposer {
+    pub(super) fn pointer_key(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<ratatui::crossterm::event::KeyCode> {
+        match &mut self.active_popup {
+            ActivePopup::Command(p) => p.pointer_key(mouse),
+            ActivePopup::Skill(p) => p.pointer_key(mouse),
+            ActivePopup::Mention(p) => p.pointer_key(mouse),
+            ActivePopup::None => None,
+        }
+    }
     pub(crate) fn new(
         has_input_focus: bool,
         app_event_tx: AppEventSender,

@@ -385,6 +385,12 @@ impl App {
         if self.overlay.is_none() && self.handle_workspace_mouse(mouse) {
             return;
         }
+        if self.overlay.is_none()
+            && self.resume_picker.is_none()
+            && self.chat_widget.handle_picker_mouse(mouse)
+        {
+            return;
+        }
         if !self.mode.is_owned() && !self.alt_screen_open() {
             return self.handle_tail_mouse(mouse);
         }

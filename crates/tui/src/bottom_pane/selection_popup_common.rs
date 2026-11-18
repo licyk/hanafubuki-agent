@@ -447,6 +447,7 @@ pub(crate) fn render_rows(
     max_results: usize,
     empty_message: &str,
 ) {
+    state.hits.borrow_mut().clear();
     if rows_all.is_empty() {
         if area.height > 0 {
             Line::from(empty_message.dim().italic()).render(area, buf);
@@ -494,6 +495,7 @@ pub(crate) fn render_rows(
         });
 
         // Render the wrapped lines.
+        let start_y = cur_y;
         for line in wrapped {
             if cur_y >= area.y + area.height {
                 break;
@@ -509,6 +511,10 @@ pub(crate) fn render_rows(
             );
             cur_y = cur_y.saturating_add(1);
         }
+        state
+            .hits
+            .borrow_mut()
+            .push((Rect::new(area.x, start_y, area.width, cur_y - start_y), i));
     }
 }
 

@@ -49,6 +49,13 @@ impl ModuleView {
 }
 
 impl BottomPaneView for ModuleView {
+    fn pointer_key(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<ratatui::crossterm::event::KeyCode> {
+        self.guard.run(None, || self.view.pointer_key(mouse))
+    }
+
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         self.guard.run((), || self.view.handle_key_event(key_event));
     }

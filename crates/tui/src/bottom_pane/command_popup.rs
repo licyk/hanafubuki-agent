@@ -32,6 +32,13 @@ pub(crate) struct CommandPopup {
 }
 
 impl CommandPopup {
+    pub(crate) fn pointer_key(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<ratatui::crossterm::event::KeyCode> {
+        self.state
+            .pointer(mouse, ratatui::crossterm::event::KeyCode::Enter)
+    }
     pub(crate) fn new(disabled: Vec<&'static str>) -> Self {
         Self {
             command_filter: String::new(),
@@ -74,7 +81,7 @@ impl CommandPopup {
         use super::selection_popup_common::measure_rows_height;
         let rows = self.rows_from_matches(self.filtered());
 
-        measure_rows_height(&rows, &self.state, MAX_POPUP_ROWS, width)
+        1 + measure_rows_height(&rows, &self.state, MAX_POPUP_ROWS, width)
     }
 
     /// Compute exact/prefix matches over the commands' names, paired with
@@ -162,8 +169,15 @@ impl CommandPopup {
 impl Widget for &CommandPopup {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let rows = self.rows_from_matches(self.filtered());
+        let [rows_area, footer] = ratatui::layout::Layout::vertical([
+            ratatui::layout::Constraint::Fill(1),
+            ratatui::layout::Constraint::Length(1),
+        ])
+        .areas(area);
+        ratatui::text::Line::from(format!("  {}", self.state.position(rows.len())))
+            .render(footer, buf);
         render_rows(
-            area.inset(Insets::tlbr(0, 2, 0, 0)),
+            rows_area.inset(Insets::tlbr(0, 2, 0, 0)),
             buf,
             &rows,
             &self.state,

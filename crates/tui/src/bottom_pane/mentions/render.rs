@@ -45,6 +45,7 @@ pub(super) fn render_popup(
     search_mode: SearchMode,
     query: &str,
 ) {
+    state.hits.borrow_mut().clear();
     ratatui::widgets::Clear.render(area, buf);
     if area.is_empty() {
         return;
@@ -76,7 +77,7 @@ pub(super) fn render_popup(
         ..rect
     };
     for (offset, line) in [
-        Line::from("Mentions".bold()),
+        Line::from(format!("Mentions · {}", state.position(rows.len())).bold()),
         Line::from("Files, directories, plugins, skills and tasks".dim()),
     ]
     .into_iter()
@@ -178,6 +179,10 @@ fn render_rows(
             break;
         }
 
+        state
+            .hits
+            .borrow_mut()
+            .push((Rect::new(area.x, cur_y, area.width, 1), idx));
         let selected = Some(idx) == state.selected_idx;
         let line = build_line(row, selected, usize::from(area.width), primary_column_width);
         line.render(

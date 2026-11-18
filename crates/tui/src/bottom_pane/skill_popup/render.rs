@@ -15,6 +15,7 @@ use unicode_width::UnicodeWidthStr;
 
 impl SkillPopup {
     pub(super) fn render_rows(&self, area: Rect, buf: &mut Buffer) {
+        self.state.hits.borrow_mut().clear();
         if area.is_empty() {
             return;
         }
@@ -96,6 +97,7 @@ impl SkillPopup {
                 },
             ));
             let target = Rect::new(body.x, body.y + (row - start) as u16, body.width, 1);
+            self.state.hits.borrow_mut().push((target, row));
             if selected {
                 buf.set_style(target, crate::style::selection_style().bold());
             }

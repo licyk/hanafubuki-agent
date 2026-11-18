@@ -286,9 +286,10 @@ impl App {
         if self.chat_widget.welcome_needs_space() && size.width >= 64 && size.height >= 30 {
             height = size.height.saturating_sub(1);
         }
-        let capture = self.tail_mouse.setting == AgentScrollbackMouse::Tail
-            && !self.tail_mouse.released
-            && entries.iter().any(|entry| entry.control);
+        let capture = !self.chat_widget.no_modal_or_popup_active()
+            || self.tail_mouse.setting == AgentScrollbackMouse::Tail
+                && !self.tail_mouse.released
+                && entries.iter().any(|entry| entry.control);
         let _ = tui.set_inline_mouse_capture(capture);
         let cells = self.tail.cells();
         let view = &mut self.transcript_view;

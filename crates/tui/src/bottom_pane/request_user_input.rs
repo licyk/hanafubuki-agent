@@ -225,18 +225,24 @@ impl RequestUserInputOverlay {
             .wrap(Wrap { trim: false })
             .line_count(width) as u16;
         let rows = self.option_rows();
-        let state = self
-            .answers
-            .get(self.current_idx)
-            .copied()
-            .unwrap_or_default();
-        let rows_height = measure_rows_height(&rows, &state, rows.len().max(1), width);
+        let empty = ScrollState::default();
+        let state = self.answers.get(self.current_idx).unwrap_or(&empty);
+        let rows_height = measure_rows_height(&rows, state, rows.len().max(1), width);
         // Progress, question, a blank row, the options, a blank row, the tips.
         1 + question_height + 1 + rows_height + 1 + 1
     }
 }
 
 impl BottomPaneView for RequestUserInputOverlay {
+    fn pointer_key(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<ratatui::crossterm::event::KeyCode> {
+        self.answers
+            .get_mut(self.current_idx)?
+            .pointer(mouse, KeyCode::Enter)
+    }
+
     fn handle_key_event(&mut self, key_event: KeyEvent) {
         if key_event.kind == KeyEventKind::Release {
             return;
@@ -328,11 +334,8 @@ impl Renderable for RequestUserInputOverlay {
         );
 
         let rows = self.option_rows();
-        let state = self
-            .answers
-            .get(self.current_idx)
-            .copied()
-            .unwrap_or_default();
+        let empty = ScrollState::default();
+        let state = self.answers.get(self.current_idx).unwrap_or(&empty);
         let rows_top = content.y + header_height + 1;
         let bottom = content.y + content.height;
         let rows_area = Rect {
@@ -345,7 +348,7 @@ impl Renderable for RequestUserInputOverlay {
             rows_area,
             buf,
             &rows,
-            &state,
+            state,
             rows.len().max(1),
             "No options",
         );

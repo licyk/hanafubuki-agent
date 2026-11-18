@@ -190,6 +190,17 @@ impl ChatWidget {
         }
     }
 
+    pub(crate) fn handle_picker_mouse(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> bool {
+        let Some(key) = self.bottom_pane.pointer_key(mouse) else {
+            return false;
+        };
+        self.handle_key_event(KeyEvent::new(key, KeyModifiers::NONE));
+        true
+    }
+
     pub(crate) fn handle_key_event(&mut self, key_event: KeyEvent) {
         if key_event.kind == KeyEventKind::Press
             && key_event.modifiers.contains(KeyModifiers::CONTROL)

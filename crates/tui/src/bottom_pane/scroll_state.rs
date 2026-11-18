@@ -6,17 +6,45 @@
 /// - Optional selection (None when list is empty)
 /// - Wrap-around navigation on Up/Down
 /// - Maintaining a scroll window (`scroll_top`) so the selected row stays visible
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone)]
 pub(crate) struct ScrollState {
     pub selected_idx: Option<usize>,
     pub scroll_top: usize,
+    pub(super) hits: std::cell::RefCell<Vec<(ratatui::layout::Rect, usize)>>,
 }
 
 impl ScrollState {
     pub fn new() -> Self {
         Self {
             selected_idx: None,
-            scroll_top: 0,
+            ..Self::default()
+        }
+    }
+
+    pub(super) fn position(&self, count: usize) -> String {
+        format!("{}/{}", self.selected_idx.map_or(0, |i| i + 1), count)
+    }
+
+    pub(super) fn pointer(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+        activate: ratatui::crossterm::event::KeyCode,
+    ) -> Option<ratatui::crossterm::event::KeyCode> {
+        use ratatui::crossterm::event::{KeyCode, MouseButton, MouseEventKind};
+        let index = self
+            .hits
+            .borrow()
+            .iter()
+            .find(|(rect, _)| rect.contains((mouse.column, mouse.row).into()))?
+            .1;
+        match mouse.kind {
+            MouseEventKind::ScrollUp => Some(KeyCode::Up),
+            MouseEventKind::ScrollDown => Some(KeyCode::Down),
+            MouseEventKind::Down(MouseButton::Left) => {
+                self.selected_idx = Some(index);
+                Some(activate)
+            }
+            _ => None,
         }
     }
 
