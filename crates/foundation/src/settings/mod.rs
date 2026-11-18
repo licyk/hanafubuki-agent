@@ -32,6 +32,8 @@ pub struct SettingSpec {
     /// More, shown below the row when it is selected.
     pub help: Option<String>,
     pub kind: SettingKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub picker: Option<SettingPicker>,
     /// The text editor accepts provider-specific effort IDs, parsed by the shared model policy.
     #[serde(skip)]
     pub reasoning_effort: bool,
@@ -59,6 +61,7 @@ impl SettingSpec {
             summary: String::new(),
             help: None,
             kind,
+            picker: None,
             reasoning_effort: false,
             default: None,
             apply: SettingApply::Live,
@@ -68,6 +71,19 @@ impl SettingSpec {
             keywords: Vec::new(),
         }
     }
+}
+
+/// Catalog-backed editors for provider and model IDs. The provider key is
+/// relative to the same settings section.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "type"
+)]
+pub enum SettingPicker {
+    Provider,
+    Model { provider_key: String },
 }
 
 /// What values a setting takes. Bounds are inclusive; `None` is unbounded.

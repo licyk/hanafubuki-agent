@@ -83,6 +83,7 @@ pub(crate) enum WorkspaceEvent {
     },
     /// What a page of the center asks of a collection.
     SettingsAction(SettingsPageAction),
+    SetSettingsModel(String, String),
     /// What a call of the settings center found.
     Settings(Box<CatalogReply>),
     /// What a read of the command center found, or its watch saw.
@@ -277,6 +278,12 @@ impl App {
             WorkspaceEvent::Tasks(event) => self.tasks_event(tui, *event),
             WorkspaceEvent::OpenSettings { target, record } => {
                 self.open_settings_center(tui, target, record)
+            }
+            WorkspaceEvent::SetSettingsModel(key, model) => {
+                if let Some(center) = self.workspace.settings.as_mut() {
+                    center.edit(0, key, model.into());
+                    self.run_settings_requests(tui);
+                }
             }
             WorkspaceEvent::SettingsAction(action) => self.run_settings_action(tui, action),
             WorkspaceEvent::Settings(reply) => self.settings_reply(tui, *reply),

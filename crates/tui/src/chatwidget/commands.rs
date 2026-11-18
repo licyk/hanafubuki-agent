@@ -87,6 +87,17 @@ impl ChatWidget {
         });
     }
 
+    pub(crate) fn open_settings_model(
+        &mut self,
+        provider: String,
+        setting: crate::commands::providers::ModelSetting,
+    ) {
+        use crate::commands::providers::{open_model_picker, PROVIDERS};
+        self.run_command(&PROVIDERS, |ctx| {
+            open_model_picker(ctx, provider, Some(setting))
+        });
+    }
+
     /// A command's next view, which one of its views asked for.
     pub(crate) fn run_command_step(&mut self, step: CommandStep) {
         self.run_command(step.command, step.run);

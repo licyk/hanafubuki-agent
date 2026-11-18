@@ -182,14 +182,19 @@ impl AgentApplicationService {
         )
         .await??;
         let statuses = self.plugin_status();
-        sections.extend(self.plugin_option_sections(&statuses).await?);
+        let registry = self.provider_registry_snapshot().await;
+        let provider_kind = registry.as_ref().ok().map(model_policy::provider_kind);
+        sections.extend(
+            self.plugin_option_sections(&statuses, provider_kind.as_ref())
+                .await?,
+        );
         if let Ok(packages) = self.packages().await {
             sections.extend(package_settings::sections(&packages));
         }
         let mut collections = vec![
             providers::collection(self).await,
             provider_models::collection(self).await,
-            model_policy::collection(self).await,
+            model_policy::collection(self, registry).await,
             mcp::collection(self).await,
             mcp_secrets::collection(self).await,
             plugin_mcp::collection(self).await,
@@ -278,6 +283,7 @@ impl AgentApplicationService {
     async fn plugin_option_sections(
         &self,
         statuses: &[AgentPluginStatus],
+        provider_kind: Option<&hanafubuki_agent_config::SettingKind>,
     ) -> Result<Vec<SettingsSection>, String> {
         let config = self.config.clone();
         let sources = hanafubuki_agent_foundation::blocking::run_blocking_operation(
@@ -298,6 +304,13 @@ impl AgentApplicationService {
                     .iter()
                     .map(|spec| SettingSpec {
                         key: key(&spec.key),
+                        kind: match (&spec.picker, provider_kind) {
+                            (
+                                Some(hanafubuki_agent_config::SettingPicker::Provider),
+                                Some(kind),
+                            ) => kind.clone(),
+                            _ => spec.kind.clone(),
+                        },
                         ..spec.clone()
                     })
                     .collect();

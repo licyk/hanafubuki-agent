@@ -47,9 +47,8 @@ impl SettingsCenter {
             return false;
         };
         for page in self.pages.iter().skip(index + 1).rev() {
-            if let Page::Hosted(page) = page {
-                self.requests
-                    .push(CenterRequest::ClosePage(page.command.name));
+            if let Page::Hosted { command, .. } = page {
+                self.requests.push(CenterRequest::ClosePage(command));
             }
         }
         self.pages.truncate(index + 1);
@@ -73,7 +72,7 @@ impl SettingsCenter {
                 Page::Form(page) => page.title(catalog),
                 Page::Choice(page) => page.title.clone(),
                 Page::List(page) => page.spec.label.clone(),
-                Page::Hosted(page) => hosted_title(page, catalog),
+                Page::Hosted { title, .. } => title.clone(),
             };
             let title = truncate_text(&title, usize::from(area.width));
             let width = title.width() as u16;
@@ -116,7 +115,7 @@ impl SettingsCenter {
     }
 }
 
-fn hosted_title(page: &PageOverride, catalog: &SettingsCatalog) -> String {
+pub(super) fn hosted_title(page: &PageOverride, catalog: &SettingsCatalog) -> String {
     match &page.attach {
         Attach::Row { label, .. } | Attach::Record { label, .. } => (*label).to_string(),
         Attach::Setting(key) => catalog

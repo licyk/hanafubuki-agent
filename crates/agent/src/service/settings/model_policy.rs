@@ -69,7 +69,7 @@ struct PolicyRecord {
     policy: AgentModelPolicySettings,
 }
 
-fn fields(registry: &AgentProviderRegistrySettings) -> Vec<SettingSpec> {
+pub(super) fn provider_kind(registry: &AgentProviderRegistrySettings) -> SettingKind {
     let providers = registry
         .providers
         .iter()
@@ -78,6 +78,10 @@ fn fields(registry: &AgentProviderRegistrySettings) -> Vec<SettingSpec> {
             ..SettingChoice::new(&provider.id, &provider.display_name)
         })
         .collect();
+    SettingKind::Choice { values: providers }
+}
+
+fn fields(registry: &AgentProviderRegistrySettings) -> Vec<SettingSpec> {
     let choice = |values: Vec<(String, &str)>| SettingKind::Choice {
         values: values
             .into_iter()
@@ -91,7 +95,7 @@ fn fields(registry: &AgentProviderRegistrySettings) -> Vec<SettingSpec> {
             ..SettingSpec::new(
                 "defaultProviderId",
                 "Default Provider",
-                SettingKind::Choice { values: providers },
+                provider_kind(registry),
             )
         },
         SettingSpec {
@@ -176,8 +180,11 @@ fn fields(registry: &AgentProviderRegistrySettings) -> Vec<SettingSpec> {
     .collect()
 }
 
-pub(super) async fn collection(service: &AgentApplicationService) -> SettingsCollection {
-    let registry = match service.provider_registry_snapshot().await {
+pub(super) async fn collection(
+    service: &AgentApplicationService,
+    registry: Result<AgentProviderRegistrySettings, String>,
+) -> SettingsCollection {
+    let registry = match registry {
         Ok(registry) => registry,
         Err(error) => {
             return SettingsCollection::new(ID, "Model", SettingsGroup::Model, Vec::new())

@@ -38,6 +38,7 @@ fn picker() -> (ModelPicker, Receiver<AppEvent>) {
     let (sender, events) = channel();
     let picker = ModelPicker::new(
         PROVIDER.to_string(),
+        None,
         AppEventSender::new(sender),
         LoadingLine::still(),
     );

@@ -1078,7 +1078,7 @@ yank = []
 
 ## 咨询 Advisor [#advisor]
 
-在 `/advisor-settings`（别名 `/advisor-models`）选择提供商和模型。输入 `/advisor-manual 这个修复覆盖了哪些失败路径？` 可单次咨询，回答直接显示在对话中。输入 `/advisor` 后，执行模型可以主动请求审查。`/advisor-off` 停用并解除重复工具门控对本会话的阻止。会话激活仅对当前对话有效，持久激活也适用于后续对话。
+在 `/advisor-settings`（别名 `/advisor-models`）可分别配置审查、备用和执行模型。先选择该项的提供商，再从它的模型列表中搜索或手动输入模型 ID。选择只写入对应的 Advisor 设置。输入 `/advisor-manual 这个修复覆盖了哪些失败路径？` 可单次咨询，回答直接显示在对话中。输入 `/advisor` 后，执行模型可以主动请求审查。`/advisor-off` 停用并解除重复工具门控对本会话的阻止。会话激活仅对当前对话有效，持久激活也适用于后续对话。
 
 执行模型提议更改设置时，输入 `/advisor-settings review` 查看各项旧值和新值，再使用显示的提案 ID 执行 apply 或 cancel。开启反馈记录后，输入 `/advisor-stats` 可查看本地保留记录的采纳和验证统计。
 

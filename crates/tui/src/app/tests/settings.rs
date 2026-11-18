@@ -692,3 +692,51 @@ fn the_global_model_field_lists_facts_and_accepts_a_manual_id() {
         assert_eq!(harness.app.bridge.session_id(), None);
     }
 }
+
+#[test]
+fn advisor_model_pickers_write_only_their_own_settings() {
+    let listing =
+        || FakeListing::ok(r#"{"data":[{"id":"reviewer-model","context_window":200000}]}"#);
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let second = runtime.block_on(hanafubuki_agent::test_support::FakeServer::with_listings(
+        Vec::new(),
+        vec![listing(), listing(), listing()],
+    ));
+    let mut harness = Harness::listing(Vec::new(), TranscriptMode::Owned, |config| {
+        hanafubuki_agent::test_support::add_test_provider(
+            config,
+            "review",
+            "Review Provider",
+            &second.base_url,
+        )
+    });
+    harness.type_and_submit("/advisor-settings");
+    harness.pump_until_screen_shows("Share status only");
+    for (provider, model, model_key) in [
+        (
+            "Pin executor provider",
+            "Pin executor model",
+            "executorModel",
+        ),
+        ("Advisor provider ID", "Advisor model ID", "model"),
+        ("Fallback provider ID", "Fallback model ID", "fallbackModel"),
+    ] {
+        harness.select_setting(provider);
+        harness.key(KeyCode::Enter);
+        harness.pump_until_screen_shows("Review Provider");
+        harness.key(KeyCode::Down);
+        harness.key(KeyCode::Enter);
+        harness.pump_until_screen_shows("Saved");
+        harness.select_setting(model);
+        harness.key(KeyCode::Enter);
+        let screen = harness.pump_until_screen_shows("reviewer-model");
+        assert!(screen.contains("200K"), "{screen}");
+        harness.key(KeyCode::Enter);
+        harness.pump_until("the advisor model is saved", |h| {
+            h.config_file()
+                .contains(&format!("{model_key} = \"reviewer-model\""))
+        });
+        harness.pump_until_screen_shows("Saved");
+    }
+    assert_eq!(harness.registry().model_policy.model, "fixture-model");
+}

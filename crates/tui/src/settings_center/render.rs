@@ -159,7 +159,7 @@ impl SettingsCenter {
         let bottom = area.bottom().saturating_sub(1);
         let items = self.list_items(top);
         let (view, mut list, hint, empty) = match &self.pages[top] {
-            Page::Hosted(_) => {
+            Page::Hosted { .. } => {
                 Line::from("esc back".dim()).render(line(bottom), buf);
                 self.layout = layout;
                 return Some(Rect {
@@ -239,7 +239,7 @@ impl SettingsCenter {
                     Page::Form(page) => (page.view(catalog), page.list),
                     Page::Choice(page) => (page.view(), page.list),
                     Page::List(page) => (page.view(&items), page.list),
-                    Page::Main(_) | Page::Hosted(_) => (Vec::new(), ListState::default()),
+                    Page::Main(_) | Page::Hosted { .. } => (Vec::new(), ListState::default()),
                 };
                 (view, list, None, "")
             }

@@ -7,7 +7,8 @@
 //! commit group opens a form of its group, and `r` resets.
 
 use hanafubuki_agent::{
-    SettingKind, SettingSource, SettingSpec, SettingValue, SettingsCatalog, SettingsGroup,
+    SettingKind, SettingPicker, SettingSource, SettingSpec, SettingValue, SettingsCatalog,
+    SettingsGroup,
 };
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serde_json::Value;
@@ -99,6 +100,20 @@ pub(super) fn setting_value<'a>(
     key: &str,
 ) -> Option<&'a SettingValue> {
     state(catalog, key).and_then(|state| state.value.as_ref())
+}
+
+fn model_provider<'a>(
+    spec: &SettingSpec,
+    section: &str,
+    catalog: &'a SettingsCatalog,
+) -> Option<&'a str> {
+    let Some(SettingPicker::Model { provider_key }) = &spec.picker else {
+        return None;
+    };
+    match setting_value(catalog, &format!("{section}.{provider_key}")) {
+        Some(SettingValue::Text(provider)) if !provider.is_empty() => Some(provider),
+        _ => None,
+    }
 }
 
 fn state<'a>(
@@ -203,6 +218,19 @@ impl MainPage {
                     return Effect::Push(Box::new(Page::Form(FormPage::group(section, group))));
                 }
                 let value = setting_value(catalog, &spec.key);
+                if let Some(provider) = model_provider(spec, &section.id, catalog) {
+                    return Effect::OpenModel {
+                        provider: provider.to_owned(),
+                        setting: crate::commands::providers::ModelSetting {
+                            key: spec.key.clone(),
+                            label: spec.label.clone(),
+                            current: value.and_then(|v| match v {
+                                SettingValue::Text(id) => Some(id.clone()),
+                                _ => None,
+                            }),
+                        },
+                    };
+                }
                 match &spec.kind {
                     SettingKind::Boolean => toggle(spec, value),
                     SettingKind::Choice { .. } | SettingKind::ChoiceOrText { .. } => {
@@ -443,7 +471,9 @@ fn view_row<'a>(
                 spec,
                 value,
                 false,
-                page.is_some() || spec.commit_group.is_some(),
+                page.is_some()
+                    || spec.commit_group.is_some()
+                    || model_provider(spec, &section.id, catalog).is_some(),
             );
             row.source = state.and_then(|state| values::source_text(&state.source));
             if let Some(issue) = state.and_then(|state| state.issue.as_ref()) {

@@ -1079,7 +1079,7 @@ Turn it off with `tui.checkForUpdates = false` ([Configuration reference](/docs/
 
 ## Ask an Advisor [#advisor]
 
-Open `/advisor-settings` (also `/advisor-models`) and choose a provider and model. Run `/advisor-manual Is the proposed fix sufficient?` for one answer in the transcript. Run `/advisor` to give the executor ongoing access. Use `/advisor-off` to withdraw access and clear a repeated-tool block. Session activation applies to the current conversation. Persistent activation also applies to subsequent conversations.
+Open `/advisor-settings` (also `/advisor-models`) to configure the reviewer, fallback or pinned executor. For each, choose a provider, then search its model list or enter a model ID manually. Each selection saves to its corresponding Advisor setting. Run `/advisor-manual Is the proposed fix sufficient?` for one answer in the transcript. Run `/advisor` to give the executor ongoing access. Use `/advisor-off` to withdraw access and clear a repeated-tool block. Session activation applies to the current conversation. Persistent activation also applies to subsequent conversations.
 
 When the executor proposes settings, `/advisor-settings review` shows each old and new value. Use the displayed apply or cancel command with its proposal ID. When outcome recording is enabled, `/advisor-stats` reports adoption and validation counts in the retained local records.
 

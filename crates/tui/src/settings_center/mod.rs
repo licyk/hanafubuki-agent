@@ -54,6 +54,7 @@ pub(crate) enum CenterRequest {
     Call(u64, CatalogCall),
     /// Shows the views of the page now on top, on its record.
     OpenPage(&'static PageOverride, Option<String>),
+    OpenModel(String, crate::commands::providers::ModelSetting),
     ClosePage(&'static str),
     Close,
 }
@@ -88,7 +89,10 @@ enum Page {
     Choice(ChoicePage),
     List(ListPage),
     /// A command's views ([`registry`]).
-    Hosted(&'static PageOverride),
+    Hosted {
+        command: &'static str,
+        title: String,
+    },
 }
 
 impl Page {
@@ -99,7 +103,7 @@ impl Page {
             Page::Form(page) => Some(&mut page.list),
             Page::Choice(page) => Some(&mut page.list),
             Page::List(page) => Some(&mut page.list),
-            Page::Hosted(_) => None,
+            Page::Hosted { .. } => None,
         }
     }
 }
@@ -112,6 +116,10 @@ enum Effect {
     Close,
     /// A page, on a record when it is a record's.
     Open(&'static PageOverride, Option<String>),
+    OpenModel {
+        provider: String,
+        setting: crate::commands::providers::ModelSetting,
+    },
     /// A field of the page `at` (the page itself when `None`) takes `value`;
     /// `pop` closes the page that chose it.
     Edit {
@@ -188,7 +196,7 @@ impl SettingsCenter {
     /// The command whose views the page on top is.
     pub(crate) fn hosted_command(&self) -> Option<&'static str> {
         match self.pages.last() {
-            Some(Page::Hosted(page)) => Some(page.command.name),
+            Some(Page::Hosted { command, .. }) => Some(command),
             _ => None,
         }
     }
@@ -219,7 +227,7 @@ impl SettingsCenter {
     /// The command's views closed: back to the row that opened them, and
     /// the values they may have saved read again.
     pub(crate) fn hosted_closed(&mut self) {
-        if matches!(self.pages.last(), Some(Page::Hosted(_))) {
+        if matches!(self.pages.last(), Some(Page::Hosted { .. })) {
             self.pages.pop();
             if self.pending.is_none() {
                 self.call(Pending::Read, CatalogCall::Read);
@@ -249,7 +257,7 @@ impl SettingsCenter {
             Page::Form(page) => page.handle_key(key, catalog, top),
             Page::Choice(page) => page.handle_key(key),
             Page::List(page) => page.handle_key_with(key, &items),
-            Page::Hosted(_) => Effect::None,
+            Page::Hosted { .. } => Effect::None,
         };
         self.apply(effect);
     }
@@ -380,6 +388,14 @@ impl SettingsCenter {
             }
             Effect::Close => self.requests.push(CenterRequest::Close),
             Effect::Open(page, record) => self.open_page(page, record),
+            Effect::OpenModel { provider, setting } => {
+                self.pages.push(Page::Hosted {
+                    command: crate::commands::providers::PROVIDERS.name,
+                    title: setting.label.clone(),
+                });
+                self.requests
+                    .push(CenterRequest::OpenModel(provider, setting));
+            }
             Effect::Edit {
                 key,
                 value,
@@ -427,7 +443,7 @@ impl SettingsCenter {
     /// The field `key` of the page at `at` takes `value`: a setting is
     /// written at once, a record's field saved with what it holds unsaved,
     /// a form that is a draft keeps it.
-    fn edit(&mut self, at: usize, key: String, value: Value) {
+    pub(crate) fn edit(&mut self, at: usize, key: String, value: Value) {
         let catalog = self.catalog.as_ref();
         match self.pages.get_mut(at) {
             Some(Page::Main(_)) => self.write(
@@ -553,7 +569,11 @@ impl SettingsCenter {
     }
 
     fn open_page(&mut self, page: &'static PageOverride, record: Option<String>) {
-        self.pages.push(Page::Hosted(page));
+        let Some(catalog) = &self.catalog else { return };
+        self.pages.push(Page::Hosted {
+            command: page.command.name,
+            title: navigation::hosted_title(page, catalog),
+        });
         self.requests.push(CenterRequest::OpenPage(page, record));
     }
 

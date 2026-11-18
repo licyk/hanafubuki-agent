@@ -35,6 +35,7 @@ const USE_MODEL: &str = "use";
 
 pub(super) struct ModelPicker {
     provider_id: String,
+    setting: Option<super::ModelSetting>,
     tx: AppEventSender,
     loading: LoadingLine,
     stage: Stage,
@@ -62,9 +63,15 @@ struct Listed {
 }
 
 impl ModelPicker {
-    pub(super) fn new(provider_id: String, tx: AppEventSender, loading: LoadingLine) -> Self {
+    pub(super) fn new(
+        provider_id: String,
+        setting: Option<super::ModelSetting>,
+        tx: AppEventSender,
+        loading: LoadingLine,
+    ) -> Self {
         Self {
             provider_id,
+            setting,
             tx,
             loading,
             stage: Stage::Listing,
@@ -77,12 +84,25 @@ impl ModelPicker {
             Ok(models) => (models, None),
             Err(error) => (Vec::new(), Some(error)),
         };
+        let (current, subtitle) = match &self.setting {
+            Some(setting) => (
+                setting.current.as_deref(),
+                format!("{} · {}", setting.label, listed.name),
+            ),
+            None => (
+                listed.current.as_deref(),
+                format!(
+                    "{} becomes the default; new sessions run this model.",
+                    listed.name
+                ),
+            ),
+        };
         let mut items: Vec<SelectionItem> = models
             .iter()
             .map(|model| SelectionItem {
                 name: model.entry.id.clone(),
                 description: Some(listed.name.clone()),
-                is_current: listed.current.as_deref() == Some(model.entry.id.as_str()),
+                is_current: current == Some(model.entry.id.as_str()),
                 search_value: Some(
                     [Some(&model.entry.id), model.entry.display_name.as_ref()]
                         .into_iter()
@@ -106,16 +126,7 @@ impl ModelPicker {
                 // The subtitle wraps at narrow widths, as `/model`'s does.
                 header: Box::new(ColumnRenderable::with([
                     Box::new(Line::from(TITLE.bold())) as Box<dyn Renderable>,
-                    Box::new(
-                        Paragraph::new(Line::from(
-                            format!(
-                                "{} becomes the default; new sessions run this model.",
-                                listed.name
-                            )
-                            .dim(),
-                        ))
-                        .wrap(Wrap { trim: false }),
-                    ),
+                    Box::new(Paragraph::new(Line::from(subtitle.dim())).wrap(Wrap { trim: false })),
                 ])),
                 items,
                 is_searchable: true,
@@ -141,6 +152,15 @@ impl ModelPicker {
     /// `model` on this Provider, saved as the model policy's, and the page
     /// closed.
     fn choose(&mut self, model: String) {
+        if let Some(setting) = &self.setting {
+            self.tx
+                .send(AppEvent::Workspace(WorkspaceEvent::SetSettingsModel(
+                    setting.key.clone(),
+                    model,
+                )));
+            self.complete = true;
+            return;
+        }
         let values = Map::from_iter([
             ("defaultProviderId".to_string(), json!(self.provider_id)),
             ("model".to_string(), json!(model)),

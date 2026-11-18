@@ -209,7 +209,10 @@ impl App {
     }
 
     /// Carries out what the center asked.
-    fn run_settings_requests<B: Backend<Error = io::Error> + Write>(&mut self, tui: &mut Tui<B>) {
+    pub(super) fn run_settings_requests<B: Backend<Error = io::Error> + Write>(
+        &mut self,
+        tui: &mut Tui<B>,
+    ) {
         let Some(center) = self.workspace.settings.as_mut() else {
             return;
         };
@@ -240,6 +243,10 @@ impl App {
             CenterRequest::Call(id, call) => self.bridge.catalog_call(id, call),
             CenterRequest::OpenPage(page, record) => {
                 self.chat_widget.open_settings_page(page, record);
+                self.queue_settings_page_check();
+            }
+            CenterRequest::OpenModel(provider, setting) => {
+                self.chat_widget.open_settings_model(provider, setting);
                 self.queue_settings_page_check();
             }
             CenterRequest::ClosePage(command) => self.chat_widget.close_settings_page(command),

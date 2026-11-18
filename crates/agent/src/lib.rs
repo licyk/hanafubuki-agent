@@ -233,11 +233,12 @@ pub use hanafubuki_agent_config::{
     AgentWindowsSandbox, AgentWindowsSettings, ConfigLayerSource, ConfigLayers, ConfigOverrides,
     FileAccess, InstructionsMode, PackageSettingKey, PluginOptionKey, PluginOptionSchema,
     PluginOptionsSettings, ResolvedPluginOption, ResolvedPluginOptions, RoleLayer, RoleOrigin,
-    SettingApply, SettingChange, SettingChoice, SettingCondition, SettingKind, SettingProblem,
-    SettingSource, SettingSpec, SettingState, SettingValue, SettingWriteOp, SettingsGroup,
-    SettingsSection, SettingsWrite, SettingsWriteOutcome, AGENT_CREDENTIAL_FILES, AGENT_HOME_ENV,
-    AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE, MAX_AGENT_IDLE_TIMEOUT_SECONDS,
-    MAX_AGENT_IN_FLIGHT_TOOLS, MAX_AGENT_PENDING_INPUT_ITEMS, MAX_PLUGIN_OPTIONS,
+    SettingApply, SettingChange, SettingChoice, SettingCondition, SettingKind, SettingPicker,
+    SettingProblem, SettingSource, SettingSpec, SettingState, SettingValue, SettingWriteOp,
+    SettingsGroup, SettingsSection, SettingsWrite, SettingsWriteOutcome, AGENT_CREDENTIAL_FILES,
+    AGENT_HOME_ENV, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
+    MAX_AGENT_IDLE_TIMEOUT_SECONDS, MAX_AGENT_IN_FLIGHT_TOOLS, MAX_AGENT_PENDING_INPUT_ITEMS,
+    MAX_PLUGIN_OPTIONS,
 };
 pub use hanafubuki_agent_execution::{
     AgentBackgroundTerminalSnapshot, AgentBackgroundTerminalStopFailure,

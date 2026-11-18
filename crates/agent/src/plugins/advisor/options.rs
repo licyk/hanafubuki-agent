@@ -1,4 +1,6 @@
-use hanafubuki_agent_config::{PluginOptionSchema, SettingChoice, SettingKind, SettingSpec};
+use hanafubuki_agent_config::{
+    PluginOptionSchema, SettingChoice, SettingKind, SettingPicker, SettingSpec,
+};
 use hanafubuki_agent_kernel::ModelReasoningEffort;
 use serde::{Deserialize, Serialize};
 
@@ -266,6 +268,18 @@ pub(crate) fn advisor_schema() -> PluginOptionSchema {
     .into_iter()
     .map(|(key, label, kind)| {
         let mut spec = SettingSpec::new(key, label, kind);
+        let model = |provider_key: &str| {
+            Some(SettingPicker::Model {
+                provider_key: provider_key.into(),
+            })
+        };
+        spec.picker = match key {
+            "provider" | "executorProvider" | "fallbackProvider" => Some(SettingPicker::Provider),
+            "model" => model("provider"),
+            "executorModel" => model("executorProvider"),
+            "fallbackModel" => model("fallbackProvider"),
+            _ => None,
+        };
         spec.reasoning_effort = matches!(key, "reasoningEffort" | "executorEffort");
         spec.default = if defaults[key].is_null() {
             Some(hanafubuki_agent_config::SettingValue::Null)

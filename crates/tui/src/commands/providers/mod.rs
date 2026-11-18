@@ -51,18 +51,34 @@ pub(crate) static MODEL_SETTING_PAGE: PageOverride = PageOverride {
     open: open_model,
 };
 
+#[derive(Debug)]
+pub(crate) struct ModelSetting {
+    pub(crate) key: String,
+    pub(crate) label: String,
+    pub(crate) current: Option<String>,
+}
+
 fn open_model(context: &mut CommandContext<'_>, record: Option<&str>) {
     let Some(provider_id) = record else {
         return;
     };
+    open_model_picker(context, provider_id.to_owned(), None);
+}
+
+pub(crate) fn open_model_picker(
+    context: &mut CommandContext<'_>,
+    provider_id: String,
+    setting: Option<ModelSetting>,
+) {
     let tx = context.app_event_tx();
     let loading = LoadingLine::new(FrameRequester::new(tx.clone()), true);
     context.show_view(Box::new(ModelPicker::new(
-        provider_id.to_string(),
+        provider_id.clone(),
+        setting,
         tx,
         loading,
     )));
-    context.agent_command(AgentCommand::ProviderModels(provider_id.to_string()));
+    context.agent_command(AgentCommand::ProviderModels(provider_id));
 }
 
 fn dispatch(context: &mut CommandContext<'_>, args: &str) {

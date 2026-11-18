@@ -35,8 +35,8 @@ mod tui;
 pub use dirs::{AgentDirs, AGENT_HOME_ENV};
 pub use file::{write_atomic, FileAccess};
 pub use hanafubuki_agent_foundation::settings::{
-    SettingApply, SettingChoice, SettingCondition, SettingKind, SettingProblem, SettingSpec,
-    SettingValue,
+    SettingApply, SettingChoice, SettingCondition, SettingKind, SettingPicker, SettingProblem,
+    SettingSpec, SettingValue,
 };
 pub use hanafubuki_agent_packages::{
     PluginOptionSchema, ResolvedPluginOption, ResolvedPluginOptions, MAX_PLUGIN_OPTIONS,

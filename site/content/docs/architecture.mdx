@@ -269,6 +269,8 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 
 每项设置由它的所有者用 `hanafubuki-agent-foundation::settings` 的词汇描述一次（`SettingSpec`：键、标签、摘要、类型、默认值、改动何时生效、`visible_if`、`commit_group`），设置页按描述渲染，不必为每项设置写代码。门面的 `settings_catalog()` 每次读取时构建它（`SettingsCatalog { sections, collections }`），自己不设注册表：每个所有者通过它已经公开的东西提供内容。
 
+插件可以在选项描述中声明 `picker`。提供商选择器与模型策略共享已配置的提供商及其禁用原因。模型选择器通过 `providerKey` 指定同一节中的提供商字段。客户端可在用户打开模型字段时读取该提供商的模型列表，通过 `write_setting_values` 保存选中或手动输入的模型 ID。
+
 覆盖范围也包括集合字段：角色继承与限制、MCP 公开 HTTP 请求头、已安装插件默认策略（`packageDefaults`）、市场启停与稀疏检出，以及配置档中的已注册插件选项。配置档复用所有者的描述但不填入默认值，通过 `AgentConfig::write_profile_values` 校验整批改动后一次写入。新增持久化用户选项应接入所有者的节、插件 schema 或集合，并通过目录的读写测试验证；独立的 TUI 表单不能成为另一套配置来源。文件所有的钩子定义和角色仍展示来源及已有管理动作；会话状态、启动参数和宿主提供的服务不属于全局设置。
 
 - **节**（`SettingsSection`：id、标题、分组、顺序、spec 和值）来自配置（`AgentConfig::settings_sections`，spec 声明在各设置结构体旁边；宿主的配置没有 `network` 和 `tui` 节），每个描述符带选项的插件行一节（`pluginOptions.<row>`，属于 Plugins 分组，键为 `pluginOptions.<row>.<option>`），以及每个 `configSchema` 能转换成选项的已安装代码插件一节（`plugins."<id>".settings`，键为 `plugins."<id>".settings.<option>`，由 `package_setting_key` 拼写）。每个值（`SettingState`）注明它来自哪一层（`SettingSource`），以及某一层的值为何无法使用。
