@@ -60,6 +60,28 @@ fn type_query(composer: &mut ChatComposer, query: &str) {
     }
 }
 
+#[test]
+fn reverse_search_finds_executed_commands_with_their_arguments() {
+    let (mut composer, _) = composer_with(&["ordinary message"]);
+    composer.set_text_content("/goal 检查版本".into());
+    assert!(matches!(
+        press(&mut composer, key(KeyCode::Enter)),
+        InputResult::Command(..)
+    ));
+    composer.set_text_content("unfinished draft".into());
+    open(&mut composer, &[]);
+    type_query(&mut composer, "/goal");
+    assert_eq!(text(&composer), "/goal 检查版本");
+    assert!(matches!(
+        press(&mut composer, key(KeyCode::Enter)),
+        InputResult::None
+    ));
+    assert_eq!(text(&composer), "/goal 检查版本");
+    assert!(
+        matches!(press(&mut composer, key(KeyCode::Enter)), InputResult::Command(command, args) if command.name == "goal" && args == "检查版本")
+    );
+}
+
 fn key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
 }

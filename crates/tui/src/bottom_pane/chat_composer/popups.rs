@@ -17,6 +17,7 @@ use crate::commands;
 use crate::commands::{parse_input, ParsedInput};
 use crate::file_search::FileMatch;
 use crate::history_cell;
+use crate::user_message::UserMessage;
 
 impl ChatComposer {
     /// Whether a popup or the history search takes the keys.
@@ -141,6 +142,11 @@ impl ChatComposer {
                 ..
             } => {
                 if let Some(selected) = popup.selected_item() {
+                    self.history
+                        .record_local_submission(UserMessage::from_text(format!(
+                            "/{}",
+                            selected.name
+                        )));
                     self.textarea.set_text_clearing_elements("");
                     return (InputResult::Command(selected.command, String::new()), true);
                 }
@@ -156,7 +162,8 @@ impl ChatComposer {
     /// message is no command, or text follows a command that takes none.
     /// A command turned off is not run: the transcript says so.
     pub(super) fn try_dispatch_slash_command(&mut self) -> Option<InputResult> {
-        let ParsedInput::Command(command, args) = parse_input(self.textarea.text()) else {
+        let text = self.current_text_with_pending();
+        let ParsedInput::Command(command, args) = parse_input(&text) else {
             return None;
         };
         self.textarea.set_text_clearing_elements("");
@@ -183,6 +190,8 @@ impl ChatComposer {
             )));
             return Some(InputResult::None);
         }
+        self.history.record_local_submission(text.trim_end().into());
+        self.pending_pastes.clear();
         Some(InputResult::Command(command, args))
     }
 
@@ -246,7 +255,11 @@ impl ChatComposer {
     /// textarea. This must be called after every modification that can change
     /// the text so the popup is shown/updated/hidden as appropriate.
     pub(super) fn sync_command_popup(&mut self, allow: bool) {
-        if !allow {
+        if !allow
+            || self
+                .history
+                .should_handle_navigation(self.textarea.text(), self.textarea.cursor())
+        {
             if matches!(self.active_popup, ActivePopup::Command(_)) {
                 self.active_popup = ActivePopup::None;
             }

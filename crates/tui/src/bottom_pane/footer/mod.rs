@@ -119,7 +119,7 @@ pub(crate) fn footer_height(props: FooterProps<'_>, width: u16) -> u16 {
     let rows = match props.mode {
         FooterMode::ShortcutOverlay => {
             shortcut_overlay::lines(&props, width.saturating_sub(FOOTER_INDENT_COLS as u16)).len()
-                + usize::from(props.status_line.is_some() || goal_line(props).is_some())
+                + usize::from(props.status_line.is_some())
         }
         _ => footer_lines(props).len(),
     };
@@ -138,22 +138,21 @@ pub(crate) fn render_footer(area: Rect, buf: &mut Buffer, props: FooterProps<'_>
             width: area.width - indent,
             ..area
         };
-        if props.status_line.is_some() || goal_line(props).is_some() {
-            render_status_row(
-                area,
-                buf,
-                props.status_line.cloned().unwrap_or_default(),
-                goal_line(props),
-            );
+        if let Some(status) = props.status_line {
+            buf.set_line(area.x, area.y, status, area.width);
             area.y = area.y.saturating_add(1);
             area.height = area.height.saturating_sub(1);
         }
-        return shortcut_overlay::render(&props, area, buf);
+        return shortcut_overlay::render(&props, area, buf, goal_line(props));
     }
     let mut lines = footer_lines(props);
     let goal = goal_line(props);
-    let first = if goal.is_some() && !lines.is_empty() {
-        Some(std::mem::take(&mut lines[0]))
+    let hint_row = lines.len().saturating_sub(1);
+    let hint = if goal.is_some()
+        && lines.len() > usize::from(props.status_line.is_some())
+        && hint_row < usize::from(area.height)
+    {
+        Some(std::mem::take(&mut lines[hint_row]))
     } else {
         None
     };
@@ -163,16 +162,17 @@ pub(crate) fn render_footer(area: Rect, buf: &mut Buffer, props: FooterProps<'_>
         " ".repeat(FOOTER_INDENT_COLS).into(),
     ))
     .render(area, buf);
-    if let Some(first) = first {
+    if let (Some(hint), Some(goal)) = (hint, goal) {
         let indent = (FOOTER_INDENT_COLS as u16).min(area.width);
-        render_status_row(
+        render_footer_row(
             Rect {
                 x: area.x + indent,
+                y: area.y + hint_row as u16,
                 width: area.width - indent,
-                ..area
+                height: 1,
             },
             buf,
-            first,
+            hint,
             goal,
         );
     }
@@ -188,16 +188,7 @@ fn goal_line(props: FooterProps<'_>) -> Option<Line<'static>> {
     props.goal?.line(std::time::Instant::now())
 }
 
-fn render_status_row(
-    area: Rect,
-    buf: &mut Buffer,
-    left: Line<'static>,
-    right: Option<Line<'static>>,
-) {
-    let Some(right) = right else {
-        buf.set_line(area.x, area.y, &left, area.width);
-        return;
-    };
+fn render_footer_row(area: Rect, buf: &mut Buffer, left: Line<'static>, right: Line<'static>) {
     let right_width = right.width().min(usize::from(area.width)) as u16;
     let left_width = area.width.saturating_sub(right_width).saturating_sub(2);
     buf.set_line(area.x, area.y, &left, left_width);

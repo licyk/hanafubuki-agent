@@ -127,10 +127,18 @@ pub(super) fn lines(props: &FooterProps<'_>, width: u16) -> Vec<Line<'static>> {
 
 /// Draws the shortcuts in `area`; cut to its height, the list keeps its
 /// footer and says where the rest is.
-pub(super) fn render(props: &FooterProps<'_>, area: Rect, buf: &mut Buffer) {
+pub(super) fn render(
+    props: &FooterProps<'_>,
+    area: Rect,
+    buf: &mut Buffer,
+    goal: Option<Line<'static>>,
+) {
+    if area.is_empty() {
+        return;
+    }
     let mut lines = lines(props, area.width);
     let height = usize::from(area.height);
-    if lines.len() > height && height > 0 {
+    if lines.len() > height {
         let mut footer = footer_lines(usize::from(area.width.max(1)));
         footer.truncate(height);
         let body_height = height.saturating_sub(footer.len());
@@ -140,7 +148,21 @@ pub(super) fn render(props: &FooterProps<'_>, area: Rect, buf: &mut Buffer) {
         }
         lines.extend(footer);
     }
+    let footer = goal.map(|goal| (lines.pop().unwrap_or_default(), goal));
+    let footer_y = area.y + lines.len() as u16;
     Paragraph::new(lines).render(area, buf);
+    if let Some((footer, goal)) = footer {
+        super::render_footer_row(
+            Rect {
+                y: footer_y,
+                height: 1,
+                ..area
+            },
+            buf,
+            footer,
+            goal,
+        );
+    }
 }
 
 fn footer_lines(width: usize) -> Vec<Line<'static>> {

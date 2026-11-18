@@ -335,8 +335,13 @@ fn a_failed_call_with_a_display_has_a_red_bullet() {
 fn agent_interactions_and_waiting_have_collaboration_titles() {
     for (name, running, finished) in [
         ("spawn_agent", "Starting agent", "Started agent"),
-        ("send_message", "Interacting with", "Interacted with"),
-        ("followup_task", "Interacting with", "Interacted with"),
+        ("send_message", "Sending message to", "Sent message to"),
+        ("followup_task", "Assigning task to", "Assigned task to"),
+        (
+            "interrupt_agent",
+            "Interrupting agent",
+            "Interrupt requested for",
+        ),
         ("wait_agent", "Waiting for agents", "Finished waiting"),
     ] {
         let cell = new_tool_call("collaboration".into(), name.into(), Some("reviewer".into()));
@@ -352,4 +357,42 @@ fn agent_interactions_and_waiting_have_collaboration_titles() {
         assert!(output.contains(finished), "{output}");
         assert!(output.contains("Completed"), "{output}");
     }
+}
+
+#[test]
+fn agent_tasks_are_previewed_but_the_full_request_is_kept_in_details() {
+    let task = format!("Task: {} LAST_DETAIL", "检查命令的输出与错误。".repeat(30));
+    let full = format!("Agent: reviewer (agent 42)\nModel: fast-model · Reasoning: high\n{task}\nProvider: local\nRole: review");
+    let cell = shown(
+        "spawn_agent",
+        Some("reviewer"),
+        AgentToolDisplay::Text { text: full },
+    );
+    let compact = render(&cell, 80);
+    assert!(compact.contains("Started agent reviewer"));
+    assert!(compact.contains("Model: fast-model · Reasoning: high"));
+    assert!(compact.contains("Task:"));
+    assert!(!compact.contains("LAST_DETAIL") && !compact.contains("Provider: local"));
+    assert!(cell.activity_disclosure(80).is_some());
+    let expanded = text(&cell.transcript_lines(80));
+    assert!(
+        expanded.contains("LAST_DETAIL")
+            && expanded.contains("Provider: local")
+            && expanded.contains("Role: review")
+    );
+    assert!(text(&cell.raw_lines()).contains(&task));
+
+    let cell = shown(
+        "send_message",
+        Some("reviewer"),
+        AgentToolDisplay::Text {
+            text: format!(
+                "Delivery: queued for its next turn\nMessage: {} MESSAGE_END",
+                "Follow up. ".repeat(40)
+            ),
+        },
+    );
+    assert!(render(&cell, 80).contains("queued for its next turn"));
+    assert!(!render(&cell, 80).contains("MESSAGE_END"));
+    assert!(text(&cell.transcript_lines(80)).contains("MESSAGE_END"));
 }

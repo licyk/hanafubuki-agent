@@ -70,13 +70,13 @@ fn props(mode: FooterMode) -> FooterProps<'static> {
 }
 
 #[test]
-fn goal_is_right_aligned_with_or_without_a_custom_status_line() {
+fn goal_is_right_aligned_on_the_hint_row_without_shortening_the_status_line() {
     let mut goal = GoalStatus::default();
     let value =
         serde_json::from_value(serde_json::json!({"objective": "Run Python", "status": "active"}))
             .unwrap();
     goal.update(Some(&value), std::time::Instant::now());
-    let status = Line::from("custom status");
+    let status = Line::from("custom status · model · workspace · context · permission mode");
     for status_line in [None, Some(&status)] {
         let props = FooterProps {
             goal: Some(&goal),
@@ -84,13 +84,71 @@ fn goal_is_right_aligned_with_or_without_a_custom_status_line() {
             ..props(FooterMode::ComposerEmpty)
         };
         let lines = rows(props, 100, footer_height(props, 100));
-        assert!(lines[0].ends_with("Pursuing goal (0s)"), "{lines:?}");
-        assert_eq!(lines[0].chars().count(), 100);
+        let hint_row = usize::from(status_line.is_some());
+        assert!(lines[hint_row].ends_with("Pursuing goal (0s)"), "{lines:?}");
+        assert_eq!(lines[hint_row].chars().count(), 100);
+        assert!(lines[hint_row].contains("for shortcuts"));
         if status_line.is_some() {
-            assert!(lines[0].starts_with("  custom status"));
+            assert_eq!(lines[0], format!("  {status}"));
         }
         let narrow = rows(props, 24, footer_height(props, 24));
-        assert!(narrow[0].ends_with("Pursuing goal (0s)"), "{narrow:?}");
+        assert!(
+            narrow[hint_row].ends_with("Pursuing goal (0s)"),
+            "{narrow:?}"
+        );
+        let without_goal = FooterProps {
+            goal: None,
+            ..props
+        };
+        assert_eq!(footer_height(props, 24), footer_height(without_goal, 24));
+        if status_line.is_some() {
+            assert_eq!(narrow[0], rows(without_goal, 24, 1)[0]);
+            assert_eq!(rows(props, 24, 1), rows(without_goal, 24, 1));
+        }
+    }
+}
+
+#[test]
+fn goal_stays_with_the_shortcut_overlay_footer_when_the_list_is_clipped() {
+    let mut goal = GoalStatus::default();
+    let value =
+        serde_json::from_value(serde_json::json!({"objective": "Run Python", "status": "active"}))
+            .unwrap();
+    goal.update(Some(&value), std::time::Instant::now());
+    let status = Line::from("model · workspace · context");
+    for status_line in [None, Some(&status)] {
+        let props = FooterProps {
+            goal: Some(&goal),
+            status_line,
+            ..overlay()
+        };
+        let height = footer_height(props, 80);
+        assert_eq!(
+            height,
+            footer_height(
+                FooterProps {
+                    goal: None,
+                    ..props
+                },
+                80
+            )
+        );
+        for height in [height, 8] {
+            let lines = rows(props, 80, height);
+            let last = lines.last().unwrap();
+            assert!(last.starts_with("  /keymap customize"), "{lines:?}");
+            assert!(last.ends_with("Pursuing goal (0s)"), "{lines:?}");
+            assert_eq!(
+                lines
+                    .iter()
+                    .filter(|line| line.contains("Pursuing goal"))
+                    .count(),
+                1
+            );
+            if status_line.is_some() {
+                assert_eq!(lines[0], format!("  {status}"));
+            }
+        }
     }
 }
 

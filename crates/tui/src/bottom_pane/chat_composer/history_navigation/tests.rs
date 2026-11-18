@@ -6,6 +6,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use crate::app_event::{AppEvent, AppEventSender};
 use crate::bottom_pane::chat_composer::{ActivePopup, ChatComposer};
+use crate::bottom_pane::InputResult;
 
 fn composer(local: &[&str]) -> (ChatComposer, Receiver<AppEvent>) {
     let (tx, rx) = channel();
@@ -22,6 +23,92 @@ fn press(composer: &mut ChatComposer, code: KeyCode) {
 
 fn read(composer: &mut ChatComposer, entries: &[&str]) {
     composer.on_recent_messages(entries.iter().map(|entry| entry.to_string()).collect());
+}
+
+#[test]
+fn submitted_commands_join_messages_and_recalled_commands_do_not_capture_arrow_keys() {
+    let (mut composer, _) = composer(&[]);
+    read(&mut composer, &[]);
+    for input in [
+        "ordinary message",
+        "/goal 检查 Python 版本\n然后报告结果",
+        "/status",
+    ] {
+        composer.set_text_content(input.into());
+        let result = composer
+            .handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+            .0;
+        assert!(matches!(
+            result,
+            InputResult::Submitted(_) | InputResult::Command(..)
+        ));
+    }
+    for expected in [
+        "/status",
+        "/goal 检查 Python 版本\n然后报告结果",
+        "ordinary message",
+    ] {
+        press(&mut composer, KeyCode::Up);
+        assert_eq!(composer.textarea.text(), expected);
+        assert!(matches!(composer.active_popup, ActivePopup::None));
+    }
+    for expected in ["/goal 检查 Python 版本\n然后报告结果", "/status", ""] {
+        press(&mut composer, KeyCode::Down);
+        assert_eq!(composer.textarea.text(), expected);
+    }
+    press(&mut composer, KeyCode::Up);
+    let result = composer
+        .handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .0;
+    assert!(
+        matches!(result, InputResult::Command(command, args) if command.name == "status" && args.is_empty())
+    );
+    press(&mut composer, KeyCode::Up);
+    assert_eq!(composer.textarea.text(), "/status");
+    press(&mut composer, KeyCode::Up);
+    assert!(
+        composer.textarea.text().starts_with("/goal "),
+        "consecutive duplicate submissions are coalesced"
+    );
+}
+
+#[test]
+fn popup_selection_records_the_executed_name_and_tab_only_completes() {
+    let (mut composer, _) = composer(&[]);
+    read(&mut composer, &[]);
+    composer.set_text_content("/sta".into());
+    assert!(matches!(composer.active_popup, ActivePopup::Command(_)));
+    let result = composer
+        .handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .0;
+    assert!(matches!(result, InputResult::Command(command, _) if command.name == "status"));
+    press(&mut composer, KeyCode::Up);
+    assert_eq!(composer.textarea.text(), "/status");
+
+    press(&mut composer, KeyCode::Down);
+    composer.set_text_content("/mod".into());
+    press(&mut composer, KeyCode::Tab);
+    composer.set_text_content(String::new());
+    press(&mut composer, KeyCode::Up);
+    assert_eq!(composer.textarea.text(), "/status");
+}
+
+#[test]
+fn command_arguments_expand_pastes_and_tab_submission_records_them() {
+    let (mut composer, _) = composer(&[]);
+    read(&mut composer, &[]);
+    let arguments = "检查项目并报告结果。".repeat(300);
+    composer.handle_paste(format!("/goal {arguments}"));
+    composer.set_task_running(true);
+    let result = composer
+        .handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))
+        .0;
+    assert!(
+        matches!(result, InputResult::Command(command, args) if command.name == "goal" && args == arguments)
+    );
+    assert!(composer.pending_pastes.is_empty());
+    press(&mut composer, KeyCode::Up);
+    assert_eq!(composer.textarea.text(), format!("/goal {arguments}"));
 }
 
 #[test]
