@@ -12,6 +12,12 @@ use crate::app_event::{AgentCommand, AppEvent, Op};
 use crate::history_cell::{self, HistoryCell, ToolCallCell, ToolGroup};
 use crate::user_message::image_rows;
 
+#[cfg(not(test))]
+const HEADER_VERSION: &str = env!("CARGO_PKG_VERSION");
+// The header sizes its border from the version before the terminal is drawn.
+#[cfg(test)]
+const HEADER_VERSION: &str = "0.1.0";
+
 impl ChatWidget {
     /// Shows the session from its start. What the previous session left
     /// running is gone with it, and so is what waited for it: a call
@@ -55,7 +61,7 @@ impl ChatWidget {
         let header = history_cell::SessionHeaderHistoryCell::new(
             opened.model,
             self.directory.clone(),
-            env!("CARGO_PKG_VERSION"),
+            HEADER_VERSION,
         );
         if let Some(notice) = self.appearance.update_notice() {
             header.set_update_notice(notice.clone());

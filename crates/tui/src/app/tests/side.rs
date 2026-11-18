@@ -27,13 +27,8 @@ impl Harness {
             .and_then(|snapshot| snapshot.origin)
     }
 
-    /// The screen without the version the session header names.
-    fn redacted_screen(&self) -> String {
+    fn snapshot_screen(&self) -> String {
         self.screen()
-            .replace(
-                env!("CARGO_PKG_VERSION"),
-                &"X".repeat(env!("CARGO_PKG_VERSION").len()),
-            )
             .lines()
             .map(str::trim_end)
             .collect::<Vec<_>>()
@@ -143,7 +138,7 @@ fn in_fullscreen_the_side_conversation_is_a_pane_the_leader_and_pointer_focus() 
     harness.pump_until_turn_ends();
     let side = harness.session();
     let screen = harness.screen();
-    insta::assert_snapshot!("side_pane_beside_the_transcript", harness.redacted_screen());
+    insta::assert_snapshot!("side_pane_beside_the_transcript", harness.snapshot_screen());
     // Both conversations are on the screen, each under its title.
     assert!(screen.contains("Main conversation"), "{screen}");
     assert!(
@@ -163,7 +158,7 @@ fn in_fullscreen_the_side_conversation_is_a_pane_the_leader_and_pointer_focus() 
     // Ctrl+X shows its keys; ← focuses the main conversation.
     harness.key_with(KeyCode::Char('x'), KeyModifiers::CONTROL);
     harness.pump_until_screen_shows("main conversation");
-    insta::assert_snapshot!("leader_keys_over_the_side_pane", harness.redacted_screen());
+    insta::assert_snapshot!("leader_keys_over_the_side_pane", harness.snapshot_screen());
     harness.key(KeyCode::Left);
     harness.pump_until_screen_shows("Main conversation · ctrl-x right side");
     assert_eq!(harness.session(), parent);

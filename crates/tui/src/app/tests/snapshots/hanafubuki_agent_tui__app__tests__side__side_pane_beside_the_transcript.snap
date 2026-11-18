@@ -1,10 +1,10 @@
 ---
 source: crates/tui/src/app/tests/side.rs
-expression: harness.redacted_screen()
+expression: harness.snapshot_screen()
 ---
  Main conversation                                             │ Side · Ctrl-C or /close closes
 ╭──────────────────────────────╮                               │╭──────────────────────────────╮
-│ >_ hanafubuki-agent (vXXXXX) │                               ││ >_ hanafubuki-agent (vXXXXX) │
+│ >_ hanafubuki-agent (v0.1.0) │                               ││ >_ hanafubuki-agent (v0.1.0) │
 │                              │                               ││                              │
 │ model:     fixture-model     │                               ││ model:     fixture-model     │
 │ directory: /project          │                               ││ directory: /project          │
