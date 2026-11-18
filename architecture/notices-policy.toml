@@ -2100,3 +2100,7 @@ notice = "crates/mcp/src/stdio/environment.rs"
 [[original]]
 path = "crates/tui/src/commands/advisor.rs"
 reason = "Native commands for explicit Advisor activation, one-off consultations and registry settings."
+
+[[original]]
+path = "crates/tui/src/bottom_pane/actions.rs"
+reason = "The Agent's clickable dialog actions map their rendered terminal cells to the keys handled by each view."
