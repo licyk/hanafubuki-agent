@@ -173,10 +173,57 @@ fn write_stdin_default_wait_distinguishes_input_from_polling() {
     assert_eq!(wait(Value::Null), 5_000);
 }
 
-/// Strict function schemas list every property as required-and-nullable;
-/// an omitted nullable field means the same as `null`.
+/// Only `cmd` is required of `exec_command`, as in Codex; every other
+/// property is optional so a model need not spell out `null` for each.
+#[test]
+fn only_cmd_is_required_by_the_exec_command_schema() {
+    let (_, schema) = crate::specs::spec(ExecToolKind::ExecCommand);
+    assert_eq!(
+        schema["required"].as_array().map(|required| required
+            .iter()
+            .filter_map(|name| name.as_str())
+            .collect::<Vec<_>>()),
+        Some(vec!["cmd"])
+    );
+    for optional in [
+        "shell",
+        "login",
+        "tty",
+        "yield_time_ms",
+        "max_output_bytes",
+        "workdir",
+        "sandbox_permissions",
+        "justification",
+    ] {
+        assert!(
+            schema["properties"].get(optional).is_some(),
+            "{optional} stays an optional property"
+        );
+    }
+}
+
+/// Only `cmd` is required, as in Codex: an omitted nullable field means the
+/// same as `null`, so a call naming nothing else parses to the defaults.
 #[test]
 fn omitted_nullable_fields_read_as_null() {
+    let (minimal, _) = parse(ExecToolKind::ExecCommand, &json!({ "cmd": "program" })).unwrap();
+    let (explicit_null, _) = parse(
+        ExecToolKind::ExecCommand,
+        &json!({
+            "cmd": "program",
+            "shell": null,
+            "login": null,
+            "tty": null,
+            "yield_time_ms": null,
+            "max_output_bytes": null,
+            "workdir": null,
+            "sandbox_permissions": null,
+            "justification": null
+        }),
+    )
+    .unwrap();
+    assert_eq!(minimal, explicit_null);
+
     for (kind, arguments, nullable) in [
         (
             ExecToolKind::ExecCommand,

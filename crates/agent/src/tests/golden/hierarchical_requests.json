@@ -684,6 +684,7 @@
               ]
             },
             "max_output_bytes": {
+              "description": "Bytes of unread output this wait returns, keeping the head and the tail. Defaults to 65536.",
               "maximum": 262144,
               "minimum": 1,
               "type": [
@@ -704,28 +705,31 @@
               ]
             },
             "shell": {
-            "enum": [
-              "posix",
-              "bash",
-              "sh",
-              "power_shell",
-              "pwsh",
-              "powershell",
-              "cmd",
-              null
-            ],
+              "description": "Shell to run the command in. Omit for the platform's default: `power_shell` on Windows, `posix` elsewhere.",
+              "enum": [
+                "posix",
+                "bash",
+                "sh",
+                "power_shell",
+                "pwsh",
+                "powershell",
+                "cmd",
+                null
+              ],
               "type": [
                 "string",
                 "null"
               ]
             },
             "tty": {
+              "description": "True allocates a PTY for the command; false or omitted uses plain pipes.",
               "type": [
                 "boolean",
                 "null"
               ]
             },
             "workdir": {
+              "description": "Working directory for the command. Defaults to the session's working directory.",
               "maxLength": 4096,
               "type": [
                 "string",
@@ -733,6 +737,7 @@
               ]
             },
             "yield_time_ms": {
+              "description": "Wait before returning a session ID for a still-running command. Defaults to 10000 ms.",
               "maximum": 30000,
               "minimum": 1,
               "type": [
@@ -742,15 +747,7 @@
             }
           },
           "required": [
-            "cmd",
-            "shell",
-            "login",
-            "tty",
-            "yield_time_ms",
-            "max_output_bytes",
-            "workdir",
-            "sandbox_permissions",
-            "justification"
+            "cmd"
           ],
           "type": "object"
         },
@@ -2742,6 +2739,7 @@
               ]
             },
             "max_output_bytes": {
+              "description": "Bytes of unread output this wait returns, keeping the head and the tail. Defaults to 65536.",
               "maximum": 262144,
               "minimum": 1,
               "type": [
@@ -2762,28 +2760,31 @@
               ]
             },
             "shell": {
-            "enum": [
-              "posix",
-              "bash",
-              "sh",
-              "power_shell",
-              "pwsh",
-              "powershell",
-              "cmd",
-              null
-            ],
+              "description": "Shell to run the command in. Omit for the platform's default: `power_shell` on Windows, `posix` elsewhere.",
+              "enum": [
+                "posix",
+                "bash",
+                "sh",
+                "power_shell",
+                "pwsh",
+                "powershell",
+                "cmd",
+                null
+              ],
               "type": [
                 "string",
                 "null"
               ]
             },
             "tty": {
+              "description": "True allocates a PTY for the command; false or omitted uses plain pipes.",
               "type": [
                 "boolean",
                 "null"
               ]
             },
             "workdir": {
+              "description": "Working directory for the command. Defaults to the session's working directory.",
               "maxLength": 4096,
               "type": [
                 "string",
@@ -2791,6 +2792,7 @@
               ]
             },
             "yield_time_ms": {
+              "description": "Wait before returning a session ID for a still-running command. Defaults to 10000 ms.",
               "maximum": 30000,
               "minimum": 1,
               "type": [
@@ -2800,15 +2802,7 @@
             }
           },
           "required": [
-            "cmd",
-            "shell",
-            "login",
-            "tty",
-            "yield_time_ms",
-            "max_output_bytes",
-            "workdir",
-            "sandbox_permissions",
-            "justification"
+            "cmd"
           ],
           "type": "object"
         },

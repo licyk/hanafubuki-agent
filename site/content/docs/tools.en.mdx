@@ -38,6 +38,8 @@ After finding a name, the model calls the ordinary `search_tools` function with 
 
 `exec_command` runs a command in a shell:
 
+Only `cmd` is required: `shell`, `login`, `tty`, `yield_time_ms`, `max_output_bytes`, `workdir`, `sandbox_permissions` and `justification` may be omitted, and an omitted one takes the same default as `null` (the platform's own shell, no PTY, a 10000 ms wait, and so on).
+
 | System       | Shell                                                                                                                 |
 | ------------ | --------------------------------------------------------------------------------------------------------------------- |
 | Linux, macOS | `/bin/bash` (or `/bin/sh` without it), as a login shell (`-lc`) by default                                            |

@@ -39,9 +39,10 @@ const MAX_OUTPUT_BYTES: usize = 256 * 1024;
 const MAX_TERMINAL_CELLS: u64 = 500;
 const MAX_JUSTIFICATION_BYTES: usize = 1024;
 
-/// Parses a call and the notes on how its limits were adjusted. An omitted
-/// nullable field is absent, like `null`; an unknown key is ignored, since
-/// the executor's capabilities (argv, receipts, confirmations) are never
+/// Parses a call and the notes on how its limits were adjusted. Only `cmd`
+/// is required, as in Codex: an omitted nullable field is absent, like
+/// `null`, and takes its default. An unknown key is ignored, since the
+/// executor's capabilities (argv, receipts, confirmations) are never
 /// arguments, so no key the model adds can reach one. A command runs for at
 /// most `command_timeout_ms`, the plugin's option: no argument sets it.
 pub(crate) fn parse(

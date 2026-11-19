@@ -3,12 +3,12 @@
 //!
 //! The model's arguments are read tolerantly: an unknown key is ignored, a
 //! missing or null optional value is absent (`nullable_*` and `optional_*`
-//! alike: one schema lists every property as required-and-nullable for
+//! alike: a schema may list every property as required-and-nullable for
 //! strict providers, but omitting one means the same as null), and an
 //! out-of-range limit is clamped with an [`ArgumentNotes`] entry the result
 //! carries back. The kernel has already coerced `1.0` and numeric strings
-//! where the tool's schema says `integer` or `number`. A required value that
-//! is missing or unusable is an error naming its field.
+//! where the tool's schema says `integer` or `number`. A value the schema
+//! requires that is missing or unusable is an error naming its field.
 
 use serde_json::{Map, Value};
 

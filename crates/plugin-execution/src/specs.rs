@@ -13,15 +13,36 @@ pub(crate) fn spec(kind: ExecToolKind) -> (&'static str, Value) {
                 "type": "object",
                 "properties": {
                     "cmd": { "type": "string", "minLength": 1, "maxLength": 49152 },
-                    "shell": { "type": ["string", "null"], "enum": ["posix", "bash", "sh", "power_shell", "pwsh", "powershell", "cmd", null] },
+                    "shell": {
+                        "type": ["string", "null"],
+                        "enum": ["posix", "bash", "sh", "power_shell", "pwsh", "powershell", "cmd", null],
+                        "description": "Shell to run the command in. Omit for the platform's default: `power_shell` on Windows, `posix` elsewhere."
+                    },
                     "login": {
                         "type": ["boolean", "null"],
                         "description": "Load shell startup files: POSIX login mode or PowerShell profiles. true enables, false disables; null or omitted defaults to true for posix, bash and sh, and the shellUseProfile setting for the three PowerShell values. Ignored by cmd."
                     },
-                    "tty": { "type": ["boolean", "null"] },
-                    "yield_time_ms": { "type": ["integer", "null"], "minimum": 1, "maximum": 30000 },
-                    "max_output_bytes": { "type": ["integer", "null"], "minimum": 1, "maximum": 262144 },
-                    "workdir": { "type": ["string", "null"], "maxLength": 4096 },
+                    "tty": {
+                        "type": ["boolean", "null"],
+                        "description": "True allocates a PTY for the command; false or omitted uses plain pipes."
+                    },
+                    "yield_time_ms": {
+                        "type": ["integer", "null"],
+                        "minimum": 1,
+                        "maximum": 30000,
+                        "description": "Wait before returning a session ID for a still-running command. Defaults to 10000 ms."
+                    },
+                    "max_output_bytes": {
+                        "type": ["integer", "null"],
+                        "minimum": 1,
+                        "maximum": 262144,
+                        "description": "Bytes of unread output this wait returns, keeping the head and the tail. Defaults to 65536."
+                    },
+                    "workdir": {
+                        "type": ["string", "null"],
+                        "maxLength": 4096,
+                        "description": "Working directory for the command. Defaults to the session's working directory."
+                    },
                     "sandbox_permissions": {
                         "type": ["string", "null"],
                         "enum": ["use_default", "require_escalated", null],
@@ -33,7 +54,7 @@ pub(crate) fn spec(kind: ExecToolKind) -> (&'static str, Value) {
                         "description": "User-facing approval question for `require_escalated`, for example \"Do you want to download the project's dependencies?\"; null otherwise."
                     }
                 },
-                "required": ["cmd", "shell", "login", "tty", "yield_time_ms", "max_output_bytes", "workdir", "sandbox_permissions", "justification"],
+                "required": ["cmd"],
                 "additionalProperties": false
             }),
         ),

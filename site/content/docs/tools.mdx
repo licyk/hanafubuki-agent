@@ -38,6 +38,8 @@ icon: Wrench
 
 `exec_command` 在 Shell 中运行一条命令：
 
+只有 `cmd` 是必填的：`shell`、`login`、`tty`、`yield_time_ms`、`max_output_bytes`、`workdir`、`sandbox_permissions` 和 `justification` 都可以省略，省略与给 `null` 取同一个默认值（平台自己的 Shell、不分配 PTY、等待 10000 毫秒等）。
+
 | 系统         | Shell                                                                                                  |
 | ------------ | ------------------------------------------------------------------------------------------------------ |
 | Linux、macOS | `/bin/bash`（没有时用 `/bin/sh`），默认以登录 Shell 运行（`-lc`）                                      |
