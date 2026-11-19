@@ -12,6 +12,8 @@ use crate::model_facts::{step_effort, EffortStep};
 
 /// How often a step refused (another step set the effort first) is taken
 /// again.
+/// How many times a step retries: a running turn stages commits of its own,
+/// and a change waits for each to settle.
 const STEP_ATTEMPTS: usize = 8;
 
 /// What `/effort` and its keys ask of the Agent.

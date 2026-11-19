@@ -22,7 +22,8 @@ pub(crate) static MODEL: CommandSpec = CommandSpec {
     aliases: &[],
     description: "choose what model to use",
     inline_args: true,
-    during_task: false,
+    // A running turn takes the model at its next step.
+    during_task: true,
     needs_session: true,
     dispatch,
 };

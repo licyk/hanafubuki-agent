@@ -23,5 +23,5 @@ pub(in crate::service) use record::{
 pub(in crate::service) use snapshots::{persisted_runtime_snapshot, session_summary, snapshot};
 pub(in crate::service) use validation::{
     ensure_no_staged_commit, has_active_operation, now_millis, now_millis_u64,
-    validate_session_mutation,
+    validate_session_change, validate_session_mutation,
 };

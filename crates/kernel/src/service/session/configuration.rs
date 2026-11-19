@@ -263,16 +263,9 @@ impl AgentService {
         let cell = self.session(session_id)?;
         let mut guard = cell.lock_after_persistence_blocking()?;
         let record = &mut *guard;
-        validate_session_mutation(record, generation, revision)?;
-        ensure_no_staged_commit(record)?;
-        if record
-            .runtime
-            .turn
-            .as_ref()
-            .is_some_and(|turn| !turn.phase.is_terminal())
-        {
-            return Err(AgentError::TurnAlreadyRunning);
-        }
+        // A running turn takes the model at its next step, since each
+        // sampling request is built from this configuration.
+        validate_session_change(record, generation, revision)?;
         if record
             .runtime
             .compaction
@@ -346,16 +339,8 @@ impl AgentService {
         let cell = self.session(session_id)?;
         let mut guard = cell.lock_after_persistence_blocking()?;
         let record = &mut *guard;
-        validate_session_mutation(record, generation, revision)?;
-        ensure_no_staged_commit(record)?;
-        if record
-            .runtime
-            .turn
-            .as_ref()
-            .is_some_and(|turn| !turn.phase.is_terminal())
-        {
-            return Err(AgentError::TurnAlreadyRunning);
-        }
+        // As the model: a running turn takes the effort at its next step.
+        validate_session_change(record, generation, revision)?;
         if record
             .runtime
             .compaction

@@ -13,7 +13,7 @@ use ratatui::crossterm::event::KeyEvent;
 use super::ChatWidget;
 use crate::agent_bridge::EffortCall;
 use crate::app_event::{AgentCommand, AppEvent, Op};
-use crate::commands::{self, effort};
+use crate::commands;
 use crate::keymap::{self, Action};
 
 impl ChatWidget {
@@ -54,9 +54,7 @@ impl ChatWidget {
     }
 
     fn step_effort(&mut self, raise: bool) {
-        if self.bottom_pane.is_task_running() {
-            return self.add_error_message(effort::DURING_TASK.to_string());
-        }
+        // As `/effort`: a running turn takes the new effort at its next step.
         self.app_event_tx.send(AppEvent::Op(Op::EnsureSession));
         self.app_event_tx
             .send(AppEvent::Op(Op::Command(AgentCommand::Effort(

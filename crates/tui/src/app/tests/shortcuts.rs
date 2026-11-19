@@ -12,7 +12,6 @@ use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 
 use super::subagents::spawn_and_wait;
 use super::Harness;
-use crate::commands::effort::DURING_TASK;
 use crate::transcript_mode::TranscriptMode;
 
 impl Harness {
@@ -122,7 +121,7 @@ fn quick_effort_steps_each_take_a_level() {
 }
 
 #[test]
-fn an_effort_step_without_levels_or_during_a_turn_changes_nothing() {
+fn an_effort_step_needs_levels_and_works_during_a_turn() {
     let mut harness = Harness::start_timed(
         vec![(assistant_events("Done."), Duration::from_secs(2))],
         true,
@@ -137,12 +136,10 @@ fn an_effort_step_without_levels_or_during_a_turn_changes_nothing() {
         harness.app.chat_widget.is_task_running()
     });
     harness.alt(KeyCode::Char(','));
-    harness.pump_until_screen_shows("Change the effort after this turn");
-    assert!(
-        harness.transcript().contains(DURING_TASK),
-        "{}",
-        harness.transcript()
-    );
+    // This model knows no reasoning levels, so the step stays: what the key
+    // no longer does is refuse for the turn's sake.
+    harness.pump_until_screen_shows("No reasoning levels are known for this model");
+    assert_eq!(harness.session_effort(), None);
     harness.pump_until_turn_ends();
     assert_eq!(harness.session_effort(), None);
 }

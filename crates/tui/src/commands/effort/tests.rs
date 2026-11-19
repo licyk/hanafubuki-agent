@@ -1,5 +1,5 @@
-//! `/effort`: what it asks of the Agent, its refusal during a turn, the
-//! picker over the model's known efforts (only Default and Custom when
+//! `/effort`: what it asks of the Agent, that it works during a turn too,
+//! the picker over the model's known efforts (only Default and Custom when
 //! none is known), and a custom effort typed and checked.
 
 use std::sync::mpsc::Receiver;
@@ -91,18 +91,13 @@ fn effort_lists_or_sets_a_typed_effort_or_the_default() {
 }
 
 #[test]
-fn no_effort_is_changed_during_a_turn() {
+fn the_effort_is_changed_during_a_turn() {
     let (mut chat, events) = chat(false);
     chat.handle_turn_update(TurnUpdate::Started);
     for line in ["effort", "effort high"] {
         let sent = run(&mut chat, &events, line);
         assert!(
-            sent.contains(&Sent::Cell(format!("■ {DURING_TASK}"))),
-            "{sent:?}"
-        );
-        assert!(
-            !sent
-                .iter()
+            sent.iter()
                 .any(|sent| matches!(sent, Sent::Op(Op::Command(AgentCommand::Effort(_))))),
             "{sent:?}"
         );

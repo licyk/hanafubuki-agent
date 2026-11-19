@@ -4,8 +4,8 @@
 //! known for its model (Codex's reasoning popup, `chatwidget/model_popups.rs`):
 //! the levels its configuration or its Provider's listing names, then
 //! Default (the Provider's) and Custom, typed. `/effort VALUE` and
-//! `/effort default` set it at once. The kernel takes a change only
-//! between turns, so it is refused during one.
+//! `/effort default` set it at once. A running turn takes the change at its
+//! next step, so it is allowed during one.
 
 use hanafubuki_agent::{reasoning_effort_choices, KnownReasoning, ModelReasoningEffort};
 
@@ -22,21 +22,14 @@ pub(crate) static EFFORT: CommandSpec = CommandSpec {
     aliases: &[],
     description: "choose the reasoning effort of the model",
     inline_args: true,
-    // Refused during a turn by dispatch, which says what to do instead.
+    // Allowed during a turn: the running one takes the change at its next
+    // step.
     during_task: true,
     needs_session: true,
     dispatch,
 };
 
-/// What a change of the effort during a turn is told.
-pub(crate) const DURING_TASK: &str = "'/effort' is disabled while a task is in progress. \
-                                      Change the effort after this turn, or interrupt it.";
-
 fn dispatch(context: &mut CommandContext<'_>, args: &str) {
-    if context.task_running() {
-        context.add_to_history(history_cell::new_error_event(DURING_TASK.to_string()));
-        return;
-    }
     match args.trim() {
         "" => context.agent_command(AgentCommand::Effort(EffortCall::List)),
         "default" => context.agent_command(AgentCommand::Effort(EffortCall::Set(None))),

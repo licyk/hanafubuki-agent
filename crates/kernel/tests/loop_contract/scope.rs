@@ -17,6 +17,11 @@ use hanafubuki_agent_kernel::{
     AgentCapabilityScope, AgentChildSessionBase, AgentChildSessionRequest, AgentPermissionMode,
     AgentSessionOrigin, AgentSessionPersistence, AgentToolScope, ToolPattern,
 };
+use hanafubuki_agent_kernel::{
+    AgentConfiguredModelFacts, AgentSessionModelConfigurationUpdate, ModelApiProtocol,
+    ModelCompactionCapability, ModelRetryPolicy,
+};
+use hanafubuki_agent_model_api::ModelReasoningEffort;
 
 use super::*;
 
@@ -578,6 +583,114 @@ async fn the_role_changes_only_between_turns() {
         .set_session_role(session.id, AgentCapabilityScope::default(), None)
         .unwrap();
     assert_eq!((cleared.role, cleared.scope), (None, None));
+}
+
+/// A running turn takes the effort at its next step: each sampling request
+/// is built from the session's configuration, so `/effort` works during one.
+#[tokio::test]
+async fn the_effort_changes_during_a_turn() {
+    let service = AgentService::new(
+        Arc::new(CancellationOnlyModel),
+        FakeTools::new([]).await.registries(),
+    );
+    let session = service.create_session(config()).unwrap();
+    let accepted = service
+        .submit_turn_with_sink(session.id, "wait".to_string(), Arc::new(NoopEventSink))
+        .unwrap();
+    wait_for_active_turn(&service, session.id).await;
+
+    // The turn's own commits hold `persisting_revision` for a moment at a
+    // time, so a change waits for one to settle.
+    let mut changed = None;
+    for _ in 0..200 {
+        let snapshot = service.snapshot(session.id).unwrap();
+        match service.set_session_reasoning_effort(
+            session.id,
+            snapshot.generation,
+            snapshot.revision,
+            Some(ModelReasoningEffort::High),
+        ) {
+            Ok(snapshot) => {
+                changed = Some(snapshot);
+                break;
+            }
+            Err(AgentError::SessionMutationNotConfirmed) => {
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
+            Err(error) => panic!("{error:?}"),
+        }
+    }
+    assert_eq!(
+        changed
+            .expect("the running turn took the effort")
+            .reasoning_effort,
+        Some(ModelReasoningEffort::High)
+    );
+    service
+        .cancel_turn_confirmed(session.id, accepted.turn_id, accepted.generation)
+        .await
+        .unwrap();
+}
+
+/// The model too: a running turn's next request is built from whatever the
+/// configuration says then, so the switch is allowed during a turn.
+#[tokio::test]
+async fn the_model_changes_during_a_turn() {
+    let service = AgentService::new(
+        Arc::new(CancellationOnlyModel),
+        FakeTools::new([]).await.registries(),
+    );
+    let session = service.create_session(config()).unwrap();
+    let accepted = service
+        .submit_turn_with_sink(session.id, "wait".to_string(), Arc::new(NoopEventSink))
+        .unwrap();
+    wait_for_active_turn(&service, session.id).await;
+
+    let mut changed = None;
+    for _ in 0..200 {
+        let snapshot = service.snapshot(session.id).unwrap();
+        let update = AgentSessionModelConfigurationUpdate {
+            provider_id: snapshot.provider_id.clone(),
+            provider_protocol: snapshot.provider_protocol,
+            model: "switched-during-a-turn".into(),
+            instructions: "switched".into(),
+            reasoning_effort: None,
+            configured_facts: AgentConfiguredModelFacts::default(),
+            input_capabilities: Default::default(),
+            auto_compaction_enabled: true,
+            auto_compact_threshold_percent: 80,
+            compaction_capability: ModelCompactionCapability::LocalSummary,
+            turn_budget: Default::default(),
+        };
+        match service.set_session_model_configuration(
+            session.id,
+            snapshot.generation,
+            snapshot.revision,
+            ModelApiProtocol::Responses,
+            "http://127.0.0.1:1/v1",
+            None,
+            Vec::new(),
+            ModelRetryPolicy::default(),
+            update,
+        ) {
+            Ok(snapshot) => {
+                changed = Some(snapshot);
+                break;
+            }
+            Err(AgentError::SessionMutationNotConfirmed) => {
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
+            Err(error) => panic!("{error:?}"),
+        }
+    }
+    assert_eq!(
+        changed.expect("the running turn took the model").model,
+        "switched-during-a-turn"
+    );
+    service
+        .cancel_turn_confirmed(session.id, accepted.turn_id, accepted.generation)
+        .await
+        .unwrap();
 }
 
 #[tokio::test]

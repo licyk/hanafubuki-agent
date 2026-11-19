@@ -159,11 +159,11 @@ fn a_command_the_running_turn_forbids_says_so() {
     let (mut chat, events) = chat();
     chat.handle_turn_update(TurnUpdate::Started);
     drain(&events);
-    chat.dispatch_command(command("model"), String::new());
+    chat.dispatch_command(command("mode"), String::new());
     let (cells, ops) = drain(&events);
     assert_eq!(
         cells,
-        vec!["■ '/model' is disabled while a task is in progress."]
+        vec!["■ '/mode' is disabled while a task is in progress."]
     );
     assert!(ops.is_empty());
 }

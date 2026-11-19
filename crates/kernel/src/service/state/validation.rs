@@ -33,6 +33,37 @@ pub(in crate::service) fn validate_session_mutation(
     Ok(())
 }
 
+/// `validate_session_mutation` for a change a running turn can take at its
+/// next step: the model, its effort. A running turn is not a refusal; a
+/// staged commit still is, since the change would race the one being
+/// written, and so is a compaction, whose summary would be measured
+/// against a window the model no longer has.
+pub(in crate::service) fn validate_session_change(
+    record: &SessionRecord,
+    generation: AgentGeneration,
+    revision: AgentRevision,
+) -> Result<(), AgentError> {
+    ensure_no_staged_commit(record)?;
+    if record.status.generation != generation {
+        return Err(AgentError::StaleGeneration);
+    }
+    if record.status.revision != revision.value() {
+        return Err(AgentError::StaleRevision);
+    }
+    if record.status.disposing {
+        return Err(AgentError::SessionMutationNotConfirmed);
+    }
+    if record
+        .runtime
+        .compaction
+        .as_ref()
+        .is_some_and(|compaction| !compaction.snapshot.status.is_terminal())
+    {
+        return Err(AgentError::CompactionAlreadyRunning);
+    }
+    Ok(())
+}
+
 pub(in crate::service) fn ensure_no_staged_commit(
     record: &SessionRecord,
 ) -> Result<(), AgentError> {

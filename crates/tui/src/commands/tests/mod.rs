@@ -108,7 +108,8 @@ fn availability_follows_the_spec() {
             "advisor-manual",
             "advisor-settings",
             "advisor-stats",
-            // Refused during a turn by its dispatch, with a hint.
+            // A running turn takes the model at its next step.
+            "model",
             "effort",
             "providers",
             "permissions",

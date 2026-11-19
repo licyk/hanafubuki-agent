@@ -188,7 +188,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 | `/clear [name]`            | 清空终端的滚动历史和屏幕（Fullscreen 下清空对话）并离开会话；下一个会话使用这个名字                                                                                                                                                                                                                                                                                                                                                                         | 不可用                         |
 | `/quit`、`/exit`           | 退出                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 可用                           |
 
-- 回合进行中输入不可用的命令，会显示 `'/x' is disabled while a task is in progress.`（`/effort` 还会加上 `Change the effort after this turn, or interrupt it.`）。
+- 回合进行中输入不可用的命令，会显示 `'/x' is disabled while a task is in progress.`。`/model` 和 `/effort` 可用：运行中的回合会在下一次采样时采用新的模型或强度，因为每次请求都按当时的会话配置构建。压缩进行中仍会拒绝两者，因为它的摘要会按模型已不再拥有的窗口来衡量。
 - 不认识的 `/名字` 不会发送，而是提示 `Unrecognized command`。包含斜杠的路径（如 `/usr/bin/env`）或以空格开头的文本会作为普通消息发送。
 - 除 `/model`（`forget`）、`/effort`、`/permissions`、`/role`、`/rename`、`/resume`、`/fork`、`/review`、`/side`、`/goal`、`/export`、`/cd`、`/clear`、`/compression`（`cache`）、`/raw`、`/config`、`/providers`（`policy`）、`/mcp`、`/statusline`、`/title` 和 `/keymap` 外，命令不带参数。`/compact now` 这样在名字后面写了内容的消息会作为普通消息发给模型；`/model` 后面跟 `forget` 以外的内容时，会提示 `Usage: /model [forget]`。`/mcp` 后面跟 `verbose` 或 `login ID` 以外的内容时，会提示 `Usage: /mcp [verbose | login ID]`；`/providers` 后面跟 `policy` 以外的内容时提示 `Usage: /providers [policy]`，`/compression` 后面跟 `cache` 以外的内容时提示 `Usage: /compression [cache]`。
 - `/raw` 立即生效并保存（`tui.rawOutput`），下次启动时沿用。Fullscreen 下整个对话以原始形式重新显示；Scrollback 下已经写入滚动历史的内容保持不变，只有之后的内容是原始形式，直到调整终端大小后滚动历史按当前的形式重新写入。已结束的回答或计划显示它的 Markdown；流式输出期间显示去掉样式的各行。`/raw` 后面跟 `on`、`off` 以外的内容时，会提示 `Usage: /raw [on|off]`。
@@ -258,7 +258,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 - 档位来自模型自己的 `reasoningEfforts`，否则来自其 Provider 的目录；来自 models.dev 的档位不会提供（[推理强度与思考过程](/docs/providers-models#reasoning)）。没有已知档位时只有 **Default** 和 **Custom**；模型不接受推理参数时，副标题会说明，从 Provider 的拒绝学到时说 `The Provider refused the reasoning parameter`。
 - **Default** 取消设置，使用 Provider 的默认值。**Custom** 打开单行输入框，当前值是自定义值时预先填入；Enter 时先检查，不接受的值（如 `none`）留在输入框中并显示原因。列表中没有的当前值显示为 `Custom: max (current)`。
 - **`/effort 档位`** 直接设置任意推理强度（发送时按模型的档位收窄），**`/effort default`** 取消设置。
-- 轮次进行中不可用，会提示 `Change the effort after this turn, or interrupt it.`。没有会话时，`/effort` 会先创建一个。
+- 轮次进行中可用：运行中的回合会在下一次采样时采用新的强度。压缩进行中会拒绝。没有会话时，`/effort` 会先创建一个。
 - **Alt+, 和 Alt+.** 在上述档位中把推理强度降低或提高一档，条件与 `/effort` 相同。未设置的推理强度，或不在档位中的值，从模型的默认档位开始，没有默认档位时从第一个档位开始；到了一端就保持不变，并提示 `Reasoning is already at the highest level (High).`。没有已知档位时提示 `No reasoning levels are known for this model; use /effort to type one.`。
 - 推理强度显示在 `/status` 中，也显示在状态栏的 `model-with-reasoning` 项（默认显示）中。设置中心的模型策略中，推理强度一行提供相同的选项，设置的是新会话使用的推理强度（[设置](#config)）。
 
