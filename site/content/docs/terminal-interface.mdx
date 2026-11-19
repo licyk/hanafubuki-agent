@@ -829,24 +829,24 @@ flowchart TD
 
 第二行右侧是各项计数，形如 `2 terminals · 1 agent · 3 warnings`，按此顺序，为零的项不显示，全为零时整块为空。点击其中一项会打开它对应的地方：终端和 Agent 打开 `/tasks` 的相应页签，警告打开 `/warnings`。警告就是 `/warnings` 会列出的那些，忽略一条后计数随之减少。
 
-| 项目                                        | 显示                                                                                                     |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `model`                                     | 模型                                                                                                     |
-| `model-with-reasoning`                      | 模型及其推理强度（默认显示）                                                                             |
+| 项目                                        | 显示                                                                                                         |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `model`                                     | 模型                                                                                                         |
+| `model-with-reasoning`                      | 模型及其推理强度（默认显示）                                                                                 |
 | `background-tasks`                          | 保留为设置项，但状态行不再显示它：运行中的终端、Agent 和警告计数是底栏的第二行，各自可点击，都没有时该项为空 |
-| `reasoning`                                 | 推理强度                                                                                                 |
-| `current-dir`                               | 工作目录，主目录写作 `~`（默认显示）                                                                     |
-| `git-branch`                                | 第一个工作区目录检出的分支，分离状态时是短提交号，从 `.git` 读取                                         |
-| `context-remaining`、`context-used`         | `Context 75% left`、`Context 25% used`，知道模型的上下文窗口之后显示                                     |
-| `used-tokens`                               | 会话的输入和输出 token 总数，有用量之后显示                                                              |
-| `total-input-tokens`、`total-output-tokens` | `12K in`、`3.4K out`                                                                                     |
-| `session-id`                                | 会话 ID                                                                                                  |
-| `session-title`                             | 会话标题（默认显示）                                                                                     |
-| `task-progress`                             | `Tasks 2/5`：最近的任务计划中已完成的步骤数和总步骤数                                                    |
-| `permission-mode`                           | 会话的权限模式，没有时是配置的 `permissionMode`                                                          |
-| `goal`                                      | `Goal: 目标 (状态)`，会话设有目标时显示                                                                  |
-| `compression`                               | `3 blocks, 42K saved`：[分层压缩](#compression)的活动块数和折叠所替换的 token 数，会话运行过它之后显示   |
-| `role`                                      | `Role: 名字`，会话有 `default` 以外的[角色](#role)时显示                                                 |
+| `reasoning`                                 | 推理强度                                                                                                     |
+| `current-dir`                               | 工作目录，主目录写作 `~`（默认显示）                                                                         |
+| `git-branch`                                | 第一个工作区目录检出的分支，分离状态时是短提交号，从 `.git` 读取                                             |
+| `context-remaining`、`context-used`         | `Context 75% left`、`Context 25% used`，知道模型的上下文窗口之后显示                                         |
+| `used-tokens`                               | 会话的输入和输出 token 总数，有用量之后显示                                                                  |
+| `total-input-tokens`、`total-output-tokens` | `12K in`、`3.4K out`                                                                                         |
+| `session-id`                                | 会话 ID                                                                                                      |
+| `session-title`                             | 会话标题（默认显示）                                                                                         |
+| `task-progress`                             | `Tasks 2/5`：最近的任务计划中已完成的步骤数和总步骤数                                                        |
+| `permission-mode`                           | 会话的权限模式，没有时是配置的 `permissionMode`                                                              |
+| `goal`                                      | `Goal: 目标 (状态)`，会话设有目标时显示                                                                      |
+| `compression`                               | `3 blocks, 42K saved`：[分层压缩](#compression)的活动块数和折叠所替换的 token 数，会话运行过它之后显示       |
+| `role`                                      | `Role: 名字`，会话有 `default` 以外的[角色](#role)时显示                                                     |
 
 终端标题（OSC 0）有自己的项目，以 `|` 连接；默认是旋转指示、会话标题和项目名称。
 

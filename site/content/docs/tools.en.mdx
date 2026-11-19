@@ -80,19 +80,20 @@ In a [review](/docs/sessions#reviews), only plain `git --no-pager` reads run; se
 
 ## Files [#files]
 
-| Tool             | Does                                                                                       |
-| ---------------- | ------------------------------------------------------------------------------------------ |
-| `read_file`      | Reads a file, page by page, up to 256 KiB a page                                           |
-| `list_directory` | Lists a directory                                                                          |
-| `search_text`    | Searches text with a regular expression, honouring `.gitignore` and the other ignore files |
-| `apply_patch`    | Creates, changes and deletes files as a patch                                              |
-| `move_path`      | Moves or renames                                                                           |
-| `delete_path`    | Deletes a file or a directory                                                              |
+| Tool             | Does                                                                                                                  |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `read_file`      | Reads a file, page by page, up to 256 KiB a page                                                                      |
+| `list_directory` | Lists a directory                                                                                                     |
+| `search_text`    | Searches text with a regular expression in a directory or one file, honouring `.gitignore` and the other ignore files |
+| `apply_patch`    | Creates, changes and deletes files as a patch                                                                         |
+| `move_path`      | Moves or renames                                                                                                      |
+| `delete_path`    | Deletes a file or a directory                                                                                         |
 
 - A relative path is taken from the first workspace root.
 - `apply_patch` automatically creates missing parent directories for `Add File` and `Move to`, including multiple nested levels. Directory creation is part of the approved patch; preparation and approval do not create directories. Writes remain atomic per file, not across the whole patch; cancellation or an I/O failure can leave directories already created.
 - Reading is not limited to the workspace roots. A write, move or delete anywhere needs an approval; one that touches a path outside the workspace roots is critical, and its summary names those paths.
-- `read_file` pages by bytes: `offset` is where its page starts and `nextOffset` where the next one does. Its result also counts the line the page starts on, `startLine` (from 1), so the lines it read can be numbered.
+- `read_file` pages by bytes: `offset` is where its page starts and `nextOffset` where the next one does. Its result also counts the line the page starts on, `startLine` (from 1), so the lines it read can be numbered; `lineNumbers` adds those lines, each with its number, beside the page's unchanged `content`.
+- `search_text`'s `path` is a directory or a single file. A directory is walked, and `maxDepth` bounds that walk; a file is searched itself, so `maxDepth` does not apply to it.
 - In the terminal interface, `apply_patch`'s approval shows the diff it makes, and its result the files it changed, with the diff expanded ([Tool calls](/docs/terminal-interface#tools)), its rows numbered where the patch landed. The tool reports those positions beside its result, for the display only: the model reads the files it changed, as before.
 
 ## The web [#web]
