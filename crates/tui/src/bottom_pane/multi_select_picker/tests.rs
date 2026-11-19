@@ -13,6 +13,7 @@ fn item(id: &str, enabled: bool) -> MultiSelectItem {
         name: id.to_string(),
         description: Some(format!("the {id}")),
         enabled,
+        note: None,
     }
 }
 
@@ -55,7 +56,9 @@ fn picker() -> (MultiSelectPicker, Rc<RefCell<Option<Vec<String>>>>) {
             .collect();
         Some(Line::from(on.join(" | ")))
     }))
-    .on_confirm(Box::new(move |ids| *sink.borrow_mut() = Some(ids.to_vec())));
+    .on_confirm(Box::new(move |chosen| {
+        *sink.borrow_mut() = Some(chosen.iter().map(|item| item.id.clone()).collect());
+    }));
     (picker, confirmed)
 }
 

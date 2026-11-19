@@ -42,7 +42,7 @@ fn statusline_arguments_apply_to_the_run_and_the_setup_saves() {
     harness.pump_until_screen_shows("Status line updated.");
     let config = harness.config_file();
     assert!(
-        config.contains("statusLine = [\"current-dir\"]"),
+        config.contains("statusLine = [\"current-dir:left-1\"]"),
         "{config}"
     );
     assert!(config.contains("statusLineColors = false"), "{config}");

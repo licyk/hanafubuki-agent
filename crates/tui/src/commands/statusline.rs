@@ -70,6 +70,8 @@ pub(super) fn parse(args: &str) -> Result<AppearanceEvent, String> {
     Ok(AppearanceEvent::StatusLine {
         items: (!items.is_empty()).then_some(items),
         colors,
+        positions: None,
+        overflow: None,
         save: false,
     })
 }

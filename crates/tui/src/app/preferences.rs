@@ -17,7 +17,7 @@ use ratatui::backend::Backend;
 use serde_json::{json, Value};
 
 use super::App;
-use crate::appearance::items::ids;
+use crate::appearance::items::{ids, SurfaceItem};
 use crate::appearance::{AppearanceEvent, SPINNER_INTERVAL};
 use crate::history_cell::HistoryRenderMode;
 use crate::keymap::{self, Keymap};
@@ -38,7 +38,7 @@ impl App {
         } else {
             format!("Raw output {state} for what follows; the scrollback keeps what it shows.")
         };
-        self.write_tui_settings(vec![("tui.rawOutput", json!(raw))], message);
+        self.write_tui_settings(vec![("tui.rawOutput".to_string(), json!(raw))], message);
     }
 
     /// The conversation shown raw, or rich.
@@ -61,25 +61,41 @@ impl App {
     pub(crate) fn apply_appearance(&mut self, event: AppearanceEvent) {
         let save = match &event {
             AppearanceEvent::ThemeSaved(name) => Some((
-                vec![("tui.theme", json!(name))],
+                vec![("tui.theme".to_string(), json!(name))],
                 format!("Theme set to {name}."),
             )),
             AppearanceEvent::StatusLine {
                 items,
                 colors,
+                positions,
+                overflow,
                 save: true,
             } => {
-                let items = items
-                    .as_deref()
-                    .map(|items| ("tui.statusLine", json!(ids(items))));
-                let colors = colors.map(|colors| ("tui.statusLineColors", json!(colors)));
+                // The place travels in the item's own value (`model:right-2`),
+                // so the one key that is already written carries it.
+                let items = items.as_deref().map(|items| {
+                    let entries: Vec<String> = items
+                        .iter()
+                        .map(
+                            |item| match positions.as_ref().and_then(|p| p.get(item.id())) {
+                                Some(place) => format!("{}:{}", item.id(), place.value()),
+                                None => item.id().to_string(),
+                            },
+                        )
+                        .collect();
+                    ("tui.statusLine".to_string(), json!(entries))
+                });
+                let colors =
+                    colors.map(|colors| ("tui.statusLineColors".to_string(), json!(colors)));
+                let overflow = overflow
+                    .map(|overflow| ("tui.statusLineOverflow".to_string(), json!(overflow)));
                 Some((
-                    items.into_iter().chain(colors).collect(),
+                    items.into_iter().chain(colors).chain(overflow).collect(),
                     "Status line updated.".to_string(),
                 ))
             }
             AppearanceEvent::TerminalTitle { items, save: true } => Some((
-                vec![("tui.terminalTitle", json!(ids(items)))],
+                vec![("tui.terminalTitle".to_string(), json!(ids(items)))],
                 "Terminal title updated.".to_string(),
             )),
             AppearanceEvent::StatusLine { save: false, .. }
@@ -141,12 +157,12 @@ impl App {
     /// Writes `[tui]` settings by key off the loop; what they changed is
     /// applied when the write is done ([`Self::tui_settings_written`]). An
     /// empty `message` writes quietly: only a failure is said.
-    pub(super) fn write_tui_settings(&mut self, changes: Vec<(&str, Value)>, message: String) {
+    pub(super) fn write_tui_settings(&mut self, changes: Vec<(String, Value)>, message: String) {
         let write = SettingsWrite {
             changes: changes
                 .into_iter()
                 .map(|(key, value)| SettingChange {
-                    key: key.to_string(),
+                    key,
                     op: SettingWriteOp::Set(value),
                 })
                 .collect(),

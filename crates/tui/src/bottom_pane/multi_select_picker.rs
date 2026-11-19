@@ -29,16 +29,23 @@ pub(crate) struct MultiSelectItem {
     pub(crate) name: String,
     pub(crate) description: Option<String>,
     pub(crate) enabled: bool,
+    /// A label the caller keeps beside the item (the status line's place).
+    pub(crate) note: Option<String>,
 }
 
 /// The preview line of the items as they are.
 pub(crate) type PreviewCallback = Box<dyn Fn(&[MultiSelectItem]) -> Option<Line<'static>>>;
 /// Told of every toggle and move.
 pub(crate) type ChangeCallback = Box<dyn Fn(&[MultiSelectItem])>;
-/// Told the ids turned on, in order, on Enter.
-pub(crate) type ConfirmCallback = Box<dyn Fn(&[String])>;
+/// Told the items turned on, in order, on Enter; their ids are what the
+/// setting keeps, and a caller's own note goes beside them.
+pub(crate) type ConfirmCallback = Box<dyn Fn(&[MultiSelectItem])>;
 /// Told of Esc and Ctrl-C.
 pub(crate) type CancelCallback = Box<dyn Fn()>;
+/// Told `key` when it is not one of the list's own, with the items as they
+/// are and the highlighted one; `true` when it was taken.
+pub(crate) type ExtraKeyCallback =
+    Box<dyn Fn(&mut Vec<MultiSelectItem>, Option<usize>, KeyEvent) -> bool>;
 
 pub(crate) struct MultiSelectPicker {
     buttons: super::ActionButtons,
@@ -52,6 +59,7 @@ pub(crate) struct MultiSelectPicker {
     on_change: Option<ChangeCallback>,
     on_confirm: Option<ConfirmCallback>,
     on_cancel: Option<CancelCallback>,
+    on_extra_key: Option<ExtraKeyCallback>,
 }
 
 impl MultiSelectPicker {
@@ -74,6 +82,7 @@ impl MultiSelectPicker {
             on_change: None,
             on_confirm: None,
             on_cancel: None,
+            on_extra_key: None,
         }
     }
 
@@ -95,6 +104,11 @@ impl MultiSelectPicker {
 
     pub(crate) fn on_cancel(mut self, callback: CancelCallback) -> Self {
         self.on_cancel = Some(callback);
+        self
+    }
+
+    pub(crate) fn on_extra_key(mut self, callback: ExtraKeyCallback) -> Self {
+        self.on_extra_key = Some(callback);
         self
     }
 
@@ -155,14 +169,14 @@ impl MultiSelectPicker {
     }
 
     fn confirm(&mut self) {
-        let ids: Vec<String> = self
+        let chosen: Vec<MultiSelectItem> = self
             .items
             .iter()
             .filter(|item| item.enabled)
-            .map(|item| item.id.clone())
+            .cloned()
             .collect();
         if let Some(on_confirm) = &self.on_confirm {
-            on_confirm(&ids);
+            on_confirm(&chosen);
         }
         self.complete = true;
     }
@@ -187,7 +201,11 @@ impl MultiSelectPicker {
                 let marker = if item.enabled { 'x' } else { ' ' };
                 GenericDisplayRow {
                     name: format!("{cursor} [{marker}] {}", item.name),
-                    description: item.description.clone(),
+                    description: match (&item.note, &item.description) {
+                        (Some(note), Some(description)) => Some(format!("{note} · {description}")),
+                        (Some(note), None) => Some(note.clone()),
+                        (None, description) => description.clone(),
+                    },
                     ..Default::default()
                 }
             })
@@ -248,7 +266,14 @@ impl BottomPaneView for MultiSelectPicker {
             KeyCode::Char(' ') => self.toggle_selected(),
             KeyCode::Enter => self.confirm(),
             KeyCode::Esc => self.cancel(),
-            _ => {}
+            _ => {
+                let Some(on_extra_key) = &self.on_extra_key else {
+                    return;
+                };
+                if on_extra_key(&mut self.items, self.state.selected_idx, key) {
+                    self.changed();
+                }
+            }
         }
     }
 

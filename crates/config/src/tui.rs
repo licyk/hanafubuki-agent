@@ -51,10 +51,6 @@ pub struct AgentTuiPreferences {
     /// The items of the status line under the composer, in order; empty
     /// for none.
     pub status_line: Vec<String>,
-    /// `statusLinePosition.<item>`: where that item sits, `left-1`,
-    /// `right-2` and the like. An item without an entry is on the left of
-    /// the first row.
-    pub status_line_position: BTreeMap<String, String>,
     /// What the footer does when a row does not fit beside the counts.
     pub status_line_overflow: AgentStatusLineOverflow,
     /// Whether the status line's items take the theme's colors.
@@ -137,7 +133,6 @@ impl Default for AgentTuiPreferences {
             welcome_enabled: true,
             welcome_theme: AgentWelcomeTheme::Random,
             status_line: DEFAULT_STATUS_LINE.map(String::from).to_vec(),
-            status_line_position: BTreeMap::new(),
             status_line_overflow: AgentStatusLineOverflow::default(),
             status_line_colors: true,
             terminal_title: DEFAULT_TERMINAL_TITLE.map(String::from).to_vec(),

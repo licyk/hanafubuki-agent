@@ -45,6 +45,10 @@ pub(crate) enum AppearanceEvent {
     StatusLine {
         items: Option<Vec<StatusLineItem>>,
         colors: Option<bool>,
+        /// `tui.statusLinePosition.<item>` as the setup view set them.
+        positions: Option<std::collections::BTreeMap<String, AgentStatusLinePlace>>,
+        /// `tui.statusLineOverflow`, when the view changed it.
+        overflow: Option<AgentStatusLineOverflow>,
         save: bool,
     },
     TerminalTitle {
@@ -139,9 +143,33 @@ impl Appearance {
     /// The settings `preferences` hold; with the warnings for the items
     /// they name that this interface does not know.
     pub(crate) fn new(preferences: &AgentTuiPreferences, directory: String) -> (Self, Vec<String>) {
-        let (status_line, unknown_status) = parse_items(&preferences.status_line);
+        // An item may carry its place after a colon (`model:right-2`), which
+        // the one setting then holds beside the id.
+        let mut ids = Vec::new();
+        let mut places = Vec::new();
+        let mut bad_places = Vec::new();
+        for entry in &preferences.status_line {
+            match entry.split_once(':') {
+                Some((id, place)) => match AgentStatusLinePlace::parse(place) {
+                    Some(place) => {
+                        ids.push(id.to_string());
+                        places.push((id.to_string(), place));
+                    }
+                    None => bad_places.push(entry.clone()),
+                },
+                None => ids.push(entry.clone()),
+            }
+        }
+        let (status_line, unknown_status) = parse_items(&ids);
         let (terminal_title, unknown_title) = parse_items(&preferences.terminal_title);
         let mut warnings = Vec::new();
+        if !bad_places.is_empty() {
+            warnings.push(format!(
+                "tui.statusLine: {} is not `id` or `id:left-1`, `id:left-2`, `id:right-1`, \
+                 `id:right-2`; it is ignored.",
+                bad_places.join(", ")
+            ));
+        }
         if !unknown_status.is_empty() {
             warnings.push(unknown_items_warning("tui.statusLine", &unknown_status));
         }
@@ -149,16 +177,8 @@ impl Appearance {
             warnings.push(unknown_items_warning("tui.terminalTitle", &unknown_title));
         }
         let mut positions = std::collections::BTreeMap::new();
-        for (item, value) in &preferences.status_line_position {
-            match AgentStatusLinePlace::parse(value) {
-                Some(place) => {
-                    positions.insert(item.clone(), place);
-                }
-                None => warnings.push(format!(
-                    "tui.statusLinePosition.{item} is '{value}', not left-1, left-2, right-1 or right-2; \
-                     it is ignored."
-                )),
-            }
+        for (item, place) in places {
+            positions.insert(item, place);
         }
         let appearance = Self {
             theme: preferences.theme.clone(),
@@ -220,12 +240,24 @@ impl Appearance {
     pub(crate) fn apply(&mut self, event: AppearanceEvent) {
         match event {
             AppearanceEvent::ThemeSaved(name) => self.theme = Some(name),
-            AppearanceEvent::StatusLine { items, colors, .. } => {
+            AppearanceEvent::StatusLine {
+                items,
+                colors,
+                positions,
+                overflow,
+                ..
+            } => {
                 if let Some(items) = items {
                     self.status_line = items;
                 }
                 if let Some(colors) = colors {
                     self.status_line_colors = colors;
+                }
+                if let Some(positions) = positions {
+                    self.positions = positions;
+                }
+                if let Some(overflow) = overflow {
+                    self.overflow = overflow;
                 }
             }
             AppearanceEvent::TerminalTitle { items, .. } => {
@@ -259,6 +291,17 @@ impl Appearance {
             AgentStatusLineOverflow::WrapAll => crate::bottom_pane::Overflow::WrapAll,
             AgentStatusLineOverflow::Truncate => crate::bottom_pane::Overflow::Truncate,
         }
+    }
+
+    /// Where the item with `id` sits, `left-1` and the like; `None` for the
+    /// items that are not the status line's.
+    pub(crate) fn place_label(&self, id: &str) -> Option<String> {
+        StatusLineItem::parse(id).map(|item| self.place_of(item).value())
+    }
+
+    /// The overflow rule as its setting writes it.
+    pub(crate) fn overflow_setting(&self) -> AgentStatusLineOverflow {
+        self.overflow
     }
 
     /// The status line's second row, on the left; `None` with no item there.

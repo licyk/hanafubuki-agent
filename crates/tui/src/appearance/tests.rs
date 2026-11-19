@@ -195,6 +195,8 @@ fn the_status_line_takes_the_themes_colours_or_is_dimmed() {
     appearance.apply(AppearanceEvent::StatusLine {
         items: None,
         colors: Some(false),
+        positions: None,
+        overflow: None,
         save: false,
     });
     assert_eq!(
@@ -305,8 +307,53 @@ fn the_status_line_setup_saves_the_items_in_their_order_and_the_colours() {
         [AppearanceEvent::StatusLine {
             items: Some(vec![StatusLineItem::GitBranch, StatusLineItem::CurrentDir]),
             colors: Some(true),
+            positions: Some(
+                [
+                    (
+                        "git-branch".to_string(),
+                        AgentStatusLinePlace {
+                            second_row: false,
+                            right: false,
+                        },
+                    ),
+                    (
+                        "current-dir".to_string(),
+                        AgentStatusLinePlace {
+                            second_row: false,
+                            right: false,
+                        },
+                    ),
+                ]
+                .into_iter()
+                .collect()
+            ),
+            overflow: Some(AgentStatusLineOverflow::WrapAll),
             save: true,
         }]
+    );
+}
+
+#[test]
+fn the_status_line_setup_steps_an_items_place_and_saves_it() {
+    let (tx, receiver) = events();
+    let appearance = appearance(&["model"], &[]);
+    let mut view = setup::status_line_setup(&appearance, tx);
+    // `p` steps `model` through left-1, left-2, right-1, right-2.
+    press(&mut view, KeyCode::Char('p'));
+    press(&mut view, KeyCode::Enter);
+    let saved = appearance_events(&receiver)
+        .into_iter()
+        .find(|event| matches!(event, AppearanceEvent::StatusLine { save: true, .. }))
+        .expect("the setup saved");
+    let AppearanceEvent::StatusLine { positions, .. } = saved else {
+        unreachable!()
+    };
+    assert_eq!(
+        positions.and_then(|positions| positions.get("model").copied()),
+        Some(AgentStatusLinePlace {
+            second_row: true,
+            right: false,
+        })
     );
 }
 
@@ -348,13 +395,8 @@ fn the_title_setup_saves_what_is_confirmed() {
 
 #[test]
 fn an_items_place_moves_it_between_the_rows_and_their_sides() {
-    let mut prefs = preferences(&["model", "current-dir"], &[]);
-    prefs
-        .status_line_position
-        .insert("current-dir".to_string(), "right-2".to_string());
-    prefs
-        .status_line_position
-        .insert("model".to_string(), "left-1".to_string());
+    // A place travels in the item's own value, `id:place`.
+    let prefs = preferences(&["model:left-1", "current-dir:right-2"], &[]);
     let (mut appearance, warnings) = Appearance::new(&prefs, "/work/project".to_string());
     assert!(warnings.is_empty(), "{warnings:?}");
     appearance.values_mut().model = "gpt-5".to_string();
@@ -371,20 +413,13 @@ fn an_items_place_moves_it_between_the_rows_and_their_sides() {
 
 #[test]
 fn a_place_that_is_not_a_side_and_a_row_is_ignored_with_a_warning() {
-    let mut prefs = preferences(&["model"], &[]);
-    prefs
-        .status_line_position
-        .insert("model".to_string(), "middle-3".to_string());
+    let prefs = preferences(&["model:middle-3"], &[]);
     let (mut appearance, warnings) = Appearance::new(&prefs, "/work".to_string());
     appearance.values_mut().model = "gpt-5".to_string();
+    // An entry whose place does not parse is ignored whole, and said so:
+    // the id alone would silently drop the place the person asked for.
     assert_eq!(warnings.len(), 1, "{warnings:?}");
-    assert!(
-        warnings[0].contains("tui.statusLinePosition.model"),
-        "{warnings:?}"
-    );
-    // The item keeps its default place.
-    assert_eq!(
-        appearance.status_line().map(|line| plain(&line)).as_deref(),
-        Some("gpt-5")
-    );
+    assert!(warnings[0].contains("model:middle-3"), "{warnings:?}");
+    // The item is gone from the line, which has nothing else to show.
+    assert!(appearance.status_line().is_none());
 }

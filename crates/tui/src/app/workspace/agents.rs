@@ -388,7 +388,10 @@ impl App {
     /// a failure is said in the center.
     fn save_agents_grouping(&mut self, grouping: AgentAgentsGrouping) {
         let value = json!(grouping);
-        self.write_tui_settings(vec![("tui.agentsGrouping", value)], String::new());
+        self.write_tui_settings(
+            vec![("tui.agentsGrouping".to_string(), value)],
+            String::new(),
+        );
     }
 }
 
