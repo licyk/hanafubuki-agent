@@ -6,6 +6,7 @@ impl WorkspaceFsService {
         file: ExistingPathPlan,
         offset: usize,
         max_bytes: usize,
+        line_numbers: bool,
         cancellation: &CancellationToken,
     ) -> Result<WorkspaceFsResult, WorkspaceFsError> {
         revalidate_existing(&file)?;
@@ -56,6 +57,11 @@ impl WorkspaceFsService {
         let content = bounded_utf8(bytes, truncated)?;
         let content_sha256 = sha256_hex(content.as_bytes());
         let content_bytes = content.len();
+        let lines = if line_numbers {
+            numbered_lines(&content, start_line)
+        } else {
+            Vec::new()
+        };
         let next_offset = offset.saturating_add(content_bytes);
         Ok(WorkspaceFsResult::FileRead(FileReadResult {
             path: file.identity.path,
@@ -63,12 +69,27 @@ impl WorkspaceFsService {
             sha256: content_sha256,
             offset,
             start_line: Some(start_line),
+            lines,
             next_offset,
             bytes: content_bytes,
             total_bytes: file.identity.size,
             truncated,
         }))
     }
+}
+
+/// `content`'s lines with their numbers in the file, the first of them
+/// `start_line`. A trailing blank line that only ends the last one is not a
+/// line of its own, as a reader counts them.
+fn numbered_lines(content: &str, start_line: u64) -> Vec<NumberedLine> {
+    let body = content.strip_suffix('\n').unwrap_or(content);
+    body.split('\n')
+        .enumerate()
+        .map(|(index, text)| NumberedLine {
+            number: start_line.saturating_add(index as u64),
+            text: text.strip_suffix('\r').unwrap_or(text).to_string(),
+        })
+        .collect()
 }
 
 /// The line breaks in the file's first `offset` bytes, read through

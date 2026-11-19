@@ -76,6 +76,7 @@ pub(crate) enum WorkspaceOperationPlan {
         file: ExistingPathPlan,
         offset: usize,
         max_bytes: usize,
+        line_numbers: bool,
     },
     WriteFile {
         target: TargetPlan,

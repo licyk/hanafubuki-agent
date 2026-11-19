@@ -111,6 +111,7 @@ fn no_result_variant_exposes_a_verbatim_path() {
             path: "tree/a.txt".to_string(),
             offset: 0,
             max_bytes: 4096,
+            line_numbers: false,
         }),
         WorkspaceFsRequest::WriteFile(WriteFileRequest {
             path: "written.txt".to_string(),
@@ -195,12 +196,14 @@ fn no_error_message_exposes_a_verbatim_path() {
             path: "absent.txt".to_string(),
             offset: 0,
             max_bytes: 1024,
+            line_numbers: false,
         }),
         // A directory where a file was required.
         WorkspaceFsRequest::ReadFile(ReadFileRequest {
             path: ".".to_string(),
             offset: 0,
             max_bytes: 1024,
+            line_numbers: false,
         }),
     ];
 
@@ -227,6 +230,7 @@ fn a_relative_parent_request_resolves_instead_of_failing() {
             path: "nested/../sibling.txt".to_string(),
             offset: 0,
             max_bytes: 1024,
+            line_numbers: false,
         }),
     )
     .unwrap();
@@ -253,6 +257,7 @@ fn a_missing_path_is_reported_as_missing_not_as_a_resolution_failure() {
             path: "tree/absent.txt".to_string(),
             offset: 0,
             max_bytes: 1024,
+            line_numbers: false,
         }),
     )
     .unwrap_err();
@@ -291,6 +296,7 @@ fn protection_holds_across_spellings_of_one_location() {
                 path: spelling.to_string(),
                 offset: 0,
                 max_bytes: 1024,
+                line_numbers: false,
             }),
         )
         .unwrap_err();
@@ -551,6 +557,7 @@ fn relative_requests_resolve_against_the_first_root() {
             path: "shared.txt".to_string(),
             offset: 0,
             max_bytes: 1024,
+            line_numbers: false,
         }),
     )
     .unwrap() else {
@@ -583,6 +590,7 @@ fn a_nested_root_does_not_change_containment() {
             path: "inner/file.txt".to_string(),
             offset: 0,
             max_bytes: 1024,
+            line_numbers: false,
         }),
     )
     .unwrap() else {

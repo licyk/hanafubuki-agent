@@ -2,7 +2,8 @@
 
 use hanafubuki_agent_contracts::object_arguments;
 use hanafubuki_agent_contracts::tools::arguments::{
-    clamped_usize, required_bool, required_bounded_string, required_text, ArgumentNotes,
+    clamped_usize, optional_bool, required_bool, required_bounded_string, required_text,
+    ArgumentNotes,
 };
 use hanafubuki_agent_contracts::ToolCallValidationError;
 use hanafubuki_agent_workspace_fs::{
@@ -81,6 +82,7 @@ pub(crate) fn parse(
                 64 * 1024,
                 &mut notes,
             )?,
+            line_numbers: optional_bool(arguments, "lineNumbers")?.unwrap_or(false),
         }),
         FsToolKind::MovePath => WorkspaceFsRequest::MovePath(MovePathRequest {
             source: required_bounded_string(arguments, "source", 4096)?,

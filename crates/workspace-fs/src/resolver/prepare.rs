@@ -108,6 +108,7 @@ pub(crate) fn prepare_operation(
                     file,
                     offset: request.offset,
                     max_bytes: request.max_bytes,
+                    line_numbers: request.line_numbers,
                 },
                 ApprovalActionKind::FileRead,
                 ApprovalRiskClass::Medium,

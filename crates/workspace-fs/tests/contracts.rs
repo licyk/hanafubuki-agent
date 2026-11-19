@@ -91,6 +91,7 @@ fn reads_are_unreviewed_and_mutations_require_exact_authorization() {
         path: "tree/a.txt".to_string(),
         offset: 0,
         max_bytes: 5,
+        line_numbers: false,
     });
     let WorkspaceFsResult::FileRead(read_result) = run(&service, &read).unwrap() else {
         panic!("read result")
@@ -144,6 +145,7 @@ fn read_file_pages_utf8_content_from_the_returned_next_offset() {
         path: "paged.txt".to_string(),
         offset: 0,
         max_bytes: 4,
+        line_numbers: false,
     });
     let WorkspaceFsResult::FileRead(first) = run(&service, &first).unwrap() else {
         panic!("first page")
@@ -158,6 +160,7 @@ fn read_file_pages_utf8_content_from_the_returned_next_offset() {
         path: "paged.txt".to_string(),
         offset: first.next_offset,
         max_bytes: 4,
+        line_numbers: false,
     });
     let WorkspaceFsResult::FileRead(second) = run(&service, &second).unwrap() else {
         panic!("second page")
@@ -171,6 +174,7 @@ fn read_file_pages_utf8_content_from_the_returned_next_offset() {
         path: "paged.txt".to_string(),
         offset: second.next_offset,
         max_bytes: 4,
+        line_numbers: false,
     });
     let WorkspaceFsResult::FileRead(third) = run(&service, &third).unwrap() else {
         panic!("third page")
@@ -191,6 +195,7 @@ fn read_file_counts_the_line_its_page_starts_on() {
             path: "lines.txt".to_string(),
             offset,
             max_bytes: 64,
+            line_numbers: false,
         });
         let WorkspaceFsResult::FileRead(page) = run(&service, &request).unwrap() else {
             panic!("a page")
@@ -216,6 +221,58 @@ fn read_file_counts_the_line_its_page_starts_on() {
 }
 
 #[test]
+fn read_file_numbers_each_line_it_pages_without_changing_the_page() {
+    let temp = TempDir::new().unwrap();
+    fs::write(temp.path().join("numbered.txt"), "one\ntwo\r\nthree\n").unwrap();
+    let service = WorkspaceFsService::new(policy(temp.path()));
+    let read = |offset, line_numbers| {
+        let request = WorkspaceFsRequest::ReadFile(ReadFileRequest {
+            path: "numbered.txt".to_string(),
+            offset,
+            max_bytes: 64,
+            line_numbers,
+        });
+        let WorkspaceFsResult::FileRead(page) = run(&service, &request).unwrap() else {
+            panic!("a page")
+        };
+        page
+    };
+
+    let whole = read(0, true);
+    assert_eq!(whole.content, "one\ntwo\r\nthree\n");
+    assert_eq!(whole.start_line, Some(1));
+    assert_eq!(whole.next_offset, whole.content.len());
+    let numbered: Vec<(u64, &str)> = whole
+        .lines
+        .iter()
+        .map(|line| (line.number, line.text.as_str()))
+        .collect();
+    assert_eq!(
+        numbered,
+        vec![(1, "one"), (2, "two"), (3, "three")],
+        "the page's own bytes are unchanged, only the line ends are left out of text"
+    );
+
+    // A page that starts inside the file continues the file's numbering, and
+    // the one that did not ask for lines carries none.
+    let second = read(4, true);
+    assert_eq!(second.start_line, Some(2));
+    assert_eq!(second.content, "two\r\nthree\n");
+    assert_eq!(second.next_offset, 4 + second.content.len());
+    let numbered: Vec<(u64, &str)> = second
+        .lines
+        .iter()
+        .map(|line| (line.number, line.text.as_str()))
+        .collect();
+    assert_eq!(numbered, vec![(2, "two"), (3, "three")]);
+    assert!(read(0, false).lines.is_empty());
+
+    // The numbers are not part of the result unless they were asked for.
+    let encoded = serde_json::to_value(WorkspaceFsResult::FileRead(read(0, false))).unwrap();
+    assert!(encoded.get("lines").is_none());
+}
+
+#[test]
 fn read_file_rejects_offsets_past_eof_and_files_larger_than_128_mib() {
     let temp = TempDir::new().unwrap();
     fs::write(temp.path().join("small.txt"), "small").unwrap();
@@ -229,6 +286,7 @@ fn read_file_rejects_offsets_past_eof_and_files_larger_than_128_mib() {
         path: "small.txt".to_string(),
         offset: 6,
         max_bytes: MIN_READ_PAGE_BYTES,
+        line_numbers: false,
     });
     assert!(matches!(
         service.prepare(&past_eof),
@@ -239,6 +297,7 @@ fn read_file_rejects_offsets_past_eof_and_files_larger_than_128_mib() {
         path: "exact-limit.txt".to_string(),
         offset: MAX_READ_FILE_BYTES as usize,
         max_bytes: MIN_READ_PAGE_BYTES,
+        line_numbers: false,
     });
     let WorkspaceFsResult::FileRead(exact_eof) = run(&service, &exact_eof).unwrap() else {
         panic!("exact limit EOF page")
@@ -251,6 +310,7 @@ fn read_file_rejects_offsets_past_eof_and_files_larger_than_128_mib() {
         path: "oversized.txt".to_string(),
         offset: 0,
         max_bytes: MAX_READ_PAGE_BYTES,
+        line_numbers: false,
     });
     assert!(matches!(
         service.prepare(&oversized),
@@ -416,6 +476,7 @@ fn symlink_target_replacement_invalidates_the_approved_action() {
         path: "link.txt".to_string(),
         offset: 0,
         max_bytes: 64,
+        line_numbers: false,
     });
     let approval = approved(&service, &request);
     fs::remove_file(temp.path().join("link.txt")).unwrap();
@@ -509,6 +570,7 @@ fn large_files_are_truncated_or_rejected_without_unbounded_reads() {
         path: "large.txt".to_string(),
         offset: 0,
         max_bytes: 1024,
+        line_numbers: false,
     });
     let WorkspaceFsResult::FileRead(result) = run(&service, &read).unwrap() else {
         panic!("read")
@@ -592,6 +654,7 @@ fn protected_application_paths_are_rejected_before_approval() {
         path: "app-data/credentials.json".to_string(),
         offset: 0,
         max_bytes: 1024,
+        line_numbers: false,
     });
     assert!(matches!(
         service.prepare(&request),

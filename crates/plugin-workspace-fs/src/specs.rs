@@ -36,11 +36,12 @@ pub(crate) fn spec(kind: FsToolKind) -> FsToolSpec {
             &["path", "query", "maxDepth", "maxResults", "maxBytes"],
         ),
         FsToolKind::ReadFile => object(
-            "Read one bounded UTF-8 page from a file up to 128 MiB. Start with offset 0, then continue from nextOffset while truncated is true.",
+            "Read one bounded UTF-8 page from a file up to 128 MiB. Start with offset 0, then continue from nextOffset while truncated is true. Set lineNumbers to also get each line of the page with the number it has in the file; content and nextOffset stay as they are.",
             json!({
                 "path": bounded_string(4096),
                 "offset": { "type": "integer", "minimum": 0, "maximum": 134217728 },
-                "maxBytes": { "type": "integer", "minimum": 4, "maximum": 262144 }
+                "maxBytes": { "type": "integer", "minimum": 4, "maximum": 262144 },
+                "lineNumbers": { "type": "boolean" }
             }),
             &["path", "offset", "maxBytes"],
         ),

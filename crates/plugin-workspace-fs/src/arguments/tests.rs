@@ -67,6 +67,7 @@ fn limits_out_of_range_are_clamped_to_their_bounds_with_a_note() {
             path: "x".to_string(),
             offset: 134217728,
             max_bytes: 262144,
+            line_numbers: false,
         })
     );
     assert_eq!(
@@ -76,6 +77,19 @@ fn limits_out_of_range_are_clamped_to_their_bounds_with_a_note() {
             "maxBytes 262145 is above its maximum; 262144 was used",
         ]
     );
+    // Asking for line numbers is passed through as given.
+    let (request, _) = parse(
+        FsToolKind::ReadFile,
+        &json!({"path": "x", "offset": 0, "maxBytes": 4, "lineNumbers": true}),
+    )
+    .unwrap();
+    assert!(matches!(
+        request,
+        WorkspaceFsRequest::ReadFile(ReadFileRequest {
+            line_numbers: true,
+            ..
+        })
+    ));
     let (request, notes) = parse(
         FsToolKind::ListDirectory,
         &json!({"path": ".", "maxDepth": 0, "maxEntries": -3}),

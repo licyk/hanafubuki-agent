@@ -1028,7 +1028,7 @@
       "type": "function"
     },
     {
-      "description": "Read one bounded UTF-8 page from a file up to 128 MiB. Start with offset 0, then continue from nextOffset while truncated is true.",
+      "description": "Read one bounded UTF-8 page from a file up to 128 MiB. Start with offset 0, then continue from nextOffset while truncated is true. Set lineNumbers to also get each line of the page with the number it has in the file; content and nextOffset stay as they are.",
       "name": "read_file",
       "parameters": {
         "additionalProperties": false,
@@ -1037,6 +1037,9 @@
             "maximum": 262144,
             "minimum": 4,
             "type": "integer"
+          },
+          "lineNumbers": {
+            "type": "boolean"
           },
           "offset": {
             "maximum": 134217728,
