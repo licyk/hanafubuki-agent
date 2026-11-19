@@ -249,6 +249,24 @@ impl RegistryState {
         Some(facts)
     }
 
+    /// `route`'s facts a decision may rest on at `now_ms`: `live_facts`,
+    /// without what its Provider no longer stands behind ([`RouteFacts::holding`]).
+    pub(super) fn holding_facts(&self, route: &ModelRouteKey, now_ms: u64) -> Option<RouteFacts> {
+        let facts = self.live_facts(route, now_ms)?;
+        // Only a listing that came back without it withdraws what it
+        // reported: with no listing of the endpoint at all (none taken yet,
+        // or one evicted) nothing contradicts the fact.
+        let withdrawn = self
+            .listings
+            .get(route.endpoint())
+            .is_some_and(|_| !listed(&self.listings, route));
+        Some(if withdrawn {
+            facts.without_withdrawn_reported()
+        } else {
+            facts
+        })
+    }
+
     /// Drops the facts that expired, the routes left with none, and a copy
     /// of models.dev past its week.
     fn prune(&mut self, now_ms: u64) {
@@ -300,6 +318,26 @@ impl RouteFacts {
             expire(&mut self.reported, now_ms, REPORTED_TTL_MS);
         }
         expire(&mut self.learned, now_ms, LEARNED_TTL_MS);
+    }
+
+    /// What a model's Provider still stands behind at `now_ms`: its reported
+    /// facts only while the latest listing of its endpoint still names it.
+    ///
+    /// The grace `expire` keeps a dropped model's facts for is not a claim
+    /// that they are true. A model a listing leaves out may have been
+    /// removed, or may have moved to another endpoint under the same name;
+    /// either way the window the old listing reported describes a model
+    /// nobody at the Provider is serving now. Keeping it for a while is
+    /// right for showing what was last seen, and wrong for deciding how much
+    /// context fits: a window that is too small compacts early, which is
+    /// what happened when a model left a listing while its old 131072 was
+    /// still read as current and the session compacted at 663k tokens of a
+    /// 1M window.
+    fn without_withdrawn_reported(self) -> Self {
+        Self {
+            reported: ModelMetadata::default(),
+            learned: self.learned,
+        }
     }
 
     fn normalized(self, now_ms: u64) -> Self {

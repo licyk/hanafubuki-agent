@@ -72,7 +72,7 @@ fn a_new_listing_replaces_what_it_reports_again() {
 }
 
 #[test]
-fn a_model_left_out_of_a_listing_keeps_its_facts_until_they_expire() {
+fn a_model_left_out_of_a_listing_stops_standing_behind_what_it_reported() {
     let registry = registry();
     let kept = route(PROVIDER, "kept");
     let dropped = route(PROVIDER, "dropped");
@@ -86,13 +86,33 @@ fn a_model_left_out_of_a_listing_keeps_its_facts_until_they_expire() {
     );
     registry.record_listing(&endpoint(PROVIDER), &[entry("kept", Some(100_000))], NOW);
 
-    let expiry = NOW + REPORTED_TTL_MS;
-    assert_eq!(window(&registry, None, &dropped, expiry), Some(200_000));
-    assert_eq!(window(&registry, None, &dropped, expiry + 1), None);
+    // The listing that leaves it out withdraws its window at once: the
+    // Provider is no longer serving that model there, so the window the old
+    // listing reported says nothing about how much context now fits.
+    assert_eq!(window(&registry, None, &dropped, NOW), None);
+    assert_eq!(window(&registry, None, &dropped, NOW + 1), None);
     assert_eq!(
-        window(&registry, None, &kept, expiry + 1),
+        window(&registry, None, &kept, NOW + REPORTED_TTL_MS + 1),
         Some(100_000),
         "a model the latest listing names keeps what it reported"
+    );
+}
+
+/// A route whose endpoint never listed anything (no listing taken yet, or
+/// one evicted) has nothing contradicting what it reported, so it keeps it.
+#[test]
+fn a_route_without_a_listing_keeps_what_it_reported() {
+    let registry = registry();
+    let known = route(PROVIDER, "known");
+    registry.record_listing(&endpoint(PROVIDER), &[entry("known", Some(200_000))], NOW);
+    assert_eq!(window(&registry, None, &known, NOW), Some(200_000));
+
+    // The same route once the endpoint's listing is gone.
+    registry.state.lock().listings.clear();
+    assert_eq!(
+        window(&registry, None, &known, NOW + 1),
+        Some(200_000),
+        "nothing contradicts a fact no listing withdrew"
     );
 }
 
@@ -122,6 +142,45 @@ fn a_listing_of_fewer_than_half_its_models_is_trusted_when_it_repeats() {
     assert_eq!(window(&registry, None, &survivor, NOW + 2), Some(50_000));
     registry.record_listing(&provider, &[entry("a", Some(40_000))], NOW + 3);
     assert_eq!(window(&registry, None, &survivor, NOW + 3), Some(40_000));
+}
+
+/// The session that compacted at 663k of a 1M window (2026-11-19, session
+/// 92): a model named `DeepSeek-Flash` reported 131072, then the Provider's
+/// listing stopped naming it while another model of the same endpoint
+/// reported 1000000. Reading the withdrawn 131072 as current made 80% of it
+/// 104857, so 662857 tokens looked over the limit.
+#[test]
+fn a_withdrawn_small_window_does_not_compact_a_larger_one() {
+    let registry = registry();
+    let provider = endpoint(PROVIDER);
+    let old = route(PROVIDER, "DeepSeek-Flash");
+    let new = route(PROVIDER, "deepseek-v4-flash");
+    registry.record_listing(
+        &provider,
+        &[
+            entry("DeepSeek-Flash", Some(131_072)),
+            entry("deepseek-v4-flash", Some(1_000_000)),
+        ],
+        NOW,
+    );
+    assert_eq!(window(&registry, None, &old, NOW), Some(131_072));
+
+    // The model is renamed away: the endpoint now lists only the new id.
+    registry.record_listing(
+        &provider,
+        &[entry("deepseek-v4-flash", Some(1_000_000))],
+        NOW + 1,
+    );
+    assert_eq!(
+        window(&registry, None, &old, NOW + 1),
+        None,
+        "the window of a model the listing dropped is not what fits now"
+    );
+    assert_eq!(
+        window(&registry, None, &new, NOW + 1),
+        Some(1_000_000),
+        "the model that is still listed keeps its window"
+    );
 }
 
 #[test]

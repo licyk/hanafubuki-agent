@@ -246,7 +246,9 @@ impl ModelMetadataRegistry {
         let (facts, catalog) = {
             let state = self.state.lock();
             (
-                route.and_then(|route| state.live_facts(route, now_ms)),
+                // What a decision rests on: a model its Provider's latest
+                // listing no longer names keeps no reported window.
+                route.and_then(|route| state.holding_facts(route, now_ms)),
                 state.models_dev_facts(route, model, now_ms),
             )
         };
