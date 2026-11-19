@@ -22,10 +22,8 @@ mod advisor;
 mod background_terminals;
 mod base_instructions;
 mod colour;
-#[cfg(target_os = "linux")]
 mod compaction_golden;
 mod compression;
-#[cfg(target_os = "linux")]
 mod compression_golden;
 mod context;
 mod context_usage;
@@ -34,10 +32,9 @@ mod descriptors;
 mod executions;
 mod features;
 mod goal;
-#[cfg(target_os = "linux")]
 mod goal_display;
-#[cfg(target_os = "linux")]
 mod golden;
+mod golden_snapshot;
 #[cfg(unix)]
 mod hooks;
 mod image_storage;
@@ -71,7 +68,6 @@ mod tool_search_live;
 mod tools;
 mod user_shell;
 mod wake;
-#[cfg(target_os = "linux")]
 mod wake_golden;
 mod workspace;
 mod worktrees;

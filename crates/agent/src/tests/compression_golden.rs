@@ -2,7 +2,6 @@
 //! folds by itself, from the nudge to a tier-2 block, and the request once
 //! the session switched back to `standard` (`golden.rs` and `compression.rs`
 //! hold the helpers).
-//! Linux-only, as the fixtures are.
 
 use super::compression::{call_events, configure, tuned, with_usage};
 use super::golden::{assert_golden, normalize};

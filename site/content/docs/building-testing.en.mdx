@@ -92,6 +92,13 @@ The update rules:
   HANAFUBUKI_AGENT_UPDATE_GOLDEN=1 cargo test -p hanafubuki-agent --lib golden
   ```
 
+  In PowerShell
+
+  ```powershell
+  $env:HANAFUBUKI_AGENT_UPDATE_GOLDEN = "1"
+  try { cargo test -p hanafubuki-agent --lib golden } finally { Remove-Item Env:HANAFUBUKI_AGENT_UPDATE_GOLDEN }
+  ```
+
 - The history corpora are re-recorded **only after an intended history-format change**; otherwise their point is to prove that older history still opens:
 
   ```sh
@@ -99,7 +106,7 @@ The update rules:
   ```
 
 - Both variables count as set whatever their value: setting one to `0` still rewrites the fixtures.
-- The fixtures are Linux-only.
+- Linux, macOS and Windows record and compare the same request fixtures. The snapshot replaces the host OS, CPU architecture and temporary directory with placeholders and uses forward slashes for fixture paths.
 - Hanafubuki keeps goldens of its own and the same history corpus in `hanafubuki-agent-integration` ([the twins](/docs/contributing#twins-shared-with-hanafubuki)): a model-visible change here changes them too, and a history-format change re-records both.
 
 To compare tool images with pasted images through a real Hoshimi Responses endpoint, set `HOSHIMI_VISION_TEST_URL` to its `/v1` URL and `HOSHIMI_VISION_TEST_IMAGE` to an image file, then run `cargo test -p hanafubuki-agent --lib live_hoshimi_view_image_and_paste_deliver_the_same_image -- --ignored --nocapture`. It uses the logged-in qodercli-cn account's `DeepSeek-Flash`, asks the model to call the real `view_image` tool, and sends the same image as an attachment in a separate session. It checks the tool call and identical stored image digests, and prints both descriptions for comparison with the image; passing these structural assertions alone does not prove visual recognition. This is an explicit network probe, excluded from routine tests.

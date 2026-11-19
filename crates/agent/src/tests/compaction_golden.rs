@@ -1,6 +1,6 @@
 //! Golden baselines of compaction: a manual one, one in the background,
 //! and a window compacted mid-turn (`golden.rs` holds the rest and the
-//! helpers). Linux-only, as the fixtures are.
+//! helpers).
 
 use super::golden::{agent_history_dir, assert_golden, copy_tree, normalize};
 use super::*;

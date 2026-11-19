@@ -92,6 +92,13 @@ cargo test --workspace --all-features
   HANAFUBUKI_AGENT_UPDATE_GOLDEN=1 cargo test -p hanafubuki-agent --lib golden
   ```
 
+  在 PowerShell 中运行
+
+  ```powershell
+  $env:HANAFUBUKI_AGENT_UPDATE_GOLDEN = "1"
+  try { cargo test -p hanafubuki-agent --lib golden } finally { Remove-Item Env:HANAFUBUKI_AGENT_UPDATE_GOLDEN }
+  ```
+
 - 历史语料**只在有意的历史格式变化之后**重新录制；否则它们的意义就是证明旧的历史仍能打开：
 
   ```sh
@@ -99,7 +106,7 @@ cargo test --workspace --all-features
   ```
 
 - 两个变量只看是否**设置**，不看值：设置成 `0` 也会重写 fixture。
-- fixture 只在 Linux 上有效。
+- Linux、macOS 和 Windows 可生成并校验同一套请求基线。快照用占位符表示操作系统、CPU 架构和临时目录，并统一使用正斜杠表示夹具路径。
 - Hanafubuki 在 `hanafubuki-agent-integration` 中保留了自己的 golden 和同一份历史语料（[双生副本](/docs/contributing#twins-shared-with-hanafubuki)）：这里模型可见的变化也会改变它们，历史格式变化要在两边都重新录制。
 
 要通过真实 Hoshimi Responses 端点对比工具看图和粘贴图片，设置 `HOSHIMI_VISION_TEST_URL` 为 `/v1` 地址、`HOSHIMI_VISION_TEST_IMAGE` 为图片路径，再运行 `cargo test -p hanafubuki-agent --lib live_hoshimi_view_image_and_paste_deliver_the_same_image -- --ignored --nocapture`。它使用已登录的 qodercli-cn 账号的 `DeepSeek-Flash`，要求模型调用真实的 `view_image` 工具，再在独立会话中发送同一张图片附件。测试检查工具确实被调用且保存的图片摘要相同，并打印两次描述供对照原图；仅这些结构断言通过，并不能证明视觉识别正确。该测试需要显式联网运行，不属于常规测试。

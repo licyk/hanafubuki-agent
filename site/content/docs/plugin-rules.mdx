@@ -411,7 +411,7 @@ kardia 的日志通过宿主安装在根上的 `LogExporter` 到达 `log` facade
 - 不需要 kardia 的地方直接测试处理函数和领域逻辑。
 - **请求 golden**（`crates/agent/src/tests/golden.rs`，在 Agent 自己的插件上，宿主不添加任何行、上下文或指令）固定模型收到的内容：默认与计划模式下、带 Skill 目录、工作区指令、记忆摘要、压缩之后、带来自脚本化进程内服务器的 MCP 工具、在 `explorer` 角色的会话中、围绕一次工具调用和一次原生 `tool_search` 的指令、工具目录和输入条目，以及一次工具往返的展示事件，并固定 `workspace-context` 重新启动后会话的第一个请求与默认模式的请求逐字节相同；`compaction_golden.rs` 和 `compression_golden.rs` 固定各种压缩，以及 `hierarchical` 策略的请求（它的提示词、工具、标签和提醒，一次折叠之后、一次第二层提炼之后、切换走之后）。模型能看到的变化**有意地**改变请求 golden：用 `HANAFUBUKI_AGENT_UPDATE_GOLDEN=1 cargo test -p hanafubuki-agent --lib golden` 重新生成并审查 fixture 的 diff。
 - **历史语料**（`golden/history/` 与 `golden/history-reasoning/`）只在有意的历史格式变化之后用 `HANAFUBUKI_AGENT_UPDATE_GOLDEN_HISTORY=1` 重新录制；否则它们持续证明旧的历史仍能打开。
-- 宿主保留它自己的、覆盖它的行的 golden（Hanafubuki 的在 `hanafubuki-agent-integration`），这里模型可见的变化也会改变它们。fixture 只在 Linux 上有效。
+- 宿主保留它自己的、覆盖它的行的 golden（Hanafubuki 的在 `hanafubuki-agent-integration`），这里模型可见的变化也会改变它们。Linux、macOS 和 Windows 共用本仓库的 Agent 请求基线。
 
 命令与更新规则见[构建与测试](/docs/building-testing)。
 

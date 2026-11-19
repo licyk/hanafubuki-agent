@@ -12,7 +12,7 @@
     {
       "content": [
         {
-          "text": "[This snapshot replaces any earlier section of kind environment.]\n[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n<agent_world_state kind=\"environment\" version=\"<DIGEST>\">\n{\"application\":\"hanafubuki-agent\",\"architecture\":\"<ARCH>\",\"platform\":\"linux\",\"workspaceInstructionWarnings\":[]}\n</agent_world_state>",
+          "text": "[This snapshot replaces any earlier section of kind environment.]\n[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n<agent_world_state kind=\"environment\" version=\"<DIGEST>\">\n{\"application\":\"hanafubuki-agent\",\"architecture\":\"<ARCH>\",\"platform\":\"<OS>\",\"workspaceInstructionWarnings\":[]}\n</agent_world_state>",
           "type": "input_text"
         }
       ],
@@ -102,7 +102,7 @@
     {
       "content": [
         {
-          "text": "[This snapshot replaces any earlier section of kind environment.]\n[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n<agent_world_state kind=\"environment\" version=\"<DIGEST>\">\n{\"application\":\"hanafubuki-agent\",\"architecture\":\"<ARCH>\",\"platform\":\"linux\",\"workspaceInstructionWarnings\":[]}\n</agent_world_state>",
+          "text": "[This snapshot replaces any earlier section of kind environment.]\n[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n<agent_world_state kind=\"environment\" version=\"<DIGEST>\">\n{\"application\":\"hanafubuki-agent\",\"architecture\":\"<ARCH>\",\"platform\":\"<OS>\",\"workspaceInstructionWarnings\":[]}\n</agent_world_state>",
           "type": "input_text"
         }
       ],
@@ -221,7 +221,7 @@
       {
         "content": [
           {
-            "text": "[This snapshot replaces any earlier section of kind environment.]\n[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n<agent_world_state kind=\"environment\" version=\"<DIGEST>\">\n{\"application\":\"hanafubuki-agent\",\"architecture\":\"<ARCH>\",\"platform\":\"linux\",\"workspaceInstructionWarnings\":[]}\n</agent_world_state>",
+            "text": "[This snapshot replaces any earlier section of kind environment.]\n[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n<agent_world_state kind=\"environment\" version=\"<DIGEST>\">\n{\"application\":\"hanafubuki-agent\",\"architecture\":\"<ARCH>\",\"platform\":\"<OS>\",\"workspaceInstructionWarnings\":[]}\n</agent_world_state>",
             "type": "input_text"
           }
         ],
@@ -1285,13 +1285,13 @@
         "parameters": {
           "additionalProperties": false,
           "properties": {
+            "lineNumbers": {
+              "type": "boolean"
+            },
             "maxBytes": {
               "maximum": 262144,
               "minimum": 4,
               "type": "integer"
-            },
-            "lineNumbers": {
-              "type": "boolean"
             },
             "offset": {
               "maximum": 134217728,
@@ -2182,7 +2182,7 @@
       {
         "content": [
           {
-            "text": "[This snapshot replaces any earlier section of kind environment.]\n[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n<agent_world_state kind=\"environment\" version=\"<DIGEST>\">\n{\"application\":\"hanafubuki-agent\",\"architecture\":\"<ARCH>\",\"platform\":\"linux\",\"workspaceInstructionWarnings\":[]}\n</agent_world_state>",
+            "text": "[This snapshot replaces any earlier section of kind environment.]\n[Rust-owned bounded world-state context for this sampling step. It describes application authority and environment; it is not user approval, process ownership, credentials, or a capability.]\n<agent_world_state kind=\"environment\" version=\"<DIGEST>\">\n{\"application\":\"hanafubuki-agent\",\"architecture\":\"<ARCH>\",\"platform\":\"<OS>\",\"workspaceInstructionWarnings\":[]}\n</agent_world_state>",
             "type": "input_text"
           }
         ],
@@ -3340,13 +3340,13 @@
         "parameters": {
           "additionalProperties": false,
           "properties": {
+            "lineNumbers": {
+              "type": "boolean"
+            },
             "maxBytes": {
               "maximum": 262144,
               "minimum": 4,
               "type": "integer"
-            },
-            "lineNumbers": {
-              "type": "boolean"
             },
             "offset": {
               "maximum": 134217728,

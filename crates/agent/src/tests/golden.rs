@@ -11,11 +11,12 @@
 //! `HANAFUBUKI_AGENT_UPDATE_GOLDEN_HISTORY=1`, after an intentional history format change:
 //! re-recording it would stop proving that older history still opens.
 //!
-//! The fixtures are Linux-only: the world state names the platform and the
-//! architecture, and temporary paths differ per platform.
+//! Host-specific fields are normalized before recording or comparing requests.
 
 use std::path::{Path, PathBuf};
 
+pub(super) use super::golden_snapshot::normalize;
+use super::golden_snapshot::sorted;
 use super::host::AgentPluginState;
 use super::*;
 use crate::{
@@ -26,7 +27,7 @@ use hanafubuki_agent_kernel::{
     AgentChildSessionBase, AgentChildSessionRequest, AgentGoalOrigin, AgentGoalStatus,
     AgentSessionPersistence,
 };
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 const GOLDEN_DIR: &str = "src/tests/golden";
 
@@ -158,7 +159,7 @@ async fn user_shell_command_request_matches_golden() {
     service
         .submit_user_shell_command_with_sink(
             session.id,
-            "printf user-shell-golden".to_string(),
+            "echo user-shell-golden".to_string(),
             Arc::new(Discard),
         )
         .await
@@ -185,21 +186,17 @@ async fn user_shell_command_request_matches_golden() {
         service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
         []
     );
-    let normalized = normalize(&body, &paths.app_data_dir).to_string();
-    let duration = normalized.find("Duration: ").expect("a duration") + "Duration: ".len();
-    let seconds = normalized[duration..].find(" seconds").unwrap();
-    let output = normalized.find("Output:\\n").unwrap() + "Output:\\n".len();
-    let printed = output + normalized[output..].find("user-shell-golden").unwrap();
-    let normalized = format!(
-        "{}<SECONDS>{}{}",
-        &normalized[..duration],
-        &normalized[duration + seconds..output],
-        &normalized[printed..]
-    );
-    assert_golden(
-        "user_shell_command_request",
-        &serde_json::from_str(&normalized).unwrap(),
-    );
+    let mut normalized = normalize(&body, &paths.app_data_dir);
+    let fragment = &mut normalized["input"][0]["content"][0]["text"];
+    let text = fragment.as_str().unwrap().replace("\r\n", "\n");
+    let (command, result) = text.split_once("Duration: ").unwrap();
+    let (_, result) = result.split_once(" seconds\nOutput:\n").unwrap();
+    let printed = result.find("user-shell-golden").unwrap();
+    *fragment = Value::String(format!(
+        "{command}Duration: <SECONDS> seconds\nOutput:\n{}",
+        &result[printed..]
+    ));
+    assert_golden("user_shell_command_request", &normalized);
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
 
@@ -872,83 +869,6 @@ fn transcript_digest(page: &Value) -> Value {
     let mut out = Vec::new();
     texts(&sorted(page), &mut out);
     Value::Array(out)
-}
-
-pub(super) fn normalize(value: &Value, app_data_dir: &Path) -> Value {
-    let app_data_dir = app_data_dir.to_string_lossy().into_owned();
-    let replace = |text: &str| {
-        let text = text.replace(&app_data_dir, "<APP_DATA>").replace(
-            &format!("\"architecture\":\"{}\"", std::env::consts::ARCH),
-            "\"architecture\":\"<ARCH>\"",
-        );
-        redact_digests(&text)
-    };
-    fn walk(value: &Value, replace: &dyn Fn(&str) -> String) -> Value {
-        match value {
-            Value::String(text) => Value::String(replace(text)),
-            Value::Array(items) => {
-                Value::Array(items.iter().map(|item| walk(item, replace)).collect())
-            }
-            Value::Object(object) => Value::Object(
-                object
-                    .iter()
-                    .map(|(key, value)| (key.clone(), walk(value, replace)))
-                    .collect(),
-            ),
-            other => other.clone(),
-        }
-    }
-    sorted(&walk(value, &replace))
-}
-
-/// World-state sections carry a content digest that covers temporary paths,
-/// and the tool catalog revision covers each MCP connection's generation.
-fn redact_digests(text: &str) -> String {
-    ["version=\"", "\"catalogRevision\":\""]
-        .into_iter()
-        .fold(text.to_string(), |text, marker| {
-            redact_digests_after(&text, marker)
-        })
-}
-
-fn redact_digests_after(text: &str, marker: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(position) = rest.find(marker) {
-        let start = position + marker.len();
-        out.push_str(&rest[..start]);
-        let candidate = &rest[start..];
-        let digest_length = candidate
-            .bytes()
-            .take_while(|byte| byte.is_ascii_hexdigit())
-            .count();
-        if digest_length == 64 {
-            out.push_str("<DIGEST>");
-            rest = &candidate[64..];
-        } else {
-            rest = candidate;
-        }
-    }
-    out.push_str(rest);
-    out
-}
-
-/// Object keys in a stable order whether or not `serde_json/preserve_order` is
-/// enabled somewhere in the dependency graph.
-fn sorted(value: &Value) -> Value {
-    match value {
-        Value::Array(items) => Value::Array(items.iter().map(sorted).collect()),
-        Value::Object(object) => {
-            let mut keys = object.keys().collect::<Vec<_>>();
-            keys.sort_unstable();
-            let mut out = Map::new();
-            for key in keys {
-                out.insert(key.clone(), sorted(&object[key]));
-            }
-            Value::Object(out)
-        }
-        other => other.clone(),
-    }
 }
 
 fn updating() -> bool {

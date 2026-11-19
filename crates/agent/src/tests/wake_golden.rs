@@ -1,8 +1,7 @@
 //! The golden of a wake turn's request: its only opener is a
 //! `<background_events>` fragment with one event of each kind
 //! (`golden.rs` holds the helpers); and, with `wakeOnBackgroundTasks` off,
-//! a request is the one from before wakes. Linux-only, as the fixtures
-//! are.
+//! a request is the one from before wakes.
 
 use hanafubuki_agent_kernel::AgentExecutionProgressStatus;
 use serde_json::Value;
@@ -197,6 +196,8 @@ fn without_reworded(mut request: Value) -> Value {
     for item in request["input"].as_array_mut().unwrap() {
         for part in item["content"].as_array_mut().into_iter().flatten() {
             if let Some(text) = part["text"].as_str() {
+                // The immutable pre-wake fixture was recorded on Linux.
+                let text = text.replace(r#""platform":"linux""#, r#""platform":"<OS>""#);
                 let text = text.replace(
                     "At most 8 sub-agents work at once in this conversation, counting the ones they spawn; a sub-agent you spawn can spawn sub-agents of its own, which cannot spawn further.",
                     "At most 3 sub-agents run at once, and a sub-agent cannot spawn sub-agents of its own.",
