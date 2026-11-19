@@ -142,10 +142,10 @@ impl ChatWidget {
         false
     }
 
-    /// Shift+Left: the last queued message back in the composer, before
-    /// the draft; `false` with none queued.
+    /// Shift+Left: the last message no turn has been sent back in the
+    /// composer, before the draft; `false` with none waiting.
     pub(super) fn edit_queued_message(&mut self) -> bool {
-        let Some(message) = self.input_queue.pop_queued() else {
+        let Some(message) = self.input_queue.pop_editable() else {
             return false;
         };
         self.bottom_pane.restore_draft(message);

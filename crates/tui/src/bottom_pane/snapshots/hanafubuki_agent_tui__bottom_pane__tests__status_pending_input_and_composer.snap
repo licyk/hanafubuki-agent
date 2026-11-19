@@ -7,6 +7,7 @@ expression: "render_snapshot(&pane, area)"
 • Messages to be submitted after next tool call (press esc  
   to interrupt and send immediately)                        
   ↳ Check the tests first.                                  
+    shift + ← edit last pending message                     
                                                             
 • Queued follow-up inputs                                   
   ↳ Then update the docs.                                   

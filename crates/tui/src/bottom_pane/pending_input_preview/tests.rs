@@ -38,6 +38,7 @@ fn each_group_has_its_header_steers_first_and_the_edit_key_last() {
         steers: strings(&["Please continue.", "Check the last command output."]),
         held: strings(&["Sent while the review ran."]),
         queued: strings(&["Queued follow-up question"]),
+        steer_is_editable: true,
     };
     assert_snapshot!(render(&pending, 52));
 }

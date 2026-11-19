@@ -6,6 +6,7 @@ expression: "render(&pending, 52)"
   (press esc to interrupt and send immediately)
   ↳ Please continue.
   ↳ Check the last command output.
+    shift + ← edit last pending message
 
 • Messages to be submitted at end of turn
   ↳ Sent while the review ran.

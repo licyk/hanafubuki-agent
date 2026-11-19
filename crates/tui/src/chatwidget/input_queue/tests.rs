@@ -227,10 +227,10 @@ fn shift_left_takes_the_last_queued_message_then_the_held_ones() {
     for text in ["one", "two"] {
         queue.queue(text.into(), true);
     }
-    assert_eq!(queue.pop_queued(), Some("two".into()));
-    assert_eq!(queue.pop_queued(), Some("one".into()));
-    assert_eq!(queue.pop_queued(), Some("refused".into()));
-    assert_eq!(queue.pop_queued(), None);
+    assert_eq!(queue.pop_editable(), Some("two".into()));
+    assert_eq!(queue.pop_editable(), Some("one".into()));
+    assert_eq!(queue.pop_editable(), Some("refused".into()));
+    assert_eq!(queue.pop_editable(), None);
 }
 
 #[test]
@@ -239,5 +239,46 @@ fn mention_previews_show_labels_while_editing_retains_their_identity() {
     let text = "Use [$shared](skill://system:two) and [@task](thread://52)";
     assert_eq!(queue.queue(text.into(), true), Submission::Waits);
     assert_eq!(queue.preview().queued, ["Use $shared and @task"]);
-    assert_eq!(queue.pop_queued(), Some(text.into()));
+    assert_eq!(queue.pop_editable(), Some(text.into()));
+}
+
+/// A steer the turn was never sent waits behind the one in flight, so
+/// Shift+Left takes it back; the one in flight is the Agent's already and
+/// stays, which leaves nothing else to take.
+#[test]
+fn shift_left_takes_back_a_steer_no_turn_was_sent() {
+    let mut queue = running();
+    assert_eq!(queue.submit("sent".into(), true), steer(0, "sent"));
+    // The second steer waits: one is in flight, so none is sent after it.
+    assert_eq!(queue.submit("waiting".into(), true), Submission::Waits);
+    assert!(queue.preview().steer_is_editable);
+
+    assert_eq!(queue.pop_editable(), Some("waiting".into()));
+    assert!(
+        !queue.preview().steer_is_editable,
+        "only the sent steer is left, which is not the queue's to take"
+    );
+    assert_eq!(queue.pop_editable(), None);
+}
+
+/// A turn that ended settles its own steers, so none is taken back here.
+#[test]
+fn shift_left_takes_no_steer_once_the_turn_ended() {
+    let mut queue = running();
+    assert_eq!(queue.submit("sent".into(), true), steer(0, "sent"));
+    assert_eq!(queue.submit("waiting".into(), true), Submission::Waits);
+    queue.turn_ended(Ending::Finished);
+    assert!(!queue.preview().steer_is_editable);
+    assert_eq!(queue.pop_editable(), None);
+}
+
+/// Esc with steers waiting sends them, so they are not taken back either.
+#[test]
+fn shift_left_takes_no_steer_once_esc_queued_them_to_send() {
+    let mut queue = running();
+    assert_eq!(queue.submit("sent".into(), true), steer(0, "sent"));
+    assert_eq!(queue.submit("waiting".into(), true), Submission::Waits);
+    queue.esc();
+    assert!(!queue.preview().steer_is_editable);
+    assert_eq!(queue.pop_editable(), None);
 }

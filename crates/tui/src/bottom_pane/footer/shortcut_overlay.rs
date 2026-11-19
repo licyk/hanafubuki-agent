@@ -55,7 +55,19 @@ pub(super) fn lines(props: &FooterProps<'_>, width: u16) -> Vec<Line<'static>> {
     } else {
         "Send message"
     };
+    let submit = if props.task_running {
+        "Steer the turn"
+    } else {
+        "Send message"
+    };
+    session.push(keymap::hint(Action::Submit), submit);
     session.push(keymap::hint(Action::Queue), queue);
+    if props.task_running {
+        session.push(
+            keymap::hint(Action::EditQueuedMessage),
+            "Edit last pending message",
+        );
+    }
     if !props.second_conversation {
         session.push(keymap::hint(Action::CycleMode), "Change mode");
         session.push(keymap::hint(Action::ReasoningDown), "Less reasoning");

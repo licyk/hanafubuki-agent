@@ -283,9 +283,36 @@ impl InputQueue {
         }
     }
 
-    /// Shift+Left: the last queued message (else the last held one), to
-    /// edit in the composer.
-    pub(super) fn pop_queued(&mut self) -> Option<UserMessage> {
+    /// Whether Shift+Left takes a steer back: one is waiting for the turn
+    /// to send it, and the turn still runs so it is this queue's to take.
+    /// A turn that ended settles its steers itself, into the next turn or
+    /// back into the composer, and Esc with steers waiting sends them, so
+    /// neither leaves one to take back.
+    fn steer_is_editable(&self) -> bool {
+        self.ended.is_none()
+            && !self.send_steers_after_interrupt
+            && self
+                .steers
+                .iter()
+                .any(|steer| steer.state == SteerState::Waiting)
+    }
+
+    /// Shift+Left: the last message no turn has been sent, to edit in the
+    /// composer. A steer comes first, since it is the one sent last, then
+    /// the last message queued with Tab, then the last one held for the
+    /// turn's end. A steer the turn was sent is not taken back: the Agent
+    /// holds it already, and only a turn it has not read leaves the
+    /// conversation.
+    pub(super) fn pop_editable(&mut self) -> Option<UserMessage> {
+        if self.steer_is_editable() {
+            if let Some(index) = self
+                .steers
+                .iter()
+                .rposition(|steer| steer.state == SteerState::Waiting)
+            {
+                return Some(self.steers.remove(index).message);
+            }
+        }
         self.queued.pop_back().or_else(|| self.held.pop())
     }
 
@@ -307,6 +334,7 @@ impl InputQueue {
                 .collect(),
             held: self.held.iter().map(text).collect(),
             queued: self.queued.iter().map(text).collect(),
+            steer_is_editable: self.steer_is_editable(),
         }
     }
 }

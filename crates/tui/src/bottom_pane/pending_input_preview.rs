@@ -31,6 +31,9 @@ pub(crate) struct PendingInput {
     pub(crate) held: Vec<String>,
     /// Queued with Tab, each starting a turn of its own.
     pub(crate) queued: Vec<String>,
+    /// Whether Shift+Left takes one of `steers` back: the turn still runs
+    /// and one of them waits for it to send it.
+    pub(crate) steer_is_editable: bool,
 }
 
 impl PendingInput {
@@ -52,6 +55,15 @@ impl PendingInput {
                 header.push(" to interrupt and send immediately)".dim());
             }
             push_section(&mut lines, width, header, &self.steers, false);
+            if self.steer_is_editable {
+                if let Some(key) = keymap::hint(Action::EditQueuedMessage) {
+                    lines.push(Line::from(vec![
+                        "    ".into(),
+                        key.into(),
+                        " edit last pending message".dim(),
+                    ]));
+                }
+            }
         }
         if !self.held.is_empty() {
             let header = vec![Span::from("Messages to be submitted at end of turn")];
