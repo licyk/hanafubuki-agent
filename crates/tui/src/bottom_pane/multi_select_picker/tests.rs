@@ -54,7 +54,7 @@ fn picker() -> (MultiSelectPicker, Rc<RefCell<Option<Vec<String>>>>) {
             .filter(|item| item.enabled)
             .map(|item| item.id.as_str())
             .collect();
-        Some(Line::from(on.join(" | ")))
+        vec![Line::from(on.join(" | "))]
     }))
     .on_confirm(Box::new(move |chosen| {
         *sink.borrow_mut() = Some(chosen.iter().map(|item| item.id.clone()).collect());
@@ -70,7 +70,7 @@ fn space_toggles_arrows_reorder_and_enter_confirms_the_order() {
     // `b` moves above `a`, the cursor with it.
     key(&mut picker, KeyCode::Left);
     key(&mut picker, KeyCode::Left);
-    assert_eq!(picker.preview_line, Some(Line::from("b | a")));
+    assert_eq!(picker.preview_lines, vec![Line::from("b | a")]);
     key(&mut picker, KeyCode::Down);
     key(&mut picker, KeyCode::Down);
     key(&mut picker, KeyCode::Char(' '));
@@ -80,6 +80,28 @@ fn space_toggles_arrows_reorder_and_enter_confirms_the_order() {
     assert_eq!(
         confirmed.borrow().as_deref(),
         Some(&["b".to_string(), "a".to_string(), "c".to_string()][..])
+    );
+}
+
+#[test]
+fn a_callers_keys_are_said_after_the_lists_in_the_footer() {
+    let (picker, _) = picker();
+    let plain = render(&picker, 80);
+    assert!(
+        plain.contains("Enter confirm  Esc cancel") && !plain.contains("l/r side"),
+        "{plain}"
+    );
+
+    let with_keys = MultiSelectPicker::new(
+        "Configure Status Line".to_string(),
+        None,
+        vec![item("a", true)],
+    )
+    .with_keys_hint("l/r side · 1/2 row · p around");
+    let rendered = render(&with_keys, 140);
+    assert!(
+        rendered.contains("l/r side · 1/2 row · p around"),
+        "{rendered}"
     );
 }
 

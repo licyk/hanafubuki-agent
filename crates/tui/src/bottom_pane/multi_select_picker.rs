@@ -33,8 +33,9 @@ pub(crate) struct MultiSelectItem {
     pub(crate) note: Option<String>,
 }
 
-/// The preview line of the items as they are.
-pub(crate) type PreviewCallback = Box<dyn Fn(&[MultiSelectItem]) -> Option<Line<'static>>>;
+/// The preview of the items as they are: a line each, none when there is
+/// nothing to show (a caller drawing two sides returns two).
+pub(crate) type PreviewCallback = Box<dyn Fn(&[MultiSelectItem]) -> Vec<Line<'static>>>;
 /// Told of every toggle and move.
 pub(crate) type ChangeCallback = Box<dyn Fn(&[MultiSelectItem])>;
 /// Told the items turned on, in order, on Enter; their ids are what the
@@ -54,12 +55,14 @@ pub(crate) struct MultiSelectPicker {
     items: Vec<MultiSelectItem>,
     state: ScrollState,
     complete: bool,
-    preview_line: Option<Line<'static>>,
+    preview_lines: Vec<Line<'static>>,
     on_preview: Option<PreviewCallback>,
     on_change: Option<ChangeCallback>,
     on_confirm: Option<ConfirmCallback>,
     on_cancel: Option<CancelCallback>,
     on_extra_key: Option<ExtraKeyCallback>,
+    /// Keys of a caller's own, after the list's in the footer's hint.
+    extra_keys: Option<String>,
 }
 
 impl MultiSelectPicker {
@@ -77,17 +80,18 @@ impl MultiSelectPicker {
             items,
             state,
             complete: false,
-            preview_line: None,
+            preview_lines: Vec::new(),
             on_preview: None,
             on_change: None,
             on_confirm: None,
             on_cancel: None,
             on_extra_key: None,
+            extra_keys: None,
         }
     }
 
     pub(crate) fn on_preview(mut self, callback: PreviewCallback) -> Self {
-        self.preview_line = callback(&self.items);
+        self.preview_lines = callback(&self.items);
         self.on_preview = Some(callback);
         self
     }
@@ -109,6 +113,12 @@ impl MultiSelectPicker {
 
     pub(crate) fn on_extra_key(mut self, callback: ExtraKeyCallback) -> Self {
         self.on_extra_key = Some(callback);
+        self
+    }
+
+    /// `hint`, a caller's own keys, said after the list's in the footer.
+    pub(crate) fn with_keys_hint(mut self, hint: &str) -> Self {
+        self.extra_keys = Some(hint.to_string());
         self
     }
 
@@ -159,10 +169,11 @@ impl MultiSelectPicker {
     }
 
     fn changed(&mut self) {
-        self.preview_line = self
+        self.preview_lines = self
             .on_preview
             .as_ref()
-            .and_then(|preview| preview(&self.items));
+            .map(|preview| preview(&self.items))
+            .unwrap_or_default();
         if let Some(on_change) = &self.on_change {
             on_change(&self.items);
         }
@@ -232,11 +243,10 @@ impl MultiSelectPicker {
     }
 
     fn footer_lines(&self) -> Vec<Line<'static>> {
-        let mut lines = Vec::new();
-        if let Some(preview) = &self.preview_line {
-            lines.push(preview.clone());
-        }
-        lines.push(Line::from("space toggle · ←/→ move · enter confirm · esc cancel").dim());
+        let mut lines = self.preview_lines.clone();
+        // The keys' own row is drawn by `ActionButtons` in `render`, which
+        // knows where each lands.
+        lines.push(Line::default());
         lines
     }
 }
@@ -343,17 +353,39 @@ impl Renderable for MultiSelectPicker {
         let mut footer = footer;
         footer.pop();
         Paragraph::new(footer).render(footer_area, buf);
-        self.buttons.render(
-            buttons,
-            buf,
-            &[
-                ("Space toggle", KeyCode::Char(' ')),
-                ("← earlier", KeyCode::Left),
-                ("→ later", KeyCode::Right),
-                ("Enter confirm", KeyCode::Enter),
-                ("Esc cancel", KeyCode::Esc),
-            ],
-        );
+        let actions = vec![
+            ("Space toggle", KeyCode::Char(' ')),
+            ("← earlier", KeyCode::Left),
+            ("→ later", KeyCode::Right),
+            ("Enter confirm", KeyCode::Enter),
+            ("Esc cancel", KeyCode::Esc),
+        ];
+        self.buttons.render(buttons, buf, &actions);
+        // A caller's own keys are named after these, without a button of
+        // their own: the footer says what the view takes beyond its list,
+        // and a click has nothing to answer.
+        if let Some(extra) = &self.extra_keys {
+            let rest = Rect {
+                x: buttons.x,
+                y: buttons.y,
+                width: footer_area.width,
+                height: 1,
+            };
+            let used: u16 = actions.iter().fold(buttons.x, |x, (label, _)| {
+                let width = Line::from(label.dim()).width() as u16;
+                x.saturating_add(width).saturating_add(2)
+            }) - buttons.x;
+            let line = Line::from(format!(" {extra}").dim());
+            let width = line.width() as u16;
+            line.render(
+                Rect {
+                    x: rest.x.saturating_add(used),
+                    width: width.min(rest.width.saturating_sub(used)),
+                    ..rest
+                },
+                buf,
+            );
+        }
     }
 }
 

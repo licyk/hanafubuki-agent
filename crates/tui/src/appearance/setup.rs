@@ -48,8 +48,37 @@ pub(crate) fn status_line_setup(appearance: &Appearance, tx: AppEventSender) -> 
         items,
     )
     .on_preview(Box::new(move |items| {
+        // Two rows, as the footer draws them: the first and the second, each
+        // with its left side then its right, so a key's effect shows.
         let (selected, colors) = status_line_selection(&enabled_ids(items));
-        status_line(&selected, colors, |item| status_preview(&values, item))
+        let place_of = |id: &str| {
+            items
+                .iter()
+                .find(|item| item.id == id)
+                .and_then(|item| item.note.as_deref())
+                .and_then(AgentStatusLinePlace::parse)
+                .unwrap_or_default()
+        };
+        let at = |second_row: bool, right: bool| {
+            let here: Vec<StatusLineItem> = selected
+                .iter()
+                .copied()
+                .filter(|item| {
+                    let place = place_of(item.id());
+                    place.second_row == second_row && place.right == right
+                })
+                .collect();
+            status_line(&here, colors, |item| status_preview(&values, item))
+        };
+        [
+            at(false, false),
+            at(true, false),
+            at(false, true),
+            at(true, true),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
     }))
     .on_confirm(Box::new(move |chosen| {
         let ids = enabled_ids(chosen);
@@ -72,35 +101,71 @@ pub(crate) fn status_line_setup(appearance: &Appearance, tx: AppEventSender) -> 
     }))
     .on_extra_key(Box::new(move |items, selected, key| {
         use ratatui::crossterm::event::KeyCode;
+        // The keys that place the highlighted item: `l` and `r` its side,
+        // `1` and `2` its row, and `p` round all four.
+        let place_of = |items: &[MultiSelectItem], selected: Option<usize>| {
+            selected
+                .and_then(|index| items.get(index))
+                .and_then(|item| item.note.as_deref())
+                .and_then(AgentStatusLinePlace::parse)
+                .unwrap_or_default()
+        };
+        let put = |items: &mut Vec<MultiSelectItem>, place: AgentStatusLinePlace| {
+            let Some(item) = selected.and_then(|index| items.get_mut(index)) else {
+                return false;
+            };
+            item.note = Some(place.value());
+            true
+        };
         match key.code {
-            // `p` steps the highlighted item's place: left-1, left-2,
-            // right-1, right-2.
+            KeyCode::Char('l') => put(
+                items,
+                AgentStatusLinePlace {
+                    right: false,
+                    ..place_of(items, selected)
+                },
+            ),
+            KeyCode::Char('r') => put(
+                items,
+                AgentStatusLinePlace {
+                    right: true,
+                    ..place_of(items, selected)
+                },
+            ),
+            KeyCode::Char('1') => put(
+                items,
+                AgentStatusLinePlace {
+                    second_row: false,
+                    ..place_of(items, selected)
+                },
+            ),
+            KeyCode::Char('2') => put(
+                items,
+                AgentStatusLinePlace {
+                    second_row: true,
+                    ..place_of(items, selected)
+                },
+            ),
             KeyCode::Char('p') => {
-                let Some(item) = selected.and_then(|index| items.get_mut(index)) else {
-                    return false;
-                };
-                let place = item
-                    .note
-                    .as_deref()
-                    .and_then(AgentStatusLinePlace::parse)
-                    .unwrap_or_default();
-                let next = match (place.right, place.second_row) {
-                    (false, false) => AgentStatusLinePlace {
-                        second_row: true,
-                        right: false,
+                let place = place_of(items, selected);
+                put(
+                    items,
+                    match (place.right, place.second_row) {
+                        (false, false) => AgentStatusLinePlace {
+                            second_row: true,
+                            right: false,
+                        },
+                        (false, true) => AgentStatusLinePlace {
+                            second_row: false,
+                            right: true,
+                        },
+                        (true, false) => AgentStatusLinePlace {
+                            second_row: true,
+                            right: true,
+                        },
+                        (true, true) => AgentStatusLinePlace::default(),
                     },
-                    (false, true) => AgentStatusLinePlace {
-                        second_row: false,
-                        right: true,
-                    },
-                    (true, false) => AgentStatusLinePlace {
-                        second_row: true,
-                        right: true,
-                    },
-                    (true, true) => AgentStatusLinePlace::default(),
-                };
-                item.note = Some(next.value());
-                true
+                )
             }
             // `o` cycles what a row does when it does not fit.
             KeyCode::Char('o') => {
@@ -114,6 +179,7 @@ pub(crate) fn status_line_setup(appearance: &Appearance, tx: AppEventSender) -> 
             _ => false,
         }
     }))
+    .with_keys_hint("l/r side · 1/2 row · p around · o overflow")
 }
 
 pub(crate) fn terminal_title_setup(
@@ -132,7 +198,10 @@ pub(crate) fn terminal_title_setup(
         let (selected, _) = parse_items::<TerminalTitleItem>(&enabled_ids(items));
         let now = Instant::now();
         let title = terminal_title_text(&selected, |item| title_preview(&values, item, now));
-        (!title.is_empty()).then(|| Line::from(title))
+        (!title.is_empty())
+            .then(|| Line::from(title))
+            .into_iter()
+            .collect()
     }))
     .on_change(Box::new(move |items| {
         let (selected, _) = parse_items(&enabled_ids(items));

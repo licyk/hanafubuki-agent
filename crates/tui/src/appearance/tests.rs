@@ -358,6 +358,70 @@ fn the_status_line_setup_steps_an_items_place_and_saves_it() {
 }
 
 #[test]
+fn the_setup_sets_a_side_and_a_row_with_one_key_each() {
+    let saved_place = |keys: &[KeyCode]| {
+        let (tx, receiver) = events();
+        let appearance = appearance(&["model"], &[]);
+        let mut view = setup::status_line_setup(&appearance, tx);
+        for key in keys {
+            press(&mut view, *key);
+        }
+        press(&mut view, KeyCode::Enter);
+        let saved = appearance_events(&receiver)
+            .into_iter()
+            .find(|event| matches!(event, AppearanceEvent::StatusLine { save: true, .. }))
+            .expect("the setup saved");
+        let AppearanceEvent::StatusLine { positions, .. } = saved else {
+            unreachable!()
+        };
+        positions.and_then(|positions| positions.get("model").copied())
+    };
+
+    // `r` alone moves it to the right of the row it is on; `2` alone moves
+    // it to the second row of the side it is on.
+    assert_eq!(
+        saved_place(&[KeyCode::Char('r')]),
+        Some(AgentStatusLinePlace {
+            second_row: false,
+            right: true,
+        })
+    );
+    assert_eq!(
+        saved_place(&[KeyCode::Char('2')]),
+        Some(AgentStatusLinePlace {
+            second_row: true,
+            right: false,
+        })
+    );
+    // Together they are the second row's right, in either order.
+    for keys in [
+        [KeyCode::Char('r'), KeyCode::Char('2')],
+        [KeyCode::Char('2'), KeyCode::Char('r')],
+    ] {
+        assert_eq!(
+            saved_place(&keys),
+            Some(AgentStatusLinePlace {
+                second_row: true,
+                right: true,
+            })
+        );
+    }
+    // `l` and `1` put it back on the first row's left.
+    assert_eq!(
+        saved_place(&[
+            KeyCode::Char('r'),
+            KeyCode::Char('2'),
+            KeyCode::Char('l'),
+            KeyCode::Char('1'),
+        ]),
+        Some(AgentStatusLinePlace {
+            second_row: false,
+            right: false,
+        })
+    );
+}
+
+#[test]
 fn the_title_setup_previews_in_the_terminal_and_esc_puts_it_back() {
     let (tx, receiver) = events();
     let appearance = appearance(&[], &["app-name"]);
