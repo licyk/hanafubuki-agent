@@ -10,6 +10,7 @@
 //! `chatwidget/status_surfaces.rs` and `status_surface_commands.rs`).
 
 pub(crate) mod items;
+pub(crate) mod palette;
 pub(crate) mod setup;
 pub(crate) mod terminal_title;
 pub(crate) mod theme_picker;
@@ -83,6 +84,9 @@ pub(crate) enum AppearanceEvent {
         positions: Option<std::collections::BTreeMap<String, AgentStatusLinePlace>>,
         /// `tui.statusLineOverflow`, when the view changed it.
         overflow: Option<AgentStatusLineOverflow>,
+        /// `tui.statusLinePalette` as the palette view set it, each entry
+        /// `id:color`; `None` leaves it as it was.
+        palette: Option<Vec<String>>,
         save: bool,
     },
     TerminalTitle {
@@ -219,21 +223,7 @@ impl Appearance {
         // `tui.statusLinePalette`: each entry `id:color`. An item the
         // interface does not know, or a colour it cannot read, is left to
         // the theme with a warning.
-        let mut palette = std::collections::BTreeMap::new();
-        let mut bad_palette = Vec::new();
-        for entry in &preferences.status_line_palette {
-            let parsed = entry.split_once(':').and_then(|(id, color)| {
-                let item = StatusLineItem::parse(id)?;
-                let color = parse_color(color)?;
-                Some((item, color))
-            });
-            match parsed {
-                Some((item, color)) => {
-                    palette.insert(item.id().to_string(), color);
-                }
-                None => bad_palette.push(entry.clone()),
-            }
-        }
+        let (palette, bad_palette) = palette::parse(&preferences.status_line_palette);
         if !bad_palette.is_empty() {
             warnings.push(format!(
                 "tui.statusLinePalette: {} is not `id:color` (a name like cyan or #rrggbb); it is ignored.",
@@ -306,6 +296,7 @@ impl Appearance {
                 colors,
                 positions,
                 overflow,
+                palette,
                 ..
             } => {
                 if let Some(items) = items {
@@ -319,6 +310,9 @@ impl Appearance {
                 }
                 if let Some(overflow) = overflow {
                     self.overflow = overflow;
+                }
+                if let Some(palette) = palette {
+                    self.palette = palette::parse(&palette).0;
                 }
             }
             AppearanceEvent::TerminalTitle { items, .. } => {

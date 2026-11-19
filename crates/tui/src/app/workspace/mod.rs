@@ -24,7 +24,7 @@ use std::time::Instant;
 
 use hanafubuki_agent::AgentSessionId;
 use ratatui::backend::Backend;
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{KeyEvent, KeyEventKind};
 
 use super::{new_view, App};
 use crate::agent_bridge::{
@@ -465,19 +465,6 @@ impl App {
     ) -> bool {
         if self.overlay.is_some() {
             return false;
-        }
-        if (self.workspace.second_focused() || self.workspace.child.is_some())
-            && key.kind == KeyEventKind::Press
-            && key.code == KeyCode::Char('c')
-            && key.modifiers == KeyModifiers::CONTROL
-            && self.chat_widget.no_modal_or_popup_active()
-        {
-            if self.workspace.second_focused() {
-                self.close_second(tui);
-            } else {
-                self.leave_child(tui);
-            }
-            return true;
         }
         if let Some(action) = PaneAction::of(&key) {
             self.pane_action(tui, action);

@@ -182,6 +182,27 @@ fn press(view: &mut impl BottomPaneView, code: KeyCode) {
 }
 
 #[test]
+fn the_palette_view_saves_an_item_and_a_colour_it_offered() {
+    let (tx, receiver) = events();
+    let mut view = crate::appearance::palette::PaletteView::new(tx);
+    // The first item, then the first colour: `model:black`.
+    press(&mut view, KeyCode::Enter);
+    press(&mut view, KeyCode::Enter);
+    assert!(view.is_complete());
+    assert_eq!(
+        appearance_events(&receiver),
+        [AppearanceEvent::StatusLine {
+            items: None,
+            colors: None,
+            positions: None,
+            overflow: None,
+            palette: Some(vec!["model:black".to_string()]),
+            save: true,
+        }]
+    );
+}
+
+#[test]
 fn every_status_line_item_shows_the_sessions_value_snapshot() {
     let all: Vec<&str> = StatusLineItem::ALL.iter().map(|item| item.id()).collect();
     let mut appearance = appearance(&all, &[]);
@@ -201,6 +222,7 @@ fn the_status_line_takes_the_themes_colours_or_is_dimmed() {
         colors: Some(false),
         positions: None,
         overflow: None,
+        palette: None,
         save: false,
     });
     assert_eq!(
@@ -332,6 +354,7 @@ fn the_status_line_setup_saves_the_items_in_their_order_and_the_colours() {
                 .collect()
             ),
             overflow: Some(AgentStatusLineOverflow::WrapAll),
+            palette: None,
             save: true,
         }]
     );

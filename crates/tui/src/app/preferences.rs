@@ -69,6 +69,7 @@ impl App {
                 colors,
                 positions,
                 overflow,
+                palette,
                 save: true,
             } => {
                 // The place travels in the item's own value (`model:right-2`),
@@ -89,8 +90,16 @@ impl App {
                     colors.map(|colors| ("tui.statusLineColors".to_string(), json!(colors)));
                 let overflow = overflow
                     .map(|overflow| ("tui.statusLineOverflow".to_string(), json!(overflow)));
+                let palette = palette
+                    .as_ref()
+                    .map(|palette| ("tui.statusLinePalette".to_string(), json!(palette)));
                 Some((
-                    items.into_iter().chain(colors).chain(overflow).collect(),
+                    items
+                        .into_iter()
+                        .chain(colors)
+                        .chain(overflow)
+                        .chain(palette)
+                        .collect(),
                     "Status line updated.".to_string(),
                 ))
             }

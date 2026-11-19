@@ -33,9 +33,10 @@ pub(crate) struct MultiSelectItem {
     pub(crate) note: Option<String>,
 }
 
-/// The preview of the items as they are: a line each, none when there is
-/// nothing to show (a caller drawing two sides returns two).
-pub(crate) type PreviewCallback = Box<dyn Fn(&[MultiSelectItem]) -> Vec<Line<'static>>>;
+/// The preview of the items as they are, wrapped to the width it is given:
+/// a line each, none when there is nothing to show (a caller drawing two
+/// sides returns two).
+pub(crate) type PreviewCallback = Box<dyn Fn(&[MultiSelectItem], u16) -> Vec<Line<'static>>>;
 /// Told of every toggle and move.
 pub(crate) type ChangeCallback = Box<dyn Fn(&[MultiSelectItem])>;
 /// Told the items turned on, in order, on Enter; their ids are what the
@@ -55,7 +56,6 @@ pub(crate) struct MultiSelectPicker {
     items: Vec<MultiSelectItem>,
     state: ScrollState,
     complete: bool,
-    preview_lines: Vec<Line<'static>>,
     on_preview: Option<PreviewCallback>,
     on_change: Option<ChangeCallback>,
     on_confirm: Option<ConfirmCallback>,
@@ -80,7 +80,6 @@ impl MultiSelectPicker {
             items,
             state,
             complete: false,
-            preview_lines: Vec::new(),
             on_preview: None,
             on_change: None,
             on_confirm: None,
@@ -91,7 +90,7 @@ impl MultiSelectPicker {
     }
 
     pub(crate) fn on_preview(mut self, callback: PreviewCallback) -> Self {
-        self.preview_lines = callback(&self.items);
+        // The width is known only when drawn (`footer_lines`).
         self.on_preview = Some(callback);
         self
     }
@@ -169,11 +168,6 @@ impl MultiSelectPicker {
     }
 
     fn changed(&mut self) {
-        self.preview_lines = self
-            .on_preview
-            .as_ref()
-            .map(|preview| preview(&self.items))
-            .unwrap_or_default();
         if let Some(on_change) = &self.on_change {
             on_change(&self.items);
         }
@@ -242,8 +236,12 @@ impl MultiSelectPicker {
         )
     }
 
-    fn footer_lines(&self) -> Vec<Line<'static>> {
-        let mut lines = self.preview_lines.clone();
+    /// The preview wrapped to `width`, then a blank row for the keys.
+    fn footer_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let mut lines = match &self.on_preview {
+            Some(preview) => preview(&self.items, width),
+            None => Vec::new(),
+        };
         // The keys' own row is drawn by `ActionButtons` in `render`, which
         // knows where each lands.
         lines.push(Line::default());
@@ -303,14 +301,17 @@ impl Renderable for MultiSelectPicker {
         let header = self.header_lines().len() as u16;
         // The surface's padding, the header, a gap, the rows; then the
         // preview and the key hints.
-        2 + header + 1 + self.rows_height(rows_width) + self.footer_lines().len() as u16
+        2 + header
+            + 1
+            + self.rows_height(rows_width)
+            + self.footer_lines(width.saturating_sub(2)).len() as u16
     }
 
     fn render(&self, area: Rect, buf: &mut Buffer) {
         if area.is_empty() {
             return;
         }
-        let footer = self.footer_lines();
+        let footer = self.footer_lines(area.width.saturating_sub(2));
         let [content_area, footer_area] =
             Layout::vertical([Constraint::Fill(1), Constraint::Length(footer.len() as u16)])
                 .areas(area);

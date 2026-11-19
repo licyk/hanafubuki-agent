@@ -48,7 +48,7 @@ fn picker() -> (MultiSelectPicker, Rc<RefCell<Option<Vec<String>>>>) {
         Some("Pick items.".to_string()),
         vec![item("a", true), item("b", false), item("c", false)],
     )
-    .on_preview(Box::new(|items| {
+    .on_preview(Box::new(|items, _width| {
         let on: Vec<&str> = items
             .iter()
             .filter(|item| item.enabled)
@@ -70,7 +70,8 @@ fn space_toggles_arrows_reorder_and_enter_confirms_the_order() {
     // `b` moves above `a`, the cursor with it.
     key(&mut picker, KeyCode::Left);
     key(&mut picker, KeyCode::Left);
-    assert_eq!(picker.preview_lines, vec![Line::from("b | a")]);
+    let preview: Vec<Line<'static>> = picker.footer_lines(80);
+    assert_eq!(preview.first(), Some(&Line::from("b | a")));
     key(&mut picker, KeyCode::Down);
     key(&mut picker, KeyCode::Down);
     key(&mut picker, KeyCode::Char(' '));

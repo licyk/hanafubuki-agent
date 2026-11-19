@@ -47,7 +47,7 @@ pub(crate) fn status_line_setup(appearance: &Appearance, tx: AppEventSender) -> 
         ),
         items,
     )
-    .on_preview(Box::new(move |items| {
+    .on_preview(Box::new(move |items, width| {
         // Two rows, as the footer draws them: the first and the second, each
         // with its left side then its right, so a key's effect shows.
         let (selected, colors) = status_line_selection(&enabled_ids(items));
@@ -83,10 +83,16 @@ pub(crate) fn status_line_setup(appearance: &Appearance, tx: AppEventSender) -> 
             .max()
             .unwrap_or(1)
             .min(hanafubuki_agent::STATUS_LINE_ROWS);
-        (1..=rows)
+        let lines: Vec<Line<'static>> = (1..=rows)
             .flat_map(|row| [at(row, false), at(row, true)])
             .flatten()
-            .collect()
+            .collect();
+        // The footer wraps each row to the width it has, so the preview does
+        // too; no width (before the view is drawn) leaves the rows whole.
+        match width {
+            0 => lines,
+            width => crate::wrapping::word_wrap_lines(lines, usize::from(width)),
+        }
     }))
     .on_confirm(Box::new(move |chosen| {
         let ids = enabled_ids(chosen);
@@ -104,6 +110,7 @@ pub(crate) fn status_line_setup(appearance: &Appearance, tx: AppEventSender) -> 
             colors: Some(colors),
             positions: Some(positions),
             overflow: Some(confirmed.get()),
+            palette: None,
             save: true,
         }));
     }))
@@ -200,14 +207,20 @@ pub(crate) fn terminal_title_setup(
         Some("Select which items to display in the terminal title.".to_string()),
         select_items(appearance.terminal_title_items()),
     )
-    .on_preview(Box::new(move |items| {
+    .on_preview(Box::new(move |items, width| {
         let (selected, _) = parse_items::<TerminalTitleItem>(&enabled_ids(items));
         let now = Instant::now();
         let title = terminal_title_text(&selected, |item| title_preview(&values, item, now));
-        (!title.is_empty())
-            .then(|| Line::from(title))
-            .into_iter()
-            .collect()
+        if title.is_empty() {
+            return Vec::new();
+        }
+        let line = Line::from(title);
+        // The title is one row in the terminal; the preview wraps it to what
+        // the view has, as the status line's does.
+        match width {
+            0 => vec![line],
+            width => crate::wrapping::word_wrap_lines([line], usize::from(width)),
+        }
     }))
     .on_change(Box::new(move |items| {
         let (selected, _) = parse_items(&enabled_ids(items));

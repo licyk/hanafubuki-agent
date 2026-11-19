@@ -125,10 +125,13 @@ impl Workspace {
                 format!("Main conversation · {} side", hint(Action::FocusPaneRight))
             }
             Focus::Main => "Main conversation".to_string(),
-            Focus::Second if focused && split => "Side · Ctrl-C or /close closes".to_string(),
-            Focus::Second if focused => {
-                "Side conversation · Ctrl-C or /close closes · Esc returns".to_string()
+            Focus::Second if focused && split => {
+                format!("Side · {} or /close closes", hint(Action::HidePane))
             }
+            Focus::Second if focused => format!(
+                "Side conversation · {} or /close closes · Esc returns",
+                hint(Action::HidePane)
+            ),
             Focus::Second => format!("Side conversation · {}", hint(Action::FocusPaneRight)),
         };
         if focused {

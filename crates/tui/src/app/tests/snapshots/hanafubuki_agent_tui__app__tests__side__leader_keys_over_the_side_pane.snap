@@ -2,7 +2,7 @@
 source: crates/tui/src/app/tests/side.rs
 expression: harness.snapshot_screen()
 ---
- Main conversation                                             │ Side · Ctrl-C or /close closes
+ Main conversation                                             │ Side · ctrl-x x or /close closes
 ╭──────────────────────────────╮                               │┌ ctrl-x ──────────────────────────┐
 │ >_ hanafubuki-agent (v0.1.0) │                               ││ left   main conversation         │
 │                              │                               ││ right  side pane                 │

@@ -21,6 +21,55 @@ use crate::sections::{described, no_rule, SettingsGroup, SettingsRead, SettingsS
 
 const TUI: &str = "tui";
 
+/// The status line's item ids, as the interface offers them.
+const STATUS_LINE_ITEMS: &[&str] = &[
+    "model",
+    "model-with-reasoning",
+    "background-tasks",
+    "reasoning",
+    "current-dir",
+    "git-branch",
+    "context-remaining",
+    "context-used",
+    "context-window",
+    "context-used-tokens",
+    "context-left-tokens",
+    "cache-hit-rate",
+    "cache-hit-tokens",
+    "cache-miss-tokens",
+    "used-tokens",
+    "total-input-tokens",
+    "total-output-tokens",
+    "session-id",
+    "session-title",
+    "task-progress",
+    "permission-mode",
+    "goal",
+    "compression",
+    "role",
+    "advisor",
+];
+
+/// The colours a palette entry may name: the sixteen ANSI names.
+const STATUS_LINE_COLORS: &[&str] = &[
+    "black",
+    "red",
+    "green",
+    "yellow",
+    "blue",
+    "magenta",
+    "cyan",
+    "gray",
+    "darkgray",
+    "lightred",
+    "lightgreen",
+    "lightyellow",
+    "lightblue",
+    "lightmagenta",
+    "lightcyan",
+    "white",
+];
+
 /// The longest input a preset holds, in UTF-8 bytes (Codex's limit).
 pub const MAX_PRESET_INPUT_BYTES: usize = 8_000;
 
@@ -335,6 +384,21 @@ pub(crate) fn section() -> SettingsSection {
         maximum_items: None,
         maximum_item_chars: None,
     };
+    // The palette's entries are `<item>:<color>`: the status line's own item
+    // ids, and the colours the interface reads (its sixteen ANSI names and
+    // `#rrggbb`, which the editor also accepts typed).
+    let palette = || SettingKind::Palette {
+        maximum_items: None,
+        maximum_item_chars: None,
+        items: STATUS_LINE_ITEMS
+            .iter()
+            .map(|id| SettingChoice::new(*id, *id))
+            .collect(),
+        colors: STATUS_LINE_COLORS
+            .iter()
+            .map(|color| SettingChoice::new(*color, *color))
+            .collect(),
+    };
     let at_launch = |spec: SettingSpec| SettingSpec {
         apply: SettingApply::NextLaunch,
         ..spec
@@ -441,9 +505,9 @@ pub(crate) fn section() -> SettingsSection {
                 SettingSpec::new(
                     "tui.statusLinePalette",
                     "Status line palette",
-                    items(),
+                    palette(),
                 ),
-                "Per-item colors for the status line, each `id:color` (a name like cyan or #rrggbb); an item without one keeps the theme's",
+                "Per-item colors for the status line, each `id:color` (one of the sixteen ANSI names, or #rrggbb); an item without one keeps the theme's",
             ),
             described(
                 SettingSpec::new("tui.terminalTitle", "Terminal title", items()),

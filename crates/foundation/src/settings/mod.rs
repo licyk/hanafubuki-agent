@@ -128,6 +128,18 @@ pub enum SettingKind {
         maximum_items: Option<u32>,
         maximum_item_chars: Option<u32>,
     },
+    /// A list of `<item>:<color>` entries, its items offered from `items`
+    /// and its colours from `colors`; an editor offers both. It is read as
+    /// a text list: the entries are what is kept, and the setting's owner
+    /// decides what an entry it cannot use means.
+    Palette {
+        maximum_items: Option<u32>,
+        maximum_item_chars: Option<u32>,
+        /// The item ids an entry may name, as they are offered.
+        items: Vec<SettingChoice>,
+        /// The colours an entry may name, as they are offered.
+        colors: Vec<SettingChoice>,
+    },
 }
 
 /// One value of a choice.

@@ -32,8 +32,15 @@ pub(crate) static PAGE: PageOverride = PageOverride {
 };
 
 fn dispatch(context: &mut CommandContext<'_>, args: &str) {
-    if args.trim().is_empty() {
+    let args = args.trim();
+    if args.is_empty() {
         return super::open_settings(context, PAGE.id);
+    }
+    // `/statusline palette`: an item's colour, from the items and colours
+    // offered, or typed in.
+    if args == "palette" {
+        let view = crate::appearance::palette::PaletteView::new(context.app_event_tx());
+        return context.show_view(Box::new(view));
     }
     match parse(args) {
         Ok(event) => context.send(AppEvent::Appearance(event)),
@@ -72,6 +79,7 @@ pub(super) fn parse(args: &str) -> Result<AppearanceEvent, String> {
         colors,
         positions: None,
         overflow: None,
+        palette: None,
         save: false,
     })
 }

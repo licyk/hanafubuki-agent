@@ -119,6 +119,11 @@ impl SettingSpec {
             SettingKind::TextList {
                 maximum_items,
                 maximum_item_chars,
+            }
+            | SettingKind::Palette {
+                maximum_items,
+                maximum_item_chars,
+                ..
             } => {
                 let Some(items) = raw.as_array() else {
                     return unusable("is not a list of strings");

@@ -355,13 +355,13 @@ Esc 返回上一页，在标签页上回到设置中心。用 `--safe-mode` 启�
 
 ## 旁路对话 [#side]
 
-在旁路界面中，**Ctrl-C** 关闭该界面并中断它的回合，不会退出主 Agent；有弹窗时先关闭弹窗。**`/close`** 同样可关闭旁路界面，运行中也可使用。主界面仍支持 `/side close`。旁路界面命令列表包含 `/close` 和 `/subagents`，隐藏 `/side` 和 `/btw`；主界面的 Ctrl-C 保持原有中断／退出行为。
+在旁路界面中，**`/close`** 或 `hide_pane` 的按键关闭该界面并中断它的回合，运行中也可使用，不会退出主 Agent。旁路界面里的 Ctrl-C 保持它在记录中的含义（复制选中的文字、清空草稿、中断回合），因此不再关闭界面。主界面仍支持 `/side close`。旁路界面命令列表包含 `/close` 和 `/subagents`，隐藏 `/side` 和 `/btw`；主界面的 Ctrl-C 保持原有中断／退出行为。
 
 `/side`（或 `/btw`）打开会话的[旁路对话](/docs/sessions#side)：在会话旁边临时开的一段对话，用来快速问一个问题，而不打扰会话正在做的事。`/side 问题` 打开它并把问题发到那里。会话必须已经有过回合：在你发送第一条消息之前，`/side` 会提示 `'/side' is unavailable until the current conversation has started.`。[评审](#review)运行期间，或会话的上下文正在压缩时，也会拒绝打开。
 
 - **Fullscreen**：旁路对话是停靠在对话右侧的窗格，有自己的对话、输入框和状态栏；每个窗格顶部有一行标题，两个窗格之间有分隔线。窗格打开时获得焦点。它的消息发给旁路会话，主对话的消息发给主会话，两边都保持运行：一边的回合在你于另一边输入时继续进行。屏幕窄于 100 列或放大（`leader z`）时，获得焦点的对话占满屏幕，上方显示它的标题。用鼠标拖动分隔线，或用 `leader <` 和 `leader >`，调整窗格宽度；`leader =` 让两个窗格等宽；在另一个窗格中单击会让它获得焦点。
-- **Scrollback**：界面切换到旁路对话：先在回滚区写入 `Side conversation · Ctrl-C or /close closes · Esc returns`，再写旁路对话。这期间主对话写出的内容会先保留，回到主对话时再写入。
-- **返回和关闭**：在空输入框上、没有任务运行时按 Esc（`chat.edit_previous` 的按键），或 `leader left`，回到主对话。旁路对话保持打开：`/side`、`leader right` 或 `leader tab` 会再次显示它，连同它的记录和草稿。旁路界面的 `/close` 或 Ctrl-C、主界面的 `/side close`，或 `leader x` 关闭它：中断它正在运行的回合并丢弃这个会话（`Side conversation closed.`）。主对话切换到别的会话时（`/new`、`/resume`、`/fork` 等），它也会被关闭。
+- **Scrollback**：界面切换到旁路对话：先在回滚区写入 `Side conversation · ctrl-x x or /close closes · Esc returns`，再写旁路对话。这期间主对话写出的内容会先保留，回到主对话时再写入。
+- **返回和关闭**：在空输入框上、没有任务运行时按 Esc（`chat.edit_previous` 的按键），或 `leader left`，回到主对话。旁路对话保持打开：`/side`、`leader right` 或 `leader tab` 会再次显示它，连同它的记录和草稿。旁路界面的 `/close`、主界面的 `/side close`，或 `leader x`（`hide_pane`）关闭它：中断它正在运行的回合并丢弃这个会话（`Side conversation closed.`）。主对话切换到别的会话时（`/new`、`/resume`、`/fork` 等），它也会被关闭。
 - 旁路对话支持以下查看**命令**：`/copy`、`/agents`、`/tasks`、`/export`、`/raw`、`/diff`、`/mention`、`/status`、`/warnings`、`/pwd`、`/close` 和 `/subagents`。弹出列表只列出这些；其他命令会提示 `'/x' is unavailable here; Esc returns to the main conversation.`。旁路对话中之前的消息不能编辑。
 
 窗格的按键是[按键映射](#keymap)中的动作，默认是前导键（Ctrl-X）再按一个键：
@@ -827,7 +827,7 @@ flowchart TD
 
 项目可以指定自己的位置，在 `tui.statusLine` 里写作 `model:right-2`：底栏的第 `1` 到 `9` 行，左端或右端。只写 ID 时在第一行左侧。在 `/statusline` 的设置页里，`l` 和 `r` 把高亮的项目放到左端或右端，`1` 到 `9` 放到对应的行，`p` 在四个角之间循环；`o` 循环切换溢出规则，列表下方的按键说明会列出这些键。按键说明上方的预览按底栏的实际布局逐行绘制，所以按 Enter 保存之前就能看到按键的效果。一行放不下同一个位置上的内容时，由 `tui.statusLineOverflow` 决定：`wrap-all`（默认）两侧都换行，`wrap-left` 保留右侧的行并把左侧换到它下面，`truncate` 在右侧开始处截断左侧。
 
-项目的颜色来自主题；`tui.statusLinePalette` 可以逐项覆盖（`model:cyan`、`context-window:#ff8800`）。颜色是十六个 ANSI 名称之一（`black` 到 `white`，另有 `gray` 和 `light*`），或 `#rrggbb`；无法读取的条目会被忽略并给出警告。`--no-colors` 仍会把整行变暗，与调色板无关。
+项目的颜色来自主题；`tui.statusLinePalette` 可以逐项覆盖（`model:cyan`、`context-window:#ff8800`）。`/statusline palette` 无需手写即可编辑一项：从状态栏自己的项目 id 中选，或直接输入一个，然后从十六个颜色名中选，或输入 `#rrggbb`。颜色是十六个 ANSI 名称之一（`black` 到 `white`，另有 `gray` 和 `light*`），或 `#rrggbb`；无法读取的条目会被忽略并给出警告。`--no-colors` 仍会把整行变暗，与调色板无关。
 
 第二行右侧是各项计数，形如 `2 terminals · 1 agent · 3 warnings`，按此顺序，为零的项不显示，全为零时整块为空。点击其中一项会打开它对应的地方：终端和 Agent 打开 `/tasks` 的相应页签，警告打开 `/warnings`。警告就是 `/warnings` 会列出的那些，忽略一条后计数随之减少。
 

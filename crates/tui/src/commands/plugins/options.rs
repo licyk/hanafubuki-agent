@@ -223,6 +223,10 @@ fn option_item(id: &str, option: &SettingSpec, value: Option<&SettingValue>) -> 
         SettingKind::TextList { .. } => {
             FormItem::text(id, &label, &text(value)).placeholder("one, two, three")
         }
+        // A palette is its entries, each `<item>:<color>`, typed here; the
+        // status line's own view offers the item and colour lists.
+        SettingKind::Palette { .. } => FormItem::text(id, &label, &text(value))
+            .placeholder("model:cyan, context-window:#ff8800"),
     }
 }
 
@@ -279,8 +283,10 @@ fn read(
         SettingKind::Choice { values } => chosen(values.len())
             .and_then(|index| values.get(index))
             .map(|choice| Ok(Value::String(choice.value.clone()))),
-        SettingKind::TextList { .. } if text.is_empty() && unset => None,
-        SettingKind::TextList { .. } => Some(Ok(Value::from(
+        SettingKind::TextList { .. } | SettingKind::Palette { .. } if text.is_empty() && unset => {
+            None
+        }
+        SettingKind::TextList { .. } | SettingKind::Palette { .. } => Some(Ok(Value::from(
             text.split(',')
                 .map(str::trim)
                 .filter(|item| !item.is_empty())
