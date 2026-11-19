@@ -56,6 +56,47 @@ pub(crate) enum AppearanceEvent {
     UpdateNotice(TuiUpdateNotice),
 }
 
+/// One count the footer's right side shows, and what a click on it opens.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SideItem {
+    Terminals,
+    Agents,
+    Warnings,
+}
+
+/// A count, and the word after it, `1 agent` or `3 agents`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct SideCount {
+    pub(crate) item: SideItem,
+    pub(crate) count: usize,
+    singular: &'static str,
+    plural: &'static str,
+}
+
+impl SideCount {
+    fn new(item: SideItem, count: usize, singular: &'static str, plural: &'static str) -> Self {
+        Self {
+            item,
+            count,
+            singular,
+            plural,
+        }
+    }
+
+    /// The count and its word, `3 agents`.
+    pub(crate) fn text(&self) -> String {
+        format!(
+            "{} {}",
+            self.count,
+            if self.count == 1 {
+                self.singular
+            } else {
+                self.plural
+            }
+        )
+    }
+}
+
 /// The settings and what they show.
 #[derive(Clone)]
 pub(crate) struct Appearance {
@@ -77,6 +118,10 @@ pub(crate) struct SurfaceValues {
     pub(crate) model: String,
     pub(crate) status: Option<SessionStatus>,
     pub(crate) task_running: bool,
+    /// The warnings `/warnings` would list, those dismissed left out. The
+    /// Agent's own are known only when it is asked, so this is as fresh as
+    /// the last listing.
+    pub(crate) warnings: usize,
 }
 
 impl Appearance {
@@ -191,6 +236,40 @@ impl Appearance {
         (!line.spans.is_empty()).then_some(line)
     }
 
+    /// The footer's counts, under the composer: each running terminal, then
+    /// each agent, then the warnings `/warnings` would list; `None` while
+    /// there is none of any.
+    pub(crate) fn side_counts(&self) -> Vec<SideCount> {
+        let background = self
+            .values
+            .status
+            .as_ref()
+            .and_then(|status| status.tree_background.as_ref());
+        let mut counts = Vec::new();
+        if let Some(background) = background {
+            counts.push(SideCount::new(
+                SideItem::Terminals,
+                background.work.terminals,
+                "terminal",
+                "terminals",
+            ));
+            counts.push(SideCount::new(
+                SideItem::Agents,
+                background.work.agents,
+                "agent",
+                "agents",
+            ));
+        }
+        counts.push(SideCount::new(
+            SideItem::Warnings,
+            self.values.warnings,
+            "warning",
+            "warnings",
+        ));
+        counts.retain(|count| count.count > 0);
+        counts
+    }
+
     /// The terminal's title at `now` (the spinner's frame); empty with no
     /// item to show.
     pub(crate) fn terminal_title(&self, now: Instant) -> String {
@@ -222,42 +301,10 @@ impl SurfaceValues {
             }
             StatusLineItem::Reasoning => effort,
             StatusLineItem::BackgroundTasks => {
-                let background = status.and_then(|status| status.tree_background.as_ref())?;
-                let mut parts = Vec::new();
-                if background.work.agents > 0 {
-                    parts.push(format!(
-                        "{} {}",
-                        background.work.agents,
-                        if background.work.agents == 1 {
-                            "agent"
-                        } else {
-                            "agents"
-                        }
-                    ));
-                }
-                if background.work.terminals > 0 {
-                    parts.push(format!(
-                        "{} {}",
-                        background.work.terminals,
-                        if background.work.terminals == 1 {
-                            "terminal"
-                        } else {
-                            "terminals"
-                        }
-                    ));
-                }
-                if parts.is_empty() {
-                    return None;
-                }
-                let prefix = if matches!(
-                    background.wake,
-                    hanafubuki_agent::AgentWakeState::Paused { .. }
-                ) {
-                    "paused · "
-                } else {
-                    ""
-                };
-                Some(format!("{prefix}{}", parts.join(" · ")))
+                // The counts are the footer's second row now
+                // ([`Appearance::side_line`]); the item is kept so the
+                // setting still names it, and shows nothing here.
+                None
             }
             StatusLineItem::CurrentDir => Some(display_directory(&self.directory)),
             StatusLineItem::GitBranch => status.and_then(|status| status.git_branch.clone()),

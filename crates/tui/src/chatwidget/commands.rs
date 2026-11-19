@@ -152,6 +152,7 @@ impl ChatWidget {
         self.add_to_history(history_cell::new_error_event(warning.clone()));
         self.warnings
             .push(Warning::new(WarningSource::Interface, warning));
+        self.sync_warning_count();
         self.request_redraw();
     }
 

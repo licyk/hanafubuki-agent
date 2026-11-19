@@ -12,40 +12,64 @@ use crate::bottom_pane::BottomPaneView;
 use crate::render::highlight::{resolve_theme_by_name, set_syntax_theme};
 
 #[test]
-fn background_tasks_counts_and_pause_come_from_the_session_status() {
-    use hanafubuki_agent::{
-        AgentBackgroundStatus, AgentBackgroundWork, AgentWakePause, AgentWakeState,
-    };
-    let mut appearance = appearance(&["background-tasks"], &[]);
+fn the_footer_counts_terminals_then_agents_then_warnings() {
+    use hanafubuki_agent::{AgentBackgroundStatus, AgentBackgroundWork, AgentWakeState};
+    let mut appearance = appearance(&[], &[]);
     let mut status = status();
-    for (agents, terminals, wake, expected) in [
-        (0, 0, AgentWakeState::On, None),
-        (2, 1, AgentWakeState::On, Some("2 agents · 1 terminal")),
-        (1, 0, AgentWakeState::On, Some("1 agent")),
-        (0, 3, AgentWakeState::Off, Some("3 terminals")),
-        (
-            2,
-            0,
-            AgentWakeState::Paused {
-                reason: AgentWakePause::PersonInterrupted,
-            },
-            Some("paused · 2 agents"),
-        ),
+    let counts = |appearance: &Appearance| -> Vec<String> {
+        appearance
+            .side_counts()
+            .iter()
+            .map(|count| format!("{:?}: {}", count.item, count.text()))
+            .collect()
+    };
+
+    // Nothing at all: the right side is empty.
+    status.tree_background = None;
+    appearance.values_mut().status = Some(status.clone());
+    assert!(counts(&appearance).is_empty());
+
+    // Counts in the order the footer shows them, the zero ones left out.
+    for (agents, terminals, expected) in [
+        (0, 1, vec!["Terminals: 1 terminal"]),
+        (1, 0, vec!["Agents: 1 agent"]),
+        (2, 1, vec!["Terminals: 1 terminal", "Agents: 2 agents"]),
     ] {
         status.tree_background = Some(AgentBackgroundStatus {
             work: AgentBackgroundWork { agents, terminals },
             pending_wake_events: 0,
-            wake,
+            wake: AgentWakeState::On,
         });
         appearance.values_mut().status = Some(status.clone());
-        assert_eq!(
-            appearance
-                .values
-                .status_value(StatusLineItem::BackgroundTasks)
-                .as_deref(),
-            expected
-        );
+        appearance.values_mut().warnings = 0;
+        assert_eq!(counts(&appearance), expected);
     }
+
+    // Warnings come last, and alone they still show.
+    status.tree_background = None;
+    appearance.values_mut().status = Some(status.clone());
+    appearance.values_mut().warnings = 3;
+    assert_eq!(counts(&appearance), vec!["Warnings: 3 warnings"]);
+    appearance.values_mut().warnings = 1;
+    assert_eq!(counts(&appearance), vec!["Warnings: 1 warning"]);
+}
+
+#[test]
+fn the_status_line_no_longer_carries_the_background_counts() {
+    use hanafubuki_agent::AgentBackgroundStatus;
+    let mut appearance = appearance(&["background-tasks", "model"], &[]);
+    let mut status = status();
+    status.tree_background = Some(AgentBackgroundStatus {
+        work: hanafubuki_agent::AgentBackgroundWork {
+            agents: 2,
+            terminals: 1,
+        },
+        pending_wake_events: 0,
+        wake: hanafubuki_agent::AgentWakeState::On,
+    });
+    appearance.values_mut().status = Some(status);
+    let line = appearance.status_line().unwrap();
+    assert_eq!(plain(&line), "Main agent · gpt-5");
 }
 
 fn preferences(status_line: &[&str], terminal_title: &[&str]) -> AgentTuiPreferences {

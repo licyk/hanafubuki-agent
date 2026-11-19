@@ -110,6 +110,9 @@ pub(crate) struct ChatWidget {
     /// What went wrong in the interface itself in this run, such as a
     /// command turned off after it panicked, for `/warnings`.
     warnings: Vec<Warning>,
+    /// The Agent's warnings as the last listing reported them: what
+    /// `/warnings` merges with the chat's own, and what the footer counts.
+    agent_warnings: Vec<Warning>,
     appearance: Appearance,
     owned_transcript: bool,
     /// `[tui]` as the configuration resolves it (the saved
@@ -174,6 +177,7 @@ impl ChatWidget {
             directory,
             mode: AgentSessionMode::Default,
             warnings: Vec::new(),
+            agent_warnings: Vec::new(),
             appearance,
             owned_transcript,
             preferences: AgentTuiPreferences {

@@ -27,19 +27,30 @@ impl ChatWidget {
             let noun = if count == 1 { "warning" } else { "warnings" };
             self.add_info_message(format!("{count} {noun}: /warnings"));
         }
+        self.sync_warning_count();
     }
 
     /// `/warnings`: the Agent's `warnings` and the chat's, in the view.
     pub(crate) fn show_warnings(&mut self, warnings: Vec<Warning>) {
-        let warnings = self.visible_warnings(warnings);
+        self.agent_warnings = warnings;
+        let visible = self.visible_warnings(self.agent_warnings.clone());
         self.run_command(&commands::WARNINGS, |context| {
-            commands::show_warnings(context, warnings)
+            commands::show_warnings(context, visible)
         });
+        self.sync_warning_count();
     }
 
     /// Hides the warning with `key` for the rest of the run.
     pub(crate) fn dismiss_warning(&mut self, key: String) {
         self.dismissed_warnings.insert(key);
+        self.sync_warning_count();
+    }
+
+    /// The footer's right side follows what `/warnings` would list now.
+    pub(super) fn sync_warning_count(&mut self) {
+        let count = self.visible_warnings(self.agent_warnings.clone()).len();
+        self.appearance.values_mut().warnings = count;
+        self.sync_status_line();
     }
 
     /// `agent` and the chat's warnings, but those dismissed, each once (the
