@@ -1076,3 +1076,51 @@ fn fuzz_textarea_randomized() {
         }
     }
 }
+
+#[test]
+fn a_click_puts_the_cursor_where_it_lands() {
+    let mut ta = TextArea::new();
+    ta.insert_str("one\ntwo\nthree");
+    let area = Rect::new(0, 0, 20, 3);
+    // Render once so the wrapped lines are known, as the interface does
+    // before a click reaches it.
+    let mut buf = Buffer::empty(area);
+    let mut state = TextAreaState::default();
+    StatefulWidget::render(&ta, area, &mut buf, &mut state);
+
+    // The second row's second column: `two`'s second character.
+    ta.cursor_at(area, state.scroll, 1, 1);
+    assert_eq!(ta.cursor(), "one\nt".len());
+
+    // A click past a line's end lands at that line's end, not the next one.
+    ta.cursor_at(area, state.scroll, 1, 19);
+    assert_eq!(ta.cursor(), "one\ntwo".len());
+
+    // A click outside the text leaves the cursor where it was.
+    ta.cursor_at(area, state.scroll, 9, 1);
+    assert_eq!(ta.cursor(), "one\ntwo".len());
+}
+
+#[test]
+fn a_wheel_turn_moves_the_cursor_a_row_at_a_time_and_stops_at_the_ends() {
+    let mut ta = TextArea::new();
+    ta.insert_str("one\ntwo\nthree");
+    ta.set_cursor(0);
+
+    let end = ta.text().len();
+
+    // A row at a time, down to the last row, which holds it.
+    ta.wheel(false, 1);
+    assert_eq!(ta.cursor(), "one\n".len());
+    let after_one = ta.cursor();
+    ta.wheel(false, 1);
+    assert!(ta.cursor() > after_one, "the wheel moved down");
+    ta.wheel(false, 8);
+    assert_eq!(ta.cursor(), end);
+
+    // And back up to the first row, which holds it too.
+    ta.wheel(true, 1);
+    assert!(ta.cursor() < end, "the wheel moved up");
+    ta.wheel(true, 8);
+    assert_eq!(ta.cursor(), 0);
+}

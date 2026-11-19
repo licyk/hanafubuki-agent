@@ -79,6 +79,42 @@ impl TextArea {
         self.cursor_pos = self.clamp_pos_to_nearest_boundary(self.cursor_pos);
     }
 
+    /// Puts the cursor where `row` and `column` are drawn inside `area`, as
+    /// a click there asks, scrolled to the first row when it is above the
+    /// text.
+    pub fn cursor_at(&mut self, area: Rect, scroll: u16, row: u16, column: u16) {
+        if row < area.y || row >= area.bottom() || column < area.x {
+            return;
+        }
+        let (start, end) = {
+            let lines = self.wrapped_lines(area.width);
+            if lines.is_empty() {
+                return;
+            }
+            let index = (scroll as usize)
+                .saturating_add(row.saturating_sub(area.y) as usize)
+                .min(lines.len() - 1);
+            let line = &lines[index];
+            (line.start, line.end.saturating_sub(1))
+        };
+        let target = column.saturating_sub(area.x) as usize;
+        self.move_to_display_col_on_line(start, end.max(start), target);
+        self.preferred_col = None;
+    }
+
+    /// The cursor a wheel turn moves, `up` or down, a row at a time; the
+    /// text that does not scroll then is the row it moved over.
+    pub fn wheel(&mut self, up: bool, rows: usize) {
+        for _ in 0..rows {
+            if up {
+                self.move_cursor_up();
+            } else {
+                self.move_cursor_down();
+            }
+        }
+        self.preferred_col = None;
+    }
+
     pub fn move_cursor_up(&mut self) {
         // If we have a wrapping cache, prefer navigating across wrapped (visual) lines.
         if let Some((target_col, maybe_line)) = {

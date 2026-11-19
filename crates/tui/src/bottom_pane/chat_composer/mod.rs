@@ -83,6 +83,9 @@ use history_search::HistorySearchSession;
 /// placeholder in the UI.
 const LARGE_PASTE_CHAR_THRESHOLD: usize = 1000;
 
+/// The rows one wheel turn moves the cursor in the composer.
+const COMPOSER_WHEEL_ROWS: usize = 3;
+
 pub(crate) struct ChatComposer {
     textarea: TextArea,
     textarea_state: RefCell<TextAreaState>,
@@ -106,6 +109,8 @@ pub(crate) struct ChatComposer {
     sides: super::FooterSides,
     /// Where the footer drew each count, for a click on it.
     footer_hits: std::cell::RefCell<Vec<(ratatui::layout::Rect, crate::appearance::SideItem)>>,
+    /// Where the text was drawn last, for a click or a wheel turn in it.
+    textarea_area: std::cell::Cell<ratatui::layout::Rect>,
     goal_status: super::footer::GoalStatus,
     navigation_footer: Option<Vec<Line<'static>>>,
     /// A newer release, on the right of the footer's row.
@@ -177,6 +182,7 @@ impl ChatComposer {
             status_line: None,
             sides: super::FooterSides::default(),
             footer_hits: Default::default(),
+            textarea_area: Default::default(),
             goal_status: Default::default(),
             navigation_footer: None,
             paste_burst: PasteBurst::default(),
@@ -790,6 +796,35 @@ impl ChatComposer {
             .iter()
             .find(|(rect, _)| rect.contains((mouse.column, mouse.row).into()))
             .map(|(_, item)| *item)
+    }
+
+    /// The composer's own pointer keys: a click puts the cursor where the
+    /// click is, a wheel turn moves it a row at a time. `true` when one was
+    /// taken.
+    pub(crate) fn handle_textarea_mouse(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> bool {
+        use ratatui::crossterm::event::{MouseButton, MouseEventKind};
+        let textarea = self.textarea_area.get();
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left)
+                if textarea.contains((mouse.column, mouse.row).into()) =>
+            {
+                let scroll = self.textarea_state.borrow().scroll;
+                self.textarea
+                    .cursor_at(textarea, scroll, mouse.row, mouse.column);
+                true
+            }
+            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
+                if textarea.contains((mouse.column, mouse.row).into()) =>
+            {
+                self.textarea
+                    .wheel(mouse.kind == MouseEventKind::ScrollUp, COMPOSER_WHEEL_ROWS);
+                true
+            }
+            _ => false,
+        }
     }
 
     /// Records `hits` as where the footer's counts are, for a test of what a

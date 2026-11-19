@@ -146,6 +146,7 @@ impl Renderable for ChatComposer {
 
     fn render(&self, area: Rect, buf: &mut Buffer) {
         let [composer_rect, textarea_rect, popup_rect, footer_rect] = self.layout_areas(area);
+        self.textarea_area.set(textarea_rect);
         match &self.active_popup {
             ActivePopup::Command(popup) => popup.render(popup_rect, buf),
             ActivePopup::Mention(popup) => popup.render(popup_rect, buf),

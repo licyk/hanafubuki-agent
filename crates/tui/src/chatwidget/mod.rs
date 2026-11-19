@@ -198,6 +198,10 @@ impl ChatWidget {
         &mut self,
         mouse: ratatui::crossterm::event::MouseEvent,
     ) -> bool {
+        if self.bottom_pane.handle_textarea_mouse(mouse) {
+            self.request_redraw();
+            return true;
+        }
         let Some(key) = self.bottom_pane.pointer_key(mouse) else {
             return self.handle_footer_mouse(mouse);
         };

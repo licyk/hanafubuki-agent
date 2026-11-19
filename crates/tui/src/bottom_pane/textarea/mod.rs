@@ -46,7 +46,7 @@ struct WrapCache {
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct TextAreaState {
     /// Index into wrapped lines of the first visible line.
-    scroll: u16,
+    pub(crate) scroll: u16,
 }
 
 impl TextArea {

@@ -372,6 +372,18 @@ impl super::BottomPane {
     pub(crate) fn set_footer_hits_for_test(&mut self, hits: Vec<(Rect, SideItem)>) {
         self.composer.set_footer_hits_for_test(hits);
     }
+
+    /// The composer's own pointer keys, taken before the footer's: a click
+    /// in the text or a wheel turn there.
+    pub(crate) fn handle_textarea_mouse(
+        &mut self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> bool {
+        if self.view_stack.last().is_some() || self.composer.popup_active() {
+            return false;
+        }
+        self.composer.handle_textarea_mouse(mouse)
+    }
 }
 
 /// Renders one line chosen by the composer (the history search's) in
