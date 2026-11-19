@@ -514,7 +514,7 @@ Provider 的错误是否拒绝了请求的推理参数，由 `hanafubuki-agent-m
 
 [数据目录](/docs/data-directory#contents)之外的细节：
 
-- `history/active/YYYY/MM/DD/session-<YYYY-MM-DD>T<HH-MM-SS>-<id>.jsonl`（创建时的本地时间）、`history/archived/`、`history/attachments/<id>/blobs/<sha256>.blob`、`history/attachments/<id>/exports/`（会话的导出文件，`decompress` 的 `toFile`）、`history/trash/` 和 `history/index.sqlite3`。分叉通过谱系表共享父会话的前缀。索引的模式版本是 6：5 为会话列表的父会话过滤增加了 `agent_sessions.parent_session_id`（带索引），6 增加了分层压缩链的 `agent_compression_links`；其他版本的索引（包括更旧的）在打开时被丢弃，并从 rollout 重建一次。
+- `history/active/YYYY/MM/DD/session-<YYYY-MM-DD>T<HH-MM-SS>-<id>.jsonl`（创建时的本地时间）、`history/archived/`、`history/attachments/<id>/blobs/<sha256>.blob`、`history/attachments/<id>/exports/`（会话的导出文件，`decompress` 的 `toFile`）、`history/trash/` 和 `history/index.sqlite3`。分叉通过谱系表共享父会话的前缀，取的是该前缀所属会话最后拥有的模型上下文：某一段的会话压缩过时，它贡献的是检查点的替换内容及其后的条目，而不是被替换掉的转录；转录仍显示每一条，其分页也照旧翻过父会话的整段历史。索引的模式版本是 6：5 为会话列表的父会话过滤增加了 `agent_sessions.parent_session_id`（带索引），6 增加了分层压缩链的 `agent_compression_links`；其他版本的索引（包括更旧的）在打开时被丢弃，并从 rollout 重建一次。
 - `memory/memory.sqlite3`、`memory/ad-hoc-notes.jsonl`（模型留下的笔记）、`memory/artifacts/`（发布的制品，包括 `MEMORY.md` 和 `memory_summary.md`）、`memory/staging/` 和 `memory/reset-trash/`。
 
 ### 记忆存储 [#memory-store]

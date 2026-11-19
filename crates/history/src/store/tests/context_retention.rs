@@ -95,6 +95,119 @@ fn compaction_boundary_changes_model_context_without_removing_display_history() 
 }
 
 #[test]
+fn a_fork_of_a_compacted_parent_inherits_its_window_not_its_transcript() {
+    let (_temporary, _paths, workers, store) = open_store();
+    let parent = store.allocate_session_id().unwrap();
+    store
+        .create_session(AgentConversationCommit {
+            runtime: runtime(parent, 0, 3),
+            history_mutations: vec![
+                AgentHistoryMutation::AppendItem {
+                    item: turn_start(1, 1),
+                },
+                AgentHistoryMutation::AppendItem {
+                    item: item(2, 0, "the parent's question"),
+                },
+            ],
+        })
+        .unwrap();
+    // The parent compacts, then goes on with a turn of its own: its
+    // transcript keeps the replaced question, the summary and that turn,
+    // while its model context starts from the window the compaction left.
+    let mut compacted = runtime(parent, 2, 6);
+    let source_window = compacted.context_window;
+    let target_window = source_window.next().unwrap();
+    let snapshot = AgentCompactionSnapshot {
+        id: AgentCompactionId::new(1),
+        generation: AgentCompactionGeneration::new(1),
+        trigger: AgentCompactionTrigger::Automatic,
+        phase: AgentCompactionPhase::PreTurn,
+        reason: AgentCompactionReason::ContextLimit,
+        implementation: AgentCompactionImplementation::LocalSummary,
+        status: AgentCompactionStatus::Completed,
+        source_revision: AgentRevision::new(1),
+        source_window_id: source_window.window_id,
+        target_window,
+        turn_generation: None,
+        summary: Some("summary".to_string()),
+        usage: None,
+        last_error: None,
+        created_at: 1,
+        updated_at: 2,
+    };
+    compacted.context_window = target_window;
+    compacted.compaction = Some(snapshot.clone());
+    let boundary = AgentModelContextBoundary::Compacted {
+        checkpoint: AgentCompactionCheckpoint {
+            checkpoint_item_id: AgentHistoryItemId::new(3),
+            snapshot,
+            replacement_history: vec![
+                item(40, 0, "retained user"),
+                item(50, 0, "summary replacement"),
+            ],
+            window_chain: vec![source_window, target_window],
+            future_items_after_item_id: 50,
+            initial_context_digest: [7; 32],
+        },
+    };
+    compacted.model_context_boundary = boundary.clone();
+    let mut next_turn = compacted.clone();
+    next_turn.revision = AgentRevision::new(3);
+    next_turn.next_history_item_id = 8;
+    store
+        .append_commit(AgentConversationCommit {
+            runtime: compacted,
+            history_mutations: vec![
+                AgentHistoryMutation::AppendItem {
+                    item: item(3, 0, "summary"),
+                },
+                AgentHistoryMutation::SetModelContextBoundary { boundary },
+            ],
+        })
+        .unwrap();
+    store
+        .append_commit(AgentConversationCommit {
+            runtime: next_turn,
+            history_mutations: vec![
+                AgentHistoryMutation::AppendItem {
+                    item: turn_start(6, 2),
+                },
+                AgentHistoryMutation::AppendItem {
+                    item: item(7, 0, "the parent's next question"),
+                },
+            ],
+        })
+        .unwrap();
+    let child = store.allocate_session_id().unwrap();
+    let mut child_runtime = runtime(child, 0, 1);
+    child_runtime.forked_from_session_id = Some(parent);
+    store
+        .create_fork(
+            parent,
+            AgentTurnId::new(2),
+            AgentConversationCommit {
+                runtime: child_runtime,
+                history_mutations: Vec::new(),
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        store
+            .load_latest_model_context(child)
+            .unwrap()
+            .iter()
+            .map(|item| item.item_id.value())
+            .collect::<Vec<_>>(),
+        vec![40, 50]
+    );
+    store.shutdown_session(child).unwrap();
+    store.shutdown_session(parent).unwrap();
+    assert!(workers
+        .shutdown(Instant::now() + Duration::from_secs(2))
+        .is_empty());
+}
+
+#[test]
 fn retention_is_disabled_by_default_and_never_selects_a_referenced_parent() {
     let (_temporary, _paths, workers, store) = open_store();
     let parent = store.allocate_session_id().unwrap();
