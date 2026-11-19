@@ -28,32 +28,14 @@ pub(crate) fn prepare_operation(
         }
         WorkspaceFsRequest::SearchText(request) => {
             validate_depth_entries(request.max_depth, request.max_results)?;
-            if request.query.is_empty()
-                || request.query.len() > MAX_SEARCH_QUERY_BYTES
-                || request.query.as_bytes().contains(&0)
-            {
-                return Err(WorkspaceFsError::InvalidRequest(format!(
-                    "search query must contain 1 to {MAX_SEARCH_QUERY_BYTES} bytes without NUL"
-                )));
-            }
-            if request.max_results == 0 || request.max_results > MAX_SEARCH_RESULTS {
-                return Err(WorkspaceFsError::InvalidRequest(format!(
-                    "search results must be between 1 and {MAX_SEARCH_RESULTS}"
-                )));
-            }
-            if request.max_bytes == 0 || request.max_bytes > MAX_SEARCH_BYTES {
-                return Err(WorkspaceFsError::InvalidRequest(format!(
-                    "search bytes must be between 1 and {MAX_SEARCH_BYTES}"
-                )));
-            }
+            validate_search_limits(request)?;
             let matcher =
                 grep_regex::RegexMatcher::new_line_matcher(&request.query).map_err(|error| {
                     WorkspaceFsError::InvalidRequest(format!(
                         "invalid search regular expression: {error}"
                     ))
                 })?;
-            // A file is a searchable tree of one file: `maxDepth` bounds the
-            // walk below a directory, and a file root has no walk to bound.
+            // A file is a tree of one file, so `maxDepth` bounds no walk of it.
             let root = resolve_existing(policy, &request.path, None)?;
             let canonical = serialize_action(&CanonicalFileAction::SearchText {
                 root: &root.identity,
@@ -281,6 +263,29 @@ pub(crate) fn prepare_operation(
     })
     .map_err(|error| WorkspaceFsError::Resolution(error.to_string()))?;
     Ok(PreparedWorkspaceOperation { plan, action })
+}
+
+/// A search's own bounds: its query, and the limits on its results and bytes.
+fn validate_search_limits(request: &SearchTextRequest) -> Result<(), WorkspaceFsError> {
+    if request.query.is_empty()
+        || request.query.len() > MAX_SEARCH_QUERY_BYTES
+        || request.query.as_bytes().contains(&0)
+    {
+        return Err(WorkspaceFsError::InvalidRequest(format!(
+            "search query must contain 1 to {MAX_SEARCH_QUERY_BYTES} bytes without NUL"
+        )));
+    }
+    if request.max_results == 0 || request.max_results > MAX_SEARCH_RESULTS {
+        return Err(WorkspaceFsError::InvalidRequest(format!(
+            "search results must be between 1 and {MAX_SEARCH_RESULTS}"
+        )));
+    }
+    if request.max_bytes == 0 || request.max_bytes > MAX_SEARCH_BYTES {
+        return Err(WorkspaceFsError::InvalidRequest(format!(
+            "search bytes must be between 1 and {MAX_SEARCH_BYTES}"
+        )));
+    }
+    Ok(())
 }
 
 fn validate_depth_entries(depth: usize, entries: usize) -> Result<(), WorkspaceFsError> {
