@@ -56,6 +56,7 @@ impl AgentService {
             created_at: now,
             settings: SessionSettings {
                 pending_model: None,
+                pending_effort: None,
                 model: source.settings.model.clone(),
                 title: source.settings.title.clone(),
                 goal: source.settings.goal.clone(),
@@ -135,6 +136,7 @@ impl AgentService {
             created_at: now,
             settings: SessionSettings {
                 pending_model: None,
+                pending_effort: None,
                 model: source.settings.model.clone(),
                 title: source.settings.title.clone(),
                 goal: source.settings.goal.clone(),

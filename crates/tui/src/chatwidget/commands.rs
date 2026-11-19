@@ -204,13 +204,26 @@ impl ChatWidget {
             TurnUpdate::EffortChoices(choices) => self.run_command(&commands::EFFORT, |context| {
                 commands::show_effort_choices(context, choices)
             }),
-            TurnUpdate::EffortChanged(effort) => self.add_to_history(history_cell::new_info_event(
-                match effort {
-                    Some(effort) => format!("Reasoning effort set to {effort}"),
-                    None => "Reasoning effort set to the Provider's default".to_string(),
-                },
-                None,
-            )),
+            TurnUpdate::EffortChanged(effort) => {
+                // A running turn keeps the effort it started with, so the
+                // change is for the next one.
+                let changed = if self.bottom_pane.is_task_running() {
+                    match effort {
+                        Some(effort) => {
+                            format!("Reasoning effort will be set to {effort} after this turn")
+                        }
+                        None => "Reasoning effort will be set to the Provider's default after \
+                                 this turn"
+                            .to_string(),
+                    }
+                } else {
+                    match effort {
+                        Some(effort) => format!("Reasoning effort set to {effort}"),
+                        None => "Reasoning effort set to the Provider's default".to_string(),
+                    }
+                };
+                self.add_to_history(history_cell::new_info_event(changed, None))
+            }
             TurnUpdate::EffortUnchanged(why) => {
                 self.add_to_history(history_cell::new_info_event(why, None))
             }

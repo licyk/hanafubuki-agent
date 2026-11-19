@@ -90,7 +90,7 @@ impl AgentService {
             turn.final_answer_message_id = final_answer_message_id;
             turn.terminal_reason = None;
             // A model change the turn held back applies now that it ended.
-            self.apply_pending_model_configuration(record)?;
+            self.apply_pending_changes(record)?;
             record.runtime.context_window.new_context_requested = false;
             let reasoning_event =
                 close_reasoning_for_terminal(record, identity, self.inner.limits)?;
@@ -283,7 +283,7 @@ impl AgentService {
         turn.last_error = transition.error;
         turn.terminal_reason = Some(transition.reason);
         // A model change the turn held back applies now that it has ended.
-        self.apply_pending_model_configuration(record)?;
+        self.apply_pending_changes(record)?;
         record.runtime.context_window.new_context_requested = false;
         if transition.reason == AgentTurnTerminalReason::UserInterrupted {
             super::super::compression::note_interrupt(record);

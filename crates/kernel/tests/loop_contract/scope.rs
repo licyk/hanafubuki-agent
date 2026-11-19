@@ -585,15 +585,17 @@ async fn the_role_changes_only_between_turns() {
     assert_eq!((cleared.role, cleared.scope), (None, None));
 }
 
-/// A running turn takes the effort at its next step: each sampling request
-/// is built from the session's configuration, so `/effort` works during one.
+/// As the model: the effort a running turn is given waits for it to end, so
+/// every request a turn sends is the one it was admitted for, whatever the
+/// Provider's model changes to meanwhile.
 #[tokio::test]
-async fn the_effort_changes_during_a_turn() {
+async fn the_effort_changes_after_a_turn() {
     let service = AgentService::new(
         Arc::new(CancellationOnlyModel),
         FakeTools::new([]).await.registries(),
     );
     let session = service.create_session(config()).unwrap();
+    let before = service.snapshot(session.id).unwrap();
     let accepted = service
         .submit_turn_with_sink(session.id, "wait".to_string(), Arc::new(NoopEventSink))
         .unwrap();
@@ -621,15 +623,19 @@ async fn the_effort_changes_during_a_turn() {
         }
     }
     assert_eq!(
-        changed
-            .expect("the running turn took the effort")
-            .reasoning_effort,
-        Some(ModelReasoningEffort::High)
+        changed.expect("the change was accepted").reasoning_effort,
+        before.reasoning_effort,
+        "the running turn keeps the effort it started with"
     );
     service
         .cancel_turn_confirmed(session.id, accepted.turn_id, accepted.generation)
         .await
         .unwrap();
+    assert_eq!(
+        service.snapshot(session.id).unwrap().reasoning_effort,
+        Some(ModelReasoningEffort::High),
+        "the change applies once the turn ends"
+    );
 }
 
 /// The model too: a running turn's next request is built from whatever the

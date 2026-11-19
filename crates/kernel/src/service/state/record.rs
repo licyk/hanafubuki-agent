@@ -38,6 +38,9 @@ pub(in crate::service) struct SessionSettings {
     /// A model change a running turn could not take: the turn keeps the
     /// model and transport it started with, so this applies once it ends.
     pub(in crate::service) pending_model: Option<PendingModel>,
+    /// An effort change a running turn held back, for the same reason: a
+    /// turn's requests are its own from its first step to its last.
+    pub(in crate::service) pending_effort: Option<PendingEffort>,
     pub(in crate::service) title: Option<AgentSessionTitle>,
     pub(in crate::service) goal: Option<crate::AgentGoal>,
     pub(in crate::service) config: AgentSessionConfig,
@@ -53,6 +56,13 @@ pub(in crate::service) struct PendingModel {
     pub(in crate::service) model: Arc<dyn ModelPort>,
     pub(in crate::service) base_url: String,
     pub(in crate::service) update: crate::AgentSessionModelConfigurationUpdate,
+}
+
+/// An effort change held for the end of the running turn. `effort` is the
+/// Provider's default when none is named, which a plain `Option` cannot say.
+#[derive(Clone, Debug)]
+pub(in crate::service) struct PendingEffort {
+    pub(in crate::service) effort: Option<hanafubuki_agent_model_api::ModelReasoningEffort>,
 }
 
 /// Where the session stands: lifecycle, the generation and revision that

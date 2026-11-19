@@ -364,23 +364,28 @@ impl AgentService {
         Ok(())
     }
 
-    /// Applies the model change a running turn held back, now that it has
-    /// ended. The caller commits the record it is handed; a revision it
-    /// already counts covers this.
-    pub(in crate::service) fn apply_pending_model_configuration(
+    /// Applies the model and effort changes a running turn held back, now
+    /// that it has ended. The caller commits the record it is handed; a
+    /// revision it already counts covers this.
+    pub(in crate::service) fn apply_pending_changes(
         &self,
         record: &mut SessionRecord,
     ) -> Result<(), AgentError> {
-        let Some(PendingModel {
+        if let Some(PendingModel {
             model,
             base_url,
             update,
         }) = record.settings.pending_model.take()
-        else {
-            return Ok(());
-        };
-        self.name_model_provider_at(&update.provider_id, update.provider_protocol, &base_url);
-        self.apply_model_configuration(record, model, update)
+        {
+            self.name_model_provider_at(&update.provider_id, update.provider_protocol, &base_url);
+            self.apply_model_configuration(record, model, update)?;
+        }
+        // After the model: a change of Provider may have taken the effort's
+        // meaning with it, and this is the effort asked for last.
+        if let Some(PendingEffort { effort }) = record.settings.pending_effort.take() {
+            self.apply_reasoning_effort(record, effort)?;
+        }
+        Ok(())
     }
 
     pub fn set_session_reasoning_effort(
@@ -393,7 +398,6 @@ impl AgentService {
         let cell = self.session(session_id)?;
         let mut guard = cell.lock_after_persistence_blocking()?;
         let record = &mut *guard;
-        // As the model: a running turn takes the effort at its next step.
         validate_session_change(record, generation, revision)?;
         if record
             .runtime
@@ -404,10 +408,20 @@ impl AgentService {
             return Err(AgentError::CompactionAlreadyRunning);
         }
         let previous = record.rollback_state();
-        record.settings.config.reasoning_effort = effort;
-        // A protocol without reasoning effort ignores it, with a warning.
-        normalize_session_config(&mut record.settings.config);
-        validate_session_config(&record.settings.config, self.inner.limits)?;
+        // The model's rule, for the model's reason: a running turn keeps the
+        // configuration it started with, so every request it sends is the
+        // one it was admitted for.
+        if record
+            .runtime
+            .turn
+            .as_ref()
+            .is_some_and(|turn| !turn.phase.is_terminal())
+        {
+            record.settings.pending_effort = Some(PendingEffort { effort });
+            drop(guard);
+            return self.snapshot(session_id);
+        }
+        self.apply_reasoning_effort(record, effort)?;
         record.status.revision = record
             .status
             .revision
@@ -418,5 +432,18 @@ impl AgentService {
         drop(guard);
         self.persist_staged_blocking(staged)?;
         self.snapshot(session_id)
+    }
+
+    /// Puts `effort` into `record`'s configuration. The caller commits it
+    /// and counts the revision.
+    fn apply_reasoning_effort(
+        &self,
+        record: &mut SessionRecord,
+        effort: Option<hanafubuki_agent_model_api::ModelReasoningEffort>,
+    ) -> Result<(), AgentError> {
+        record.settings.config.reasoning_effort = effort;
+        // A protocol without reasoning effort ignores it, with a warning.
+        normalize_session_config(&mut record.settings.config);
+        validate_session_config(&record.settings.config, self.inner.limits)
     }
 }

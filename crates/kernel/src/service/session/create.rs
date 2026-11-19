@@ -104,6 +104,7 @@ impl AgentService {
             created_at: now,
             settings: SessionSettings {
                 pending_model: None,
+                pending_effort: None,
                 model,
                 title: None,
                 goal: None,

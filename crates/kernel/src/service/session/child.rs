@@ -248,6 +248,7 @@ fn child_record(
         created_at: now,
         settings: SessionSettings {
             pending_model: None,
+            pending_effort: None,
             model: parent.settings.model.clone(),
             title: from_parent.then(|| parent.settings.title.clone()).flatten(),
             // A child works for its parent: it never pursues the parent's goal.
