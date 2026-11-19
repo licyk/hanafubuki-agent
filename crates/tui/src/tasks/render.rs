@@ -34,7 +34,7 @@ impl Tasks {
             let width = tabs.width.min(label.len() as u16);
             let tab = Rect { width, ..tabs };
             let label = if self.section == section {
-                label.cyan().bold().reversed()
+                label.white().bold().reversed()
             } else {
                 label.dim()
             };
