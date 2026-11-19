@@ -68,6 +68,7 @@ fn props(mode: FooterMode) -> FooterProps<'static> {
         wsl: false,
         counts: &[],
         second_row: None,
+        hits: Box::leak(Box::new(std::cell::RefCell::new(Vec::new()))),
         overflow: Overflow::default(),
     }
 }
@@ -256,6 +257,41 @@ fn no_counts_leaves_the_hint_row_as_it_was() {
         rows(with_none, 80, footer_height(with_none, 80)),
         rows(plain, 80, footer_height(plain, 80))
     );
+}
+
+#[test]
+fn each_count_is_a_place_the_pointer_can_land_on() {
+    let counts = counts();
+    let hits = std::cell::RefCell::new(Vec::new());
+    let props = FooterProps {
+        agents_hint: true,
+        counts: &counts,
+        hits: &hits,
+        ..props(FooterMode::ComposerEmpty)
+    };
+    let width = 80;
+    let height = footer_height(props, width);
+    draw(props, width, height);
+
+    // Three pieces, left to right, each on the counts' row: the row the
+    // counts were drawn on, one up from the bottom.
+    let hits = hits.into_inner();
+    assert_eq!(hits.len(), 3, "{hits:?}");
+    assert_eq!(
+        hits.iter().map(|(_, item)| *item).collect::<Vec<_>>(),
+        [
+            crate::appearance::SideItem::Terminals,
+            crate::appearance::SideItem::Agents,
+            crate::appearance::SideItem::Warnings,
+        ]
+    );
+    for (rect, _) in &hits {
+        assert_eq!(rect.y, height - 1, "{hits:?}");
+        assert!(
+            rect.width > 0 && rect.right() <= width,
+            "{rect:?} is not on the row"
+        );
+    }
 }
 
 fn install(entries: &[(&str, &str, &[&str])]) {

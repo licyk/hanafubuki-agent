@@ -11,7 +11,7 @@ use super::*;
 
 fn fixture() -> Tasks {
     let root = AgentSessionId::new(1);
-    let mut tasks = Tasks::new(root);
+    let mut tasks = Tasks::new(root, Default::default());
     let child = |id, parent, depth, title: &str, status| AgentSubagentStatus {
         session_id: AgentSessionId::new(id),
         parent_session_id: AgentSessionId::new(parent),

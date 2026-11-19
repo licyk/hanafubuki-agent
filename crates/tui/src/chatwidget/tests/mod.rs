@@ -18,6 +18,7 @@ use hanafubuki_agent::panic::is_panic_contained;
 use hanafubuki_agent::{AgentRevision, AgentSessionId, AgentToolDisplay};
 
 mod entries;
+mod footer;
 mod images;
 mod work;
 

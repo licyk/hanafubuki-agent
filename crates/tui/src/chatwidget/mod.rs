@@ -199,9 +199,48 @@ impl ChatWidget {
         mouse: ratatui::crossterm::event::MouseEvent,
     ) -> bool {
         let Some(key) = self.bottom_pane.pointer_key(mouse) else {
-            return false;
+            return self.handle_footer_mouse(mouse);
         };
         self.handle_key_event(KeyEvent::new(key, KeyModifiers::NONE));
+        true
+    }
+
+    /// Records where the footer's counts are, for a test of what a click on
+    /// them does.
+    #[cfg(test)]
+    pub(crate) fn set_footer_hits_for_test(
+        &mut self,
+        hits: Vec<(ratatui::layout::Rect, crate::appearance::SideItem)>,
+    ) {
+        self.bottom_pane.set_footer_hits_for_test(hits);
+    }
+
+    /// A click on a footer count opens what it counts: the task manager at
+    /// the terminals' or the agents' section, or `/warnings`.
+    fn handle_footer_mouse(&mut self, mouse: ratatui::crossterm::event::MouseEvent) -> bool {
+        use ratatui::crossterm::event::{MouseButton, MouseEventKind};
+        if mouse.kind != MouseEventKind::Down(MouseButton::Left) {
+            return false;
+        }
+        let Some(side) = self.bottom_pane.footer_side_at(mouse) else {
+            return false;
+        };
+        match side {
+            crate::appearance::SideItem::Terminals | crate::appearance::SideItem::Agents => {
+                let section = if matches!(side, crate::appearance::SideItem::Terminals) {
+                    crate::tasks::Section::Terminals
+                } else {
+                    crate::tasks::Section::Agents
+                };
+                self.app_event_tx
+                    .send(AppEvent::Workspace(crate::app::WorkspaceEvent::Tasks(
+                        Box::new(crate::tasks::TasksEvent::Open(section)),
+                    )));
+            }
+            crate::appearance::SideItem::Warnings => {
+                self.dispatch_command(&crate::commands::WARNINGS, String::new());
+            }
+        }
         true
     }
 

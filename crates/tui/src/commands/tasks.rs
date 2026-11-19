@@ -12,7 +12,7 @@ pub(super) static TASKS: CommandSpec = CommandSpec {
     needs_session: false,
     dispatch: |context: &mut CommandContext<'_>, _| {
         context.send(AppEvent::Workspace(WorkspaceEvent::Tasks(Box::new(
-            TasksEvent::Open,
+            TasksEvent::Open(Default::default()),
         ))));
     },
 };

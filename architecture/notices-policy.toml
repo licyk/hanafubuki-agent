@@ -466,6 +466,10 @@ path = "crates/tui/src/agent_bridge/mod.rs"
 reason = "The adapter between the facade and the interface, written for the Agent; it stands where Codex has its ConversationManager."
 
 [[original]]
+path = "crates/tui/src/chatwidget/tests/footer.rs"
+reason = "What a click on a footer count opens; the counts are the Agent's, which Codex does not have."
+
+[[original]]
 path = "crates/tui/src/agent_bridge/background.rs"
 reason = "The session woken for its background work, onto the facade's woken turn; Codex resumes nothing by itself."
 

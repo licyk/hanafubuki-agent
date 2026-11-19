@@ -89,6 +89,7 @@ impl ChatComposer {
             wsl: self.wsl,
             counts: &self.sides.counts,
             second_row: self.sides.second_row.as_ref(),
+            hits: &self.footer_hits,
             overflow: self.sides.overflow,
         }
     }

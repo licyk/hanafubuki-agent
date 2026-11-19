@@ -117,9 +117,9 @@ pub(crate) enum CancellationEvent {
 }
 
 pub(crate) struct BottomPane {
-    composer: ChatComposer,
+    pub(super) composer: ChatComposer,
 
-    view_stack: Vec<Box<dyn BottomPaneView>>,
+    pub(super) view_stack: Vec<Box<dyn BottomPaneView>>,
 
     app_event_tx: AppEventSender,
     frame_requester: FrameRequester,
@@ -523,13 +523,6 @@ impl BottomPane {
 
     pub(crate) fn set_status_line(&mut self, line: Option<Line<'static>>) {
         self.composer.set_status_line(line);
-        self.request_redraw();
-    }
-
-    /// The footer's right side and what it does when a row does not fit
-    /// beside it.
-    pub(crate) fn set_counts(&mut self, sides: FooterSides) {
-        self.composer.set_counts(sides);
         self.request_redraw();
     }
 

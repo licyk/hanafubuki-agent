@@ -104,6 +104,8 @@ pub(crate) struct ChatComposer {
     /// The footer's sides beside the hints: the counts and the items placed
     /// on the second row's left.
     sides: super::FooterSides,
+    /// Where the footer drew each count, for a click on it.
+    footer_hits: std::cell::RefCell<Vec<(ratatui::layout::Rect, crate::appearance::SideItem)>>,
     goal_status: super::footer::GoalStatus,
     navigation_footer: Option<Vec<Line<'static>>>,
     /// A newer release, on the right of the footer's row.
@@ -174,6 +176,7 @@ impl ChatComposer {
             is_task_running: false,
             status_line: None,
             sides: super::FooterSides::default(),
+            footer_hits: Default::default(),
             goal_status: Default::default(),
             navigation_footer: None,
             paste_burst: PasteBurst::default(),
@@ -775,6 +778,28 @@ impl ChatComposer {
     /// The footer's sides beside the hints.
     pub(crate) fn set_counts(&mut self, sides: super::FooterSides) {
         self.sides = sides;
+    }
+
+    /// The count the pointer is on, when it is on one.
+    pub(crate) fn footer_side_at(
+        &self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<crate::appearance::SideItem> {
+        self.footer_hits
+            .borrow()
+            .iter()
+            .find(|(rect, _)| rect.contains((mouse.column, mouse.row).into()))
+            .map(|(_, item)| *item)
+    }
+
+    /// Records `hits` as where the footer's counts are, for a test of what a
+    /// click on them does.
+    #[cfg(test)]
+    pub(crate) fn set_footer_hits_for_test(
+        &mut self,
+        hits: Vec<(ratatui::layout::Rect, crate::appearance::SideItem)>,
+    ) {
+        self.footer_hits = std::cell::RefCell::new(hits);
     }
 
     /// Whether the terminal reports Shift+Enter apart from Enter.

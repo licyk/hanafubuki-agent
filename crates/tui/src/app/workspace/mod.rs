@@ -488,7 +488,7 @@ impl App {
             return true;
         }
         if keymap::matches(Action::OpenTasks, &key) {
-            self.tasks_event(tui, crate::tasks::TasksEvent::Open);
+            self.tasks_event(tui, crate::tasks::TasksEvent::Open(Default::default()));
             return true;
         }
         let returns = (self.workspace.second_focused() || self.workspace.child.is_some())

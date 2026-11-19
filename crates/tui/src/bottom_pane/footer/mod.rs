@@ -23,7 +23,7 @@ mod shortcut_overlay;
 
 pub(crate) use goal::GoalStatus;
 
-use crate::appearance::SideCount;
+use crate::appearance::{SideCount, SideItem};
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
 use crate::keymap::{self, Action};
@@ -36,6 +36,7 @@ use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Widget;
+use unicode_width::UnicodeWidthStr;
 
 /// What the footer shows beside the hints: the counts on the second row's
 /// right, the status line's items placed on its left, and what happens when
@@ -89,6 +90,9 @@ pub(crate) struct FooterProps<'a> {
     pub(crate) counts: &'a [SideCount],
     /// The status line's items whose place is the second row's left.
     pub(crate) second_row: Option<&'a Line<'static>>,
+    /// Where each count was drawn, for a click: the composer's own, shared
+    /// with the render that fills it.
+    pub(crate) hits: &'a std::cell::RefCell<Vec<(Rect, SideItem)>>,
     /// When a row does not fit beside the counts.
     pub(crate) overflow: Overflow,
 }
@@ -174,12 +178,51 @@ pub(crate) fn render_footer(area: Rect, buf: &mut Buffer, props: FooterProps<'_>
         return shortcut_overlay::render(&props, area, buf, goal_line(props));
     }
     let lines = wrapped_footer(props, area.width);
+    record_count_hits(area, props, &lines);
     Paragraph::new(prefix_lines(
         lines,
         " ".repeat(FOOTER_INDENT_COLS).into(),
         " ".repeat(FOOTER_INDENT_COLS).into(),
     ))
     .render(area, buf);
+}
+
+/// Where each count landed, so a click on it opens what it counts: the
+/// counts share the row their own text ends on.
+fn record_count_hits(area: Rect, props: FooterProps<'_>, lines: &[Line<'static>]) {
+    if props.counts.is_empty() {
+        return;
+    }
+    let Some(text) = props
+        .counts
+        .iter()
+        .map(SideCount::text)
+        .reduce(|all, text| format!("{all} · {text}"))
+    else {
+        return;
+    };
+    let Some(row) = lines
+        .iter()
+        .position(|line| line.width() >= text.width() && line.to_string().contains(&text))
+    else {
+        return;
+    };
+    let width = area.width.saturating_sub(FOOTER_INDENT_COLS as u16);
+    let mut hits = props.hits.borrow_mut();
+    hits.clear();
+    let mut x = area.x + width.saturating_sub(text.width() as u16);
+    for (index, count) in props.counts.iter().enumerate() {
+        let piece = count.text();
+        let piece_width = piece.chars().count() as u16;
+        hits.push((
+            Rect::new(x, area.y + row as u16, piece_width, 1),
+            count.item,
+        ));
+        x = x.saturating_add(piece_width);
+        if index + 1 < props.counts.len() {
+            x = x.saturating_add(" · ".chars().count() as u16);
+        }
+    }
 }
 
 fn wrapped_footer(props: FooterProps<'_>, width: u16) -> Vec<Line<'static>> {
@@ -304,6 +347,31 @@ fn render_footer_row(area: Rect, buf: &mut Buffer, left: Line<'static>, right: L
     let left_width = area.width.saturating_sub(right_width).saturating_sub(2);
     buf.set_line(area.x, area.y, &left, left_width);
     buf.set_line(area.right() - right_width, area.y, &right, right_width);
+}
+
+impl super::BottomPane {
+    /// The footer's sides beside the hints, and what it does when a row does
+    /// not fit beside them.
+    pub(crate) fn set_counts(&mut self, sides: FooterSides) {
+        self.composer.set_counts(sides);
+        self.request_redraw();
+    }
+
+    /// The footer count the pointer is on, when no view has the keys.
+    pub(crate) fn footer_side_at(
+        &self,
+        mouse: ratatui::crossterm::event::MouseEvent,
+    ) -> Option<SideItem> {
+        if self.view_stack.last().is_some() {
+            return None;
+        }
+        self.composer.footer_side_at(mouse)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_footer_hits_for_test(&mut self, hits: Vec<(Rect, SideItem)>) {
+        self.composer.set_footer_hits_for_test(hits);
+    }
 }
 
 /// Renders one line chosen by the composer (the history search's) in

@@ -15,14 +15,14 @@ impl App {
         event: TasksEvent,
     ) {
         match event {
-            TasksEvent::Open => {
+            TasksEvent::Open(section) => {
                 let Some(root) = self.main_session_id() else {
                     self.chat_widget
                         .add_error_message("Start a conversation before opening /tasks.".into());
                     return;
                 };
                 self.enter_alt_screen(tui, true);
-                self.workspace.tasks = Some(Tasks::new(root));
+                self.workspace.tasks = Some(Tasks::new(root, section));
                 self.refresh_tasks(root);
             }
             TasksEvent::Read { root, result } => {

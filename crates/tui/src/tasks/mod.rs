@@ -19,7 +19,9 @@ pub(crate) enum TaskAction {
 
 #[derive(Debug)]
 pub(crate) enum TasksEvent {
-    Open,
+    /// Opens the task manager at a section: the Agents' by default, the
+    /// Terminals' when the footer's count of them is clicked.
+    Open(Section),
     Read {
         root: AgentSessionId,
         result: Result<TaskView, String>,
@@ -43,8 +45,9 @@ pub(crate) struct AgentDetails {
     pub(crate) work: Option<hanafubuki_agent::AgentBackgroundWork>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Section {
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Section {
+    #[default]
     Agents,
     Terminals,
 }
@@ -77,12 +80,12 @@ pub(crate) struct Tasks {
 }
 
 impl Tasks {
-    pub(crate) fn new(root: AgentSessionId) -> Self {
+    pub(crate) fn new(root: AgentSessionId, section: Section) -> Self {
         Self {
             root,
             view: None,
             hits: Default::default(),
-            section: Section::Agents,
+            section,
             selected: 0,
             expanded: false,
             detail_scroll: 0,
