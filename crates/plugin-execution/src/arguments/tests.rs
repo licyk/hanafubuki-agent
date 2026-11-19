@@ -8,6 +8,32 @@ use crate::tool::ExecToolKind;
 /// The plugin's command timeout in these tests.
 const COMMAND_TIMEOUT_MS: u64 = 7 * 60_000;
 
+/// Every shell name the schema offers parses, and each keeps its own identity:
+/// `bash` is not `posix`, and `powershell` is not `power_shell`.
+#[test]
+fn every_named_shell_parses_as_itself() {
+    use hanafubuki_agent_execution::PlatformShell;
+
+    for (name, expected) in [
+        ("posix", PlatformShell::Posix),
+        ("bash", PlatformShell::Bash),
+        ("sh", PlatformShell::Sh),
+        ("power_shell", PlatformShell::PowerShell),
+        ("pwsh", PlatformShell::Pwsh),
+        ("powershell", PlatformShell::WindowsPowerShell),
+        ("cmd", PlatformShell::Cmd),
+    ] {
+        let (ExecCall::ExecCommand(request), _) = parse(
+            ExecToolKind::ExecCommand,
+            &json!({ "cmd": "echo hi", "shell": name }),
+        )
+        .unwrap() else {
+            panic!("exec_command parses to a command");
+        };
+        assert_eq!(request.shell, Some(expected), "{name}");
+    }
+}
+
 #[test]
 fn login_preserves_explicit_values_and_shell_defaults() {
     for (argument, expected) in [
@@ -318,5 +344,53 @@ fn on_windows_posix_is_an_msys_bash_and_the_default_stays_powershell() {
             assert!(!git.exists(), "{error}");
             assert!(error.to_string().contains("\"power_shell\""), "{error}");
         }
+    }
+}
+
+/// The named shells run exactly what they name: a `bash` request never lands
+/// on an `sh`, and a `powershell` request never lands on a `pwsh`.
+#[cfg(windows)]
+#[test]
+fn on_windows_a_named_shell_never_falls_back_to_the_other() {
+    use hanafubuki_agent_approval::PermissionActionDetails;
+    use hanafubuki_agent_execution::test_support::FakeAgentExecutionProcessPort;
+    use hanafubuki_agent_execution::AgentExecutionService;
+
+    let service = AgentExecutionService::with_process_port(FakeAgentExecutionProcessPort::shared());
+    service.set_workspace_roots(vec![std::env::current_dir().unwrap()]);
+    let program = |shell: &str| {
+        let (ExecCall::ExecCommand(request), _) = parse(
+            ExecToolKind::ExecCommand,
+            &json!({ "cmd": "echo hi", "shell": shell }),
+        )
+        .unwrap() else {
+            panic!("exec_command parses to a command");
+        };
+        service
+            .prepare_exec_command_action(&request)
+            .map(|action| match action.details() {
+                Some(PermissionActionDetails::Command { program, .. }) => {
+                    program.to_ascii_lowercase()
+                }
+                _ => panic!("a shell action names its program"),
+            })
+    };
+
+    for (shell, expected) in [("bash", r"\bash.exe"), ("sh", r"\sh.exe")] {
+        match program(shell) {
+            Ok(program) => assert!(program.ends_with(expected), "{shell} ran {program}"),
+            Err(error) => assert!(
+                error.to_string().contains(&format!("{shell}.exe")),
+                "{shell}: {error}"
+            ),
+        }
+    }
+    match program("pwsh") {
+        Ok(program) => assert!(program.ends_with(r"\pwsh.exe"), "{program}"),
+        Err(error) => assert!(error.to_string().contains("pwsh"), "{error}"),
+    }
+    match program("powershell") {
+        Ok(program) => assert!(program.ends_with(r"\powershell.exe"), "{program}"),
+        Err(error) => assert!(error.to_string().contains("powershell"), "{error}"),
     }
 }

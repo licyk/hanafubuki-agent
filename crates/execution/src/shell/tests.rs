@@ -46,3 +46,44 @@ fn posix_login_defaults_to_true_independently_of_the_profile_setting() {
         }
     }
 }
+
+/// The named shells take the argv of their family, so only the program that
+/// was resolved decides which shell runs.
+#[test]
+fn the_named_shells_keep_their_family_argv() {
+    for shell in [PlatformShell::Posix, PlatformShell::Bash, PlatformShell::Sh] {
+        let command =
+            exec_shell_command(shell, "sh".into(), "echo test", Some(false), false).unwrap();
+        assert_eq!(command[0], "sh");
+        assert_eq!(command[1], "-c", "{shell:?}");
+    }
+    for shell in [
+        PlatformShell::PowerShell,
+        PlatformShell::Pwsh,
+        PlatformShell::WindowsPowerShell,
+    ] {
+        let command =
+            exec_shell_command(shell, "pwsh".into(), "echo test", Some(false), false).unwrap();
+        assert_eq!(command[0], "pwsh");
+        assert!(command.contains(&"-NoProfile".into()), "{shell:?}");
+        assert!(command.contains(&"-NonInteractive".into()), "{shell:?}");
+    }
+}
+
+#[test]
+fn a_shell_belongs_to_one_family_only() {
+    for shell in [PlatformShell::Posix, PlatformShell::Bash, PlatformShell::Sh] {
+        assert!(shell.is_posix(), "{shell:?}");
+        assert!(!shell.is_powershell(), "{shell:?}");
+    }
+    for shell in [
+        PlatformShell::PowerShell,
+        PlatformShell::Pwsh,
+        PlatformShell::WindowsPowerShell,
+    ] {
+        assert!(shell.is_powershell(), "{shell:?}");
+        assert!(!shell.is_posix(), "{shell:?}");
+    }
+    assert!(!PlatformShell::Cmd.is_posix());
+    assert!(!PlatformShell::Cmd.is_powershell());
+}

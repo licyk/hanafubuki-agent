@@ -43,7 +43,19 @@ After finding a name, the model calls the ordinary `search_tools` function with 
 | Linux, macOS | `/bin/bash` (or `/bin/sh` without it), as a login shell (`-lc`) by default                                            |
 | Windows      | `pwsh` (or `powershell` without it), with UTF-8 output; on request `cmd.exe`, or the bash of Git for Windows or MSYS2 |
 
-- **A POSIX shell on Windows**: when the model asks for one (`shell: "posix"`), the command runs in the bash (or, without it, the `sh`) of Git for Windows or MSYS2, as a login shell (`-lc`) by default, like on Linux; the default stays PowerShell. The shell is looked for in this order, bash before `sh` at each step:
+`shell` takes seven values. `posix` and `power_shell` are the platform's own choice and each falls back; the four named ones run exactly the shell they name, never the other of the pair:
+
+| `shell`       | Runs                                                           |
+| ------------- | -------------------------------------------------------------- |
+| `posix`       | `bash`, or `sh` without it (on Linux and macOS, as on Windows) |
+| `bash`        | `bash` alone; a machine without it runs nothing and says so    |
+| `sh`          | `sh` alone                                                     |
+| `power_shell` | `pwsh`, or `powershell` without it                             |
+| `pwsh`        | `pwsh` alone, never `powershell`                               |
+| `powershell`  | Windows PowerShell alone, never `pwsh`                         |
+| `cmd`         | `cmd.exe`                                                      |
+
+- **A POSIX shell on Windows**: when the model asks for one (`shell: "posix"`, `"bash"` or `"sh"`), the command runs in the bash (or, without it, the `sh`) of Git for Windows or MSYS2, as a login shell (`-lc`) by default, like on Linux; the default stays PowerShell. `posix` looks for bash before `sh` at each step, and `bash` or `sh` looks for that one name only. The shell is looked for in this order:
   1. When the Agent itself runs in an MSYS2 or Git Bash shell (`MSYSTEM` is set), that environment's, through the Agent's `PATH`.
   2. On the command's `PATH`, leaving out the `bash.exe` in `System32` (and `SysWOW64`, `Sysnative`) and in a `WindowsApps` directory: those start WSL, not a shell of this machine.
   3. In `usr\bin` of `%ProgramFiles%\Git`, `%ProgramFiles(x86)%\Git`, `%LOCALAPPDATA%\Programs\Git` and `%SystemDrive%\msys64`.

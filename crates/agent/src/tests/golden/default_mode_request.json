@@ -389,7 +389,7 @@
       "type": "function"
     },
     {
-      "description": "Run a shell command after approval. If it completes before yield-time, return output and exit code; otherwise return a live session ID for write_stdin. tty=false uses non-interactive pipes; tty=true allocates a writable, resizable PTY. On Windows, shell \"posix\" runs the bash (or sh) of Git for Windows or MSYS2 when one is installed; the default there stays PowerShell. The command runs in the sandbox the `sandbox` world state describes. When a command important to the task needs to run outside it (to write outside the writable roots, or use the network when it is off), or failed because of it (a permission error, or a DNS, connection or download failure), run it again with sandbox_permissions \"require_escalated\" and a short justification question; it then needs its own approval, which the full-access permission mode never gives.",
+      "description": "Run a shell command after approval. If it completes before yield-time, return output and exit code; otherwise return a live session ID for write_stdin. tty=false uses non-interactive pipes; tty=true allocates a writable, resizable PTY. shell \"posix\" and \"power_shell\" are the platform's own choice and fall back (posix: bash then sh; power_shell: pwsh then powershell); \"bash\", \"sh\", \"pwsh\" and \"powershell\" run exactly the shell they name, never the other of the pair, and \"cmd\" runs cmd.exe. On Windows, the POSIX values run the bash or sh of Git for Windows or MSYS2 when one is installed; the default there stays power_shell. The command runs in the sandbox the `sandbox` world state describes. When a command important to the task needs to run outside it (to write outside the writable roots, or use the network when it is off), or failed because of it (a permission error, or a DNS, connection or download failure), run it again with sandbox_permissions \"require_escalated\" and a short justification question; it then needs its own approval, which the full-access permission mode never gives.",
       "name": "exec_command",
       "parameters": {
         "additionalProperties": false,
@@ -408,7 +408,7 @@
             ]
           },
           "login": {
-            "description": "Load shell startup files: POSIX login mode or PowerShell/pwsh profiles. true enables, false disables; null or omitted defaults to true for POSIX and the shellUseProfile setting for PowerShell. Ignored by cmd.",
+            "description": "Load shell startup files: POSIX login mode or PowerShell profiles. true enables, false disables; null or omitted defaults to true for posix, bash and sh, and the shellUseProfile setting for the three PowerShell values. Ignored by cmd.",
             "type": [
               "boolean",
               "null"
@@ -437,7 +437,11 @@
           "shell": {
             "enum": [
               "posix",
+              "bash",
+              "sh",
               "power_shell",
+              "pwsh",
+              "powershell",
               "cmd",
               null
             ],

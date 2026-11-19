@@ -10,8 +10,6 @@ use hanafubuki_agent_foundation::paths::PathKey;
 use crate::model::AgentExecutionError;
 use crate::resolver::{canonical_executable, environment_value};
 
-const SHELLS: [&str; 2] = ["bash.exe", "sh.exe"];
-
 /// Where a POSIX shell is looked for, in order: bash before sh at each step.
 pub(crate) struct PosixShellSearch {
     /// The Agent's own `PATH` when it runs inside an MSYS2 or Git Bash shell
@@ -49,7 +47,10 @@ impl PosixShellSearch {
         }
     }
 
-    pub(crate) fn find(&self) -> Result<PathBuf, AgentExecutionError> {
+    /// The shell called `name` (`bash.exe` or `sh.exe`), found through the
+    /// steps in order. Only that name is looked for: a caller that asked for
+    /// one shell is never given the other.
+    pub(crate) fn find(&self, name: &str) -> Result<PathBuf, AgentExecutionError> {
         let steps = [
             self.msys_path
                 .iter()
@@ -62,16 +63,14 @@ impl PosixShellSearch {
                 .collect(),
         ];
         for directories in steps {
-            for name in SHELLS {
-                if let Some(shell) = directories
-                    .iter()
-                    .find_map(|directory| self.shell_in(directory, name))
-                {
-                    return Ok(shell);
-                }
+            if let Some(shell) = directories
+                .iter()
+                .find_map(|directory| self.shell_in(directory, name))
+            {
+                return Ok(shell);
             }
         }
-        Err(self.not_found())
+        Err(self.not_found(name))
     }
 
     fn shell_in(&self, directory: &Path, name: &str) -> Option<PathBuf> {
@@ -93,7 +92,7 @@ impl PosixShellSearch {
                 .any(|component| PathKey::of(Path::new(component.as_os_str())) == windows_apps)
     }
 
-    fn not_found(&self) -> AgentExecutionError {
+    fn not_found(&self, name: &str) -> AgentExecutionError {
         let roots = self
             .roots
             .iter()
@@ -101,9 +100,9 @@ impl PosixShellSearch {
             .collect::<Vec<_>>()
             .join(", ");
         AgentExecutionError::Resolution(format!(
-            "no POSIX shell was found: looked for bash.exe, then sh.exe, of Git for Windows or \
-             MSYS2 {}in the command's PATH (leaving out WSL's launchers in System32 and \
-             WindowsApps) and in {roots}; shell \"power_shell\" is available",
+            "no POSIX shell was found: looked for {name} of Git for Windows or MSYS2 {}in the \
+             command's PATH (leaving out WSL's launchers in System32 and WindowsApps) and in \
+             {roots}; shell \"power_shell\" is available",
             if self.msys_path.is_some() {
                 "in the PATH of the MSYS2 or Git Bash shell the Agent runs in, "
             } else {

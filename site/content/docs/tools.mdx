@@ -43,7 +43,19 @@ icon: Wrench
 | Linux、macOS | `/bin/bash`（没有时用 `/bin/sh`），默认以登录 Shell 运行（`-lc`）                                      |
 | Windows      | `pwsh`（没有时用 `powershell`），输出为 UTF-8；也可以选择 `cmd.exe`，或 Git for Windows、MSYS2 的 bash |
 
-- **Windows 上的 POSIX Shell**：模型要求时（`shell: "posix"`），命令在 Git for Windows 或 MSYS2 的 bash（没有时用 `sh`）中运行，默认以登录 Shell 运行（`-lc`），与 Linux 上相同；默认的 Shell 仍是 PowerShell。按以下顺序查找，每一步都先找 bash 再找 `sh`：
+`shell` 有七个取值。`posix` 和 `power_shell` 是平台的自动选择，各自带有回退；四个具体名字只运行它自己，不会换成同类的另一个：
+
+| `shell`       | 运行                                                  |
+| ------------- | ----------------------------------------------------- |
+| `posix`       | `bash`，没有时用 `sh`（Linux、macOS 与 Windows 相同） |
+| `bash`        | 只用 `bash`；没有它时不运行任何东西，并说明原因       |
+| `sh`          | 只用 `sh`                                             |
+| `power_shell` | `pwsh`，没有时用 `powershell`                         |
+| `pwsh`        | 只用 `pwsh`，不会换成 `powershell`                    |
+| `powershell`  | 只用 Windows PowerShell，不会换成 `pwsh`              |
+| `cmd`         | `cmd.exe`                                             |
+
+- **Windows 上的 POSIX Shell**：模型要求时（`shell: "posix"`、`"bash"` 或 `"sh"`），命令在 Git for Windows 或 MSYS2 的 bash（没有时用 `sh`）中运行，默认以登录 Shell 运行（`-lc`），与 Linux 上相同；默认的 Shell 仍是 PowerShell。`posix` 每一步都先找 bash 再找 `sh`，而 `bash` 或 `sh` 只找它自己那一个名字。按以下顺序查找：
   1. Agent 本身运行在 MSYS2 或 Git Bash 的 Shell 中（设置了 `MSYSTEM`）时，通过 Agent 的 `PATH` 找那个环境的 Shell。
   2. 命令的 `PATH` 中，跳过 `System32`（以及 `SysWOW64`、`Sysnative`）和 `WindowsApps` 目录中的 `bash.exe`：它们启动的是 WSL，而不是本机的 Shell。
   3. `%ProgramFiles%\Git`、`%ProgramFiles(x86)%\Git`、`%LOCALAPPDATA%\Programs\Git` 和 `%SystemDrive%\msys64` 下的 `usr\bin`。

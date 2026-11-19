@@ -56,7 +56,11 @@ pub(crate) fn parse(
             let shell = nullable_bounded_string(arguments, "shell", 32)?
                 .map(|shell| match shell.as_str() {
                     "posix" => Ok(PlatformShell::Posix),
+                    "bash" => Ok(PlatformShell::Bash),
+                    "sh" => Ok(PlatformShell::Sh),
                     "power_shell" => Ok(PlatformShell::PowerShell),
+                    "pwsh" => Ok(PlatformShell::Pwsh),
+                    "powershell" => Ok(PlatformShell::WindowsPowerShell),
                     "cmd" => Ok(PlatformShell::Cmd),
                     _ => Err(ToolCallValidationError::InvalidArgument("shell")),
                 })

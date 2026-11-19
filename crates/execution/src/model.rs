@@ -96,12 +96,40 @@ pub struct StartCommandRequest {
     pub origin: ApprovalOrigin,
 }
 
+/// The shell a command runs in, as the model names it.
+///
+/// `Posix` and `PowerShell` are the platform's own choice, each with a
+/// fallback (`bash` then `sh`; `pwsh` then `powershell`); the four named
+/// variants run exactly the shell they name, so a caller that needs one of
+/// them does not silently get the other. `WindowsPowerShell` is Windows
+/// PowerShell (the `powershell` program), not "a PowerShell on Windows".
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PlatformShell {
     Posix,
+    Bash,
+    Sh,
     PowerShell,
+    Pwsh,
+    WindowsPowerShell,
     Cmd,
+}
+
+impl PlatformShell {
+    /// A shell of the MSYS/POSIX family, which takes `-c`/`-lc` and a script
+    /// the MSYS runtime spells itself.
+    pub const fn is_posix(self) -> bool {
+        matches!(self, Self::Posix | Self::Bash | Self::Sh)
+    }
+
+    /// A PowerShell, whichever of the three it is: they take the same argv
+    /// and none of them loads a POSIX startup file.
+    pub const fn is_powershell(self) -> bool {
+        matches!(
+            self,
+            Self::PowerShell | Self::Pwsh | Self::WindowsPowerShell
+        )
+    }
 }
 
 /// Codex-compatible command request after model arguments have crossed the

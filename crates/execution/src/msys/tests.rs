@@ -48,36 +48,47 @@ fn wsl_launchers_on_the_path_are_skipped() {
     let tools = root.path().join("tools");
     let shell = fake(&tools, "bash.exe");
     let found = search(root.path(), &[&system32, &apps, &tools])
-        .find()
+        .find("bash.exe")
         .unwrap();
     assert_eq!(found, shell);
 }
 
 #[test]
-fn bash_comes_before_sh_at_each_step_and_the_steps_go_in_order() {
+fn the_steps_go_in_order_and_only_the_name_asked_for_is_looked_up() {
     let root = tempfile::tempdir().unwrap();
     let first = root.path().join("first");
     let second = root.path().join("second");
-    fake(&first, "sh.exe");
+    let first_sh = fake(&first, "sh.exe");
     let bash = fake(&second, "bash.exe");
     let mut lookup = search(root.path(), &[&first, &second]);
-    assert_eq!(lookup.find().unwrap(), bash);
+    // Each name is found where it is, never as the other one.
+    assert_eq!(lookup.find("bash.exe").unwrap(), bash);
+    assert_eq!(lookup.find("sh.exe").unwrap(), first_sh);
 
     let msys = root.path().join("msys");
     let msys_sh = fake(&msys, "sh.exe");
     lookup.msys_path = Some(path_of(&[&msys]));
-    assert_eq!(lookup.find().unwrap(), msys_sh);
+    assert_eq!(lookup.find("sh.exe").unwrap(), msys_sh);
+    assert_eq!(
+        lookup.find("bash.exe").unwrap(),
+        bash,
+        "a later step still answers for a name the earlier ones lack"
+    );
 
     let installed = fake(
         &root.path().join("msys64").join("usr").join("bin"),
         "bash.exe",
     );
     let lookup = search(root.path(), &[&root.path().join("empty")]);
-    assert_eq!(lookup.find().unwrap(), installed);
+    assert_eq!(lookup.find("bash.exe").unwrap(), installed);
     let git = fake(&root.path().join("Git").join("usr").join("bin"), "sh.exe");
-    assert_eq!(lookup.find().unwrap(), installed, "bash before sh");
+    // An installed bash does not stand in for a missing sh.
+    assert_eq!(lookup.find("sh.exe").unwrap(), git);
     std::fs::remove_file(&installed).unwrap();
-    assert_eq!(lookup.find().unwrap(), git);
+    assert!(
+        lookup.find("bash.exe").is_err(),
+        "a missing bash is not answered with the sh that is there"
+    );
 }
 
 #[test]
@@ -87,20 +98,23 @@ fn git_for_windows_launcher_is_replaced_by_its_shell() {
     let launcher = fake(&bin, "bash.exe");
     let shell = fake(&root.path().join("Git").join("usr").join("bin"), "bash.exe");
     let lookup = search(root.path(), &[&bin]);
-    assert_eq!(lookup.find().unwrap(), shell);
+    assert_eq!(lookup.find("bash.exe").unwrap(), shell);
 
     std::fs::remove_file(&shell).unwrap();
-    assert_eq!(lookup.find().unwrap(), launcher, "a bin without usr\\bin");
+    assert_eq!(
+        lookup.find("bash.exe").unwrap(),
+        launcher,
+        "a bin without usr\\bin"
+    );
 }
 
 #[test]
 fn a_missing_shell_says_what_was_searched_and_what_to_use_instead() {
     let root = tempfile::tempdir().unwrap();
     let mut lookup = search(root.path(), &[]);
-    let message = lookup.find().unwrap_err().to_string();
+    let message = lookup.find("bash.exe").unwrap_err().to_string();
     for expected in [
         "bash.exe",
-        "sh.exe",
         "PATH",
         "System32",
         "WindowsApps",
@@ -124,11 +138,25 @@ fn a_missing_shell_says_what_was_searched_and_what_to_use_instead() {
     }
     assert!(!message.contains("Git Bash shell"), "{message}");
     lookup.msys_path = Some(OsString::new());
-    let message = lookup.find().unwrap_err().to_string();
+    let message = lookup.find("bash.exe").unwrap_err().to_string();
     assert!(
         message.contains("Git Bash shell the Agent runs in"),
         "{message}"
     );
+    // Only the name that was asked for is named. `bash.exe` ends in `sh.exe`
+    // and `power_shell` starts with "sh", so the sentence that names the
+    // search is checked whole rather than by substring.
+    assert!(
+        message.contains("looked for bash.exe of Git for Windows"),
+        "{message}"
+    );
+    assert!(!message.contains("then"), "no second name: {message}");
+    let message = lookup.find("sh.exe").unwrap_err().to_string();
+    assert!(
+        message.contains("looked for sh.exe of Git for Windows"),
+        "{message}"
+    );
+    assert!(!message.contains("bash.exe"), "{message}");
 }
 
 #[test]

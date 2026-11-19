@@ -105,7 +105,7 @@ pub(crate) fn prepare_exec_command(
     );
     let program = resolve_shell(shell, &cwd, &environment)?;
     #[cfg(windows)]
-    if shell == PlatformShell::Posix {
+    if shell.is_posix() {
         crate::msys::add_posix_shell_environment(
             &mut environment,
             &program,
@@ -196,46 +196,14 @@ fn resolve_shell(
     environment: &std::collections::BTreeMap<String, String>,
 ) -> Result<PathBuf, AgentExecutionError> {
     match shell {
-        PlatformShell::Posix => {
-            #[cfg(unix)]
-            {
-                let preferred = std::env::var("SHELL")
-                    .ok()
-                    .filter(|program| crate::snapshot::kind(program).is_some());
-                for candidate in preferred
-                    .as_deref()
-                    .into_iter()
-                    .chain(["/bin/bash", "/bin/sh"])
-                {
-                    if let Ok(program) = resolve_executable(candidate, cwd, environment) {
-                        return Ok(program);
-                    }
-                }
-                Err(AgentExecutionError::Resolution(
-                    "no supported POSIX shell was found".to_string(),
-                ))
-            }
-            #[cfg(windows)]
-            {
-                crate::msys::PosixShellSearch::of(environment).find()
-            }
-            #[cfg(not(any(unix, windows)))]
-            {
-                Err(AgentExecutionError::Resolution(
-                    "POSIX shell is unavailable on this platform".to_string(),
-                ))
-            }
-        }
-        PlatformShell::PowerShell => {
-            for candidate in ["pwsh", "powershell"] {
-                if let Ok(program) = resolve_executable(candidate, cwd, environment) {
-                    return Ok(program);
-                }
-            }
-            Err(AgentExecutionError::Resolution(
-                "PowerShell was not found in PATH".to_string(),
-            ))
-        }
+        // The platform's own choice, with its fallback.
+        PlatformShell::Posix => posix_shell(&["bash", "sh"], cwd, environment),
+        PlatformShell::PowerShell => powershell(&["pwsh", "powershell"], cwd, environment),
+        // The named shell alone: asking for one must not run the other.
+        PlatformShell::Bash => posix_shell(&["bash"], cwd, environment),
+        PlatformShell::Sh => posix_shell(&["sh"], cwd, environment),
+        PlatformShell::Pwsh => powershell(&["pwsh"], cwd, environment),
+        PlatformShell::WindowsPowerShell => powershell(&["powershell"], cwd, environment),
         PlatformShell::Cmd => {
             #[cfg(windows)]
             {
@@ -251,6 +219,66 @@ fn resolve_shell(
     }
 }
 
+/// The first of `candidates` that resolves, and on Windows the MSYS one it
+/// names. `SHELL` is not consulted: a caller that named a shell gets that one.
+fn posix_shell(
+    candidates: &[&str],
+    cwd: &Path,
+    environment: &std::collections::BTreeMap<String, String>,
+) -> Result<PathBuf, AgentExecutionError> {
+    #[cfg(unix)]
+    {
+        let _ = cwd;
+        for candidate in candidates {
+            if let Ok(program) = resolve_executable(candidate, Path::new("/"), environment) {
+                return Ok(program);
+            }
+        }
+        Err(AgentExecutionError::Resolution(format!(
+            "no supported POSIX shell was found: looked for {}",
+            candidates.join(", then ")
+        )))
+    }
+    #[cfg(windows)]
+    {
+        let _ = cwd;
+        let search = crate::msys::PosixShellSearch::of(environment);
+        let mut failure = None;
+        for candidate in candidates {
+            match search.find(&format!("{candidate}.exe")) {
+                Ok(program) => return Ok(program),
+                Err(error) => failure = Some(error),
+            }
+        }
+        Err(failure.unwrap_or_else(|| {
+            AgentExecutionError::Resolution("no POSIX shell was found".to_string())
+        }))
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = (candidates, cwd, environment);
+        Err(AgentExecutionError::Resolution(
+            "POSIX shell is unavailable on this platform".to_string(),
+        ))
+    }
+}
+
+fn powershell(
+    candidates: &[&str],
+    cwd: &Path,
+    environment: &std::collections::BTreeMap<String, String>,
+) -> Result<PathBuf, AgentExecutionError> {
+    for candidate in candidates {
+        if let Ok(program) = resolve_executable(candidate, cwd, environment) {
+            return Ok(program);
+        }
+    }
+    Err(AgentExecutionError::Resolution(format!(
+        "{} was not found in PATH",
+        candidates.join(" and ")
+    )))
+}
+
 fn exec_shell_command(
     shell: PlatformShell,
     program: PathBuf,
@@ -259,31 +287,31 @@ fn exec_shell_command(
     use_profile: bool,
 ) -> Result<Vec<String>, AgentExecutionError> {
     let mut command = vec![program.to_string_lossy().into_owned()];
-    match shell {
-        PlatformShell::Posix => {
+    if shell.is_posix() {
+        {
             command.push(if login.unwrap_or(true) { "-lc" } else { "-c" }.to_string());
             #[cfg(windows)]
             command.push(crate::msys::command_line_script(command_text)?);
             #[cfg(not(windows))]
             command.push(command_text.to_string());
         }
-        PlatformShell::PowerShell => {
-            command.push("-NoLogo".into());
-            if !login.unwrap_or(use_profile) {
-                command.push("-NoProfile".into());
-            }
-            command.extend([
-                "-NonInteractive".to_string(),
-                "-Command".to_string(),
-                format!("{POWERSHELL_UTF8_OUTPUT_PREFIX}{command_text}"),
-            ]);
+    } else if shell.is_powershell() {
+        command.push("-NoLogo".into());
+        if !login.unwrap_or(use_profile) {
+            command.push("-NoProfile".into());
         }
-        PlatformShell::Cmd => command.extend([
+        command.extend([
+            "-NonInteractive".to_string(),
+            "-Command".to_string(),
+            format!("{POWERSHELL_UTF8_OUTPUT_PREFIX}{command_text}"),
+        ]);
+    } else {
+        command.extend([
             "/D".to_string(),
             "/S".to_string(),
             "/C".to_string(),
             format!("{CMD_UTF8_PREFIX}{command_text}"),
-        ]),
+        ]);
     }
     Ok(command)
 }
