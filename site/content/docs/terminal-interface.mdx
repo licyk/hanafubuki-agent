@@ -215,7 +215,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 - 列表下方显示选中模型的各项信息及其来源：`claude-sonnet-4-5 · Anthropic: context 200K (reported) · max output 64K (reported) · thinking low, medium, high (reported) · vision yes (reported)`；或者 `context not known (compacts on the Provider's error)`、`thinking yes, levels not known (models.dev)`、`thinking no (learned: the Provider refused it)`、`vision not known`。
 - 再下面的按键说明以 `? not known` 结尾；[models.dev](/docs/providers-models#models-dev) 关闭（默认）且某一行有 `?` 时，还会加上 `models.dev can fill these: /config modelMetadata`。
 
-输入的文字会搜索模型 ID、列表给出的模型名称以及 Provider 的名字（`openrouter`、`Sonnet`）。Up 和 Down 会跳过仍在列出的 Provider。在模型上按 Enter 会把它设为本会话的模型并关闭列表，即使其他 Provider 仍在列出。在列出失败的 Provider 上（`not listed: …`，完整的错误显示在列表下方，按键说明为 `enter lists again`）按 Enter 会重新列出它。Esc 随时关闭列表：仍在进行的列出会完成，它们报告的模型信息会像 Agent 自己列出时一样保存，但回答找不到列表，会被丢弃；再次执行 `/model` 会开始一个新的列表。每个列表都实时读取：不显示之前列表的内容。
+输入的文字会搜索模型 ID、列表给出的模型名称以及 Provider 的名字（`openrouter`、`Sonnet`）。Up 和 Down 会跳过仍在列出的 Provider；Page Up 和 Page Down 按一屏的行数移动选中项，到列表两端就停住而不绕回。在模型上按 Enter 会把它设为本会话的模型并关闭列表，即使其他 Provider 仍在列出。在列出失败的 Provider 上（`not listed: …`，完整的错误显示在列表下方，按键说明为 `enter lists again`）按 Enter 会重新列出它。Esc 随时关闭列表：仍在进行的列出会完成，它们报告的模型信息会像 Agent 自己列出时一样保存，但回答找不到列表，会被丢弃；再次执行 `/model` 会开始一个新的列表。每个列表都实时读取：不显示之前列表的内容。
 
 ## 会话命令 [#session-commands]
 

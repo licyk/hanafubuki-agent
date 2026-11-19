@@ -500,6 +500,99 @@ fn replaced_items_keep_the_search_the_selected_row_and_its_line() {
     assert_eq!(view.visible_len(), 11, "model-1x and model-10 to model-19");
 }
 
+/// A searchable model list of `count` rows, as `/model` shows one.
+fn long_list(count: usize) -> ListSelectionView {
+    let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+    let tx = AppEventSender::new(tx_raw);
+    let items = (0..count)
+        .map(|n| {
+            let name = format!("model-{n:02}");
+            SelectionItem {
+                search_value: Some(name.clone()),
+                name,
+                ..Default::default()
+            }
+        })
+        .collect();
+    ListSelectionView::new(
+        SelectionViewParams {
+            items,
+            is_searchable: true,
+            ..Default::default()
+        },
+        tx,
+    )
+}
+
+#[test]
+fn page_keys_move_by_the_rows_one_screen_shows() {
+    // 20 rows: one screen is MAX_POPUP_ROWS of them.
+    let mut view = long_list(20);
+    let page = MAX_POPUP_ROWS as isize;
+    assert_eq!(view.selected_index(), Some(0));
+
+    view.handle_key_event(KeyEvent::from(KeyCode::PageDown));
+    assert_eq!(view.selected_index(), Some(page as usize));
+    assert_eq!(view.state.scroll_top, 1, "the window follows the selection");
+
+    view.handle_key_event(KeyEvent::from(KeyCode::PageUp));
+    assert_eq!(view.selected_index(), Some(0));
+    assert_eq!(view.state.scroll_top, 0);
+
+    // The ends stop the page rather than wrapping around it.
+    view.handle_key_event(KeyEvent::from(KeyCode::PageUp));
+    assert_eq!(view.selected_index(), Some(0));
+    for _ in 0..4 {
+        view.handle_key_event(KeyEvent::from(KeyCode::PageDown));
+    }
+    assert_eq!(view.selected_index(), Some(19));
+}
+
+#[test]
+fn a_page_steps_over_the_rows_a_search_left() {
+    let mut view = long_list(20);
+    for c in "model-1".chars() {
+        view.handle_key_event(KeyEvent::from(KeyCode::Char(c)));
+    }
+    assert_eq!(view.visible_len(), 10, "model-10 to model-19");
+    assert_eq!(view.selected_index(), Some(10));
+
+    // The key types no text into the search, and steps over the rows left.
+    view.handle_key_event(KeyEvent::from(KeyCode::PageDown));
+    assert_eq!(view.search_query, "model-1");
+    assert_eq!(view.selected_index(), Some(18));
+    view.handle_key_event(KeyEvent::from(KeyCode::PageDown));
+    assert_eq!(view.selected_index(), Some(19), "the list's last row");
+    view.handle_key_event(KeyEvent::from(KeyCode::PageUp));
+    assert_eq!(view.selected_index(), Some(11), "up a page, not around");
+}
+
+#[test]
+fn a_page_steps_over_the_rows_that_cannot_be_selected() {
+    let (tx_raw, _rx) = unbounded_channel::<AppEvent>();
+    let tx = AppEventSender::new(tx_raw);
+    let items = (0..20)
+        .map(|n| SelectionItem {
+            name: format!("row-{n:02}"),
+            is_disabled: (7..10).contains(&n),
+            ..Default::default()
+        })
+        .collect();
+    let mut view = ListSelectionView::new(
+        SelectionViewParams {
+            items,
+            ..Default::default()
+        },
+        tx,
+    );
+
+    // The first page ends on a disabled row, so it steps to the next one.
+    view.handle_key_event(KeyEvent::from(KeyCode::PageDown));
+    assert_eq!(view.selected_index(), Some(10));
+    view.handle_key_event(KeyEvent::from(KeyCode::PageUp));
+    assert_eq!(view.selected_index(), Some(2));
+}
+
 /// Codex's standard popup hint, which the tests' views carry.
 fn standard_popup_hint_line() -> Line<'static> {
     Line::from(vec![

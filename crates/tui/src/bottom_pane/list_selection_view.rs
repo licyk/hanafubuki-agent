@@ -248,7 +248,7 @@ impl ListSelectionView {
         self.state.move_up_wrap(len);
         let visible = Self::max_visible_rows(len);
         self.state.ensure_visible(len, visible);
-        self.skip_disabled_up();
+        self.skip_disabled(len, true);
     }
 
     fn move_down(&mut self) {
@@ -256,7 +256,18 @@ impl ListSelectionView {
         self.state.move_down_wrap(len);
         let visible = Self::max_visible_rows(len);
         self.state.ensure_visible(len, visible);
-        self.skip_disabled_down();
+        self.skip_disabled(len, false);
+    }
+
+    /// Page Up and Page Down: by the rows one screen shows, stopping at the
+    /// list's ends rather than wrapping around.
+    fn page(&mut self, up: bool) {
+        let len = self.visible_len();
+        let step = Self::max_visible_rows(len) as isize;
+        self.state.move_by(len, if up { -step } else { step });
+        let visible = Self::max_visible_rows(len);
+        self.state.ensure_visible(len, visible);
+        self.skip_disabled(len, up);
     }
 
     fn accept(&mut self) {
@@ -335,8 +346,9 @@ impl ListSelectionView {
         total_width.saturating_sub(2)
     }
 
-    fn skip_disabled_down(&mut self) {
-        let len = self.visible_len();
+    /// Steps past the rows that cannot be selected, `up` or down: a moved
+    /// selection lands on the next row that can be.
+    fn skip_disabled(&mut self, len: usize, up: bool) {
         for _ in 0..len {
             let disabled = self
                 .state
@@ -344,27 +356,13 @@ impl ListSelectionView {
                 .and_then(|idx| self.filtered_indices.get(idx))
                 .and_then(|actual_idx| self.items.get(*actual_idx))
                 .is_some_and(|item| item.disabled_reason.is_some() || item.is_disabled);
-            if disabled {
-                self.state.move_down_wrap(len);
-            } else {
-                break;
+            if !disabled {
+                return;
             }
-        }
-    }
-
-    fn skip_disabled_up(&mut self) {
-        let len = self.visible_len();
-        for _ in 0..len {
-            let disabled = self
-                .state
-                .selected_idx
-                .and_then(|idx| self.filtered_indices.get(idx))
-                .and_then(|actual_idx| self.items.get(*actual_idx))
-                .is_some_and(|item| item.disabled_reason.is_some() || item.is_disabled);
-            if disabled {
+            if up {
                 self.state.move_up_wrap(len);
             } else {
-                break;
+                self.state.move_down_wrap(len);
             }
         }
     }
@@ -420,6 +418,14 @@ impl BottomPaneView for ListSelectionView {
                 modifiers: KeyModifiers::NONE,
                 ..
             } if !self.is_searchable => self.move_down(),
+            KeyEvent {
+                code: KeyCode::PageUp,
+                ..
+            } => self.page(true),
+            KeyEvent {
+                code: KeyCode::PageDown,
+                ..
+            } => self.page(false),
             KeyEvent {
                 code: KeyCode::Backspace,
                 ..

@@ -86,6 +86,18 @@ impl ScrollState {
         });
     }
 
+    /// Move selection by `by` rows, stopping at the first or the last one
+    /// rather than wrapping around.
+    pub fn move_by(&mut self, len: usize, by: isize) {
+        if len == 0 {
+            self.selected_idx = None;
+            self.scroll_top = 0;
+            return;
+        }
+        let current = self.selected_idx.unwrap_or(0).min(len - 1);
+        self.selected_idx = Some(current.saturating_add_signed(by).min(len - 1));
+    }
+
     /// Adjust `scroll_top` so that the current `selected_idx` is visible within
     /// the window of `visible_rows`.
     pub fn ensure_visible(&mut self, len: usize, visible_rows: usize) {
