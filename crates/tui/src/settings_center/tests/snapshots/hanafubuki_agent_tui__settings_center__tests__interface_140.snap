@@ -18,12 +18,12 @@ expression: "screen(&mut center, 140, 25)"
     Welcome mascot           [x] On                        Show Hana in empty new conversations
     Welcome mascot theme     Random ›                      Choose a fixed pose or a random pose for each new conversation
     Status line              model-with-reasoning, bac...  The status line's items, in order
+    Status line overflow     Wrap both sides ›             What the footer does when a row does not fit beside the counts
     Status line colors       [x] On                        Whether the status line's items take the theme's colors
     Terminal title           activity, session-title, ...  The terminal title's items, in order; none leaves the title alone
     Tables                   [x] On                        Pipe tables laid out in columns; off, shown as written
     List markers             [x] On                        • bullets and ☐/☑ task boxes; off, - and [ ]/[x] as written
     Math                     [x] On                        TeX formulas in Unicode notation; off, shown as written
     Mermaid diagrams         [x] On                        ```mermaid fences drawn as text diagrams; off, shown as code
-    Check for updates        [x] On                        At launch, asks GitHub at most once a day whether a newer release exists
 
-  1/18 · ←/→ tab · / search · enter toggle · esc close
+  1/19 · ←/→ tab · / search · enter toggle · esc close

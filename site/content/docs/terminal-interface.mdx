@@ -116,6 +116,8 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 
 ## 输入框 [#composer]
 
+在草稿里点击会把光标放到点击处，落在该行显示的列上，所以长消息是在你看到的地方修改，而不是用方向键移过去。在草稿上滚动滚轮会按行移动光标，文本随之滚动。
+
 - **粘贴**：超过 1000 个字符的粘贴内容在输入框中显示为 `[Pasted Content 1234 chars]` 占位符，发送时展开；删除占位符就删除了这段粘贴。
 - **图片**（与 Codex 相同）：按 Ctrl-V 把剪贴板中的图片附加到消息中光标所在处，显示为 `[Image #1]`，之后依次是 `[Image #2]` 等；WSL 下改用 Ctrl-Alt-V，因为那里 Ctrl-V 是终端的粘贴。在文件管理器中复制的图片文件按原位置附加；图片本身（截图、在浏览器中复制的图片）保存为 PNG，即 `clipboard-1.png` 等，放在界面在系统临时目录中创建的一个目录里。WSL 下 Linux 看到的剪贴板不是 Windows 的，因此会通过 PowerShell（先 `powershell.exe`，再 `pwsh`）取得 Windows 剪贴板中的图片。粘贴的内容如果正好是一个图片文件的路径（带引号、空格转义、`file://` URL，或者 Windows 路径，WSL 下读作对应的 `/mnt/c/…` 路径），同样附加该文件，后面跟一个空格；指向其他内容的路径保持为文本。消息可以只有图片。占位符是一个整体：Backspace 会整个删除它，同时去掉它的图片（并删除它的 PNG），后面的图片重新编号。模型读到的消息在你放置的位置保留这些标签，图片按顺序跟在消息之后，所以 `compare [Image #1] with [Image #2]` 能指明它们；对话中显示这条消息，并为每张图片显示一行 `[Image #1: clipboard-1.png]`。Agent 在消息发送时读取每张图片并保存自己的副本：回合开始后，或者对补充消息而言，模型读到它之后，PNG 就被删除；界面退出时，目录连同其中剩下的文件一起删除。只能附加 PNG、JPEG、GIF 和 WebP 图片，每张不超过 20 MiB 和 4000 万像素，每条消息最多 8 张；超出的会立即被拒绝并说明原因（`photo.bmp is not a PNG, JPEG, GIF or WebP image, the formats a model is sent.`、`… is too large to attach: …`、`A message carries at most 8 images; remove one first.`），路径则保留为文本。剪贴板中只有文本、没有图片时，像终端的粘贴一样粘贴文本；两者都没有时，Ctrl-V 提示 `There is no image on the clipboard.`；没有可读的剪贴板时（没有显示服务，或者通过 SSH 使用的终端，其剪贴板属于另一台机器），提示 `The clipboard cannot be read (…); save the image to a file and paste its path instead.`。有些终端在剪贴板中是图片时发送一次空的粘贴，这同样会附加剪贴板中的图片，没有图片时什么也不提示。弹出列表或历史搜索打开时，Ctrl-V 不起作用；`!` 命令不带图片（``A `!` command takes no images.``）。已知会话的模型不读图时，带图片的消息留在输入框中（`This model does not read images (reported); remove the image or switch with /model.`，见[图片](/docs/providers-models#images)）；没有任何来源说明时照常发送。Up、Down 和 Ctrl-R 取回本次运行的消息时连同其图片一起取回，PNG 已被删除的图片连同标签一起略去；更早会话中的消息取回时不带标签，因为它的图片不会被读回。放回输入框的消息，或者合并为一条发送的消息，都保留各自的图片，并按顺序重新编号。Ctrl-G 把标签原样交给编辑器：标签留在原处或被移动，都保留其图片；标签被删除则去掉其图片，其余的重新编号。[按键映射](#keymap)中的 `composer.paste_image` 可以改绑 Ctrl-V 和 Ctrl-Alt-V；在 Windows 上 Ctrl-Alt-V 是 AltGr，不会粘贴图片。
 - **历史**（与 Codex 相同）：输入框为空时，Up 调出最新输入，再按则调出更早的输入；Down 向更新的输入移动，越过最新一条后清空输入框。Ctrl-P 和 Ctrl-N 的作用相同。先翻看本次运行的消息和已执行的 `/` 命令（保留参数，也包括被 Ctrl-C 清空的草稿），再翻看之前会话中的最近输入，包括恢复的会话，范围与下文 Ctrl-R 使用的有界历史相同。已出现在本次运行中的文字不会在持久化历史中重复显示。调出的文字未修改时，光标在开头或末尾都可以继续翻看；光标在文字内部或内容已修改时，上下键正常移动光标。调出 `/` 命令时不会打开补全列表，因此可以继续用这些按键翻看历史；编辑命令后恢复补全。有弹出列表时，这些按键优先操作列表。`/` 命令只保留在本次运行中；从补全列表执行时记录完整命令名称，单纯按 Tab 补全不会记录。第一次按 Up 或 Ctrl-R 会在后台读取一次持久化历史；等待时开始编辑、粘贴或恢复的草稿，不会被稍后读到的历史覆盖。
@@ -823,11 +825,15 @@ flowchart TD
 
 输入框下方的底栏显示状态栏：关于会话的若干项目，以 `·` 分隔。还没有值的项目不显示：不在 Git 仓库中时没有分支，会话有标题之前没有标题。`tui.statusLineColors` 为真时，每个项目取主题中的颜色；否则整行变暗。
 
+项目可以指定自己的位置，在 `tui.statusLine` 里写作 `model:right-2`，或在 `/statusline` 的设置页里按 `p`：底栏的第一行或第二行，左端或右端。只写 ID 时在第一行左侧。一行放不下同一个位置上的内容时，由 `tui.statusLineOverflow` 决定：`wrap-all`（默认）两侧都换行，`wrap-left` 保留右侧的行并把左侧换到它下面，`truncate` 在右侧开始处截断左侧。
+
+第二行右侧是各项计数，形如 `2 terminals · 1 agent · 3 warnings`，按此顺序，为零的项不显示，全为零时整块为空。点击其中一项会打开它对应的地方：终端和 Agent 打开 `/tasks` 的相应页签，警告打开 `/warnings`。警告就是 `/warnings` 会列出的那些，忽略一条后计数随之减少。
+
 | 项目                                        | 显示                                                                                                     |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `model`                                     | 模型                                                                                                     |
 | `model-with-reasoning`                      | 模型及其推理强度（默认显示）                                                                             |
-| `background-tasks`                          | 运行中的 Agent 和终端，例如 `2 agents · 1 terminal`；唤醒暂停时带 `paused ·`。无后台工作时省略；默认显示 |
+| `background-tasks`                          | 保留为设置项，但状态行不再显示它：运行中的终端、Agent 和警告计数是底栏的第二行，各自可点击，都没有时该项为空 |
 | `reasoning`                                 | 推理强度                                                                                                 |
 | `current-dir`                               | 工作目录，主目录写作 `~`（默认显示）                                                                     |
 | `git-branch`                                | 第一个工作区目录检出的分支，分离状态时是短提交号，从 `.git` 读取                                         |
