@@ -276,6 +276,50 @@ impl AgentService {
         }
         let previous = record.rollback_state();
         self.name_model_provider_at(&update.provider_id, protocol, base_url);
+        // A running turn keeps the model and transport it started with: its
+        // sampling requests carry the model by name and the transport from
+        // its own session, so changing one under it would send a new name
+        // down the old endpoint. The change waits for the turn to end.
+        if record
+            .runtime
+            .turn
+            .as_ref()
+            .is_some_and(|turn| !turn.phase.is_terminal())
+        {
+            update
+                .turn_budget
+                .validate()
+                .map_err(|error| AgentError::InvalidInput(error.to_string()))?;
+            record.settings.pending_model = Some(PendingModel {
+                model,
+                base_url: base_url.to_string(),
+                update,
+            });
+            drop(guard);
+            return self.snapshot(session_id);
+        }
+        self.apply_model_configuration(record, model, update)?;
+        record.status.revision = record
+            .status
+            .revision
+            .checked_add(1)
+            .expect("agent snapshot revision exhausted");
+        record.status.updated_at = now_millis();
+        let staged = StagedPersistence::commit(&cell, record, previous);
+        drop(guard);
+        self.persist_staged_blocking(staged)?;
+        self.snapshot(session_id)
+    }
+
+    /// Puts `update`, whose model is `model`, into `record`'s configuration,
+    /// with the window the model resolves to now. The caller commits it and
+    /// counts the revision.
+    fn apply_model_configuration(
+        &self,
+        record: &mut SessionRecord,
+        model: Arc<dyn ModelPort>,
+        update: AgentSessionModelConfigurationUpdate,
+    ) -> Result<(), AgentError> {
         let model_changed = record.settings.config.provider_id != update.provider_id
             || record.settings.config.provider_protocol != update.provider_protocol
             || record.settings.config.model != update.model
@@ -317,16 +361,26 @@ impl AgentService {
             .turn_budget
             .validate()
             .map_err(|error| AgentError::InvalidInput(error.to_string()))?;
-        record.status.revision = record
-            .status
-            .revision
-            .checked_add(1)
-            .expect("agent snapshot revision exhausted");
-        record.status.updated_at = now_millis();
-        let staged = StagedPersistence::commit(&cell, record, previous);
-        drop(guard);
-        self.persist_staged_blocking(staged)?;
-        self.snapshot(session_id)
+        Ok(())
+    }
+
+    /// Applies the model change a running turn held back, now that it has
+    /// ended. The caller commits the record it is handed; a revision it
+    /// already counts covers this.
+    pub(in crate::service) fn apply_pending_model_configuration(
+        &self,
+        record: &mut SessionRecord,
+    ) -> Result<(), AgentError> {
+        let Some(PendingModel {
+            model,
+            base_url,
+            update,
+        }) = record.settings.pending_model.take()
+        else {
+            return Ok(());
+        };
+        self.name_model_provider_at(&update.provider_id, update.provider_protocol, &base_url);
+        self.apply_model_configuration(record, model, update)
     }
 
     pub fn set_session_reasoning_effort(

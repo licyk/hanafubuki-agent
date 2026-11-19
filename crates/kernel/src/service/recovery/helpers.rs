@@ -94,6 +94,7 @@ impl AgentService {
             },
             created_at: runtime.created_at,
             settings: SessionSettings {
+                pending_model: None,
                 effective_input_capabilities,
                 model,
                 title: runtime.title,

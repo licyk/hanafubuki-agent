@@ -35,12 +35,24 @@ pub(in crate::service) struct SessionLineage {
 #[derive(Clone)]
 pub(in crate::service) struct SessionSettings {
     pub(in crate::service) model: Arc<dyn ModelPort>,
+    /// A model change a running turn could not take: the turn keeps the
+    /// model and transport it started with, so this applies once it ends.
+    pub(in crate::service) pending_model: Option<PendingModel>,
     pub(in crate::service) title: Option<AgentSessionTitle>,
     pub(in crate::service) goal: Option<crate::AgentGoal>,
     pub(in crate::service) config: AgentSessionConfig,
     pub(in crate::service) memory_contribution: AgentMemoryContributionState,
     pub(in crate::service) effective_input_capabilities: ModelInputCapabilities,
     pub(in crate::service) budget_policy: AgentTurnBudgetPolicy,
+}
+
+/// A model configuration change held for the end of the running turn: what
+/// the session takes when nothing samples any more.
+#[derive(Clone)]
+pub(in crate::service) struct PendingModel {
+    pub(in crate::service) model: Arc<dyn ModelPort>,
+    pub(in crate::service) base_url: String,
+    pub(in crate::service) update: crate::AgentSessionModelConfigurationUpdate,
 }
 
 /// Where the session stands: lifecycle, the generation and revision that

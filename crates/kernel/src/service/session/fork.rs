@@ -55,6 +55,7 @@ impl AgentService {
             // it dropped must not be counted at all.
             created_at: now,
             settings: SessionSettings {
+                pending_model: None,
                 model: source.settings.model.clone(),
                 title: source.settings.title.clone(),
                 goal: source.settings.goal.clone(),
@@ -133,6 +134,7 @@ impl AgentService {
             },
             created_at: now,
             settings: SessionSettings {
+                pending_model: None,
                 model: source.settings.model.clone(),
                 title: source.settings.title.clone(),
                 goal: source.settings.goal.clone(),

@@ -189,8 +189,15 @@ impl ChatWidget {
                 self.setup_needed = false;
                 self.appearance.values_mut().model = model.clone();
                 self.sync_status_line();
+                // A running turn keeps the model it started with, so the
+                // change is for the next one.
+                let changed = if self.bottom_pane.is_task_running() {
+                    format!("Model will change to {model} after this turn")
+                } else {
+                    format!("Model changed to {model}")
+                };
                 self.add_to_history(history_cell::new_info_event(
-                    format!("Model changed to {model}"),
+                    changed,
                     None,
                 ))
             }

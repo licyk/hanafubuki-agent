@@ -194,14 +194,10 @@ impl AgentService {
         let mut guard = cell.lock_after_persistence_blocking()?;
         let record = &mut *guard;
         self.name_model_provider_at(&record.settings.config.provider_id, protocol, base_url);
-        if record
-            .runtime
-            .turn
-            .as_ref()
-            .is_some_and(|turn| !turn.phase.is_terminal())
-        {
-            return Err(AgentError::TurnAlreadyRunning);
-        }
+        // A running turn does not hold activation back: it takes the model
+        // at its next request, as `set_session_model_configuration` does.
+        // What cannot move under it is the compaction, which is refused
+        // below by its own reconciled configuration.
         let compaction = reconciled_compaction_config(record, model.compaction_capability());
         // Recovery has no bound route until its first provider activation.
         let route_changed = record

@@ -683,14 +683,139 @@ async fn the_model_changes_during_a_turn() {
             Err(error) => panic!("{error:?}"),
         }
     }
+    // The switch is accepted, and the running turn keeps the model it
+    // started with: its requests carry the model by name and the transport
+    // from its own session, so a new name would go down the old endpoint.
+    let during = changed.expect("the switch was accepted");
     assert_eq!(
-        changed.expect("the running turn took the model").model,
-        "switched-during-a-turn"
+        during.model,
+        service.snapshot(session.id).unwrap().model,
+        "the running turn keeps its model"
     );
     service
         .cancel_turn_confirmed(session.id, accepted.turn_id, accepted.generation)
         .await
         .unwrap();
+    // Once the turn ended, the change applies.
+    let after = service.snapshot(session.id).unwrap();
+    assert_eq!(after.model, "switched-during-a-turn");
+}
+
+/// Activation is what `/effort` and `/model` go through in the interface: a
+/// running turn must not hold it back, or the effort could never change
+/// during one.
+#[tokio::test]
+async fn a_running_turn_does_not_hold_activation_back() {
+    let service = AgentService::new(
+        Arc::new(CancellationOnlyModel),
+        FakeTools::new([]).await.registries(),
+    );
+    let session = service.create_session(config()).unwrap();
+    let accepted = service
+        .submit_turn_with_sink(session.id, "wait".to_string(), Arc::new(NoopEventSink))
+        .unwrap();
+    wait_for_active_turn(&service, session.id).await;
+
+    let mut activated = false;
+    for _ in 0..200 {
+        match service.activate_model_session(
+            ModelApiProtocol::Responses,
+            "http://127.0.0.1:1/v1",
+            None,
+            Vec::new(),
+            ModelRetryPolicy::default(),
+            ModelCompactionCapability::LocalSummary,
+            AgentConfiguredModelFacts::default(),
+            session.id,
+        ) {
+            Ok(()) => {
+                activated = true;
+                break;
+            }
+            Err(AgentError::SessionMutationNotConfirmed) => {
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
+            Err(error) => panic!("{error:?}"),
+        }
+    }
+    assert!(activated, "the running turn held activation back");
+    service
+        .cancel_turn_confirmed(session.id, accepted.turn_id, accepted.generation)
+        .await
+        .unwrap();
+}
+
+/// The change that went wrong: switching Provider mid-turn. A turn's
+/// requests carry the model by name and the transport from its own session,
+/// so taking a new name from another endpoint would send it down the old
+/// one, and the old endpoint answers `model_not_found`. The switch waits.
+#[tokio::test]
+async fn a_provider_switch_during_a_turn_waits_for_its_end() {
+    let service = AgentService::new(
+        Arc::new(CancellationOnlyModel),
+        FakeTools::new([]).await.registries(),
+    );
+    let session = service.create_session(config()).unwrap();
+    let before = service.snapshot(session.id).unwrap();
+    let accepted = service
+        .submit_turn_with_sink(session.id, "wait".to_string(), Arc::new(NoopEventSink))
+        .unwrap();
+    wait_for_active_turn(&service, session.id).await;
+
+    let mut accepted_change = None;
+    for _ in 0..200 {
+        let snapshot = service.snapshot(session.id).unwrap();
+        let update = AgentSessionModelConfigurationUpdate {
+            provider_id: "another-provider".into(),
+            provider_protocol: ModelApiProtocol::Responses,
+            model: "elsewhere".into(),
+            instructions: "elsewhere".into(),
+            reasoning_effort: None,
+            configured_facts: AgentConfiguredModelFacts::default(),
+            input_capabilities: Default::default(),
+            auto_compaction_enabled: true,
+            auto_compact_threshold_percent: 80,
+            compaction_capability: ModelCompactionCapability::LocalSummary,
+            turn_budget: Default::default(),
+        };
+        match service.set_session_model_configuration(
+            session.id,
+            snapshot.generation,
+            snapshot.revision,
+            ModelApiProtocol::Responses,
+            "http://elsewhere.invalid/v1",
+            None,
+            Vec::new(),
+            ModelRetryPolicy::default(),
+            update,
+        ) {
+            Ok(snapshot) => {
+                accepted_change = Some(snapshot);
+                break;
+            }
+            Err(AgentError::SessionMutationNotConfirmed) => {
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
+            Err(error) => panic!("{error:?}"),
+        }
+    }
+    let during = accepted_change.expect("the switch was accepted");
+    assert_eq!(
+        (during.provider_id.as_str(), during.model.as_str()),
+        (before.provider_id.as_str(), before.model.as_str()),
+        "the running turn keeps the pair it started with"
+    );
+
+    service
+        .cancel_turn_confirmed(session.id, accepted.turn_id, accepted.generation)
+        .await
+        .unwrap();
+    let after = service.snapshot(session.id).unwrap();
+    assert_eq!(
+        (after.provider_id.as_str(), after.model.as_str()),
+        ("another-provider", "elsewhere"),
+        "the change applies once the turn ends"
+    );
 }
 
 #[tokio::test]
