@@ -10,6 +10,12 @@ high
 main
 Context 75% left
 Context 25% used
+Context 100K
+25K used
+75K left
+Cache 75% hit
+Cache 9K read
+Cache 2.5K uncached
 15.4K used
 12K in
 3.4K out

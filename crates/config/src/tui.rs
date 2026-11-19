@@ -55,6 +55,10 @@ pub struct AgentTuiPreferences {
     pub status_line_overflow: AgentStatusLineOverflow,
     /// Whether the status line's items take the theme's colors.
     pub status_line_colors: bool,
+    /// `id:color` per status line item, overriding the theme's colour for
+    /// it (`model:cyan`, `context-window:#ff8800`). An item without an
+    /// entry keeps the theme's.
+    pub status_line_palette: Vec<String>,
     /// The items of the terminal's title, in order; empty to leave the
     /// title alone.
     pub terminal_title: Vec<String>,
@@ -135,6 +139,7 @@ impl Default for AgentTuiPreferences {
             status_line: DEFAULT_STATUS_LINE.map(String::from).to_vec(),
             status_line_overflow: AgentStatusLineOverflow::default(),
             status_line_colors: true,
+            status_line_palette: Vec::new(),
             terminal_title: DEFAULT_TERMINAL_TITLE.map(String::from).to_vec(),
             rendering: AgentTuiRendering::default(),
             keymap: BTreeMap::new(),
@@ -187,44 +192,46 @@ pub enum AgentStatusLineOverflow {
     Truncate,
 }
 
-/// Where an item of the status line sits: `left-1` or `right-2`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// The rows the status line may take: the footer draws as many as its items
+/// need, up to this.
+pub const STATUS_LINE_ROWS: u8 = 9;
+
+/// Where an item of the status line sits: `left-1` to `right-9`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AgentStatusLinePlace {
-    /// The second row rather than the first.
-    pub second_row: bool,
+    /// The row, from 1.
+    pub row: u8,
     /// The row's right edge rather than its left.
     pub right: bool,
 }
 
+impl Default for AgentStatusLinePlace {
+    fn default() -> Self {
+        Self {
+            row: 1,
+            right: false,
+        }
+    }
+}
+
 impl AgentStatusLinePlace {
-    /// What `value` says, `left-1` to `right-2`; `None` for anything else.
+    /// What `value` says, `left-1` to `right-9`; `None` for anything else.
     pub fn parse(value: &str) -> Option<Self> {
         let (side, row) = value.split_once('-')?;
-        let second_row = match row {
-            "1" => false,
-            "2" => true,
-            _ => return None,
-        };
+        let row: u8 = row
+            .parse()
+            .ok()
+            .filter(|row| (1..=STATUS_LINE_ROWS).contains(row))?;
         match side {
-            "left" => Some(Self {
-                second_row,
-                right: false,
-            }),
-            "right" => Some(Self {
-                second_row,
-                right: true,
-            }),
+            "left" => Some(Self { row, right: false }),
+            "right" => Some(Self { row, right: true }),
             _ => None,
         }
     }
 
-    /// The value `parse` reads, `left-1` to `right-2`.
+    /// The value `parse` reads, `left-1` to `right-9`.
     pub fn value(self) -> String {
-        format!(
-            "{}-{}",
-            if self.right { "right" } else { "left" },
-            if self.second_row { 2 } else { 1 }
-        )
+        format!("{}-{}", if self.right { "right" } else { "left" }, self.row)
     }
 }
 
@@ -429,6 +436,14 @@ pub(crate) fn section() -> SettingsSection {
                     SettingKind::Boolean,
                 ),
                 "Whether the status line's items take the theme's colors",
+            ),
+            described(
+                SettingSpec::new(
+                    "tui.statusLinePalette",
+                    "Status line palette",
+                    items(),
+                ),
+                "Per-item colors for the status line, each `id:color` (a name like cyan or #rrggbb); an item without one keeps the theme's",
             ),
             described(
                 SettingSpec::new("tui.terminalTitle", "Terminal title", items()),

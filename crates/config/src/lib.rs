@@ -81,5 +81,5 @@ pub use store::{
 pub use tui::{
     AgentAgentsGrouping, AgentAlternateScreen, AgentScrollbackMouse, AgentStatusLineOverflow,
     AgentStatusLinePlace, AgentTuiPreferences, AgentTuiPreferencesPatch, AgentTuiPreset,
-    AgentTuiRendering, AgentWelcomeTheme, MAX_PRESET_INPUT_BYTES,
+    AgentTuiRendering, AgentWelcomeTheme, MAX_PRESET_INPUT_BYTES, STATUS_LINE_ROWS,
 };

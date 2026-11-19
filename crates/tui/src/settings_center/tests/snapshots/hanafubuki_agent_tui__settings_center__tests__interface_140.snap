@@ -20,10 +20,10 @@ expression: "screen(&mut center, 140, 25)"
     Status line              model-with-reasoning, bac...  The status line's items, in order
     Status line overflow     Wrap both sides ›             What the footer does when a row does not fit beside the counts
     Status line colors       [x] On                        Whether the status line's items take the theme's colors
+    Status line palette      (none) ›                      Per-item colors for the status line, each `id:color` (a name like cyan or #r...
     Terminal title           activity, session-title, ...  The terminal title's items, in order; none leaves the title alone
     Tables                   [x] On                        Pipe tables laid out in columns; off, shown as written
     List markers             [x] On                        • bullets and ☐/☑ task boxes; off, - and [ ]/[x] as written
     Math                     [x] On                        TeX formulas in Unicode notation; off, shown as written
-    Mermaid diagrams         [x] On                        ```mermaid fences drawn as text diagrams; off, shown as code
 
-  1/19 · ←/→ tab · / search · enter toggle · esc close
+  1/20 · ←/→ tab · / search · enter toggle · esc close

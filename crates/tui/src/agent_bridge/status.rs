@@ -52,6 +52,15 @@ pub(crate) struct UsageSummary {
     pub(crate) output_tokens: u64,
     /// The tokens in the context and the window's size.
     pub(crate) context: Option<(u64, u64)>,
+    /// The last response's prompt total, and the part of it the Provider
+    /// read from its cache and wrote to it. The rest is what the cache did
+    /// not answer.
+    pub(crate) last_input_tokens: u64,
+    pub(crate) cache_read_tokens: u64,
+    pub(crate) cache_write_tokens: u64,
+    /// Whether any response reported a cache read or write: a Provider that
+    /// reports none is not shown as never hitting.
+    pub(crate) cache_reported: bool,
 }
 
 /// What is read once per session and kept: the configured permission
@@ -119,6 +128,10 @@ impl AgentBridge {
                 context: usage
                     .context_consumed_tokens
                     .zip(usage.context_window_tokens),
+                last_input_tokens: usage.last_response_input_tokens,
+                cache_read_tokens: usage.last_response_cache_read_tokens.unwrap_or(0),
+                cache_write_tokens: usage.last_response_cache_write_tokens.unwrap_or(0),
+                cache_reported: usage.cache_reporting_responses > 0,
             }),
             task_progress,
             permission_mode,

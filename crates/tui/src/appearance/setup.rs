@@ -59,26 +59,34 @@ pub(crate) fn status_line_setup(appearance: &Appearance, tx: AppEventSender) -> 
                 .and_then(AgentStatusLinePlace::parse)
                 .unwrap_or_default()
         };
-        let at = |second_row: bool, right: bool| {
+        let at = |row: u8, right: bool| {
             let here: Vec<StatusLineItem> = selected
                 .iter()
                 .copied()
                 .filter(|item| {
                     let place = place_of(item.id());
-                    place.second_row == second_row && place.right == right
+                    place.row == row && place.right == right
                 })
                 .collect();
-            status_line(&here, colors, |item| status_preview(&values, item))
+            // The preview shows the theme's colours: the palette is edited
+            // in `[tui]`, not here.
+            let palette = std::collections::BTreeMap::new();
+            status_line(&here, colors, &palette, |item| {
+                status_preview(&values, item)
+            })
         };
-        [
-            at(false, false),
-            at(true, false),
-            at(false, true),
-            at(true, true),
-        ]
-        .into_iter()
-        .flatten()
-        .collect()
+        // Each row the items use, its left side then its right, so a key's
+        // effect shows.
+        let rows = selected
+            .iter()
+            .map(|item| place_of(item.id()).row)
+            .max()
+            .unwrap_or(1)
+            .min(hanafubuki_agent::STATUS_LINE_ROWS);
+        (1..=rows)
+            .flat_map(|row| [at(row, false), at(row, true)])
+            .flatten()
+            .collect()
     }))
     .on_confirm(Box::new(move |chosen| {
         let ids = enabled_ids(chosen);
@@ -102,7 +110,7 @@ pub(crate) fn status_line_setup(appearance: &Appearance, tx: AppEventSender) -> 
     .on_extra_key(Box::new(move |items, selected, key| {
         use ratatui::crossterm::event::KeyCode;
         // The keys that place the highlighted item: `l` and `r` its side,
-        // `1` and `2` its row, and `p` round all four.
+        // `1` to `9` its row, and `p` round the four corners.
         let place_of = |items: &[MultiSelectItem], selected: Option<usize>| {
             selected
                 .and_then(|index| items.get(index))
@@ -132,38 +140,36 @@ pub(crate) fn status_line_setup(appearance: &Appearance, tx: AppEventSender) -> 
                     ..place_of(items, selected)
                 },
             ),
-            KeyCode::Char('1') => put(
-                items,
-                AgentStatusLinePlace {
-                    second_row: false,
-                    ..place_of(items, selected)
-                },
-            ),
-            KeyCode::Char('2') => put(
-                items,
-                AgentStatusLinePlace {
-                    second_row: true,
-                    ..place_of(items, selected)
-                },
-            ),
-            KeyCode::Char('p') => {
-                let place = place_of(items, selected);
+            // `1` to `9`: the row the selected item sits on.
+            KeyCode::Char(digit) if ('1'..='9').contains(&digit) => {
+                let row = digit.to_digit(10).unwrap_or(1) as u8;
                 put(
                     items,
-                    match (place.right, place.second_row) {
-                        (false, false) => AgentStatusLinePlace {
-                            second_row: true,
+                    AgentStatusLinePlace {
+                        row,
+                        ..place_of(items, selected)
+                    },
+                )
+            }
+            KeyCode::Char('p') => {
+                let place = place_of(items, selected);
+                // Round the four corners: left-1, left-2, right-1, right-2.
+                put(
+                    items,
+                    match (place.right, place.row) {
+                        (false, 1) => AgentStatusLinePlace {
+                            row: 2,
                             right: false,
                         },
-                        (false, true) => AgentStatusLinePlace {
-                            second_row: false,
+                        (false, _) => AgentStatusLinePlace {
+                            row: 1,
                             right: true,
                         },
-                        (true, false) => AgentStatusLinePlace {
-                            second_row: true,
+                        (true, 1) => AgentStatusLinePlace {
+                            row: 2,
                             right: true,
                         },
-                        (true, true) => AgentStatusLinePlace::default(),
+                        (true, _) => AgentStatusLinePlace::default(),
                     },
                 )
             }
@@ -179,7 +185,7 @@ pub(crate) fn status_line_setup(appearance: &Appearance, tx: AppEventSender) -> 
             _ => false,
         }
     }))
-    .with_keys_hint("l/r side · 1/2 row · p around · o overflow")
+    .with_keys_hint("l/r side · 1-9 row · p around · o overflow")
 }
 
 pub(crate) fn terminal_title_setup(
@@ -270,6 +276,12 @@ fn status_preview(values: &SurfaceValues, item: StatusLineItem) -> Option<String
                 StatusLineItem::GitBranch => "main",
                 StatusLineItem::ContextRemaining => "Context 82% left",
                 StatusLineItem::ContextUsed => "Context 18% used",
+                StatusLineItem::ContextWindow => "Context 1M",
+                StatusLineItem::ContextUsedTokens => "184K used",
+                StatusLineItem::ContextLeftTokens => "816K left",
+                StatusLineItem::CacheHitRate => "Cache 87% hit",
+                StatusLineItem::CacheHitTokens => "Cache 79K read",
+                StatusLineItem::CacheMissTokens => "Cache 12K uncached",
                 StatusLineItem::UsedTokens => "12.3K used",
                 StatusLineItem::TotalInputTokens => "10.1K in",
                 StatusLineItem::TotalOutputTokens => "2.20K out",

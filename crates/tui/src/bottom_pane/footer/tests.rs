@@ -67,7 +67,7 @@ fn props(mode: FooterMode) -> FooterProps<'static> {
         shell_command: false,
         wsl: false,
         counts: &[],
-        second_row: None,
+        further_rows: &[],
         hits: Box::leak(Box::new(std::cell::RefCell::new(Vec::new()))),
         overflow: Overflow::default(),
     }

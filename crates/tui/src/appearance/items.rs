@@ -48,6 +48,12 @@ pub(crate) enum StatusLineItem {
     GitBranch,
     ContextRemaining,
     ContextUsed,
+    ContextWindow,
+    ContextUsedTokens,
+    ContextLeftTokens,
+    CacheHitRate,
+    CacheHitTokens,
+    CacheMissTokens,
     UsedTokens,
     TotalInputTokens,
     TotalOutputTokens,
@@ -71,6 +77,12 @@ impl SurfaceItem for StatusLineItem {
         Self::GitBranch,
         Self::ContextRemaining,
         Self::ContextUsed,
+        Self::ContextWindow,
+        Self::ContextUsedTokens,
+        Self::ContextLeftTokens,
+        Self::CacheHitRate,
+        Self::CacheHitTokens,
+        Self::CacheMissTokens,
         Self::UsedTokens,
         Self::TotalInputTokens,
         Self::TotalOutputTokens,
@@ -94,6 +106,12 @@ impl SurfaceItem for StatusLineItem {
             Self::GitBranch => "git-branch",
             Self::ContextRemaining => "context-remaining",
             Self::ContextUsed => "context-used",
+            Self::ContextWindow => "context-window",
+            Self::ContextUsedTokens => "context-used-tokens",
+            Self::ContextLeftTokens => "context-left-tokens",
+            Self::CacheHitRate => "cache-hit-rate",
+            Self::CacheHitTokens => "cache-hit-tokens",
+            Self::CacheMissTokens => "cache-miss-tokens",
             Self::UsedTokens => "used-tokens",
             Self::TotalInputTokens => "total-input-tokens",
             Self::TotalOutputTokens => "total-output-tokens",
@@ -118,6 +136,22 @@ impl SurfaceItem for StatusLineItem {
             Self::GitBranch => "Current Git branch (omitted when unavailable)",
             Self::ContextRemaining => "Context window remaining (omitted when unknown)",
             Self::ContextUsed => "Context window used (omitted when unknown)",
+            Self::ContextWindow => "Size of the model's context window (omitted when unknown)",
+            Self::ContextUsedTokens => {
+                "Tokens in the context, in absolute terms (omitted when unknown)"
+            }
+            Self::ContextLeftTokens => {
+                "Tokens left in the context window (omitted when unknown)"
+            }
+            Self::CacheHitRate => {
+                "Share of the last prompt the Provider's cache answered (omitted when it reports none)"
+            }
+            Self::CacheHitTokens => {
+                "Tokens of the last prompt read from the Provider's cache (omitted when it reports none)"
+            }
+            Self::CacheMissTokens => {
+                "Tokens of the last prompt the cache did not answer (omitted when it reports none)"
+            }
             Self::UsedTokens => "Tokens used in the session (omitted when zero)",
             Self::TotalInputTokens => "Input tokens used in the session",
             Self::TotalOutputTokens => "Output tokens used in the session",
@@ -149,10 +183,17 @@ impl StatusLineItem {
             Self::GitBranch => (&["entity.name.function", "entity.name.tag"], Color::Magenta),
             Self::ContextRemaining
             | Self::ContextUsed
+            | Self::ContextWindow
+            | Self::ContextUsedTokens
+            | Self::ContextLeftTokens
             | Self::UsedTokens
             | Self::TotalInputTokens
             | Self::TotalOutputTokens
             | Self::Compression => (&["constant.numeric", "constant"], Color::Green),
+            Self::CacheHitRate | Self::CacheHitTokens => {
+                (&["markup.inserted", "constant.numeric"], Color::Green)
+            }
+            Self::CacheMissTokens => (&["markup.deleted", "constant.numeric"], Color::Yellow),
             Self::SessionId => (&["comment", "constant.other"], Color::Cyan),
             Self::SessionTitle | Self::Goal => {
                 (&["markup.heading", "entity.name.section"], Color::Magenta)

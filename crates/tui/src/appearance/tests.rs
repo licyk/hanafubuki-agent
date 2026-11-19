@@ -101,6 +101,10 @@ fn status() -> SessionStatus {
             input_tokens: 12_000,
             output_tokens: 3_400,
             context: Some((25_000, 100_000)),
+            last_input_tokens: 12_000,
+            cache_read_tokens: 9_000,
+            cache_write_tokens: 500,
+            cache_reported: true,
         }),
         task_progress: Some((2, 5)),
         permission_mode: Some(AgentPermissionMode::AutoReview),
@@ -312,14 +316,14 @@ fn the_status_line_setup_saves_the_items_in_their_order_and_the_colours() {
                     (
                         "git-branch".to_string(),
                         AgentStatusLinePlace {
-                            second_row: false,
+                            row: 1,
                             right: false,
                         },
                     ),
                     (
                         "current-dir".to_string(),
                         AgentStatusLinePlace {
-                            second_row: false,
+                            row: 1,
                             right: false,
                         },
                     ),
@@ -351,7 +355,7 @@ fn the_status_line_setup_steps_an_items_place_and_saves_it() {
     assert_eq!(
         positions.and_then(|positions| positions.get("model").copied()),
         Some(AgentStatusLinePlace {
-            second_row: true,
+            row: 2,
             right: false,
         })
     );
@@ -382,14 +386,14 @@ fn the_setup_sets_a_side_and_a_row_with_one_key_each() {
     assert_eq!(
         saved_place(&[KeyCode::Char('r')]),
         Some(AgentStatusLinePlace {
-            second_row: false,
+            row: 1,
             right: true,
         })
     );
     assert_eq!(
         saved_place(&[KeyCode::Char('2')]),
         Some(AgentStatusLinePlace {
-            second_row: true,
+            row: 2,
             right: false,
         })
     );
@@ -401,7 +405,7 @@ fn the_setup_sets_a_side_and_a_row_with_one_key_each() {
         assert_eq!(
             saved_place(&keys),
             Some(AgentStatusLinePlace {
-                second_row: true,
+                row: 2,
                 right: true,
             })
         );
@@ -415,7 +419,7 @@ fn the_setup_sets_a_side_and_a_row_with_one_key_each() {
             KeyCode::Char('1'),
         ]),
         Some(AgentStatusLinePlace {
-            second_row: false,
+            row: 1,
             right: false,
         })
     );
@@ -470,8 +474,8 @@ fn an_items_place_moves_it_between_the_rows_and_their_sides() {
     let first = appearance.status_line().unwrap();
     assert_eq!(plain(&first), "gpt-5");
     assert!(
-        appearance.second_row().is_none(),
-        "nothing on the second row's left"
+        appearance.further_rows().is_empty(),
+        "nothing on the later rows' left"
     );
 }
 

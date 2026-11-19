@@ -239,7 +239,7 @@ pub use hanafubuki_agent_config::{
     SettingsGroup, SettingsSection, SettingsWrite, SettingsWriteOutcome, AGENT_CREDENTIAL_FILES,
     AGENT_HOME_ENV, AGENT_MCP_FILE, AGENT_PROVIDERS_FILE, AGENT_SETTINGS_FILE,
     MAX_AGENT_IDLE_TIMEOUT_SECONDS, MAX_AGENT_IN_FLIGHT_TOOLS, MAX_AGENT_PENDING_INPUT_ITEMS,
-    MAX_PLUGIN_OPTIONS,
+    MAX_PLUGIN_OPTIONS, STATUS_LINE_ROWS,
 };
 pub use hanafubuki_agent_execution::{
     AgentBackgroundTerminalSnapshot, AgentBackgroundTerminalStopFailure,

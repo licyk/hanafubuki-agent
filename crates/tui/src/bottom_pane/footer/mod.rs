@@ -44,7 +44,8 @@ use unicode_width::UnicodeWidthStr;
 #[derive(Clone, Debug, Default)]
 pub(crate) struct FooterSides {
     pub(crate) counts: Vec<SideCount>,
-    pub(crate) second_row: Option<Line<'static>>,
+    /// The status line's rows after the first, on the left, in order.
+    pub(crate) further_rows: Vec<Line<'static>>,
     pub(crate) overflow: Overflow,
 }
 
@@ -88,8 +89,8 @@ pub(crate) struct FooterProps<'a> {
     pub(crate) wsl: bool,
     /// The counts on the second row's right: terminals, agents, warnings.
     pub(crate) counts: &'a [SideCount],
-    /// The status line's items whose place is the second row's left.
-    pub(crate) second_row: Option<&'a Line<'static>>,
+    /// The status line's rows after the first, on the left, in order.
+    pub(crate) further_rows: &'a [Line<'static>],
     /// Where each count was drawn, for a click: the composer's own, shared
     /// with the render that fills it.
     pub(crate) hits: &'a std::cell::RefCell<Vec<(Rect, SideItem)>>,
@@ -245,11 +246,9 @@ fn wrapped_footer(props: FooterProps<'_>, width: u16) -> Vec<Line<'static>> {
 /// the goal, `None` when there is neither.
 fn footer_sides(props: FooterProps<'_>, width: u16) -> (Vec<Line<'static>>, Option<Line<'static>>) {
     let mut lines = footer_lines(props);
-    // The items placed on the second row's left are a row of their own,
-    // under the hints.
-    if let Some(second) = props.second_row.cloned() {
-        lines.push(second);
-    }
+    // The status line's later rows are rows of their own, under the hints,
+    // in the order the places name.
+    lines.extend(props.further_rows.iter().cloned());
     let mut right = Line::default();
     for (index, count) in props.counts.iter().enumerate() {
         if index > 0 {

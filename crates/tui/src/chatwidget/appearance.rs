@@ -59,7 +59,7 @@ impl ChatWidget {
         self.bottom_pane
             .set_counts(crate::bottom_pane::FooterSides {
                 counts: self.appearance.side_counts(),
-                second_row: self.appearance.second_row(),
+                further_rows: self.appearance.further_rows(),
                 overflow: self.appearance.overflow(),
             });
     }

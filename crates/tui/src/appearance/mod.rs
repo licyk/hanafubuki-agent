@@ -36,6 +36,40 @@ pub(crate) const SPINNER_INTERVAL: std::time::Duration = std::time::Duration::fr
 /// The longest goal objective the status line shows.
 const GOAL_CHARS: usize = 40;
 
+/// The colour `value` names: one of the sixteen ANSI names, or `#rrggbb`;
+/// `None` for anything else, which the caller warns of and leaves to the
+/// theme.
+fn parse_color(value: &str) -> Option<ratatui::style::Color> {
+    use ratatui::style::Color;
+    let named = match value.to_ascii_lowercase().as_str() {
+        "black" => Color::Black,
+        "red" => Color::Red,
+        "green" => Color::Green,
+        "yellow" => Color::Yellow,
+        "blue" => Color::Blue,
+        "magenta" => Color::Magenta,
+        "cyan" => Color::Cyan,
+        "gray" | "grey" => Color::Gray,
+        "darkgray" | "darkgrey" => Color::DarkGray,
+        "lightred" => Color::LightRed,
+        "lightgreen" => Color::LightGreen,
+        "lightyellow" => Color::LightYellow,
+        "lightblue" => Color::LightBlue,
+        "lightmagenta" => Color::LightMagenta,
+        "lightcyan" => Color::LightCyan,
+        "white" => Color::White,
+        hex => {
+            let digits = hex.strip_prefix('#')?;
+            if digits.len() != 6 || !digits.chars().all(|digit| digit.is_ascii_hexdigit()) {
+                return None;
+            }
+            let byte = |at: usize| u8::from_str_radix(&digits[at..at + 2], 16).ok();
+            return Some(Color::Rgb(byte(0)?, byte(2)?, byte(4)?));
+        }
+    };
+    Some(named)
+}
+
 /// What a command or a setup view changed, for the app to apply and, when
 /// `save` says so, to write into `[tui]`.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -119,6 +153,8 @@ pub(crate) struct Appearance {
     positions: std::collections::BTreeMap<String, AgentStatusLinePlace>,
     overflow: AgentStatusLineOverflow,
     status_line_colors: bool,
+    /// The colour `tui.statusLinePalette` gives an item, by its id.
+    palette: std::collections::BTreeMap<String, ratatui::style::Color>,
     terminal_title: Vec<TerminalTitleItem>,
     title_preview: Option<Vec<TerminalTitleItem>>,
     values: SurfaceValues,
@@ -180,12 +216,37 @@ impl Appearance {
         for (item, place) in places {
             positions.insert(item, place);
         }
+        // `tui.statusLinePalette`: each entry `id:color`. An item the
+        // interface does not know, or a colour it cannot read, is left to
+        // the theme with a warning.
+        let mut palette = std::collections::BTreeMap::new();
+        let mut bad_palette = Vec::new();
+        for entry in &preferences.status_line_palette {
+            let parsed = entry.split_once(':').and_then(|(id, color)| {
+                let item = StatusLineItem::parse(id)?;
+                let color = parse_color(color)?;
+                Some((item, color))
+            });
+            match parsed {
+                Some((item, color)) => {
+                    palette.insert(item.id().to_string(), color);
+                }
+                None => bad_palette.push(entry.clone()),
+            }
+        }
+        if !bad_palette.is_empty() {
+            warnings.push(format!(
+                "tui.statusLinePalette: {} is not `id:color` (a name like cyan or #rrggbb); it is ignored.",
+                bad_palette.join(", ")
+            ));
+        }
         let appearance = Self {
             theme: preferences.theme.clone(),
             status_line,
             positions,
             overflow: preferences.status_line_overflow,
             status_line_colors: preferences.status_line_colors,
+            palette,
             terminal_title,
             title_preview: None,
             values: SurfaceValues {
@@ -278,10 +339,21 @@ impl Appearance {
             .collect()
     }
 
-    /// Where `item` sits: its `tui.statusLinePosition` entry, or the left of
-    /// the first row.
+    /// Where `item` sits: the place its `tui.statusLine` entry names, or the
+    /// left of the first row.
     fn place_of(&self, item: StatusLineItem) -> AgentStatusLinePlace {
         self.positions.get(item.id()).copied().unwrap_or_default()
+    }
+
+    /// How many rows the status line needs: the highest row an item sits on,
+    /// never more than the rows a place may name.
+    pub(crate) fn rows(&self) -> u8 {
+        self.status_line
+            .iter()
+            .map(|item| self.place_of(*item).row)
+            .max()
+            .unwrap_or(1)
+            .min(hanafubuki_agent::STATUS_LINE_ROWS)
     }
 
     /// What the footer does when a row does not fit beside the counts.
@@ -304,21 +376,23 @@ impl Appearance {
         self.overflow
     }
 
-    /// The status line's second row, on the left; `None` with no item there.
-    pub(crate) fn second_row(&self) -> Option<Line<'static>> {
-        let placed = self.placed(AgentStatusLinePlace {
-            second_row: true,
-            right: false,
-        });
-        status_line(&placed, self.status_line_colors, |item| {
-            self.values.status_value(item)
-        })
+    /// The rows after the first, on the left, in order; empty with no item
+    /// on any of them.
+    pub(crate) fn further_rows(&self) -> Vec<Line<'static>> {
+        (2..=self.rows())
+            .filter_map(|row| {
+                let placed = self.placed(AgentStatusLinePlace { row, right: false });
+                status_line(&placed, self.status_line_colors, &self.palette, |item| {
+                    self.values.status_value(item)
+                })
+            })
+            .collect()
     }
 
     /// The status line under the composer; `None` with no item to show.
     pub(crate) fn status_line(&self) -> Option<Line<'static>> {
         let placed = self.placed(AgentStatusLinePlace::default());
-        let mut line = status_line(&placed, self.status_line_colors, |item| {
+        let mut line = status_line(&placed, self.status_line_colors, &self.palette, |item| {
             self.values.status_value(item)
         })
         .unwrap_or_default();
@@ -418,6 +492,43 @@ impl SurfaceValues {
             StatusLineItem::ContextUsed => {
                 context_percent_used(usage).map(|used| format!("Context {used}% used"))
             }
+            StatusLineItem::ContextWindow => usage
+                .and_then(|usage| usage.context)
+                .map(|(_, window)| format!("Context {}", format_tokens_compact(window))),
+            StatusLineItem::ContextUsedTokens => usage
+                .and_then(|usage| usage.context)
+                .map(|(used, _)| format!("{} used", format_tokens_compact(used))),
+            StatusLineItem::ContextLeftTokens => {
+                usage.and_then(|usage| usage.context).map(|(used, window)| {
+                    format!(
+                        "{} left",
+                        format_tokens_compact(window.saturating_sub(used))
+                    )
+                })
+            }
+            StatusLineItem::CacheHitRate => {
+                let usage = usage.filter(|usage| usage.cache_reported)?;
+                let total = usage.last_input_tokens.max(1);
+                let rate = usage.cache_read_tokens.saturating_mul(100) / total;
+                Some(format!("Cache {rate}% hit"))
+            }
+            StatusLineItem::CacheHitTokens => {
+                let usage = usage.filter(|usage| usage.cache_reported)?;
+                Some(format!(
+                    "Cache {} read",
+                    format_tokens_compact(usage.cache_read_tokens)
+                ))
+            }
+            StatusLineItem::CacheMissTokens => {
+                let usage = usage.filter(|usage| usage.cache_reported)?;
+                // The prompt total is uncached input plus what the cache
+                // read and wrote, so the rest is what it did not answer.
+                let miss = usage
+                    .last_input_tokens
+                    .saturating_sub(usage.cache_read_tokens)
+                    .saturating_sub(usage.cache_write_tokens);
+                Some(format!("Cache {} uncached", format_tokens_compact(miss)))
+            }
             StatusLineItem::UsedTokens => usage
                 .map(|usage| usage.input_tokens + usage.output_tokens)
                 .filter(|total| *total > 0)
@@ -509,10 +620,12 @@ impl SurfaceValues {
     }
 }
 
-/// The items with a value, joined; in the theme's colours or dimmed.
+/// The items with a value, joined; in the colours `palette` gives them, else
+/// the theme's, or dimmed without `colors`.
 pub(crate) fn status_line(
     items: &[StatusLineItem],
     colors: bool,
+    palette: &std::collections::BTreeMap<String, ratatui::style::Color>,
     value: impl Fn(StatusLineItem) -> Option<String>,
 ) -> Option<Line<'static>> {
     let mut spans: Vec<Span<'static>> = Vec::new();
@@ -525,7 +638,12 @@ pub(crate) fn status_line(
         }
         let style = if colors {
             let (scopes, fallback) = item.accent();
-            Style::default().fg(foreground_for_scopes(scopes).unwrap_or(fallback))
+            let color = palette
+                .get(item.id())
+                .copied()
+                .or_else(|| foreground_for_scopes(scopes))
+                .unwrap_or(fallback);
+            Style::default().fg(color)
         } else {
             Style::default().dim()
         };
