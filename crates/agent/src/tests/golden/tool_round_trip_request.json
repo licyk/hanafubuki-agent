@@ -1251,7 +1251,7 @@
       "type": "function"
     },
     {
-      "description": "Search workspace text with ripgrep-style Rust regular expressions, ignore-file and hidden-file filtering, and bounded traversal/output. Matching is case-sensitive unless the expression uses an inline flag such as (?i).",
+      "description": "Search workspace text with ripgrep-style Rust regular expressions, ignore-file and hidden-file filtering, and bounded traversal/output. Matching is case-sensitive unless the expression uses an inline flag such as (?i). path may be a directory or a single file; maxDepth bounds the walk below a directory and is ignored for a file.",
       "name": "search_text",
       "parameters": {
         "additionalProperties": false,

@@ -367,6 +367,50 @@ fn search_text_rejects_invalid_regular_expressions_during_preparation() {
 }
 
 #[test]
+fn search_text_accepts_a_single_file_as_its_root() {
+    let temp = TempDir::new().unwrap();
+    fs::create_dir(temp.path().join("tree")).unwrap();
+    fs::write(temp.path().join("tree/a.txt"), "one needle\nplain\n").unwrap();
+    fs::write(temp.path().join("tree/b.txt"), "another needle\n").unwrap();
+    let service = WorkspaceFsService::new(policy(temp.path()));
+
+    // The same query over the directory finds both files; over one file it
+    // finds only that file's matches, and the root is the file it was given.
+    let search = |path: &str, max_depth: usize| {
+        let request = WorkspaceFsRequest::SearchText(SearchTextRequest {
+            path: path.to_string(),
+            query: "needle".to_string(),
+            max_depth,
+            max_results: 10,
+            max_bytes: 4096,
+        });
+        let WorkspaceFsResult::SearchResults(results) = run(&service, &request).unwrap() else {
+            panic!("search results")
+        };
+        results
+    };
+
+    let directory = search("tree", 2);
+    assert_eq!(directory.matches.len(), 2);
+    assert_eq!(directory.scanned_files, 2);
+
+    let file = search("tree/a.txt", 2);
+    assert!(
+        file.root.ends_with("a.txt") && file.root.starts_with(&directory.root),
+        "the root is the file that was searched: {}",
+        file.root
+    );
+    assert_eq!(file.scanned_files, 1);
+    assert_eq!(file.scanned_bytes, "one needle\nplain\n".len());
+    assert_eq!(file.matches.len(), 1);
+    assert_eq!(file.matches[0].line, 1);
+    assert_eq!(file.matches[0].column, 5);
+
+    // A file root has no walk to bound, so the depth limit does not apply.
+    assert_eq!(search("tree/a.txt", 1).matches, file.matches);
+}
+
+#[test]
 fn search_text_honors_ripgrep_ignore_hidden_and_binary_defaults() {
     let temp = TempDir::new().unwrap();
     fs::write(temp.path().join(".gitignore"), "gitignored.txt\n").unwrap();

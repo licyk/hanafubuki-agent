@@ -131,6 +131,29 @@ impl WorkspaceFsService {
             .line_number(true)
             .binary_detection(BinaryDetection::quit(b'\0'))
             .build();
+
+        // A file root is searched itself; only a directory root has a tree to
+        // walk, and only a walk has a depth to bound.
+        if root.identity.kind == WorkspacePathKind::File {
+            let (file_matches, bytes, file_truncated) = self.search_file(
+                &root,
+                matcher,
+                &mut searcher,
+                max_results,
+                max_bytes,
+                deadline,
+                cancellation,
+            )?;
+            revalidate_existing(&root)?;
+            return Ok(WorkspaceFsResult::SearchResults(SearchResults {
+                root: root.identity.path,
+                matches: file_matches,
+                scanned_files: 1,
+                scanned_bytes: bytes,
+                truncated: file_truncated,
+            }));
+        }
+
         let mut walker = WalkBuilder::new(root.resolved.system());
         walker
             .standard_filters(true)
@@ -236,5 +259,62 @@ impl WorkspaceFsService {
             scanned_bytes,
             truncated,
         }))
+    }
+
+    /// Search one file, the root itself, under the same limits a walk applies
+    /// to each of its files.
+    #[allow(clippy::too_many_arguments, reason = "the walk's limits, unchanged")]
+    fn search_file(
+        &self,
+        file: &ExistingPathPlan,
+        matcher: &RegexMatcher,
+        searcher: &mut Searcher,
+        max_results: usize,
+        max_bytes: usize,
+        deadline: Instant,
+        cancellation: &CancellationToken,
+    ) -> Result<(Vec<SearchMatch>, usize, bool), WorkspaceFsError> {
+        revalidate_existing(file)?;
+        self.policy().ensure_unprotected(&file.resolved)?;
+        let size = file.identity.size;
+        if size > MAX_SEARCH_FILE_BYTES || size > max_bytes as u64 {
+            return Ok((Vec::new(), 0, true));
+        }
+        let bytes = size as usize;
+
+        let path = file.resolved.native_text().to_string();
+        let mut sink = FileSearchSink {
+            matcher,
+            path: &path,
+            cancellation,
+            deadline,
+            max_results,
+            matches: Vec::new(),
+            stop: None,
+            binary: false,
+        };
+        searcher
+            .search_path(matcher, file.resolved.system(), &mut sink)
+            .map_err(|error| WorkspaceFsError::Io(format!("search {path}: {error}")))?;
+        revalidate_existing(file)?;
+        match sink.stop {
+            Some(SearchStop::Cancelled) => Err(WorkspaceFsError::Cancelled),
+            Some(SearchStop::Deadline | SearchStop::ResultLimit) => {
+                let matches = if sink.binary {
+                    Vec::new()
+                } else {
+                    sink.matches
+                };
+                Ok((matches, bytes, true))
+            }
+            None => {
+                let matches = if sink.binary {
+                    Vec::new()
+                } else {
+                    sink.matches
+                };
+                Ok((matches, bytes, false))
+            }
+        }
     }
 }

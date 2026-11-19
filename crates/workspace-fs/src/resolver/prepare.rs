@@ -52,7 +52,9 @@ pub(crate) fn prepare_operation(
                         "invalid search regular expression: {error}"
                     ))
                 })?;
-            let root = resolve_existing(policy, &request.path, Some(WorkspacePathKind::Directory))?;
+            // A file is a searchable tree of one file: `maxDepth` bounds the
+            // walk below a directory, and a file root has no walk to bound.
+            let root = resolve_existing(policy, &request.path, None)?;
             let canonical = serialize_action(&CanonicalFileAction::SearchText {
                 root: &root.identity,
                 query: &request.query,

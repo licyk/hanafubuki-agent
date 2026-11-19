@@ -25,7 +25,7 @@ pub(crate) fn spec(kind: FsToolKind) -> FsToolSpec {
             &["path", "maxDepth", "maxEntries"],
         ),
         FsToolKind::SearchText => object(
-            "Search workspace text with ripgrep-style Rust regular expressions, ignore-file and hidden-file filtering, and bounded traversal/output. Matching is case-sensitive unless the expression uses an inline flag such as (?i).",
+            "Search workspace text with ripgrep-style Rust regular expressions, ignore-file and hidden-file filtering, and bounded traversal/output. Matching is case-sensitive unless the expression uses an inline flag such as (?i). path may be a directory or a single file; maxDepth bounds the walk below a directory and is ignored for a file.",
             json!({
                 "path": bounded_string(4096),
                 "query": bounded_string(1024),
