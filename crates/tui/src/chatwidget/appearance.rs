@@ -56,6 +56,12 @@ impl ChatWidget {
         );
         self.bottom_pane
             .set_status_line(self.appearance.status_line());
+        self.bottom_pane
+            .set_counts(crate::bottom_pane::FooterSides {
+                counts: self.appearance.side_counts(),
+                second_row: self.appearance.second_row(),
+                overflow: self.appearance.overflow(),
+            });
     }
 
     /// The terminal's title at `now`, and whether it changes with time.

@@ -345,3 +345,46 @@ fn the_title_setup_saves_what_is_confirmed() {
         })
     );
 }
+
+#[test]
+fn an_items_place_moves_it_between_the_rows_and_their_sides() {
+    let mut prefs = preferences(&["model", "current-dir"], &[]);
+    prefs
+        .status_line_position
+        .insert("current-dir".to_string(), "right-2".to_string());
+    prefs
+        .status_line_position
+        .insert("model".to_string(), "left-1".to_string());
+    let (mut appearance, warnings) = Appearance::new(&prefs, "/work/project".to_string());
+    assert!(warnings.is_empty(), "{warnings:?}");
+    appearance.values_mut().model = "gpt-5".to_string();
+
+    // `model` stays on the first row's left; `current-dir` asks for the
+    // second row's right, which the footer draws.
+    let first = appearance.status_line().unwrap();
+    assert_eq!(plain(&first), "gpt-5");
+    assert!(
+        appearance.second_row().is_none(),
+        "nothing on the second row's left"
+    );
+}
+
+#[test]
+fn a_place_that_is_not_a_side_and_a_row_is_ignored_with_a_warning() {
+    let mut prefs = preferences(&["model"], &[]);
+    prefs
+        .status_line_position
+        .insert("model".to_string(), "middle-3".to_string());
+    let (mut appearance, warnings) = Appearance::new(&prefs, "/work".to_string());
+    appearance.values_mut().model = "gpt-5".to_string();
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(
+        warnings[0].contains("tui.statusLinePosition.model"),
+        "{warnings:?}"
+    );
+    // The item keeps its default place.
+    assert_eq!(
+        appearance.status_line().map(|line| plain(&line)).as_deref(),
+        Some("gpt-5")
+    );
+}

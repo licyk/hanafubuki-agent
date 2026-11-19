@@ -101,6 +101,9 @@ pub(crate) struct ChatComposer {
     is_task_running: bool,
     /// The status line the footer shows (`/statusline`).
     status_line: Option<Line<'static>>,
+    /// The footer's sides beside the hints: the counts and the items placed
+    /// on the second row's left.
+    sides: super::FooterSides,
     goal_status: super::footer::GoalStatus,
     navigation_footer: Option<Vec<Line<'static>>>,
     /// A newer release, on the right of the footer's row.
@@ -170,6 +173,7 @@ impl ChatComposer {
             placeholder_text,
             is_task_running: false,
             status_line: None,
+            sides: super::FooterSides::default(),
             goal_status: Default::default(),
             navigation_footer: None,
             paste_burst: PasteBurst::default(),
@@ -766,6 +770,11 @@ impl ChatComposer {
 
     pub(crate) fn set_status_line(&mut self, line: Option<Line<'static>>) {
         self.status_line = line;
+    }
+
+    /// The footer's sides beside the hints.
+    pub(crate) fn set_counts(&mut self, sides: super::FooterSides) {
+        self.sides = sides;
     }
 
     /// Whether the terminal reports Shift+Enter apart from Enter.

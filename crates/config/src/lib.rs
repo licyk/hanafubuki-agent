@@ -79,7 +79,7 @@ pub use store::{
     AGENT_SETTINGS_FILE,
 };
 pub use tui::{
-    AgentAgentsGrouping, AgentAlternateScreen, AgentScrollbackMouse, AgentTuiPreferences,
-    AgentTuiPreferencesPatch, AgentTuiPreset, AgentTuiRendering, AgentWelcomeTheme,
-    MAX_PRESET_INPUT_BYTES,
+    AgentAgentsGrouping, AgentAlternateScreen, AgentScrollbackMouse, AgentStatusLineOverflow,
+    AgentStatusLinePlace, AgentTuiPreferences, AgentTuiPreferencesPatch, AgentTuiPreset,
+    AgentTuiRendering, AgentWelcomeTheme, MAX_PRESET_INPUT_BYTES,
 };

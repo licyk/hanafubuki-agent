@@ -23,6 +23,7 @@ mod shortcut_overlay;
 
 pub(crate) use goal::GoalStatus;
 
+use crate::appearance::SideCount;
 use crate::key_hint;
 use crate::key_hint::KeyBinding;
 use crate::keymap::{self, Action};
@@ -35,6 +36,27 @@ use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Widget;
+
+/// What the footer shows beside the hints: the counts on the second row's
+/// right, the status line's items placed on its left, and what happens when
+/// a row does not fit.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct FooterSides {
+    pub(crate) counts: Vec<SideCount>,
+    pub(crate) second_row: Option<Line<'static>>,
+    pub(crate) overflow: Overflow,
+}
+
+/// What the footer does when a line does not fit beside what shares it:
+/// `wrap-left` keeps the right side on its row and moves the left side
+/// below it, `wrap-all` moves both, `truncate` cuts the left side.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Overflow {
+    WrapLeft,
+    #[default]
+    WrapAll,
+    Truncate,
+}
 
 /// The rendering inputs for the footer area under the composer.
 #[derive(Clone, Copy, Debug)]
@@ -63,6 +85,12 @@ pub(crate) struct FooterProps<'a> {
     /// Under WSL, whose terminal pastes text with Ctrl+V: the shortcuts
     /// show Ctrl+Alt+V for pasting an image.
     pub(crate) wsl: bool,
+    /// The counts on the second row's right: terminals, agents, warnings.
+    pub(crate) counts: &'a [SideCount],
+    /// The status line's items whose place is the second row's left.
+    pub(crate) second_row: Option<&'a Line<'static>>,
+    /// When a row does not fit beside the counts.
+    pub(crate) overflow: Overflow,
 }
 
 /// Selects which footer content is rendered.
@@ -156,17 +184,10 @@ pub(crate) fn render_footer(area: Rect, buf: &mut Buffer, props: FooterProps<'_>
 
 fn wrapped_footer(props: FooterProps<'_>, width: u16) -> Vec<Line<'static>> {
     let width = width.saturating_sub(FOOTER_INDENT_COLS as u16).max(1);
-    let mut lines = footer_lines(props);
-    if let (Some(hint), Some(goal)) = (lines.last_mut(), goal_line(props)) {
-        let used = hint.width() + goal.width();
-        if used + 2 <= usize::from(width) {
-            hint.push_span(" ".repeat(usize::from(width) - used));
-            hint.spans.extend(goal.spans);
-        } else {
-            lines.push(goal);
-        }
-    }
-    lines
+    let (lines, right) = footer_sides(props, width);
+    let mut arranged = lines;
+    place_right(&mut arranged, width, props.overflow, right);
+    arranged
         .into_iter()
         .flat_map(|line| {
             if line.width() <= usize::from(width) {
@@ -175,6 +196,97 @@ fn wrapped_footer(props: FooterProps<'_>, width: u16) -> Vec<Line<'static>> {
             crate::wrapping::word_wrap_lines([line], usize::from(width))
         })
         .collect()
+}
+
+/// The footer's left side, a row each, and its right side: the counts and
+/// the goal, `None` when there is neither.
+fn footer_sides(props: FooterProps<'_>, width: u16) -> (Vec<Line<'static>>, Option<Line<'static>>) {
+    let mut lines = footer_lines(props);
+    // The items placed on the second row's left are a row of their own,
+    // under the hints.
+    if let Some(second) = props.second_row.cloned() {
+        lines.push(second);
+    }
+    let mut right = Line::default();
+    for (index, count) in props.counts.iter().enumerate() {
+        if index > 0 {
+            right.spans.push(" · ".dim());
+        }
+        right.spans.push(count.text().dim());
+    }
+    if let Some(goal) = goal_line(props) {
+        if !right.spans.is_empty() {
+            right.spans.push(" · ".dim());
+        }
+        right.spans.extend(goal.spans);
+    }
+    let right = (!right.spans.is_empty() && right.width() <= usize::from(width)).then_some(right);
+    (lines, right)
+}
+
+/// Puts `right` at the row's right edge, keeping the left row where the
+/// overflow rule says it goes.
+fn place_right(
+    lines: &mut Vec<Line<'static>>,
+    width: u16,
+    overflow: Overflow,
+    right: Option<Line<'static>>,
+) {
+    let Some(right) = right else {
+        return;
+    };
+    let width = usize::from(width);
+    let Some(left) = lines.last_mut() else {
+        lines.push(right);
+        return;
+    };
+    let used = left.width() + right.width();
+    if used + 2 <= width {
+        left.push_span(" ".repeat(width - used));
+        left.spans.extend(right.spans);
+        return;
+    }
+    match overflow {
+        // The right side keeps the row, and the left side moves under it.
+        Overflow::WrapLeft => {
+            let left = std::mem::take(left);
+            *lines.last_mut().expect("the row is there") = right;
+            lines.push(left);
+        }
+        // Both sides move: the right side keeps its own row, the left side
+        // follows it.
+        Overflow::WrapAll => lines.push(right),
+        // The left side is cut where the right side begins, and shares the
+        // right side's row.
+        Overflow::Truncate => {
+            let room = width.saturating_sub(right.width() + 2).max(1);
+            let mut row = Line::default();
+            let mut used = 0;
+            for span in std::mem::take(&mut left.spans) {
+                if used >= room {
+                    break;
+                }
+                let mut text = String::new();
+                for ch in span.content.chars() {
+                    let width_of = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+                    if used + width_of > room {
+                        break;
+                    }
+                    text.push(ch);
+                    used += width_of;
+                }
+                if text.is_empty() {
+                    break;
+                }
+                row.spans
+                    .push(ratatui::text::Span::styled(text, span.style));
+            }
+            let pad = width.saturating_sub(row.width() + right.width());
+            row.push_span(" ".repeat(pad));
+            row.spans.extend(right.spans);
+            *lines.last_mut().expect("the row is there") = row;
+        }
+    }
 }
 
 fn goal_line(props: FooterProps<'_>) -> Option<Line<'static>> {

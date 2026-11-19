@@ -51,6 +51,12 @@ pub struct AgentTuiPreferences {
     /// The items of the status line under the composer, in order; empty
     /// for none.
     pub status_line: Vec<String>,
+    /// `statusLinePosition.<item>`: where that item sits, `left-1`,
+    /// `right-2` and the like. An item without an entry is on the left of
+    /// the first row.
+    pub status_line_position: BTreeMap<String, String>,
+    /// What the footer does when a row does not fit beside the counts.
+    pub status_line_overflow: AgentStatusLineOverflow,
     /// Whether the status line's items take the theme's colors.
     pub status_line_colors: bool,
     /// The items of the terminal's title, in order; empty to leave the
@@ -131,6 +137,8 @@ impl Default for AgentTuiPreferences {
             welcome_enabled: true,
             welcome_theme: AgentWelcomeTheme::Random,
             status_line: DEFAULT_STATUS_LINE.map(String::from).to_vec(),
+            status_line_position: BTreeMap::new(),
+            status_line_overflow: AgentStatusLineOverflow::default(),
             status_line_colors: true,
             terminal_title: DEFAULT_TERMINAL_TITLE.map(String::from).to_vec(),
             rendering: AgentTuiRendering::default(),
@@ -167,6 +175,61 @@ impl Default for AgentTuiRendering {
             math: true,
             mermaid: true,
         }
+    }
+}
+
+/// What the footer does when a row does not fit beside the counts on its
+/// right.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AgentStatusLineOverflow {
+    /// The counts keep their row and the left side moves under them.
+    WrapLeft,
+    /// Both sides move: the left side wraps to the next row.
+    #[default]
+    WrapAll,
+    /// The left side is cut where the counts begin.
+    Truncate,
+}
+
+/// Where an item of the status line sits: `left-1` or `right-2`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AgentStatusLinePlace {
+    /// The second row rather than the first.
+    pub second_row: bool,
+    /// The row's right edge rather than its left.
+    pub right: bool,
+}
+
+impl AgentStatusLinePlace {
+    /// What `value` says, `left-1` to `right-2`; `None` for anything else.
+    pub fn parse(value: &str) -> Option<Self> {
+        let (side, row) = value.split_once('-')?;
+        let second_row = match row {
+            "1" => false,
+            "2" => true,
+            _ => return None,
+        };
+        match side {
+            "left" => Some(Self {
+                second_row,
+                right: false,
+            }),
+            "right" => Some(Self {
+                second_row,
+                right: true,
+            }),
+            _ => None,
+        }
+    }
+
+    /// The value `parse` reads, `left-1` to `right-2`.
+    pub fn value(self) -> String {
+        format!(
+            "{}-{}",
+            if self.right { "right" } else { "left" },
+            if self.second_row { 2 } else { 1 }
+        )
     }
 }
 
@@ -351,6 +414,18 @@ pub(crate) fn section() -> SettingsSection {
             described(
                 SettingSpec::new("tui.statusLine", "Status line", items()),
                 "The status line's items, in order",
+            ),
+            described(
+                SettingSpec::new(
+                    "tui.statusLineOverflow",
+                    "Status line overflow",
+                    choice(&[
+                        ("wrap-all", "Wrap both sides"),
+                        ("wrap-left", "Keep the right side, wrap the left"),
+                        ("truncate", "Cut the left side"),
+                    ]),
+                ),
+                "What the footer does when a row does not fit beside the counts",
             ),
             described(
                 SettingSpec::new(

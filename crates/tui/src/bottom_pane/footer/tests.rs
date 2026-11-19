@@ -66,6 +66,9 @@ fn props(mode: FooterMode) -> FooterProps<'static> {
         second_conversation: false,
         shell_command: false,
         wsl: false,
+        counts: &[],
+        second_row: None,
+        overflow: Overflow::default(),
     }
 }
 
@@ -157,6 +160,102 @@ fn overlay() -> FooterProps<'static> {
         agents_hint: true,
         ..props(FooterMode::ShortcutOverlay)
     }
+}
+
+/// The counts a session with one terminal, two agents and three warnings
+/// would show.
+fn counts() -> Vec<crate::appearance::SideCount> {
+    use crate::appearance::{SideCount, SideItem};
+    vec![
+        SideCount::new(SideItem::Terminals, 1, "terminal", "terminals"),
+        SideCount::new(SideItem::Agents, 2, "agent", "agents"),
+        SideCount::new(SideItem::Warnings, 3, "warning", "warnings"),
+    ]
+}
+
+#[test]
+fn the_counts_sit_at_the_right_edge_of_the_hint_row() {
+    let counts = counts();
+    let props = FooterProps {
+        agents_hint: true,
+        counts: &counts,
+        ..props(FooterMode::ComposerEmpty)
+    };
+    let lines = rows(props, 80, footer_height(props, 80));
+    let row = lines.last().unwrap();
+    assert!(
+        row.starts_with("  ← for agents · ? for shortcuts"),
+        "{lines:?}"
+    );
+    assert!(
+        row.ends_with("1 terminal · 2 agents · 3 warnings"),
+        "{lines:?}"
+    );
+    assert_eq!(row.chars().count(), 80);
+    assert_eq!(lines.len(), 1, "the counts fit beside the hints");
+}
+
+#[test]
+fn a_row_too_narrow_for_both_sides_follows_the_overflow_rule() {
+    // Wide enough for either side alone, not for both.
+    let width = 40;
+    let counts = counts();
+    let at = |overflow: Overflow| {
+        let props = FooterProps {
+            agents_hint: true,
+            counts: &counts,
+            overflow,
+            ..props(FooterMode::ComposerEmpty)
+        };
+        rows(props, width, footer_height(props, width))
+    };
+
+    // Both sides move: the counts keep their row, the hints follow them.
+    let wrapped_all = at(Overflow::WrapAll);
+    assert_eq!(wrapped_all.len(), 2, "{wrapped_all:?}");
+    assert!(
+        wrapped_all[0].starts_with("  ← for agents"),
+        "{wrapped_all:?}"
+    );
+    assert!(
+        wrapped_all[1].trim_end().ends_with("3 warnings"),
+        "{wrapped_all:?}"
+    );
+
+    // The right side keeps the row; the left side goes under it.
+    let wrapped_left = at(Overflow::WrapLeft);
+    assert_eq!(wrapped_left.len(), 2, "{wrapped_left:?}");
+    assert!(
+        wrapped_left[0].trim_end().ends_with("3 warnings"),
+        "{wrapped_left:?}"
+    );
+    assert!(
+        wrapped_left[1].starts_with("  ← for agents"),
+        "{wrapped_left:?}"
+    );
+
+    // One row: the hints are cut where the counts begin.
+    let truncated = at(Overflow::Truncate);
+    assert_eq!(truncated.len(), 1, "{truncated:?}");
+    assert!(truncated[0].ends_with("3 warnings"), "{truncated:?}");
+    assert_eq!(truncated[0].chars().count(), width as usize);
+}
+
+#[test]
+fn no_counts_leaves_the_hint_row_as_it_was() {
+    let with_none = FooterProps {
+        agents_hint: true,
+        counts: &[],
+        ..props(FooterMode::ComposerEmpty)
+    };
+    let plain = FooterProps {
+        agents_hint: true,
+        ..props(FooterMode::ComposerEmpty)
+    };
+    assert_eq!(
+        rows(with_none, 80, footer_height(with_none, 80)),
+        rows(plain, 80, footer_height(plain, 80))
+    );
 }
 
 fn install(entries: &[(&str, &str, &[&str])]) {

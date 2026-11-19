@@ -36,6 +36,8 @@ fn missing_preferences_are_the_defaults() {
                 "current-dir".to_string(),
                 "session-title".to_string(),
             ],
+            status_line_position: BTreeMap::new(),
+            status_line_overflow: crate::AgentStatusLineOverflow::WrapAll,
             status_line_colors: true,
             terminal_title: vec![
                 "activity".to_string(),
@@ -77,6 +79,8 @@ fn each_key_decodes_on_its_own_and_unknown_keys_are_ignored() {
             theme: Some("nord".to_string()),
             // Not a list of ids: the default.
             status_line: AgentTuiPreferences::default().status_line,
+            status_line_position: BTreeMap::new(),
+            status_line_overflow: crate::AgentStatusLineOverflow::WrapAll,
             status_line_colors: false,
             // The interface leaves out the ids it does not know.
             terminal_title: vec!["app-name".to_string(), "unknown-item".to_string()],

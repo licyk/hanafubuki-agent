@@ -69,6 +69,7 @@ pub(crate) use actions::ActionButtons;
 use approval_overlay::ApprovalOverlay;
 pub(crate) use bottom_pane_view::BottomPaneView;
 use chat_composer::ChatComposer;
+pub(crate) use footer::{FooterSides, Overflow};
 pub(crate) use form::{FieldId, FormEvent, FormItem, FormView, TextField};
 pub(crate) use list_selection_view::{ListSelectionView, SelectionItem, SelectionViewParams};
 pub(crate) use loading_line::LoadingLine;
@@ -522,6 +523,13 @@ impl BottomPane {
 
     pub(crate) fn set_status_line(&mut self, line: Option<Line<'static>>) {
         self.composer.set_status_line(line);
+        self.request_redraw();
+    }
+
+    /// The footer's right side and what it does when a row does not fit
+    /// beside it.
+    pub(crate) fn set_counts(&mut self, sides: FooterSides) {
+        self.composer.set_counts(sides);
         self.request_redraw();
     }
 

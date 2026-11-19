@@ -87,6 +87,9 @@ impl ChatComposer {
             second_conversation: self.command_scope.is_some(),
             shell_command: self.textarea.text().starts_with('!'),
             wsl: self.wsl,
+            counts: &self.sides.counts,
+            second_row: self.sides.second_row.as_ref(),
+            overflow: self.sides.overflow,
         }
     }
 

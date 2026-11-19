@@ -16,7 +16,9 @@ pub(crate) mod theme_picker;
 
 use std::time::Instant;
 
-use hanafubuki_agent::{AgentPermissionMode, AgentTuiPreferences};
+use hanafubuki_agent::{
+    AgentPermissionMode, AgentStatusLineOverflow, AgentStatusLinePlace, AgentTuiPreferences,
+};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
 
@@ -74,7 +76,12 @@ pub(crate) struct SideCount {
 }
 
 impl SideCount {
-    fn new(item: SideItem, count: usize, singular: &'static str, plural: &'static str) -> Self {
+    pub(crate) fn new(
+        item: SideItem,
+        count: usize,
+        singular: &'static str,
+        plural: &'static str,
+    ) -> Self {
         Self {
             item,
             count,
@@ -103,6 +110,10 @@ pub(crate) struct Appearance {
     /// `tui.theme` as saved, which `/theme` marks.
     theme: Option<String>,
     status_line: Vec<StatusLineItem>,
+    /// Where each item sits; an item without an entry is on the left of the
+    /// first row.
+    positions: std::collections::BTreeMap<String, AgentStatusLinePlace>,
+    overflow: AgentStatusLineOverflow,
     status_line_colors: bool,
     terminal_title: Vec<TerminalTitleItem>,
     title_preview: Option<Vec<TerminalTitleItem>>,
@@ -137,9 +148,23 @@ impl Appearance {
         if !unknown_title.is_empty() {
             warnings.push(unknown_items_warning("tui.terminalTitle", &unknown_title));
         }
+        let mut positions = std::collections::BTreeMap::new();
+        for (item, value) in &preferences.status_line_position {
+            match AgentStatusLinePlace::parse(value) {
+                Some(place) => {
+                    positions.insert(item.clone(), place);
+                }
+                None => warnings.push(format!(
+                    "tui.statusLinePosition.{item} is '{value}', not left-1, left-2, right-1 or right-2; \
+                     it is ignored."
+                )),
+            }
+        }
         let appearance = Self {
             theme: preferences.theme.clone(),
             status_line,
+            positions,
+            overflow: preferences.status_line_overflow,
             status_line_colors: preferences.status_line_colors,
             terminal_title,
             title_preview: None,
@@ -212,9 +237,45 @@ impl Appearance {
         }
     }
 
+    /// The items placed at `place`, in the order `tui.statusLine` holds.
+    fn placed(&self, place: AgentStatusLinePlace) -> Vec<StatusLineItem> {
+        self.status_line
+            .iter()
+            .copied()
+            .filter(|item| self.place_of(*item) == place)
+            .collect()
+    }
+
+    /// Where `item` sits: its `tui.statusLinePosition` entry, or the left of
+    /// the first row.
+    fn place_of(&self, item: StatusLineItem) -> AgentStatusLinePlace {
+        self.positions.get(item.id()).copied().unwrap_or_default()
+    }
+
+    /// What the footer does when a row does not fit beside the counts.
+    pub(crate) fn overflow(&self) -> crate::bottom_pane::Overflow {
+        match self.overflow {
+            AgentStatusLineOverflow::WrapLeft => crate::bottom_pane::Overflow::WrapLeft,
+            AgentStatusLineOverflow::WrapAll => crate::bottom_pane::Overflow::WrapAll,
+            AgentStatusLineOverflow::Truncate => crate::bottom_pane::Overflow::Truncate,
+        }
+    }
+
+    /// The status line's second row, on the left; `None` with no item there.
+    pub(crate) fn second_row(&self) -> Option<Line<'static>> {
+        let placed = self.placed(AgentStatusLinePlace {
+            second_row: true,
+            right: false,
+        });
+        status_line(&placed, self.status_line_colors, |item| {
+            self.values.status_value(item)
+        })
+    }
+
     /// The status line under the composer; `None` with no item to show.
     pub(crate) fn status_line(&self) -> Option<Line<'static>> {
-        let mut line = status_line(&self.status_line, self.status_line_colors, |item| {
+        let placed = self.placed(AgentStatusLinePlace::default());
+        let mut line = status_line(&placed, self.status_line_colors, |item| {
             self.values.status_value(item)
         })
         .unwrap_or_default();
