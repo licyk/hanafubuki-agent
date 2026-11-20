@@ -2,6 +2,9 @@ use super::*;
 
 #[tokio::test]
 async fn modern_discovery_uses_correlated_legacy_fallback() {
+    if !python_available() {
+        return;
+    }
     let fixture = r#"
 import json, sys
 discovered = False
@@ -59,6 +62,9 @@ for line in sys.stdin:
 
 #[tokio::test]
 async fn discovery_failure_confirms_candidate_process_cleanup() {
+    if !python_available() {
+        return;
+    }
     let fixture = r#"
 import json, sys
 for line in sys.stdin:
@@ -98,6 +104,9 @@ for line in sys.stdin:
 
 #[tokio::test]
 async fn stdio_connection_uses_receipt_transport_and_separates_stderr() {
+    if !python_available() {
+        return;
+    }
     let fixture = r#"
 import json, sys
 for line in sys.stdin:
@@ -219,6 +228,9 @@ for line in sys.stdin:
 
 #[tokio::test]
 async fn stdio_tool_active_timeout_pauses_for_real_user_elicitation() {
+    if !python_available() {
+        return;
+    }
     let fixture = r#"
 import json, sys
 pending_call = None
@@ -326,6 +338,9 @@ for line in sys.stdin:
 
 #[tokio::test]
 async fn turn_cancellation_clears_the_exact_real_protocol_elicitation() {
+    if !python_available() {
+        return;
+    }
     let fixture = r#"
 import json, sys
 for line in sys.stdin:
@@ -421,6 +436,9 @@ for line in sys.stdin:
 
 #[tokio::test]
 async fn resource_listing_enforces_total_time_and_repeated_cursor_limits() {
+    if !python_available() {
+        return;
+    }
     // The listing that times out is abandoned, and rmcp tells the server so
     // with `notifications/cancelled`; a server must not answer a notification.
     let fixture = r#"
@@ -484,6 +502,9 @@ for line in sys.stdin:
 
 #[tokio::test]
 async fn stdio_rejects_an_oversized_outbound_jsonrpc_frame_without_echoing_content() {
+    if !python_available() {
+        return;
+    }
     let fixture = r#"
 import json, sys
 for line in sys.stdin:

@@ -72,6 +72,9 @@ fn quirky_config(mode: &str) -> McpServerConfig {
 
 #[tokio::test]
 async fn a_quirky_server_stays_connected_with_its_usable_tools() {
+    if !python_available() {
+        return;
+    }
     let config = quirky_config("quirky");
     let executor = Arc::new(ExecutorManager::default());
     let workers = BackgroundWorkerGroup::default();
@@ -262,6 +265,9 @@ async fn a_quirky_server_stays_connected_with_its_usable_tools() {
 /// over 4 MiB still fail the whole listing, so the server does not connect.
 #[tokio::test]
 async fn an_error_response_or_an_oversized_page_still_fails_the_listing() {
+    if !python_available() {
+        return;
+    }
     for (mode, expected) in [
         ("unauthorized", "Unauthorized"),
         ("oversized", "exceeds local limits"),

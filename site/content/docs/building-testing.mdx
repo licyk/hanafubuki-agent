@@ -74,6 +74,8 @@ cargo test --workspace --all-features
 
 测试针对真实实现，尽量少用 mock，不在测试里复制业务逻辑。测试的位置规则（白盒测试在 `src/<module>/tests.rs`，公开 API 与跨 crate 契约在 crate 的 `tests/`，测试辅助的写法）见[参与开发](/docs/contributing#layout-and-module-size)。
 
+MCP crate 的 stdio 测试用一个 Python 解释器来跑它的 fixture 服务器：Windows 上是 `python`，其他平台是 `python3`，或者 `HANAFUBUKI_AGENT_TEST_PYTHON` 指定的那个（可以写完整路径）。每次运行只询问一次它能否运行，询问的方式与启动服务器时一致（只给少数几个环境变量）；不能运行时，这些测试直接返回并说明一次（`warning: the stdio MCP fixtures are skipped: …`），整轮测试仍然通过。机器上没有解释器并不说明被测代码有问题，所以想让它们真正运行时，把这个变量指向一个解释器即可。
+
 设置 `HOSHIMI_COMPACTION_TEST_URL` 为真实 Hoshimi Responses 的 `/v1` 地址、`HOSHIMI_CONTEXT_TEST_IMAGE` 为含 ComfyUI、InvokeAI 或 Stable Diffusion 的 Hanafubuki 截图路径，在 Hoshimi 已登录 qodercli-cn 后，可运行 `cargo test -p hanafubuki-agent --lib live_hoshimi_reported_context_and_images_compact_at_threshold -- --ignored --nocapture`。此默认忽略的测试使用 `DeepSeek-Flash`，实际发送有图和无图的长文本，验证图片识别，在约 512k tokens 时重启会话，再跨过 80% 阈值。它使用独立的 Agent 数据目录，输出 Provider 用量、本地估算和压缩结果，不属于常规离线测试。
 
 忽略测试 `live_hoshimi_small_context_tool_loop_does_not_compact_on_cumulative_usage` 使用相同的 `HOSHIMI_COMPACTION_TEST_URL`，不需要图片。它通过 DeepSeek-Flash 连续调用 36 次 `update_plan`，每次请求约 190k token，在默认预算下跨过 640 万累计输入 token，并断言 1M 上下文窗口没有被压缩。使用 `cargo test -p hanafubuki-agent --all-features --lib live_hoshimi_small_context_tool_loop_does_not_compact_on_cumulative_usage -- --ignored --nocapture` 显式运行。

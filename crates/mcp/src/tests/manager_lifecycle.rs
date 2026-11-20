@@ -2,6 +2,9 @@ use super::*;
 
 #[tokio::test]
 async fn rapid_identical_connects_coalesce_into_one_connection() {
+    if !python_available() {
+        return;
+    }
     let fixture = r#"
 import json, sys, time
 for line in sys.stdin:
@@ -53,6 +56,9 @@ for line in sys.stdin:
 
 #[tokio::test]
 async fn manager_refresh_keeps_the_old_generation_until_plan_lease_release() {
+    if !python_available() {
+        return;
+    }
     let fixture = r#"
 import json, sys
 for line in sys.stdin:
@@ -203,6 +209,9 @@ async fn resolve_program_failure_never_reserves_a_process_and_is_diagnosed() {
 
 #[tokio::test]
 async fn shutdown_past_its_deadline_reports_the_connection_and_keeps_its_cleanup() {
+    if !python_available() {
+        return;
+    }
     // Keeps running after the end of its input; its cleanup has to stop it.
     let fixture = r#"
 import json, sys, time

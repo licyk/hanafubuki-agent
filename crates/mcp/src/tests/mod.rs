@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use hanafubuki_agent_foundation::background_worker::BackgroundWorkerGroup;
@@ -22,12 +22,65 @@ use tokio_util::sync::CancellationToken as TokioCancellationToken;
 
 use super::*;
 
+/// The environment variable naming the Python the stdio fixtures run on.
+const PYTHON_ENVIRONMENT: &str = "HANAFUBUKI_AGENT_TEST_PYTHON";
+
+/// The Python a stdio fixture runs on: what [`PYTHON_ENVIRONMENT`] names,
+/// else `python` on Windows and `python3` elsewhere.
 fn python_program() -> &'static str {
-    if cfg!(windows) {
-        "python"
-    } else {
-        "python3"
-    }
+    static PYTHON: OnceLock<String> = OnceLock::new();
+    PYTHON.get_or_init(|| {
+        std::env::var(PYTHON_ENVIRONMENT)
+            .ok()
+            .map(|program| program.trim().to_string())
+            .filter(|program| !program.is_empty())
+            .unwrap_or_else(|| match cfg!(windows) {
+                true => "python".to_string(),
+                false => "python3".to_string(),
+            })
+    })
+}
+
+/// Whether that Python runs here. A fixture that needs one returns when it
+/// does not, saying so once, rather than failing: a machine without an
+/// interpreter says nothing about the code under test.
+///
+/// It is asked the way a fixture's server is: with the few variables a
+/// server inherits, not this process's whole environment. A shim that only
+/// finds its interpreter through a variable of the test process fails here,
+/// as it would once spawned.
+fn python_available() -> bool {
+    static AVAILABLE: OnceLock<bool> = OnceLock::new();
+    *AVAILABLE.get_or_init(|| {
+        let program = python_program();
+        let mut probe = std::process::Command::new(program);
+        probe
+            .args(["-c", "import sys"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .env_clear();
+        for name in [
+            "PATH",
+            "SYSTEMROOT",
+            "SYSTEMDRIVE",
+            "USERPROFILE",
+            "TEMP",
+            "TMP",
+        ] {
+            if let Some(value) = std::env::var_os(name) {
+                probe.env(name, value);
+            }
+        }
+        let runs = probe.status().is_ok_and(|status| status.success());
+        if !runs {
+            eprintln!(
+                "warning: the stdio MCP fixtures are skipped: `{program}` is not a Python that \
+                 runs here; name one with {PYTHON_ENVIRONMENT}"
+            );
+        }
+        runs
+    })
 }
 
 fn stdio_config() -> McpServerConfig {

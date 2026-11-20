@@ -133,6 +133,9 @@ async fn stop(manager: McpManager, executor: &ExecutorManager, workers: Backgrou
 
 #[tokio::test]
 async fn a_server_that_exits_is_failed_and_reconnected_and_its_old_lease_is_stale() {
+    if !python_available() {
+        return;
+    }
     let state = tempdir().unwrap();
     let config = dying_config(state.path());
     let executor = Arc::new(ExecutorManager::default());
@@ -192,6 +195,9 @@ async fn a_server_that_exits_is_failed_and_reconnected_and_its_old_lease_is_stal
 
 #[tokio::test]
 async fn reconnects_stop_when_the_window_is_used_up_until_a_connect_from_outside() {
+    if !python_available() {
+        return;
+    }
     let state = tempdir().unwrap();
     let config = dying_config(state.path());
     let executor = Arc::new(ExecutorManager::default());
@@ -245,6 +251,9 @@ async fn reconnects_stop_when_the_window_is_used_up_until_a_connect_from_outside
 
 #[tokio::test]
 async fn shutdown_cancels_a_scheduled_reconnect() {
+    if !python_available() {
+        return;
+    }
     let state = tempdir().unwrap();
     let config = dying_config(state.path());
     let executor = Arc::new(ExecutorManager::default());

@@ -2,6 +2,9 @@ use super::*;
 
 #[tokio::test]
 async fn stdio_inherits_only_selected_names_and_keeps_explicit_overlays() {
+    if !python_available() {
+        return;
+    }
     const MARKER: &str = "HANAFUBUKI_MCP_ENV_TEST";
     if std::env::var_os(MARKER).is_none() {
         let temp = tempdir().unwrap();
