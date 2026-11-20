@@ -13,12 +13,14 @@ use std::collections::BTreeMap;
 use hanafubuki_agent::{
     config_sections, SettingKind, SettingSource, SettingSpec, SettingState, SettingValue,
     SettingsAction, SettingsActionScope, SettingsCatalog, SettingsCollection, SettingsGroup,
-    SettingsRecord,
+    SettingsRecord, SettingsSection,
 };
 use insta::assert_snapshot;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Rect;
 
+use super::editor::ListState;
+use super::render::Row;
 use super::{CenterRequest, SettingsCenter};
 use crate::agent_bridge::{CatalogCall, CatalogOutcome, CatalogReply};
 use crate::custom_terminal::Terminal;
@@ -27,6 +29,7 @@ use crate::test_support::VT100Backend;
 /// Every section of `config.toml` at its default, with one issue.
 fn catalog() -> SettingsCatalog {
     let mut sections = config_sections();
+    sections.push(plugin_options());
     for section in &mut sections {
         section.values = section
             .settings
@@ -43,6 +46,62 @@ fn catalog() -> SettingsCatalog {
     SettingsCatalog {
         sections,
         collections: vec![providers(), policy(), provider_models()],
+    }
+}
+
+/// A plugin's options, as the Plugins tab has them: its name labels the
+/// settings under it, so the tab's first row cannot be selected.
+fn plugin_options() -> SettingsSection {
+    SettingsSection {
+        id: "pluginOptions.sample".to_string(),
+        title: "Sample plugin".to_string(),
+        group: SettingsGroup::Plugins,
+        order: 0,
+        settings: vec![
+            SettingSpec::new(
+                "pluginOptions.sample.enabled",
+                "Enabled",
+                SettingKind::Boolean,
+            ),
+            SettingSpec::new(
+                "pluginOptions.sample.retries",
+                "Retries",
+                SettingKind::Integer {
+                    minimum: Some(0),
+                    maximum: None,
+                },
+            ),
+            SettingSpec::new(
+                "pluginOptions.sample.timeout",
+                "Timeout",
+                SettingKind::Integer {
+                    minimum: Some(1),
+                    maximum: None,
+                },
+            ),
+            SettingSpec::new(
+                "pluginOptions.sample.endpoint",
+                "Endpoint",
+                text(false, false),
+            ),
+            SettingSpec::new(
+                "pluginOptions.sample.verbose",
+                "Verbose",
+                SettingKind::Boolean,
+            ),
+            SettingSpec::new(
+                "pluginOptions.sample.profile",
+                "Profile",
+                text(false, false),
+            ),
+            SettingSpec::new("pluginOptions.sample.cache", "Cache", text(false, false)),
+            SettingSpec::new(
+                "pluginOptions.sample.workers",
+                "Workers",
+                SettingKind::Boolean,
+            ),
+        ],
+        values: Vec::new(),
     }
 }
 
@@ -341,6 +400,85 @@ fn a_wide_terminal_shows_a_long_label_and_value_whole() {
         !narrow.contains("low, high, medium, minimal, none"),
         "the value cut too:\n{narrow}"
     );
+}
+
+/// A section's heading labels the settings under it and cannot be
+/// selected, so a scroll that only followed the selection would leave it
+/// above the window for good once the list was scrolled down.
+#[test]
+fn a_heading_comes_back_when_the_selection_returns_to_its_first_row() {
+    let mut center = center_with(catalog(), Some("interface"));
+    let top = screen(&mut center, 100, 30);
+    assert!(top.contains("Terminal interface"), "{top}");
+    press(&mut center, KeyCode::End);
+    let scrolled = screen(&mut center, 100, 14);
+    assert!(
+        !scrolled.contains("Terminal interface"),
+        "the heading is above the window:\n{scrolled}"
+    );
+    press(&mut center, KeyCode::Home);
+    let back = screen(&mut center, 100, 14);
+    assert!(
+        back.contains("Terminal interface"),
+        "the heading again:\n{back}"
+    );
+    assert!(back.contains("Fullscreen"), "with its first row:\n{back}");
+}
+
+/// The Plugins tab's first row is a plugin's name, over its options: the
+/// shape the report was about.
+#[test]
+fn a_plugin_s_name_comes_back_over_its_options() {
+    let mut center = center_with(catalog(), None);
+    show_tab(&mut center, "Plugins");
+    press(&mut center, KeyCode::Home);
+    let top = screen(&mut center, 100, 16);
+    assert!(
+        top.lines().any(|line| line == "  Sample plugin"),
+        "its name is a heading of its own:\n{top}"
+    );
+    assert!(
+        top.contains("› Enabled"),
+        "the options under it, the first selected:\n{top}"
+    );
+    press(&mut center, KeyCode::End);
+    let scrolled = screen(&mut center, 100, 16);
+    assert!(!scrolled.contains("Sample plugin"), "{scrolled}");
+    press(&mut center, KeyCode::Home);
+    let back = screen(&mut center, 100, 16);
+    assert!(back.contains("Sample plugin"), "its name again:\n{back}");
+    assert!(back.contains("› Enabled"), "with its first option:\n{back}");
+}
+
+/// A search is left with a row that can be selected, over a section's
+/// heading if it is the one above: the keys' line counts it, not nothing.
+#[test]
+fn leaving_a_search_selects_a_row_not_the_heading_above_it() {
+    let mut center = center_with(catalog(), None);
+    show_tab(&mut center, "Memory");
+    press(&mut center, KeyCode::Char('/'));
+    type_text(&mut center, "memory");
+    press(&mut center, KeyCode::Enter);
+    press(&mut center, KeyCode::Esc);
+    let screen = screen(&mut center, 100, 26);
+    assert!(
+        screen.contains("› Memory"),
+        "the first setting is selected, under its heading:\n{screen}"
+    );
+    assert!(screen.contains("1/"), "counted among the rows:\n{screen}");
+}
+
+/// A window too short for both shows the selection: the heading above it
+/// is what gives way.
+#[test]
+fn a_window_of_one_row_shows_the_selection_not_the_heading_above_it() {
+    let rows = vec![
+        Row::heading("A plugin"),
+        Row::open("Its first option", "on", ""),
+    ];
+    let mut list = ListState::at(1);
+    list.keep_visible(1, &rows);
+    assert_eq!((list.selected, list.scroll), (1, 1));
 }
 
 /// What a write said is wrapped under the breadcrumbs, not cut at the

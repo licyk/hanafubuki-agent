@@ -168,7 +168,7 @@ impl MainPage {
         match key.code {
             KeyCode::Esc if self.search.is_some() => {
                 self.search = None;
-                self.list = ListState::default();
+                self.list = ListState::first(&self.rows(catalog), selectable);
             }
             KeyCode::Esc => return Effect::Close,
             KeyCode::Left | KeyCode::Right if self.search.is_none() => {

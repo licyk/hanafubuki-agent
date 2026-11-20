@@ -417,7 +417,6 @@ fn render_list(
         Line::from(empty.dim().italic()).render(Rect { height: 1, ..area }, buf);
         return;
     }
-    list.selected = list.selected.min(rows.len() - 1);
     let width = usize::from(area.width);
     let label_width = rows
         .iter()
@@ -451,7 +450,7 @@ fn render_list(
     } else {
         area.height
     };
-    list.keep_visible(usize::from(list_height), rows.len());
+    list.keep_visible(usize::from(list_height), rows);
     let columns = Columns {
         label: label_width,
         value: value_width,

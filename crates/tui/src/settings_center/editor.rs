@@ -72,13 +72,29 @@ impl ListState {
         };
     }
 
-    /// The scroll that keeps the selected row among `height` rows.
-    pub(super) fn keep_visible(&mut self, height: usize, count: usize) {
+    /// The scroll that keeps the selected row among `height` rows, and the
+    /// rows just above it that only label the ones below (a section's
+    /// heading, a collection's issues): those are never selected, so
+    /// scrolling up has to reach past the selection for them to be seen
+    /// again. What fits goes above it, the selection staying in view.
+    pub(super) fn keep_visible(&mut self, height: usize, rows: &[Row]) {
         let height = height.max(1);
-        if self.selected < self.scroll {
-            self.scroll = self.selected;
+        let count = rows.len();
+        if count == 0 {
+            self.selected = 0;
+            self.scroll = 0;
+            return;
+        }
+        self.selected = self.selected.min(count - 1);
+        let mut labels = self.selected;
+        while labels > 0 && !rows[labels - 1].selectable {
+            labels -= 1;
+        }
+        let lowest = (self.selected + 1).saturating_sub(height);
+        if self.scroll > labels {
+            self.scroll = labels.max(lowest);
         } else if self.selected >= self.scroll + height {
-            self.scroll = self.selected + 1 - height;
+            self.scroll = lowest;
         }
         self.scroll = self.scroll.min(count.saturating_sub(height));
     }
