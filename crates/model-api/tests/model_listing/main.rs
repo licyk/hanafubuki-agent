@@ -9,6 +9,10 @@
 //!   example of `GET /v1/models` (`openapi.yaml`, `userExample`), which
 //!   shows the cards bare; here in the `ModelList` envelope
 //!   (`{"object": "list", "data": [...]}`) the same schema names.
+//! - `zai.json`: <https://open.bigmodel.cn/api/v1/models>' own answer, read
+//!   on 2026-11-20: z.ai publishes no example, and the page is the Codex
+//!   envelope (`{"models": [...]}`) whose entries name their model in
+//!   `slug`.
 //!
 //! The first OpenRouter and Anthropic entries are the documented ones; each
 //! second entry (`example/…`, `claude-example-…`) is illustrative, in the
@@ -199,6 +203,56 @@ async fn the_documented_mistral_listing_reports_its_window() {
 }
 
 #[tokio::test]
+async fn the_zai_listing_names_its_models_by_slug() {
+    let listing = list_one_page(
+        ModelApiProtocol::Responses,
+        include_str!("fixtures/zai.json"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(listing.skipped, 0);
+    // Sorted by display name: `glm-5-turbo` before `glm-5.3`.
+    let [turbo, flagship, flash] = listing.entries.try_into().unwrap();
+    assert_eq!(
+        turbo,
+        ModelCatalogEntry {
+            display_name: Some("glm-5-turbo".into()),
+            // It reports a default level and no levels it supports.
+            default_reasoning_effort: Some(ModelReasoningEffort::parse("max").unwrap()),
+            context_window: Some(204_800),
+            image_input: Some(false),
+            reasoning: Some(true),
+            ..unknown_entry("glm-5-turbo")
+        }
+    );
+    assert_eq!(
+        flagship,
+        ModelCatalogEntry {
+            display_name: Some("glm-5.3".into()),
+            default_reasoning_effort: Some(ModelReasoningEffort::parse("max").unwrap()),
+            supported_reasoning_efforts: efforts(&["low", "high", "max"]),
+            context_window: Some(1_048_576),
+            image_input: Some(false),
+            reasoning: Some(true),
+            ..unknown_entry("glm-5.3")
+        }
+    );
+    assert_eq!(
+        flash,
+        ModelCatalogEntry {
+            display_name: Some("glm-5.3-flash".into()),
+            default_reasoning_effort: Some(ModelReasoningEffort::parse("max").unwrap()),
+            supported_reasoning_efforts: efforts(&["low", "high", "max"]),
+            context_window: Some(1_048_576),
+            // `input_modalities` names `image` among them.
+            image_input: Some(true),
+            reasoning: Some(true),
+            ..unknown_entry("glm-5.3-flash")
+        }
+    );
+}
+
+#[tokio::test]
 async fn entries_without_a_usable_id_are_skipped_and_counted() {
     let page = json!({"data": [
         {"id": "model-b", "context_length": "large", "vision": "yes"},
@@ -228,15 +282,32 @@ async fn entries_without_a_usable_id_are_skipped_and_counted() {
 }
 
 #[tokio::test]
-async fn a_page_without_a_data_array_fails_the_listing() {
-    for body in [r#"{"object":"list"}"#, r#"{"data":{"id":"model-a"}}"#, "[]"] {
+async fn a_page_without_an_entry_array_fails_the_listing() {
+    for body in [
+        r#"{"object":"list"}"#,
+        r#"{"data":{"id":"model-a"}}"#,
+        r#"{"models":{"slug":"model-a"}}"#,
+        r#"{"object":"list","data":null,"models":null}"#,
+        "[]",
+    ] {
         assert!(
             matches!(
                 list_one_page(ModelApiProtocol::ChatCompletions, body).await,
-                Err(ModelError::Protocol(message)) if message.contains("no data array")
+                Err(ModelError::Protocol(message)) if message.contains("no models array")
             ),
             "{body}"
         );
+    }
+}
+
+#[tokio::test]
+async fn an_empty_entry_array_lists_no_models() {
+    for body in [r#"{"data":[]}"#, r#"{"object":"list","models":[]}"#] {
+        let listing = list_one_page(ModelApiProtocol::ChatCompletions, body)
+            .await
+            .unwrap();
+        assert_eq!(listing.skipped, 0);
+        assert!(listing.entries.is_empty(), "{body}");
     }
 }
 

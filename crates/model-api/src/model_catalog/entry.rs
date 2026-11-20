@@ -8,14 +8,16 @@ use crate::ModelReasoningEffort;
 const MAX_MODEL_ID_BYTES: usize = 512;
 const MAX_REASONING_EFFORTS_PER_MODEL: usize = 32;
 
-/// The entry `item` describes, or `None` when it has no usable id: none, not
-/// a string, blank, or over 512 bytes. Any other field it cannot read is
-/// unknown, and a reasoning effort that does not parse is left out.
+/// The entry `item` describes, or `None` when it names no usable model: no
+/// `id` (OpenAI-compatible servers) and no `slug` (Codex, and the Responses
+/// API of z.ai), not a string, blank, or over 512 bytes; `id` first. Any
+/// other field it cannot read is unknown, and a reasoning effort that does
+/// not parse is left out.
 pub(super) fn decode_entry(item: &Value) -> Option<ModelCatalogEntry> {
-    let id = item
-        .get("id")?
-        .as_str()
-        .filter(|id| !id.trim().is_empty() && id.len() <= MAX_MODEL_ID_BYTES)?;
+    let id = ["id", "slug"]
+        .iter()
+        .filter_map(|key| item.get(*key).and_then(Value::as_str))
+        .find(|id| !id.trim().is_empty() && id.len() <= MAX_MODEL_ID_BYTES)?;
     let display_name = item
         .get("display_name")
         .and_then(Value::as_str)

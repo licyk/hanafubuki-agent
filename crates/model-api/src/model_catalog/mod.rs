@@ -1,6 +1,8 @@
 //! A Provider's model listing (`GET {base}/models`), read tolerantly: an
 //! entry the Agent cannot use is left out and counted, a field it cannot
-//! read is unknown, and only a page without a `data` array fails.
+//! read is unknown, and only a page whose entries are under neither a `data`
+//! array (OpenAI-compatible servers) nor a `models` array (Codex, and the
+//! Responses API of z.ai) fails.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -85,10 +87,10 @@ impl ModelCatalogClient {
             let value = self
                 .fetch_page(endpoint.clone(), authentication, &cancellation)
                 .await?;
-            let data = value
-                .get("data")
-                .and_then(Value::as_array)
-                .ok_or_else(|| ModelError::Protocol("model catalog has no data array".into()))?;
+            let data = ["data", "models"]
+                .iter()
+                .find_map(|key| value.get(*key).and_then(Value::as_array))
+                .ok_or_else(|| ModelError::Protocol("model catalog has no models array".into()))?;
             for item in data {
                 let Some(entry) = entry::decode_entry(item) else {
                     skipped += 1;

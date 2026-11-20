@@ -10,6 +10,9 @@ fn an_entry_without_a_usable_id_is_left_out() {
         json!({"id": null}),
         json!({"id": "  "}),
         json!({"id": "m".repeat(MAX_MODEL_ID_BYTES + 1)}),
+        json!({"slug": 7}),
+        json!({"slug": "  "}),
+        json!({"slug": "m".repeat(MAX_MODEL_ID_BYTES + 1)}),
         json!("model-a"),
         json!(null),
     ] {
@@ -17,6 +20,23 @@ fn an_entry_without_a_usable_id_is_left_out() {
     }
     let longest = "m".repeat(MAX_MODEL_ID_BYTES);
     assert_eq!(decode_entry(&json!({"id": longest})).unwrap().id, longest);
+    assert_eq!(decode_entry(&json!({"slug": longest})).unwrap().id, longest);
+}
+
+#[test]
+fn the_slug_names_the_model_when_the_id_does_not() {
+    let entry = decode_entry(&json!({"slug": "glm-5.3", "display_name": "glm-5.3"})).unwrap();
+    assert_eq!(entry.id, "glm-5.3");
+    assert_eq!(entry.display_name.as_deref(), Some("glm-5.3"));
+    let both = decode_entry(&json!({"id": "model-a", "slug": "model-b"})).unwrap();
+    assert_eq!(both.id, "model-a");
+    for item in [
+        json!({"id": null, "slug": "model-b"}),
+        json!({"id": 7, "slug": "model-b"}),
+        json!({"id": " ", "slug": "model-b"}),
+    ] {
+        assert_eq!(decode_entry(&item).unwrap().id, "model-b", "{item}");
+    }
 }
 
 #[test]
