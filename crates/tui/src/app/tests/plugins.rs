@@ -100,10 +100,10 @@ fn a_marketplaces_plugin_is_installed_trusted_turned_off_and_on_and_uninstalled(
     let mut harness = Harness::start(Vec::new());
     harness.add_marketplace();
     harness.type_and_submit("/plugins");
-    harness.pump_until_screen_shows("[Installed (0)]");
+    harness.pump_until_screen_shows("Installed (0)");
 
     harness.key(KeyCode::Right);
-    harness.pump_until_screen_shows("[Marketplaces (1)]");
+    harness.pump_until_screen_shows("Marketplaces (1)");
     harness.pump_until_screen_shows("0 of 1 installed");
     harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("demo-market marketplace");
@@ -133,17 +133,31 @@ fn a_marketplaces_plugin_is_installed_trusted_turned_off_and_on_and_uninstalled(
     harness.keys(KeyCode::Down, 2);
     harness.key(KeyCode::Enter);
     harness.pump_until_screen_shows("Uninstalled demo@demo-market and deleted its data.");
-    assert!(harness.screen().contains("[Installed (0)]"));
+    assert!(harness.screen().contains("Installed (0)"));
     assert!(harness.plugin_ids().is_empty());
+}
+
+/// A tab is clicked as a setting's row is: the one clicked shows.
+#[test]
+fn a_clicked_tab_shows_its_page() {
+    let mut harness = Harness::start(Vec::new());
+    harness.type_and_submit("/plugins");
+    harness.pump_until_screen_shows("Plugins installed from a marketplace or a directory");
+    harness.click_on("Built-in (");
+    harness.pump_until_screen_shows("The plugins compiled into the Agent");
+    harness.click_on("Marketplaces (");
+    harness.pump_until_screen_shows("The marketplaces plugins are installed from");
+    harness.click_on("Installed (");
+    harness.pump_until_screen_shows("Plugins installed from a marketplace or a directory");
 }
 
 #[test]
 fn a_built_in_plugin_is_turned_off_refused_a_retry_and_turned_on() {
     let mut harness = Harness::start(Vec::new());
     harness.type_and_submit("/plugins");
-    harness.pump_until_screen_shows("[Installed (0)]");
+    harness.pump_until_screen_shows("Installed (0)");
     harness.key(KeyCode::Left);
-    harness.pump_until_screen_shows("[Built-in (");
+    harness.pump_until_screen_shows("Built-in (");
     let goal = harness
         .builtins()
         .iter()

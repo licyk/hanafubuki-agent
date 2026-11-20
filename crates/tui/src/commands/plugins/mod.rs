@@ -15,6 +15,7 @@ mod builtin;
 mod code;
 mod options;
 mod pages;
+mod tabs;
 
 use super::{CommandContext, CommandReply, CommandSpec};
 use crate::agent_bridge::{PluginsCall, PluginsReply};

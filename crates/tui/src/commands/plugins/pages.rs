@@ -11,12 +11,14 @@ use hanafubuki_agent::{
     PackageSource,
 };
 use ratatui::style::Stylize;
-use ratatui::text::{Line, Span};
+use ratatui::text::Line;
 use ratatui::widgets::{Paragraph, Wrap};
 
 use super::builtin;
+use super::tabs::{TabHits, Tabs};
 use crate::agent_bridge::{PluginsCall, PluginsState};
 use crate::bottom_pane::{SelectionItem, SelectionViewParams};
+use crate::render::renderable::{ColumnRenderable, Renderable};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Tab {
@@ -26,7 +28,16 @@ pub(super) enum Tab {
 }
 
 impl Tab {
-    const ALL: [Tab; 3] = [Tab::Installed, Tab::Marketplaces, Tab::BuiltIn];
+    pub(super) const ALL: [Tab; 3] = [Tab::Installed, Tab::Marketplaces, Tab::BuiltIn];
+
+    /// Its name in the tab line.
+    pub(super) fn label(self) -> &'static str {
+        match self {
+            Tab::Installed => "Installed",
+            Tab::Marketplaces => "Marketplaces",
+            Tab::BuiltIn => "Built-in",
+        }
+    }
 
     /// The tab `by` places to the right, wrapping around.
     pub(super) fn step(self, by: isize) -> Tab {
@@ -110,7 +121,7 @@ pub(super) fn call(call: PluginsCall, busy: &str, after: After) -> Choice {
     }
 }
 
-pub(super) fn tab_page(state: &PluginsState, tab: Tab) -> PageView {
+pub(super) fn tab_page(state: &PluginsState, tab: Tab, hits: &TabHits) -> PageView {
     let (rows, hint, subtitle) = match tab {
         Tab::Installed => (
             installed_rows(state),
@@ -128,43 +139,27 @@ pub(super) fn tab_page(state: &PluginsState, tab: Tab) -> PageView {
             "The plugins compiled into the Agent (disabledPlugins).",
         ),
     };
-    let mut header = vec![Line::from("Plugins".bold()), tabs_line(state, tab)];
-    header.push(Line::from(subtitle.dim()));
+    let mut notes = vec![Line::from(subtitle.dim())];
     if state.safe_mode {
-        header.push(Line::from(
+        notes.push(Line::from(
             "Safe mode: no installed plugin is loaded, and only the core runs.".yellow(),
         ));
     }
+    let header = ColumnRenderable::with([
+        Box::new(Line::from("Plugins".bold())) as Box<dyn Renderable>,
+        Box::new(Tabs::new(state, tab, hits)),
+        Box::new(Paragraph::new(notes).wrap(Wrap { trim: false })),
+    ]);
     let (items, choices) = rows.into_iter().unzip();
     PageView {
         params: SelectionViewParams {
-            header: Box::new(Paragraph::new(header).wrap(Wrap { trim: false })),
+            header: Box::new(header),
             footer_hint: Some(Line::from(hint)),
             items,
             ..Default::default()
         },
         choices,
     }
-}
-
-fn tabs_line(state: &PluginsState, active: Tab) -> Line<'static> {
-    let mut spans = Vec::new();
-    for tab in Tab::ALL {
-        let label = match tab {
-            Tab::Installed => format!("Installed ({})", state.packages.len()),
-            Tab::Marketplaces => format!("Marketplaces ({})", state.marketplaces.len()),
-            Tab::BuiltIn => format!("Built-in ({})", state.builtins.len()),
-        };
-        if !spans.is_empty() {
-            spans.push(Span::from("   "));
-        }
-        spans.push(if tab == active {
-            format!("[{label}]").cyan().bold()
-        } else {
-            label.dim()
-        });
-    }
-    Line::from(spans)
 }
 
 pub(super) type Row = (SelectionItem, Option<Choice>);

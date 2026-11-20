@@ -1,14 +1,26 @@
-//! The plugin browser's pages over hand-built plugins: the tabs wrap, and
-//! a plugin's page offers what its state allows.
+//! The plugin browser's pages over hand-built plugins: the tabs wrap, are
+//! shown as the settings center's tabs are and can be clicked, and a
+//! plugin's page offers what its state allows.
+
+use std::sync::mpsc::{channel, Receiver};
 
 use hanafubuki_agent::{
     AgentPackageContent, AgentPackageGuest, AgentPackageStatus, GuestState, GuestStatus,
     PackagePermissions, RuntimeKind, WorkspaceAccess,
 };
+use ratatui::buffer::Buffer;
+use ratatui::crossterm::event::{KeyCode, MouseButton, MouseEvent, MouseEventKind};
+use ratatui::layout::Rect;
+use ratatui::style::Modifier;
 
+use super::browser::PluginsBrowser;
 use super::options;
 use super::pages::{self, After, Choice, Page, Prompt, Tab};
-use crate::agent_bridge::PluginsCall;
+use crate::agent_bridge::{PluginsCall, PluginsReply, PluginsState};
+use crate::app_event::{AppEvent, AppEventSender};
+use crate::bottom_pane::BottomPaneView;
+use crate::commands::CommandReply;
+use crate::render::renderable::Renderable;
 
 fn package(enabled: bool, hooks_to_trust: Vec<String>) -> AgentPackageStatus {
     AgentPackageStatus {
@@ -31,6 +43,151 @@ fn the_tabs_wrap_around() {
     assert_eq!(Tab::Installed.step(-1), Tab::BuiltIn);
     assert_eq!(Tab::BuiltIn.step(1), Tab::Installed);
     assert_eq!(Tab::Installed.step(1), Tab::Marketplaces);
+}
+
+/// The browser showing `state`'s first tab, and the events it may send.
+fn browser(state: PluginsState) -> (PluginsBrowser, Receiver<AppEvent>) {
+    let (sender, events) = channel();
+    let mut browser = PluginsBrowser::new(AppEventSender::new(sender));
+    let left = browser.take_command_reply(CommandReply::Plugins(PluginsReply::Loaded {
+        state: Box::new(state),
+        done: None,
+    }));
+    assert!(left.is_none(), "the browser reads its own state");
+    (browser, events)
+}
+
+/// The browser drawn at `width`, its height what it asks for.
+fn drawn(browser: &PluginsBrowser, width: u16) -> (Buffer, Rect) {
+    let area = Rect::new(0, 0, width, browser.desired_height(width));
+    let mut buf = Buffer::empty(area);
+    browser.render(area, &mut buf);
+    (buf, area)
+}
+
+/// Where `text` starts in the drawn buffer, row by row.
+fn at(buf: &Buffer, area: Rect, text: &str) -> (u16, u16) {
+    let wanted: Vec<char> = text.chars().collect();
+    for y in area.y..area.bottom() {
+        for x in area.x..area.right() {
+            let found = wanted.iter().enumerate().all(|(offset, character)| {
+                let column = x + offset as u16;
+                column < area.right() && buf[(column, y)].symbol() == character.to_string()
+            });
+            if found {
+                return (x, y);
+            }
+        }
+    }
+    panic!("no `{text}` drawn:\n{}", drawn_text(buf, area));
+}
+
+fn drawn_text(buf: &Buffer, area: Rect) -> String {
+    (area.y..area.bottom())
+        .map(|y| {
+            (area.x..area.right())
+                .map(|x| buf[(x, y)].symbol())
+                .collect::<String>()
+                .trim_end()
+                .to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn click(browser: &mut PluginsBrowser, column: u16, row: u16) -> Option<KeyCode> {
+    let key = browser.pointer_key(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column,
+        row,
+        modifiers: ratatui::crossterm::event::KeyModifiers::NONE,
+    });
+    // The chat hands what a view takes from the pointer back to it as a key.
+    if let Some(key) = key {
+        browser.handle_key_event(ratatui::crossterm::event::KeyEvent::new(
+            key,
+            ratatui::crossterm::event::KeyModifiers::NONE,
+        ));
+    }
+    key
+}
+
+/// The tab line is the settings center's: the tab shown in reverse, the
+/// others dim, and each one a click away.
+#[test]
+fn a_tab_is_shown_the_settings_centers_way_and_a_click_shows_it() {
+    let (mut browser, _events) = browser(PluginsState::default());
+    let (buf, area) = drawn(&browser, 80);
+    let (installed, row) = at(&buf, area, "Installed (0)");
+    assert_eq!(
+        buf[(installed, row)].style().add_modifier,
+        Modifier::BOLD | Modifier::REVERSED,
+        "the tab shown is in reverse"
+    );
+    let (marketplaces, _) = at(&buf, area, "Marketplaces (0)");
+    assert_eq!(
+        buf[(marketplaces, row)].style().add_modifier,
+        Modifier::DIM,
+        "the others are dim"
+    );
+
+    // A click on the second tab shows it, over the third's count.
+    assert_eq!(click(&mut browser, marketplaces, row), Some(KeyCode::Null));
+    let (buf, area) = drawn(&browser, 80);
+    let (marketplaces, row) = at(&buf, area, "Marketplaces (0)");
+    assert_eq!(
+        buf[(marketplaces, row)].style().add_modifier,
+        Modifier::BOLD | Modifier::REVERSED,
+        "the tab clicked is the one shown:\n{}",
+        drawn_text(&buf, area)
+    );
+    assert!(
+        drawn_text(&buf, area).contains("Add a marketplace…"),
+        "its rows:\n{}",
+        drawn_text(&buf, area)
+    );
+
+    // A click elsewhere in the line, and a key, are the list's.
+    assert_eq!(click(&mut browser, 79, 0), None);
+}
+
+/// The tab shown stays in the line when they do not all fit.
+#[test]
+fn the_tab_shown_keeps_its_room_in_a_narrow_window() {
+    let (mut browser, _events) = browser(PluginsState::default());
+    let (buf, area) = drawn(&browser, 80);
+    let (built_in, row) = at(&buf, area, "Built-in (0)");
+    assert_eq!(click(&mut browser, built_in, row), Some(KeyCode::Null));
+    let (buf, area) = drawn(&browser, 26);
+    let text = drawn_text(&buf, area);
+    assert!(text.contains("Built-in (0)"), "{text}");
+    assert!(
+        !text.contains("Installed (0)"),
+        "the left one gives way:\n{text}"
+    );
+}
+
+/// Away from a tab page the tab line is gone, and so are its cells: a
+/// click there belongs to the page.
+#[test]
+fn a_page_without_the_tab_line_takes_no_click_for_a_tab() {
+    let state = PluginsState {
+        packages: vec![package(true, Vec::new())],
+        ..Default::default()
+    };
+    let (mut browser, _events) = browser(state);
+    let (buf, area) = drawn(&browser, 80);
+    let (_, row) = at(&buf, area, "Demo (demo@market)");
+    click(&mut browser, 2, row);
+    let (buf, area) = drawn(&browser, 80);
+    let text = drawn_text(&buf, area);
+    assert!(text.contains("demo@market"), "its page opened:\n{text}");
+    assert!(
+        !text.contains("Marketplaces (0)"),
+        "no tab line here:\n{text}"
+    );
+    // The cells the tab line had are the page's now.
+    assert_eq!(click(&mut browser, 2, 1), None);
 }
 
 #[test]

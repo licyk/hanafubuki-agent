@@ -314,7 +314,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 
 ## 插件 [#plugins]
 
-`/plugins` 打开插件浏览器（对应 Codex 的插件目录），它是[设置中心](#config)的一个页面（Plugins 中的 Plugin browser），有三个标签页，用 ←/→ 切换：**Installed**（已安装）、**Marketplaces**（市场）和 **Built-in**（内置）。每个改动立即保存；进行中时页面会显示（`Installing…`），完成后重新读取全部内容。对应的命令见[命令行参考](/docs/cli-reference#plugins)。
+`/plugins` 打开插件浏览器（对应 Codex 的插件目录），它是[设置中心](#config)的一个页面（Plugins 中的 Plugin browser），有三个标签页：**Installed**（已安装）、**Marketplaces**（市场）和 **Built-in**（内置）。选中的标签页与设置中心的标签页画法一致（反白显示，其余变暗），同样用 ←/→ 或点击切换。每个改动立即保存；进行中时页面会显示（`Installing…`），完成后重新读取全部内容。对应的命令见[命令行参考](/docs/cli-reference#plugins)。
 
 - **Installed** 列出[已安装插件](/docs/cli-reference#plugins)：每个插件的状态、版本、需要审查的 hook 和问题。空格启用或停用选中的插件；Enter 打开它（它的来源、版本、格式、Skill、MCP 服务器、hook、[角色](/docs/roles#plugins)和问题）；`o` 打开代码插件的选项，前提是它的 `configSchema` 能降低为选项（即下面的通用选项表单；保存时写入它的设置，选项未描述的键保留，并重新启动它的代码）；**Install from a directory…** 要求输入一个插件目录，按 `<名字>@local` 安装。
 - 插件页面提供 **Disable plugin** 或 **Enable plugin**、有 hook 等待信任时的 **Trust its N hook(s)**、代码插件的权限未授予时的 **Grant its permissions**（说明它的代码能访问什么；**Code** 一行显示它的访客状态）、代码插件的 **Settings**（一个以单个 JSON 对象编辑其设置的表单，按清单的 `configSchema` 校验；留空表示移除；它的代码以新设置重新启动）、**Update plugin**（从它的市场或目录重新安装）、**Retry plugin**（重新加载，并再次启动失败的访客）和 **Uninstall plugin**（会询问是否保留它的数据目录）。下面列出它的来源、版本、格式、Skill、MCP 服务器、hook 和问题。

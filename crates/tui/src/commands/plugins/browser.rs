@@ -16,6 +16,7 @@ use ratatui::widgets::{Paragraph, Widget};
 
 use super::options;
 use super::pages::{self, After, Choice, OptionsOf, Page, PageView, Prompt, Tab};
+use super::tabs::TabHits;
 use crate::agent_bridge::{PluginsCall, PluginsDone, PluginsReply, PluginsState};
 use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
 use crate::bottom_pane::{
@@ -36,6 +37,8 @@ pub(super) struct PluginsBrowser {
     /// The pages to go back to, with the row each had highlighted.
     back: Vec<(Page, Option<usize>)>,
     list: Option<ListSelectionView>,
+    /// Where the tab line drew its tabs, for the pointer.
+    tabs: TabHits,
     choices: Vec<Option<Choice>>,
     /// The typed source of a `Prompt` page.
     form: Option<FormView>,
@@ -54,6 +57,7 @@ impl PluginsBrowser {
             page: Page::Tab(Tab::Installed),
             back: Vec::new(),
             list: None,
+            tabs: TabHits::default(),
             choices: Vec::new(),
             form: None,
             notice: None,
@@ -92,6 +96,11 @@ impl PluginsBrowser {
     fn show(&mut self, page: Page, selected: Option<usize>) {
         self.page = page;
         self.form = None;
+        // Only a tab page draws the tab line: elsewhere its last cells are
+        // stale, and a click there is the page's own.
+        if !matches!(self.page, Page::Tab(_)) {
+            self.tabs.borrow_mut().clear();
+        }
         let Some(state) = self.state.as_ref() else {
             self.list = None;
             return;
@@ -112,7 +121,7 @@ impl PluginsBrowser {
                 return;
             }
         }
-        let Some(view) = page_view(state, &self.page) else {
+        let Some(view) = page_view(state, &self.page, &self.tabs) else {
             let tab = self.tab();
             self.back.clear();
             return self.show(Page::Tab(tab), None);
@@ -234,6 +243,30 @@ impl PluginsBrowser {
     fn selected_marketplace(&self) -> Option<String> {
         let state = self.state.as_ref()?;
         Some(state.marketplaces.get(self.selected()?)?.name.clone())
+    }
+
+    /// A left click on a tab shows it, and says it was taken; a click on
+    /// the tab already shown is taken too, doing nothing.
+    fn clicked_tab(&mut self, mouse: ratatui::crossterm::event::MouseEvent) -> bool {
+        use ratatui::crossterm::event::{MouseButton, MouseEventKind};
+        if mouse.kind != MouseEventKind::Down(MouseButton::Left) {
+            return false;
+        }
+        let at = ratatui::layout::Position::new(mouse.column, mouse.row);
+        let Some(tab) = self
+            .tabs
+            .borrow()
+            .iter()
+            .find(|(cell, _)| cell.contains(at))
+            .map(|(_, tab)| *tab)
+        else {
+            return false;
+        };
+        if self.page != Page::Tab(tab) {
+            self.back.clear();
+            self.show(Page::Tab(tab), Some(0));
+        }
+        true
     }
 
     fn handle_form_key(&mut self, prompt: Prompt, key: KeyEvent) {
@@ -373,6 +406,9 @@ impl BottomPaneView for PluginsBrowser {
         if let Some(form) = &mut self.form {
             return form.pointer_key(mouse);
         }
+        if self.clicked_tab(mouse) {
+            return Some(KeyCode::Null);
+        }
         self.list.as_mut()?.pointer_key(mouse)
     }
 
@@ -464,7 +500,7 @@ impl Renderable for PluginsBrowser {
 }
 
 /// The list of `page` over `state`; `None` when its subject is gone.
-fn page_view(state: &PluginsState, page: &Page) -> Option<PageView> {
+fn page_view(state: &PluginsState, page: &Page, tabs: &TabHits) -> Option<PageView> {
     let package = |id: &str| state.packages.iter().find(|package| package.id == id);
     let marketplace = |name: &str| {
         state
@@ -473,7 +509,7 @@ fn page_view(state: &PluginsState, page: &Page) -> Option<PageView> {
             .find(|marketplace| marketplace.name == name)
     };
     Some(match page {
-        Page::Tab(tab) => pages::tab_page(state, *tab),
+        Page::Tab(tab) => pages::tab_page(state, *tab, tabs),
         Page::Package(id) => pages::package_page(package(id)?),
         Page::Marketplace(name) => pages::marketplace_page(marketplace(name)?),
         Page::Offered {
