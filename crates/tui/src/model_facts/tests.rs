@@ -181,15 +181,19 @@ fn the_keys_say_what_esc_does_and_name_models_dev_only_while_it_is_off_and_neede
         assert!(fact_cells(&unknown).has_unknown(), "{unknown:?}");
     }
     assert_eq!(
-        choose_hint("esc back", false, false),
+        choose_hint("choose", "esc back", false, false),
         "enter choose · esc back · ? not known"
     );
     assert_eq!(
-        choose_hint("esc close", true, false),
+        choose_hint("choose", "esc close", true, false),
         "enter choose · esc close · ? not known · models.dev can fill these: /config modelMetadata"
     );
     assert_eq!(
-        choose_hint("esc close", true, true),
+        choose_hint("add", "esc back", true, true),
+        "enter add · esc back · ? not known"
+    );
+    assert_eq!(
+        choose_hint("choose", "esc close", true, true),
         "enter choose · esc close · ? not known"
     );
 }

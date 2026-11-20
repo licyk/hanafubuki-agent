@@ -42,7 +42,7 @@ fn catalog() -> SettingsCatalog {
     }
     SettingsCatalog {
         sections,
-        collections: vec![providers(), policy()],
+        collections: vec![providers(), policy(), provider_models()],
     }
 }
 
@@ -145,6 +145,55 @@ fn policy() -> SettingsCollection {
             secrets_set: Vec::new(),
         }],
         actions: vec![action("save", "Save", SettingsActionScope::Record, false)],
+        revision: Some(7),
+        issues: Vec::new(),
+    }
+}
+
+/// The collection whose `add` is a page of its own (`providers`' picker of
+/// a Provider and model), with a field named like the longest label there
+/// is.
+fn provider_models() -> SettingsCollection {
+    SettingsCollection {
+        id: "providerModels".to_string(),
+        title: "Model overrides".to_string(),
+        group: SettingsGroup::Model,
+        record: vec![
+            SettingSpec::new(
+                "contextWindowTokens",
+                "Provider and model (PROVIDER/MODEL)",
+                text(false, false),
+            ),
+            SettingSpec::new("reasoningEfforts", "Reasoning levels", text(false, true)),
+        ],
+        records: vec![SettingsRecord {
+            id: "main/claude-sonnet-4-5".to_string(),
+            label: "Main · claude-sonnet-4-5".to_string(),
+            summary: "1 setting".to_string(),
+            state: None,
+            issue: None,
+            read_only: None,
+            values: BTreeMap::from([
+                (
+                    "contextWindowTokens".to_string(),
+                    SettingValue::Integer(200_000),
+                ),
+                (
+                    "reasoningEfforts".to_string(),
+                    SettingValue::TextList(
+                        ["low", "high", "medium", "minimal", "none"]
+                            .map(str::to_string)
+                            .to_vec(),
+                    ),
+                ),
+            ]),
+            secrets_set: Vec::new(),
+        }],
+        actions: vec![
+            action("add", "Add a model", SettingsActionScope::Collection, false),
+            action("save", "Save", SettingsActionScope::Record, false),
+            action("delete", "Delete", SettingsActionScope::Record, true),
+        ],
         revision: Some(7),
         issues: Vec::new(),
     }
@@ -259,6 +308,52 @@ fn a_collection_and_a_record_at_140_and_50_columns() {
     assert_snapshot!("providers_140", screen(&mut center, 140, 14));
     press(&mut center, KeyCode::Enter);
     assert_snapshot!("provider_record_50", screen(&mut center, 50, 24));
+}
+
+/// A label and a value wider than a column used to be are shown whole
+/// when the terminal has the room, and cut only when it has not: the
+/// columns ask what their rows need.
+#[test]
+fn a_wide_terminal_shows_a_long_label_and_value_whole() {
+    let mut center = center_with(catalog(), Some("providerModels"));
+    press(&mut center, KeyCode::Enter);
+    let wide = screen(&mut center, 140, 20);
+    assert!(
+        wide.contains("Provider and model (PROVIDER/MODEL)"),
+        "the label whole:\n{wide}"
+    );
+    assert!(
+        wide.contains("low, high, medium, minimal, none"),
+        "the value whole:\n{wide}"
+    );
+    let usual = screen(&mut center, 100, 20);
+    assert!(
+        usual.contains("Provider and model (PROVIDER/MODEL)"),
+        "the label whole at 100 columns too:\n{usual}"
+    );
+    assert_snapshot!("overrides_100", usual);
+    let narrow = screen(&mut center, 50, 20);
+    assert!(
+        narrow.contains("Provider and model (") && !narrow.contains("(PROVIDER/MODEL)"),
+        "the label cut where the width has no room:\n{narrow}"
+    );
+    assert!(
+        !narrow.contains("low, high, medium, minimal, none"),
+        "the value cut too:\n{narrow}"
+    );
+}
+
+/// What a write said is wrapped under the breadcrumbs, not cut at the
+/// right edge: a long refusal is read whole.
+#[test]
+fn a_long_notice_wraps_instead_of_being_cut() {
+    let error = "the record was refused because another change overtook this write, \
+                 and what was read again is what it stands on";
+    let mut center = center_with(catalog(), Some("providers"));
+    center.report(Err(error.to_string()));
+    let screen = screen(&mut center, 50, 24);
+    let flattened = screen.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(flattened.contains(error), "{screen}");
 }
 
 #[test]

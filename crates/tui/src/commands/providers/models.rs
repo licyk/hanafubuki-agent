@@ -219,7 +219,7 @@ impl Listed {
         let hint = if self.models.is_empty() {
             "enter choose · esc back".to_string()
         } else {
-            choose_hint("esc back", self.shows_unknown, self.models_dev)
+            choose_hint("choose", "esc back", self.shows_unknown, self.models_dev)
         };
         notes(detail, hint)
     }

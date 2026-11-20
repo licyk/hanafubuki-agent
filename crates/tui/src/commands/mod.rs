@@ -31,7 +31,7 @@ mod maintenance;
 pub(crate) mod mcp;
 mod memories;
 mod mode;
-mod model;
+pub(crate) mod model;
 mod parse;
 mod permissions;
 pub(crate) mod plugins;
@@ -221,7 +221,7 @@ pub(crate) fn has_prefix(name: &str, disabled: &[&str]) -> bool {
 
 /// The settings center's pages that are commands' views, each declared
 /// beside its command.
-pub(crate) static SETTINGS_PAGES: [&PageOverride; 12] = [
+pub(crate) static SETTINGS_PAGES: [&PageOverride; 13] = [
     &theme::PAGE,
     &statusline::PAGE,
     &title::PAGE,
@@ -232,6 +232,7 @@ pub(crate) static SETTINGS_PAGES: [&PageOverride; 12] = [
     &memories::PAGE,
     &providers::MODEL_PAGE,
     &providers::MODEL_SETTING_PAGE,
+    &model::OVERRIDES_PAGE,
     &mcp::LOGIN_PAGE,
     &maintenance::PAGE,
 ];

@@ -297,6 +297,29 @@ pub(crate) fn truncate_text(text: &str, max_graphemes: usize) -> String {
     }
 }
 
+/// Truncate `text` to `max_width` display columns, `...` marking what was
+/// cut. A text of CJK characters is twice as wide as its graphemes, which
+/// is why a column laid out in columns cannot be cut by [`truncate_text`].
+pub(crate) fn truncate_to_width(text: &str, max_width: usize) -> String {
+    if UnicodeWidthStr::width(text) <= max_width {
+        return text.to_string();
+    }
+    let marker = if max_width >= 3 { "..." } else { "" };
+    let budget = max_width.saturating_sub(UnicodeWidthStr::width(marker));
+    let mut kept = String::new();
+    let mut used = 0;
+    for grapheme in UnicodeSegmentation::graphemes(text, true) {
+        let width = UnicodeWidthStr::width(grapheme);
+        if used + width > budget {
+            break;
+        }
+        used += width;
+        kept.push_str(grapheme);
+    }
+    kept.push_str(marker);
+    kept
+}
+
 /// The largest JSON text laid out; a larger one shows as it came.
 const MAX_JSON_FORMAT_BYTES: usize = 1024 * 1024;
 /// The deepest nesting laid out: `serde_json`'s own limit when it builds a

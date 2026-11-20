@@ -257,6 +257,7 @@ fn a_model_picked_from_the_catalogs_is_set_on_the_session() {
             model: "model-a".to_string(),
             metadata: hanafubuki_agent::ModelMetadata::default(),
         }),
+        settings: Vec::new(),
         policy_note: None,
         models_dev: false,
     }))));
@@ -335,6 +336,7 @@ fn a_second_model_list_replaces_the_first_whose_answers_are_dropped() {
                     model: "model-a".to_string(),
                     metadata: hanafubuki_agent::ModelMetadata::default(),
                 }),
+                settings: Vec::new(),
                 policy_note: None,
                 models_dev: false,
             })),

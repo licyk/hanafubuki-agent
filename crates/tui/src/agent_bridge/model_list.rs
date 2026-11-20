@@ -37,10 +37,21 @@ pub(crate) struct ModelListStart {
     pub(crate) providers: Vec<(String, String)>,
     /// The session's model, when it has one.
     pub(crate) current: Option<CurrentModel>,
+    /// The `PROVIDER/MODEL` pairs the Providers give their own settings to.
+    pub(crate) settings: Vec<String>,
     /// What the model policy overrides of every session's model.
     pub(crate) policy_note: Option<String>,
     /// Whether models.dev fills what nothing else says.
     pub(crate) models_dev: bool,
+}
+
+impl ModelListStart {
+    /// Whether `provider_id`'s `model` has settings of its own.
+    pub(crate) fn has_settings(&self, provider_id: &str, model: &str) -> bool {
+        self.settings
+            .iter()
+            .any(|pair| pair == &format!("{provider_id}/{model}"))
+    }
 }
 
 #[derive(Debug)]
@@ -60,10 +71,9 @@ impl AgentBridge {
         listing: u64,
         provider_ids: Option<Vec<String>>,
     ) -> Option<TurnUpdate> {
-        let session = match self.current() {
-            Ok(session) => session,
-            Err(error) => return Some(update(listing, ModelListEvent::Unread(error))),
-        };
+        // The settings center lists the models before a session exists;
+        // only the session's own model is then missing.
+        let session = self.current().ok();
         let tx = self.app_event_tx.clone();
         let agent = self.agent.clone();
         self.agent.runtime().handle().spawn(async move {
@@ -120,17 +130,15 @@ fn send(tx: &AppEventSender, listing: u64, event: ModelListEvent) {
 
 async fn start(
     agent: &AgentHandle,
-    session: AgentSessionRuntimeSnapshot,
+    session: Option<AgentSessionRuntimeSnapshot>,
 ) -> Result<ModelListStart, String> {
     let registry = agent.provider_registry_snapshot().await?;
     let models_dev = agent
         .settings_view()
         .await
         .is_ok_and(|view| view.settings.model_metadata.models_dev);
-    let current = if session.model.is_empty() {
-        None
-    } else {
-        Some(CurrentModel {
+    let current = match session.filter(|session| !session.model.is_empty()) {
+        Some(session) => Some(CurrentModel {
             // A Provider gone since the session chose it has no facts.
             metadata: agent
                 .model_metadata(&session.provider_id, &session.model)
@@ -139,7 +147,8 @@ async fn start(
             provider: provider_name(&registry, &session.provider_id),
             provider_id: session.provider_id,
             model: session.model,
-        })
+        }),
+        None => None,
     };
     let mut providers: Vec<(String, String)> = registry
         .providers
@@ -153,9 +162,20 @@ async fn start(
             .cmp(&right.to_lowercase())
             .then_with(|| left_id.cmp(right_id))
     });
+    let settings = registry
+        .providers
+        .iter()
+        .flat_map(|provider| {
+            provider
+                .models
+                .keys()
+                .map(|model| format!("{}/{model}", provider.id))
+        })
+        .collect();
     Ok(ModelListStart {
         providers,
         current,
+        settings,
         policy_note: policy_note(&registry),
         models_dev,
     })

@@ -428,9 +428,10 @@ fn search_rows(catalog: &SettingsCatalog, needle: &str) -> Vec<MainRow> {
                 MainRow::Collection(index) => matches(&[&catalog.collections[*index].title]),
                 MainRow::Page(page) => match page.attach {
                     Attach::Row { label, summary, .. } => matches(&[label, summary, page.id]),
-                    Attach::Setting(_) | Attach::Record { .. } | Attach::RecordField { .. } => {
-                        false
-                    }
+                    Attach::Add { .. }
+                    | Attach::Setting(_)
+                    | Attach::Record { .. }
+                    | Attach::RecordField { .. } => false,
                 },
             };
             if found {

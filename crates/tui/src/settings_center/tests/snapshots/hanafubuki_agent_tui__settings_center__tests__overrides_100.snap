@@ -1,0 +1,24 @@
+---
+source: crates/tui/src/settings_center/tests/mod.rs
+expression: usual
+---
+
+  Settings › Model overrides › Main · claude-sonnet-4-5
+
+
+  1 setting
+
+
+  › Provider and model (PROVIDER/MODEL)  200000
+    Reasoning levels                     low, high, medium, minimal, none
+    Delete
+
+
+
+
+
+
+
+
+
+  1/3 · enter edit · esc back

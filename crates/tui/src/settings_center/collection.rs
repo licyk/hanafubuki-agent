@@ -12,9 +12,9 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use super::editor::{ChoicePage, ListState};
 use super::form::FormPage;
 use super::render::{Row, RowStyle};
-use super::{Effect, Page};
+use super::{registry, Effect, Page};
 
-const ADD: &str = "add";
+pub(super) const ADD: &str = "add";
 const SAVE: &str = "save";
 const DELETE: &str = "delete";
 
@@ -50,6 +50,15 @@ pub(super) fn has(collection: &SettingsCollection, id: &str) -> bool {
 /// Whether the collection's records can be written.
 pub(super) fn writable(collection: &SettingsCollection) -> bool {
     has(collection, SAVE)
+}
+
+/// What the collection's `add` opens: the page it declares (the Model
+/// overrides' picker, `/model`'s list), else the form it is added in.
+fn add(collection: &SettingsCollection) -> Effect {
+    match registry::add_page(&collection.id) {
+        Some(page) => Effect::Open(page, None),
+        None => Effect::Push(Box::new(Page::Form(FormPage::add(collection)))),
+    }
 }
 
 /// The tab's row of a collection: how many records, or the one it holds.
@@ -113,6 +122,11 @@ impl CollectionPage {
             .find(|collection| collection.id == self.id)
     }
 
+    /// The collection's id.
+    pub(super) fn id(&self) -> &str {
+        &self.id
+    }
+
     /// Selects the record `id`, as an `add` made it.
     pub(super) fn select_record(&mut self, catalog: Option<&SettingsCatalog>, id: &str) {
         let Some(collection) = catalog.and_then(|catalog| self.collection(catalog)) else {
@@ -150,9 +164,7 @@ impl CollectionPage {
         match key.code {
             KeyCode::Esc => Effect::Pop,
             KeyCode::Enter => self.activate(collection, selected),
-            KeyCode::Char('a') if plain && has(collection, ADD) => {
-                Effect::Push(Box::new(Page::Form(FormPage::add(collection))))
-            }
+            KeyCode::Char('a') if plain && has(collection, ADD) => add(collection),
             KeyCode::Char('d') if plain && has(collection, DELETE) => match selected {
                 Some(Line::Record(index)) => {
                     let record = &collection.records[index];
@@ -185,7 +197,7 @@ impl CollectionPage {
             Some(Line::Action(index)) => {
                 let action = &collection.actions[index];
                 if action.id == ADD {
-                    return Effect::Push(Box::new(Page::Form(FormPage::add(collection))));
+                    return add(collection);
                 }
                 let request = request(collection, None, &action.id);
                 if action.confirm {

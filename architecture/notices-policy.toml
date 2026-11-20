@@ -638,6 +638,14 @@ path = "crates/tui/src/commands/model/view.rs"
 reason = "/model's list over the Agent's per-Provider listings: the pinned session's model, a section per Provider, the retry of a failed one and the detail line."
 
 [[original]]
+path = "crates/tui/src/commands/model/purpose.rs"
+reason = "Why /model's list is open: the session's model, or a Provider and model added to the Model overrides, and what a chosen pair then says."
+
+[[original]]
+path = "crates/tui/src/commands/model/entry.rs"
+reason = "The Provider and model typed in, for a model the Provider does not list."
+
+[[original]]
 path = "crates/tui/src/commands/model/footer.rs"
 reason = "The lines under a model list, /model's and the Provider page's: the loading line or what replaced it, the detail line and the keys."
 

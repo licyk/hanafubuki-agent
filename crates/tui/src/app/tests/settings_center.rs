@@ -6,10 +6,21 @@
 
 use ratatui::crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
+use hanafubuki_agent::test_support::FakeListing;
+
 use super::Harness;
 use crate::app_event::AppEvent;
 use crate::history_cell::HistoryRenderMode;
 use crate::transcript_mode::TranscriptMode;
+
+/// A models endpoint's answer listing `ids`.
+fn the_models(ids: &[&str]) -> Vec<u8> {
+    let data: Vec<_> = ids
+        .iter()
+        .map(|id| serde_json::json!({ "id": id }))
+        .collect();
+    serde_json::json!({ "data": data }).to_string().into_bytes()
+}
 
 impl Harness {
     /// A left press on the cell at `column` and `row`.
@@ -22,6 +33,48 @@ impl Harness {
         });
         assert!(self.app.handle_event(&mut self.tui, event));
     }
+}
+
+/// The Model overrides' `a` is the same list `/model` is, over the
+/// Providers: the model chosen is written as its own settings, and the
+/// center comes back to the collection with it selected.
+#[test]
+fn a_model_override_is_added_from_the_list_of_the_providers_models() {
+    let mut harness = Harness::listing(
+        vec![FakeListing::ok(
+            &String::from_utf8(the_models(&["first-model"])).unwrap(),
+        )],
+        TranscriptMode::Owned,
+        |_| {},
+    );
+    harness.type_and_submit("/config providerModels");
+    harness.pump_until_screen_shows("+ Add a model");
+    harness.key(KeyCode::Char('a'));
+    let screen = harness.pump_until_screen_shows("Add model overrides");
+    assert!(
+        screen.contains("Settings › Model overrides › Add a model"),
+        "{screen}"
+    );
+    harness.pump_until_screen_shows("first-model");
+    // The session's model is pinned first; the listing's follow it.
+    harness.key(KeyCode::Down);
+    harness.key(KeyCode::Enter);
+    let screen = harness.pump_until_screen_shows("Added");
+    assert!(
+        screen.contains("Fixture Provider · first-model"),
+        "{screen}"
+    );
+    let registry = harness.registry();
+    let provider = registry
+        .providers
+        .iter()
+        .find(|provider| provider.id == "provider-1")
+        .unwrap();
+    assert!(
+        provider.models.contains_key("first-model"),
+        "{:?}",
+        provider.models
+    );
 }
 
 #[test]

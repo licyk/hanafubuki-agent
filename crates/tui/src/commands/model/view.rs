@@ -3,6 +3,10 @@
 //! order, each pending until its listing answers. A failed Provider is a
 //! row that Enter lists again. Under the list: what is still listed, the
 //! selected model's facts with their sources, and the keys.
+//!
+//! The same list adds a model's own settings (`Model overrides`): it then
+//! leaves out nothing, marks the models that have settings already, and
+//! ends with a row that types in a pair its Providers do not list.
 
 use hanafubuki_agent::{AgentListedModel, AgentProviderModelCatalogResult, ModelMetadata};
 use ratatui::buffer::Buffer;
@@ -12,27 +16,29 @@ use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::{Paragraph, Widget, Wrap};
 
+use super::entry;
 use super::footer::{footer, notes, render_footed, Status};
+use super::purpose::Purpose;
 
 use crate::agent_bridge::model_list::{ModelListEvent, ModelListStart};
 use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
 use crate::bottom_pane::{
-    render_menu_surface, BottomPaneView, CancellationEvent, ListSelectionView, LoadingLine,
-    SelectionItem, SelectionViewParams,
+    render_menu_surface, BottomPaneView, CancellationEvent, FormEvent, FormView, ListSelectionView,
+    LoadingLine, SelectionItem, SelectionViewParams,
 };
 use crate::commands::subagents::single_line;
 use crate::commands::CommandReply;
 use crate::model_facts::{choose_hint, fact_cells, fact_details, row_facts, FACTS_HEADER};
 use crate::render::renderable::{ColumnRenderable, Renderable};
 
-const TITLE: &str = "Select Model";
-const SUBTITLE: &str = "Switch the model of this session.";
-
 pub(super) struct ModelListView {
     /// This view's number: answers for another are dropped.
     listing: u64,
+    purpose: Purpose,
     tx: AppEventSender,
     loading: LoadingLine,
+    /// The title and subtitle, before the list is known.
+    heading: Heading,
     state: State,
     complete: bool,
 }
@@ -43,10 +49,14 @@ enum State {
     /// The Providers were not read: nothing is listed.
     Unread(String),
     Listing(Box<Listing>),
+    /// A Provider and model typed in.
+    Entry(Box<FormView>),
 }
 
 struct Listing {
     start: ModelListStart,
+    /// Whether a Provider and model can be typed in.
+    names_pair: bool,
     sections: Vec<Section>,
     list: ListSelectionView,
     /// What each of `list`'s items is, in its order.
@@ -79,6 +89,8 @@ enum Row {
         display_name: Option<String>,
         metadata: ModelMetadata,
         current: bool,
+        /// The model already has settings of its own.
+        has_settings: bool,
     },
     Pending {
         provider_id: String,
@@ -89,6 +101,8 @@ enum Row {
         name: String,
         error: String,
     },
+    /// A Provider and model typed in.
+    Entry,
 }
 
 impl Row {
@@ -97,13 +111,14 @@ impl Row {
             Row::Model { provider_id, .. }
             | Row::Pending { provider_id, .. }
             | Row::Failed { provider_id, .. } => provider_id,
+            Row::Entry => "",
         }
     }
 
     fn model(&self) -> Option<&str> {
         match self {
             Row::Model { model, .. } => Some(model),
-            Row::Pending { .. } | Row::Failed { .. } => None,
+            Row::Pending { .. } | Row::Failed { .. } | Row::Entry => None,
         }
     }
 }
@@ -112,14 +127,26 @@ impl Row {
 enum Chosen {
     Model { provider_id: String, model: String },
     Retry(String),
+    Entry,
 }
 
 impl ModelListView {
-    pub(super) fn new(listing: u64, tx: AppEventSender, loading: LoadingLine) -> Self {
+    pub(super) fn new(
+        listing: u64,
+        purpose: Purpose,
+        tx: AppEventSender,
+        loading: LoadingLine,
+    ) -> Self {
+        let heading = Heading {
+            title: purpose.title(),
+            subtitle: purpose.subtitle(),
+        };
         Self {
             listing,
+            purpose,
             tx,
             loading,
+            heading,
             state: State::Opened,
             complete: false,
         }
@@ -129,7 +156,8 @@ impl ModelListView {
         let opened = matches!(self.state, State::Opened);
         match event {
             ModelListEvent::Started(start) if opened => {
-                self.state = State::Listing(Box::new(Listing::new(*start, &self.tx)));
+                self.state =
+                    State::Listing(Box::new(Listing::new(*start, &self.purpose, &self.tx)));
             }
             ModelListEvent::Unread(error) if opened => self.state = State::Unread(error),
             ModelListEvent::Listed(result) => {
@@ -164,7 +192,8 @@ impl ModelListView {
     fn body(&self) -> &dyn Renderable {
         match &self.state {
             State::Listing(listing) => &listing.list,
-            State::Opened | State::Unread(_) => &HEADING,
+            State::Entry(form) => form.as_ref(),
+            State::Opened | State::Unread(_) => &self.heading,
         }
     }
 
@@ -177,6 +206,8 @@ impl ModelListView {
                 "The Providers were not read: {}",
                 single_line(error)
             ))),
+            // The form says what it waits for.
+            State::Entry(_) => None,
             State::Listing(listing) if listing.sections.is_empty() => Some(Status::Said(
                 "No Provider is enabled: /providers adds one.".to_string(),
             )),
@@ -194,8 +225,11 @@ impl ModelListView {
 
     /// The selected row's detail and the keys, before they are wrapped.
     fn notes(&self) -> Vec<Line<'static>> {
+        if matches!(self.state, State::Entry(_)) {
+            return Vec::new();
+        }
         let State::Listing(listing) = &self.state else {
-            return vec![Line::from("esc close".dim())];
+            return vec![Line::from(self.purpose.esc().dim())];
         };
         let selected = listing
             .list
@@ -209,13 +243,14 @@ impl ModelListView {
                 ..
             }) => (
                 Some(fact_details(model, provider, metadata)),
-                listing.choose_hint(),
+                listing.choose_hint(&self.purpose),
             ),
             Some(Row::Failed { name, error, .. }) => (
                 Some(format!("{name}: not listed: {}", single_line(error))),
-                "enter lists again · esc close".to_string(),
+                format!("enter lists again · {}", self.purpose.esc()),
             ),
-            Some(Row::Pending { .. }) | None => (None, listing.choose_hint()),
+            Some(Row::Entry) => (None, format!("enter type a pair · {}", self.purpose.esc())),
+            Some(Row::Pending { .. }) | None => (None, listing.choose_hint(&self.purpose)),
         };
         notes(detail, hint)
     }
@@ -226,7 +261,7 @@ impl ModelListView {
 }
 
 impl Listing {
-    fn new(start: ModelListStart, tx: &AppEventSender) -> Self {
+    fn new(start: ModelListStart, purpose: &Purpose, tx: &AppEventSender) -> Self {
         let sections = start
             .providers
             .iter()
@@ -236,11 +271,12 @@ impl Listing {
                 state: SectionState::Pending,
             })
             .collect();
+        let (title, subtitle) = (purpose.title(), purpose.subtitle());
         let header: Box<dyn Renderable> = match &start.policy_note {
             Some(note) => Box::new(ColumnRenderable::with([
-                Box::new(Line::from(TITLE.bold())) as Box<dyn Renderable>,
+                Box::new(Line::from(title.bold())) as Box<dyn Renderable>,
                 Box::new(
-                    Paragraph::new(Line::from(format!("{SUBTITLE} {note}").dim()))
+                    Paragraph::new(Line::from(format!("{subtitle} {note}").dim()))
                         .wrap(Wrap { trim: false }),
                 ),
             ])),
@@ -248,7 +284,7 @@ impl Listing {
         };
         let (title, subtitle) = match start.policy_note {
             Some(_) => (None, None),
-            None => (Some(TITLE.to_string()), Some(SUBTITLE.to_string())),
+            None => (Some(title.to_string()), Some(subtitle.to_string())),
         };
         let list = ListSelectionView::new(
             SelectionViewParams {
@@ -264,6 +300,7 @@ impl Listing {
         );
         let mut listing = Self {
             start,
+            names_pair: purpose.names_a_pair(),
             sections,
             list,
             rows: Vec::new(),
@@ -312,7 +349,7 @@ impl Listing {
                     row.model().map(str::to_string),
                 )
             });
-        let rows = rows(&self.start, &self.sections);
+        let rows = rows(&self.start, &self.sections, self.names_pair);
         let selected = selected
             .and_then(|(provider_id, model)| {
                 rows.iter()
@@ -321,28 +358,41 @@ impl Listing {
                     })
                     .or_else(|| rows.iter().position(|row| row.provider_id() == provider_id))
             })
-            .or_else(|| {
-                rows.iter()
-                    .position(|row| !matches!(row, Row::Pending { .. }))
-            });
+            .or_else(|| rows.iter().position(|row| choosable(row, self.names_pair)));
         self.shows_unknown = rows.iter().any(|row| match row {
             Row::Model { metadata, .. } => fact_cells(metadata).has_unknown(),
-            Row::Pending { .. } | Row::Failed { .. } => false,
+            _ => false,
         });
-        self.list
-            .replace_items(rows.iter().map(item).collect(), selected);
+        let items = rows.iter().map(|row| item(row, self.names_pair)).collect();
+        self.list.replace_items(items, selected);
         self.rows = rows;
     }
 
-    fn choose_hint(&self) -> String {
-        choose_hint("esc close", self.shows_unknown, self.start.models_dev)
+    fn choose_hint(&self, purpose: &Purpose) -> String {
+        choose_hint(
+            purpose.enter(),
+            purpose.esc(),
+            self.shows_unknown,
+            self.start.models_dev,
+        )
+    }
+}
+
+/// Whether Enter takes `row`: a model that can be chosen, a Provider
+/// listed again, or the pair typed in.
+fn choosable(row: &Row, names_pair: bool) -> bool {
+    match row {
+        Row::Model { has_settings, .. } => !(names_pair && *has_settings),
+        Row::Failed { .. } | Row::Entry => true,
+        Row::Pending { .. } => false,
     }
 }
 
 /// The rows, in their fixed order: the session's model, then each
 /// Provider's section in the facade's order, its models in its listing's
-/// (the session's left out), or one row saying it is listing or failed.
-fn rows(start: &ModelListStart, sections: &[Section]) -> Vec<Row> {
+/// (the session's left out), or one row saying it is listing or failed;
+/// the pair typed in, where it can be, last.
+fn rows(start: &ModelListStart, sections: &[Section], names_pair: bool) -> Vec<Row> {
     let pinned = start.current.as_ref().map(|current| {
         let listed = sections
             .iter()
@@ -363,6 +413,7 @@ fn rows(start: &ModelListStart, sections: &[Section]) -> Vec<Row> {
                 |listed| listed.metadata.clone(),
             ),
             current: true,
+            has_settings: start.has_settings(&current.provider_id, &current.model),
         }
     });
     let is_pinned = |provider_id: &str, model: &str| {
@@ -393,14 +444,18 @@ fn rows(start: &ModelListStart, sections: &[Section]) -> Vec<Row> {
                         display_name: listed.entry.display_name.clone(),
                         metadata: listed.metadata.clone(),
                         current: false,
+                        has_settings: start.has_settings(&provider_id, &listed.entry.id),
                     }),
             ),
         }
     }
+    if names_pair {
+        rows.push(Row::Entry);
+    }
     rows
 }
 
-fn item(row: &Row) -> SelectionItem {
+fn item(row: &Row, names_pair: bool) -> SelectionItem {
     match row {
         Row::Model {
             provider,
@@ -408,25 +463,35 @@ fn item(row: &Row) -> SelectionItem {
             display_name,
             metadata,
             current,
+            has_settings,
             ..
-        } => SelectionItem {
-            name: model.clone(),
-            description: Some(provider.clone()),
-            is_current: *current,
-            search_value: Some(
-                [
-                    Some(model.as_str()),
-                    display_name.as_deref(),
-                    Some(provider),
-                ]
-                .into_iter()
-                .flatten()
-                .collect::<Vec<_>>()
-                .join(" "),
-            ),
-            facts: Some(row_facts(metadata)),
-            ..Default::default()
-        },
+        } => {
+            let taken = names_pair && *has_settings;
+            SelectionItem {
+                // A model with settings is named as such rather than
+                // described: a description gives way to the fact columns.
+                name: match taken {
+                    true => format!("{model} (has settings)"),
+                    false => model.clone(),
+                },
+                description: Some(provider.clone()),
+                is_current: *current,
+                is_disabled: taken,
+                search_value: Some(
+                    [
+                        Some(model.as_str()),
+                        display_name.as_deref(),
+                        Some(provider),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                ),
+                facts: Some(row_facts(metadata)),
+                ..Default::default()
+            }
+        }
         Row::Pending { name, .. } => SelectionItem {
             name: name.clone(),
             description: Some("listing…".to_string()),
@@ -440,19 +505,28 @@ fn item(row: &Row) -> SelectionItem {
             search_value: Some(name.clone()),
             ..Default::default()
         },
+        Row::Entry => SelectionItem {
+            name: entry::LABEL.to_string(),
+            search_value: Some(entry::LABEL.to_string()),
+            ..Default::default()
+        },
     }
 }
 
 /// The title and subtitle, before the list is known.
-struct Heading;
-
-const HEADING: Heading = Heading;
+struct Heading {
+    title: &'static str,
+    subtitle: &'static str,
+}
 
 impl Renderable for Heading {
     fn render(&self, area: Rect, buf: &mut Buffer) {
         let content = render_menu_surface(area, buf);
-        Paragraph::new(vec![Line::from(TITLE.bold()), Line::from(SUBTITLE.dim())])
-            .render(content, buf);
+        Paragraph::new(vec![
+            Line::from(self.title.bold()),
+            Line::from(self.subtitle.dim()),
+        ])
+        .render(content, buf);
     }
 
     fn desired_height(&self, _width: u16) -> u16 {
@@ -467,11 +541,26 @@ impl BottomPaneView for ModelListView {
     ) -> Option<ratatui::crossterm::event::KeyCode> {
         match &mut self.state {
             State::Listing(listing) => listing.list.pointer_key(mouse),
+            State::Entry(form) => form.pointer_key(mouse),
             _ => None,
         }
     }
 
     fn handle_key_event(&mut self, key: KeyEvent) {
+        if let State::Entry(form) = &mut self.state {
+            match form.handle_key(key) {
+                FormEvent::Cancel => self.complete = true,
+                FormEvent::Action(entry::TAKE) => {
+                    if let Some(pair) = entry::pair(form) {
+                        let (provider_id, model) = entry::split(&pair);
+                        self.purpose.choose(&self.tx, provider_id, model);
+                        self.complete = true;
+                    }
+                }
+                FormEvent::Action(_) | FormEvent::None => {}
+            }
+            return;
+        }
         let State::Listing(listing) = &mut self.state else {
             self.complete = key.code == KeyCode::Esc;
             return;
@@ -486,21 +575,26 @@ impl BottomPaneView for ModelListView {
                     model: model.clone(),
                 }),
                 Row::Failed { provider_id, .. } => Some(Chosen::Retry(provider_id.clone())),
+                Row::Entry => Some(Chosen::Entry),
                 Row::Pending { .. } => None,
             }
         });
         self.complete = listing.list.is_complete();
         match chosen {
             Some(Chosen::Model { provider_id, model }) => {
-                self.tx
-                    .send(AppEvent::Op(Op::Command(AgentCommand::SetModel {
-                        provider_id,
-                        model,
-                    })));
+                self.purpose.choose(&self.tx, &provider_id, &model);
                 self.complete = true;
             }
             Some(Chosen::Retry(provider_id)) => self.retry(provider_id),
+            Some(Chosen::Entry) => self.state = State::Entry(Box::new(entry::form())),
             None => {}
+        }
+    }
+
+    fn handle_paste(&mut self, pasted: String) -> bool {
+        match &mut self.state {
+            State::Entry(form) => form.handle_paste(&pasted),
+            _ => false,
         }
     }
 
@@ -532,5 +626,12 @@ impl Renderable for ModelListView {
 
     fn render(&self, area: Rect, buf: &mut Buffer) {
         render_footed(self.body(), self.footer(area.width, true), area, buf);
+    }
+
+    fn cursor_pos(&self, area: Rect) -> Option<(u16, u16)> {
+        match &self.state {
+            State::Entry(form) => form.cursor_pos(area),
+            _ => None,
+        }
     }
 }

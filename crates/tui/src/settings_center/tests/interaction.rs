@@ -15,7 +15,7 @@ use serde_json::json;
 
 use super::{calls, catalog, center_with, press, reply, screen, show_tab, type_text};
 use crate::agent_bridge::{CatalogCall, CatalogOutcome};
-use crate::settings_center::SettingsCenter;
+use crate::settings_center::{CenterRequest, SettingsCenter};
 
 fn written() -> CatalogOutcome {
     CatalogOutcome::Written(SettingsWriteOutcome {
@@ -299,6 +299,30 @@ fn an_add_names_the_record_when_its_owner_does_not() {
             .as_object()
             .unwrap()
             .clone()
+    );
+}
+
+/// The collection whose `add` is a page (the Model overrides, a Provider
+/// and model chosen from a list) opens it from `a` and from its add row.
+#[test]
+fn the_add_of_a_collection_that_declares_a_page_opens_it() {
+    let mut center = center_with(catalog(), Some("providerModels"));
+    press(&mut center, KeyCode::Char('a'));
+    let requests = center.take_requests();
+    let [CenterRequest::OpenPage(page, None)] = requests.as_slice() else {
+        panic!("{requests:?}");
+    };
+    assert_eq!(page.id, "provider-model-overrides");
+    assert_eq!(center.hosted_command(), Some("model"));
+    assert!(!screen(&mut center, 140, 20).contains("Its fields are saved together"));
+
+    let mut center = center_with(super::catalog(), Some("providerModels"));
+    select(&mut center, "+ Add a model");
+    press(&mut center, KeyCode::Enter);
+    let requests = center.take_requests();
+    assert!(
+        matches!(requests.as_slice(), [CenterRequest::OpenPage(page, None)] if page.id == "provider-model-overrides"),
+        "{requests:?}"
     );
 }
 

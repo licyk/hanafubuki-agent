@@ -12,9 +12,11 @@ use ratatui::layout::Rect;
 use unicode_width::UnicodeWidthStr;
 
 use super::view::ModelListView;
+use super::Purpose;
 use crate::agent_bridge::model_list::{
     CurrentModel, ModelListEvent, ModelListStart, ModelListUpdate,
 };
+use crate::app::{SettingsPageAction, WorkspaceEvent};
 use crate::app_event::{AgentCommand, AppEvent, AppEventSender, Op};
 use crate::bottom_pane::{BottomPaneView, LoadingLine};
 use crate::commands::CommandReply;
@@ -23,9 +25,25 @@ use crate::render::renderable::Renderable;
 const LISTING: u64 = 7;
 
 fn view() -> (ModelListView, Receiver<AppEvent>) {
+    with(Purpose::Session)
+}
+
+fn with(purpose: Purpose) -> (ModelListView, Receiver<AppEvent>) {
     let (sender, events) = channel();
-    let view = ModelListView::new(LISTING, AppEventSender::new(sender), LoadingLine::still());
+    let view = ModelListView::new(
+        LISTING,
+        purpose,
+        AppEventSender::new(sender),
+        LoadingLine::still(),
+    );
     (view, events)
+}
+
+/// The list the settings center's Model overrides opens.
+fn overrides() -> (ModelListView, Receiver<AppEvent>) {
+    with(Purpose::AddRecord {
+        collection: "providerModels".to_string(),
+    })
 }
 
 fn hear(view: &mut ModelListView, event: ModelListEvent) {
@@ -76,6 +94,16 @@ fn sent(events: &Receiver<AppEvent>) -> Vec<AgentCommand> {
     std::iter::from_fn(|| events.try_recv().ok())
         .filter_map(|event| match event {
             AppEvent::Op(Op::Command(command)) => Some(command),
+            _ => None,
+        })
+        .collect()
+}
+
+/// What the view asked the settings center to write.
+fn written(events: &Receiver<AppEvent>) -> Vec<SettingsPageAction> {
+    std::iter::from_fn(|| events.try_recv().ok())
+        .filter_map(|event| match event {
+            AppEvent::Workspace(WorkspaceEvent::SettingsAction(action)) => Some(action),
             _ => None,
         })
         .collect()
@@ -148,6 +176,12 @@ fn sonnet_facts() -> ModelMetadata {
 }
 
 fn start(providers: &[(&str, &str)]) -> ModelListEvent {
+    start_with(providers, &[])
+}
+
+/// What the list starts from, `settings` being the pairs that already
+/// have settings of their own.
+fn start_with(providers: &[(&str, &str)], settings: &[&str]) -> ModelListEvent {
     ModelListEvent::Started(Box::new(ModelListStart {
         providers: providers
             .iter()
@@ -159,6 +193,7 @@ fn start(providers: &[(&str, &str)]) -> ModelListEvent {
             model: "claude-sonnet-4-5".to_string(),
             metadata: sonnet_facts(),
         }),
+        settings: settings.iter().map(|pair| pair.to_string()).collect(),
         policy_note: None,
         models_dev: false,
     }))
@@ -605,6 +640,121 @@ fn every_provider_failing_ends_the_wait_and_each_is_listed_again() {
         // Pending again: the cursor stays on it until it answers.
         hear(&mut view, failed(provider, "again"));
     }
+}
+
+/// The Model overrides' list: the pairs with settings already cannot be
+/// taken, and a pair its Providers do not list can be typed in.
+#[test]
+fn the_overrides_list_marks_the_models_that_have_settings_and_ends_with_a_pair_typed_in() {
+    let (mut view, _events) = overrides();
+    hear(
+        &mut view,
+        start_with(
+            &[("anthropic", "Anthropic")],
+            &["anthropic/claude-haiku-4-5"],
+        ),
+    );
+    hear(&mut view, anthropic());
+    let rendered = at_widths(&view);
+    assert!(
+        rendered.contains("claude-haiku-4-5 (has settings)"),
+        "{rendered}"
+    );
+    assert!(
+        rendered.contains("Enter a provider and model…"),
+        "the entry row is last:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("enter add"),
+        "Enter adds, it does not choose:\n{rendered}"
+    );
+    assert_snapshot!("model_overrides_list", rendered);
+
+    // The model that has settings is passed over.
+    key(&mut view, KeyCode::Down);
+    assert!(
+        render(&view, 100).contains("› Enter a provider and model…"),
+        "the cursor passes it to the row typed in: {}",
+        render(&view, 100)
+    );
+    key(&mut view, KeyCode::Enter);
+    assert!(render(&view, 80).contains("Enter a provider and model"));
+    assert!(written(&_events).is_empty(), "a pair is typed first");
+
+    // `/model` has no such row.
+    let (mut view, _events) = self::view();
+    hear(&mut view, start(&[("anthropic", "Anthropic")]));
+    hear(&mut view, anthropic());
+    assert!(!render(&view, 100).contains("Enter a provider and model…"));
+}
+
+#[test]
+fn a_chosen_model_is_added_as_the_collection_s_record() {
+    let (mut view, events) = overrides();
+    hear(&mut view, start(&[("anthropic", "Anthropic")]));
+    hear(&mut view, anthropic());
+    key(&mut view, KeyCode::Down);
+    key(&mut view, KeyCode::Enter);
+    let asked = written(&events);
+    let [action] = asked.as_slice() else {
+        panic!("{asked:?}");
+    };
+    assert_eq!(action.collection, "providerModels");
+    assert_eq!(action.record.as_deref(), Some("anthropic/claude-haiku-4-5"));
+    assert_eq!(action.action, "add");
+    assert!(action.values.is_empty());
+    assert!(view.is_complete());
+
+    // The session's model, on its own list, is set instead.
+    let (mut view, events) = self::view();
+    hear(&mut view, start(&[("anthropic", "Anthropic")]));
+    hear(&mut view, anthropic());
+    key(&mut view, KeyCode::Down);
+    key(&mut view, KeyCode::Enter);
+    assert_eq!(
+        sent(&events),
+        vec![AgentCommand::SetModel {
+            provider_id: "anthropic".to_string(),
+            model: "claude-haiku-4-5".to_string(),
+        }]
+    );
+}
+
+#[test]
+fn a_pair_typed_in_is_added_as_it_is_typed() {
+    let (mut view, events) = overrides();
+    hear(&mut view, start(&[("anthropic", "Anthropic")]));
+    hear(&mut view, anthropic());
+    key(&mut view, KeyCode::Down);
+    key(&mut view, KeyCode::Down);
+    key(&mut view, KeyCode::Enter);
+    assert!(render(&view, 80).contains("Enter a provider and model"));
+    typed(&mut view, "provider-9");
+    key(&mut view, KeyCode::Tab);
+    typed(&mut view, "org/model-x");
+    key(&mut view, KeyCode::Tab);
+    key(&mut view, KeyCode::Enter);
+    let asked = written(&events);
+    let [action] = asked.as_slice() else {
+        panic!("{asked:?}");
+    };
+    assert_eq!(action.record.as_deref(), Some("provider-9/org/model-x"));
+    assert!(view.is_complete());
+
+    // A pair missing one of its two is refused in the form.
+    let (mut view, events) = overrides();
+    hear(&mut view, start(&[("anthropic", "Anthropic")]));
+    hear(&mut view, anthropic());
+    for _ in 0..2 {
+        key(&mut view, KeyCode::Down);
+    }
+    key(&mut view, KeyCode::Enter);
+    typed(&mut view, "provider-9");
+    key(&mut view, KeyCode::Tab);
+    key(&mut view, KeyCode::Tab);
+    key(&mut view, KeyCode::Enter);
+    assert!(written(&events).is_empty(), "a model is missing");
+    assert!(!view.is_complete());
 }
 
 #[test]

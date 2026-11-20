@@ -25,8 +25,8 @@ mod tests;
 mod values;
 
 use hanafubuki_agent::{
-    SettingApply, SettingChange, SettingValue, SettingWriteOp, SettingsActionRequest,
-    SettingsCatalog, SettingsWrite, SettingsWriteOutcome,
+    SettingChange, SettingValue, SettingWriteOp, SettingsActionRequest, SettingsCatalog,
+    SettingsWrite,
 };
 use ratatui::crossterm::event::{
     KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
@@ -35,10 +35,10 @@ use ratatui::layout::Position;
 use serde_json::Value;
 use std::time::{Duration, Instant};
 
-use crate::agent_bridge::{CatalogCall, CatalogOutcome, CatalogReply};
+use crate::agent_bridge::{CatalogCall, CatalogReply};
 use collection::CollectionPage;
 use editor::{ChoicePage, ListPage, ListState};
-use form::{FormPage, FormTarget};
+use form::FormPage;
 use main_page::MainPage;
 pub(crate) use registry::{Attach, PageOverride};
 use render::Layout;
@@ -147,8 +147,12 @@ enum Pending {
     Read,
     /// A change of a field of the page at this index.
     Edit(usize),
-    /// An action run from the page at this index.
-    Action(usize, String),
+    /// An action of the collection run from the page at this index.
+    Action {
+        at: usize,
+        collection: String,
+        action: String,
+    },
 }
 
 /// The line under the title.
@@ -435,7 +439,15 @@ impl SettingsCenter {
                 }
                 let at = self.pages.len() - 1;
                 let action = request.action.clone();
-                self.send(Pending::Action(at, action), CatalogCall::Action(request));
+                let collection = request.collection.clone();
+                self.send(
+                    Pending::Action {
+                        at,
+                        collection,
+                        action,
+                    },
+                    CatalogCall::Action(request),
+                );
             }
         }
     }
@@ -474,13 +486,13 @@ impl SettingsCenter {
     fn send(&mut self, pending: Pending, call: CatalogCall) {
         if matches!(
             self.pending,
-            Some((_, Pending::Edit(_) | Pending::Action(..)))
+            Some((_, Pending::Edit(_) | Pending::Action { .. }))
         ) {
             self.notice = Notice::Failed("Wait for the last change to be saved.".to_string());
             return;
         }
         self.notice = Notice::Busy(match (&pending, &call) {
-            (Pending::Action(..), CatalogCall::Action(request)) => {
+            (Pending::Action { .. }, CatalogCall::Action(request)) => {
                 collection::running(self.catalog.as_ref(), request)
             }
             _ => "Saving…".to_string(),
@@ -493,63 +505,6 @@ impl SettingsCenter {
         self.pending = Some((self.next_request, pending));
         self.requests
             .push(CenterRequest::Call(self.next_request, call));
-    }
-
-    fn done(&mut self, pending: Pending, outcome: CatalogOutcome) {
-        match (pending, outcome) {
-            (Pending::Read, _) => {}
-            (Pending::Edit(at), outcome) => {
-                self.notice = Notice::done(match &outcome {
-                    CatalogOutcome::Written(written) => saved_notice(written),
-                    _ => "Saved".to_string(),
-                });
-                match self.pages.get_mut(at) {
-                    Some(Page::Main(page)) => page.saved(),
-                    // A commit group saved together is done.
-                    Some(Page::Form(page)) if matches!(page.target, FormTarget::Group { .. }) => {
-                        self.pages.truncate(at)
-                    }
-                    Some(Page::Form(page)) => page.saved(),
-                    _ => {}
-                }
-            }
-            (Pending::Action(at, action), CatalogOutcome::Acted(acted)) => {
-                let message = acted.message.clone();
-                if let Some(Page::Form(form)) = self.pages.get(at) {
-                    if matches!(form.target, FormTarget::Add { .. }) {
-                        self.pages.truncate(at);
-                        if let (Some(Page::Collection(page)), Some(record)) =
-                            (self.pages.last_mut(), acted.record.as_deref())
-                        {
-                            page.select_record(self.catalog.as_ref(), record);
-                        }
-                    }
-                }
-                self.notice = Notice::done(match message {
-                    Some(message) => message,
-                    None => match action.as_str() {
-                        "save" => "Saved".to_string(),
-                        "add" => "Added".to_string(),
-                        "delete" => "Deleted".to_string(),
-                        _ => format!("Done: {action}"),
-                    },
-                });
-            }
-            (Pending::Action(..), _) => {}
-        }
-    }
-
-    fn failed(&mut self, pending: Pending, error: String) {
-        match pending {
-            Pending::Read => {}
-            Pending::Edit(at) => match self.pages.get_mut(at) {
-                Some(Page::Main(page)) => page.refused(&error),
-                Some(Page::Form(page)) => page.refused(&error),
-                _ => {}
-            },
-            Pending::Action(..) => {}
-        }
-        self.notice = Notice::Failed(format!("Could not save: {error}"));
     }
 
     /// The pages whose record or collection the catalog no longer has (a
@@ -597,8 +552,13 @@ impl SettingsCenter {
         let mut request = collection::request(found, record, action);
         request.values = values;
         let at = self.pages.len() - 1;
+        let collection = request.collection.clone();
         self.send(
-            Pending::Action(at, action.to_string()),
+            Pending::Action {
+                at,
+                collection,
+                action: action.to_string(),
+            },
             CatalogCall::Action(request),
         );
     }
@@ -609,6 +569,16 @@ impl SettingsCenter {
         let Some(catalog) = self.catalog.as_ref() else {
             return;
         };
+        // A page that adds to a collection opens over it.
+        if let Some(page) = registry::page(target) {
+            if let Attach::Add { collection } = page.attach {
+                self.open_target(collection, None);
+                if matches!(self.pages.last(), Some(Page::Collection(_))) {
+                    self.open_page(page, None);
+                }
+                return;
+            }
+        }
         let Some(Page::Main(main)) = self.pages.first_mut() else {
             return;
         };
@@ -684,27 +654,4 @@ impl SettingsCenter {
             _ => None,
         }
     }
-}
-
-/// What a write said: saved, and whether a layer above the user's file
-/// keeps another value, or when it applies.
-fn saved_notice(written: &SettingsWriteOutcome) -> String {
-    let mut notice = "Saved".to_string();
-    if let Some(source) = written
-        .shadowed
-        .iter()
-        .find_map(|(_, source)| values::source_text(source))
-    {
-        notice.push_str(&format!(" · the {source} layer overrides it"));
-    }
-    let apply = written.apply.iter().map(|(_, apply)| *apply);
-    if apply.clone().any(|apply| apply == SettingApply::NextLaunch) {
-        notice.push_str(" · applies at next launch");
-    } else if apply
-        .into_iter()
-        .any(|apply| apply == SettingApply::NextSession)
-    {
-        notice.push_str(" · applies from the next session");
-    }
-    notice
 }

@@ -51,6 +51,8 @@ pub(crate) enum Attach {
         collection: &'static str,
         label: &'static str,
     },
+    /// In place of the form the collection's `add` opens.
+    Add { collection: &'static str },
 }
 
 pub(super) fn page_of_record_field(
@@ -87,6 +89,13 @@ pub(super) fn row_pages(group: SettingsGroup) -> impl Iterator<Item = &'static P
 pub(super) fn record_pages(collection: &str) -> impl Iterator<Item = &'static PageOverride> + '_ {
     SETTINGS_PAGES.into_iter().filter(move |page| {
         matches!(page.attach, Attach::Record { collection: attached, .. } if attached == collection)
+    })
+}
+
+/// The page that adds a record of `collection`, when it has one.
+pub(super) fn add_page(collection: &str) -> Option<&'static PageOverride> {
+    SETTINGS_PAGES.into_iter().find(|page| {
+        matches!(page.attach, Attach::Add { collection: attached } if attached == collection)
     })
 }
 

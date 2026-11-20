@@ -15,10 +15,10 @@ expression: "screen(&mut center, 50, 20)"
     models.dev catalogue  [ ] Off
     Model                 gpt-test ›
     Model policy          ›
-    Use memories          [x] On
 
   General · Sandbox
 
 
 
-  1/10 · type to search · enter results · esc cl
+  1/11 · type to search · enter results · esc
+  clear

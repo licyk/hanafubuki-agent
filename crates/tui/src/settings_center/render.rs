@@ -19,13 +19,12 @@ use super::editor::{LineEditor, ListState};
 use super::main_page::tabs;
 use super::values::{group_label, value_text};
 use super::{Notice, Page, SettingsCenter};
-use crate::text_formatting::truncate_text;
+use crate::text_formatting::truncate_to_width;
+use crate::wrapping::word_wrap_lines;
 
 /// The description column's narrowest; below it, it moves under the list.
 const NARROW_DESCRIPTION: u16 = 45;
-const LABEL_MAX: usize = 32;
 const VALUE_MIN: usize = 20;
-const VALUE_MAX: usize = 28;
 /// The lines the selected row's description takes below a narrow list.
 const NARROW_LINES: u16 = 3;
 /// `Search › `.
@@ -154,8 +153,14 @@ impl SettingsCenter {
         let (breadcrumbs, last_row) = self.render_breadcrumbs(catalog, line(y), buf);
         layout.breadcrumbs = breadcrumbs;
         y = last_row;
-        notice_line(&self.notice, self.editor_error()).render(line(y + 1), buf);
-        y += 3;
+        let notice = word_wrap_lines(
+            [notice_line(&self.notice, self.editor_error())],
+            usize::from(area.width),
+        );
+        for (offset, text) in notice.iter().enumerate() {
+            text.render(line(y + 1 + offset as u16), buf);
+        }
+        y += notice.len().max(1) as u16 + 2;
         let bottom = area.bottom().saturating_sub(1);
         let items = self.list_items(top);
         let (view, mut list, hint, empty) = match &self.pages[top] {
@@ -244,12 +249,6 @@ impl SettingsCenter {
                 (view, list, None, "")
             }
         };
-        let body = Rect {
-            y,
-            height: bottom.saturating_sub(y + 1),
-            ..area
-        };
-        render_list(&mut layout, &view, &mut list, body, buf, empty);
         let hint = hint.unwrap_or_else(|| editing_hint(&view, list.selected, "esc back"));
         let total = view.iter().filter(|row| row.selectable).count();
         let position = view
@@ -257,7 +256,22 @@ impl SettingsCenter {
             .take(list.selected + 1)
             .filter(|row| row.selectable)
             .count();
-        Line::from(format!("{position}/{total} · {hint}").dim()).render(line(bottom), buf);
+        // The keys wrap under the list rather than being cut at its right
+        // edge, taking the lines they need from the rows.
+        let hint = word_wrap_lines(
+            [Line::from(format!("{position}/{total} · {hint}").dim())],
+            usize::from(area.width),
+        );
+        let hint_height = hint.len().max(1) as u16;
+        let body = Rect {
+            y,
+            height: bottom.saturating_sub(y + 1).saturating_sub(hint_height - 1),
+            ..area
+        };
+        render_list(&mut layout, &view, &mut list, body, buf, empty);
+        for (offset, text) in hint.iter().enumerate() {
+            text.render(line(bottom + 1 - hint_height + offset as u16), buf);
+        }
         drop(view);
         if let Some(state) = self.pages[top].list_mut() {
             *state = list;
@@ -386,7 +400,10 @@ fn editing_hint(rows: &[Row], selected: usize, suffix: &str) -> String {
 }
 
 /// The rows in `area`, scrolled to the selected one; under a narrow
-/// description column, the selected row's description below them.
+/// description column, the selected row's description below them. The
+/// label and value columns are as wide as their rows ask for, so a wide
+/// terminal shows both whole: the label takes at most half of it, and the
+/// value what the description leaves.
 fn render_list(
     layout: &mut Layout,
     rows: &[Row],
@@ -408,14 +425,20 @@ fn render_list(
         .map(|row| row.label.width())
         .max()
         .unwrap_or(0)
-        .min(LABEL_MAX)
         .min(width / 2);
-    let value_width = rows
+    let wanted_value = rows
         .iter()
         .map(|row| row.value.width() + row.source.as_ref().map_or(0, |source| source.width() + 3))
         .max()
-        .unwrap_or(0)
-        .clamp(VALUE_MIN, VALUE_MAX);
+        .unwrap_or(0);
+    // What the value and the description share once the label has its own;
+    // the value takes what it asks for, but no more than half of it, and
+    // leaves the description its narrowest.
+    let rest = width.saturating_sub(2 + label_width + 2 + 2);
+    let value_width = wanted_value
+        .min(rest / 2)
+        .min(rest.saturating_sub(usize::from(NARROW_DESCRIPTION)))
+        .max(VALUE_MIN.min(rest));
     let used = 2 + label_width + 2 + value_width + 2;
     let narrow = width.saturating_sub(used) < usize::from(NARROW_DESCRIPTION);
     let (value_width, description_width) = if narrow {
@@ -486,7 +509,7 @@ fn row_line(row: &Row, selected: bool, columns: &Columns) -> (Line<'static>, Opt
         return (Line::from(row.label.clone().dim().bold()), None);
     }
     let marker = if selected { "› " } else { "  " };
-    let label = pad(&truncate_text(&row.label, columns.label), columns.label);
+    let label = pad(&truncate_to_width(&row.label, columns.label), columns.label);
     let mut spans = vec![Span::raw(marker), Span::raw(label), Span::raw("  ")];
     let mut cursor = None;
     if let Some(editor) = row.editor {
@@ -504,7 +527,7 @@ fn row_line(row: &Row, selected: bool, columns: &Columns) -> (Line<'static>, Opt
     }
     let source = row.source.as_ref().map(|source| format!(" · {source}"));
     let source_width = source.as_ref().map_or(0, |source| source.width());
-    let value = truncate_text(
+    let value = truncate_to_width(
         &row.value,
         columns.value.saturating_sub(source_width).max(1),
     );
@@ -517,7 +540,7 @@ fn row_line(row: &Row, selected: bool, columns: &Columns) -> (Line<'static>, Opt
         spans.push(Span::raw(
             " ".repeat(columns.value.saturating_sub(value_width) + 2),
         ));
-        let description = truncate_text(&row.description, columns.description);
+        let description = truncate_to_width(&row.description, columns.description);
         spans.push(match row.style {
             RowStyle::Issue => description.yellow(),
             _ if selected => Span::raw(description),

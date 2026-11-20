@@ -80,8 +80,8 @@ pub(crate) fn row_facts(metadata: &ModelMetadata) -> RowFacts {
 /// The keys of a model list whose model rows Enter chooses, `esc` saying
 /// what Esc does: `? not known`, and, while models.dev is off and a row
 /// `shows_unknown`, where it is turned on.
-pub(crate) fn choose_hint(esc: &str, shows_unknown: bool, models_dev: bool) -> String {
-    let mut hint = format!("enter choose · {esc} · ? not known");
+pub(crate) fn choose_hint(enter: &str, esc: &str, shows_unknown: bool, models_dev: bool) -> String {
+    let mut hint = format!("enter {enter} · {esc} · ? not known");
     if shows_unknown && !models_dev {
         hint.push_str(" · models.dev can fill these: /config modelMetadata");
     }

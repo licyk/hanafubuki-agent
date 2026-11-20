@@ -1,0 +1,49 @@
+---
+source: crates/tui/src/commands/model/tests.rs
+expression: rendered
+---
+--- 100 columns ---
+
+  Add model overrides
+  The model chosen gets its own settings.
+  1/3
+  Type to search models
+  Model                                                        Provider  Context  Thinking  Vision
+› claude-sonnet-4-5 (current)                                 Anthropic     200K  yes       yes
+  claude-haiku-4-5 (has settings)                             Anthropic     200K  yes       yes
+  Enter a provider and model…
+
+  claude-sonnet-4-5 · Anthropic: context 200K (reported) · max output 64K (reported) · thinking low,
+  medium, high (reported) · vision yes (reported)
+  enter add · esc back · ? not known
+--- 80 columns ---
+
+  Add model overrides
+  The model chosen gets its own settings.
+  1/3
+  Type to search models
+  Model                                    Provider  Context  Thinking  Vision
+› claude-sonnet-4-5 (current)             Anthropic     200K  yes       yes
+  claude-haiku-4-5 (has settings)         Anthropic     200K  yes       yes
+  Enter a provider and model…
+
+  claude-sonnet-4-5 · Anthropic: context 200K (reported) · max output 64K
+  (reported) · thinking low, medium, high (reported) · vision yes (reported)
+  enter add · esc back · ? not known
+--- 50 columns ---
+
+  Add model overrides
+  The model chosen gets its own settings.
+  1/3
+  Type to search models
+› claude-sonnet-4-5 (current)  Anthropic
+    context 200K · thinking yes · vision yes
+  claude-haiku-4-5 (has settings)  Anthropic
+    context 200K · thinking yes · vision yes
+  Enter a provider and model…
+
+  claude-sonnet-4-5 · Anthropic: context 200K
+  (reported) · max output 64K (reported) ·
+  thinking low, medium, high (reported) · vision
+  yes (reported)
+  enter add · esc back · ? not known
