@@ -21,7 +21,9 @@ pub enum AgentChildSessionBase {
     /// Nothing: its first turn is its first context.
     Empty,
     /// The parent's history at its last turn boundary: its head when no
-    /// turn runs, and as it stood before the running turn otherwise.
+    /// turn runs, as it stood before the running turn otherwise, and that
+    /// turn's own opening when it is the parent's first (nothing precedes
+    /// it, and a child's history starts with a turn).
     ParentHead,
 }
 

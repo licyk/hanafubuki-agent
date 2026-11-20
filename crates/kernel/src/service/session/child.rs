@@ -38,7 +38,8 @@ impl AgentService {
         validate_child_context(&request.context)?;
         let parent_id = request.parent_session_id;
         let parent = (*self.session(parent_id)?.lock_after_persistence_blocking()?).clone();
-        let base = self.child_history(&parent, request.base)?;
+        let ephemeral = request.persistence == AgentSessionPersistence::Ephemeral;
+        let base = self.child_history(&parent, request.base, ephemeral)?;
         // History starts with a turn: context can only follow one.
         if base.history.is_empty() && !request.context.is_empty() {
             return Err(AgentError::InvalidInput(
@@ -51,7 +52,6 @@ impl AgentService {
             .history_store
             .allocate_session_id()
             .map_err(history_store_error)?;
-        let ephemeral = request.persistence == AgentSessionPersistence::Ephemeral;
         let before_turn_id = base.before_turn_id;
         let mut record = child_record(session_id, &parent, &request, base);
         normalize_session_config(&mut record.settings.config);
@@ -170,6 +170,7 @@ impl AgentService {
         &self,
         parent: &SessionRecord,
         base: AgentChildSessionBase,
+        ephemeral: bool,
     ) -> Result<ChildHistory, AgentError> {
         if base == AgentChildSessionBase::Empty {
             return Ok(ChildHistory {
@@ -205,10 +206,21 @@ impl AgentService {
             });
         };
         let fork = self.load_fork_material(parent, turn_id)?;
-        let contents = history_contents(&fork.history);
+        // The parent's first turn has nothing before it, and a history
+        // starts with a turn: an ephemeral child — the side conversation
+        // that may be opened while that turn works — inherits the turn's
+        // own opening, the message and the context it came with, never the
+        // model's output or a call left open. One that is persisted keeps
+        // the refusal instead: its base is the parent's head, which already
+        // holds what that turn has committed.
+        let (history, before_turn_id) = match (fork.history.is_empty(), ephemeral) {
+            (true, true) => (turn_opening(&parent.conversation.history, turn_id), None),
+            _ => (fork.history, Some(turn_id)),
+        };
+        let contents = history_contents(&history);
         validate_persisted_history(&contents, &parent.settings.config, self.inner.limits)?;
         validate_complete_tool_pairs(&contents)?;
-        let history: Arc<Vec<_>> = Arc::new(fork.history.into_iter().map(Arc::new).collect());
+        let history: Arc<Vec<_>> = Arc::new(history.into_iter().map(Arc::new).collect());
         Ok(ChildHistory {
             history_bytes: contents.iter().fold(0usize, |total, item| {
                 total.saturating_add(item.retained_bytes())
@@ -223,9 +235,37 @@ impl AgentService {
             next_history_item_id: parent.conversation.next_history_item_id,
             next_message_id: parent.conversation.next_message_id,
             context_window: AgentContextWindowSnapshot::initial(),
-            before_turn_id: Some(turn_id),
+            before_turn_id,
         })
     }
+}
+
+/// The items of the turn `turn_id`'s opening: its start, the world state
+/// and the events it came with, and the message and Skills it was given —
+/// the kinds an admission commits before the model answers. Empty when the
+/// history does not hold that turn.
+fn turn_opening(history: &[Arc<AgentHistoryItem>], turn_id: AgentTurnId) -> Vec<AgentHistoryItem> {
+    let Some(start) = history.iter().rposition(
+        |item| matches!(item.content, ConversationItem::TurnStart { turn_id: id } if id == turn_id),
+    ) else {
+        return Vec::new();
+    };
+    history[start..]
+        .iter()
+        .take_while(|item| {
+            matches!(
+                item.content,
+                ConversationItem::TurnStart { .. }
+                    | ConversationItem::WorldStateUpdate { .. }
+                    | ConversationItem::WakeEvents { .. }
+                    | ConversationItem::CanonicalInitialContext { .. }
+                    | ConversationItem::PromptContext { .. }
+                    | ConversationItem::SkillContext { .. }
+                    | ConversationItem::UserMessage { .. }
+            )
+        })
+        .map(|item| item.as_ref().clone())
+        .collect()
 }
 
 fn child_record(

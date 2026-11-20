@@ -121,7 +121,7 @@ Every session records, when it is created, the workspace's primary directory (`c
 
 A side conversation is a temporary conversation beside a session, for a question you want answered without disturbing the session's work.
 
-- It starts with everything the session had at its last turn boundary: the whole conversation when no turn runs, and the conversation before the running turn otherwise, so you can ask while the session works. The session's history must have at least one turn.
+- It starts with everything the session had at its last turn boundary: the whole conversation when no turn runs, and the conversation before the running turn otherwise, so you can ask while the session works. When the running turn is the session's first, that turn's own opening is what it inherits — your message and the context it came with, never an answer. Only a session that has not been given a turn at all has nothing to open beside.
 - Its model is told it is in a side conversation: the inherited conversation is reference only, not instructions to carry on; it answers questions and explores without changing files, the workspace or settings unless you ask it to in the side conversation.
 - It is **ephemeral**: kept in memory only, never written to the history, never listed, and gone when it is closed, when its session is archived or deleted, or when the Agent stops. Its transcript starts at the side conversation, not with the inherited history.
 - A session has at most one; opening it again returns the open one. Closing it stops its running turn and its background terminals.

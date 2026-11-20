@@ -230,6 +230,77 @@ async fn a_side_conversation_opened_while_the_parent_works_stops_before_its_runn
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_side_conversation_opened_during_the_parents_first_turn_inherits_its_opening() {
+    // The parent's first answer holds before it completes, so the turn is
+    // running with nothing answered when the side conversation opens.
+    let held = String::from_utf8(assistant_events("First."))
+        .unwrap()
+        .replace(
+            "data: {\"type\":\"response.completed\"",
+            &format!("{HOLD}data: {{\"type\":\"response.completed\""),
+        )
+        .into_bytes();
+    let server = FakeServer::start(vec![
+        (held, Duration::ZERO),
+        (assistant_events("Side."), Duration::ZERO),
+        (assistant_events("Side."), Duration::ZERO),
+    ])
+    .await;
+    let (service, paths) = configured_service("side-during-first-turn", &server.base_url);
+    let parent = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap();
+    let first = tokio::spawn({
+        let service = service.clone();
+        async move {
+            service
+                .start_turn(parent.id, "First question.".to_string().into())
+                .await
+        }
+    });
+    wait_until("the first turn waits for its answer", || {
+        turn_running(&service, parent.id) && server.requests().len() == 1
+    })
+    .await;
+
+    // Nothing of the parent's turn is answered yet, and the conversation
+    // has still started: its side conversation opens.
+    let side = service.open_side_conversation(parent.id).unwrap();
+    assert_eq!(side.parent_session_id, Some(parent.id));
+    server.hold.notify_one();
+    assert_eq!(first.await.unwrap().unwrap().final_answer, "First.");
+    let answer = service
+        .start_turn(side.id, "Side question.".to_string().into())
+        .await
+        .unwrap();
+    assert_eq!(answer.final_answer, "Side.");
+
+    let request = server
+        .requests()
+        .into_iter()
+        .map(|request| String::from_utf8(request.body).unwrap())
+        .find(|body| body.contains("Side question."))
+        .expect("the side turn's request");
+    let position = |text: &str| request.find(text).unwrap();
+    assert!(
+        position("First question.") < position("You are in a side conversation"),
+        "the parent's opening is inherited before the policy:\n{request}"
+    );
+    assert!(
+        position("You are in a side conversation") < position("Side conversation boundary.")
+            && position("Side conversation boundary.") < position("Side question."),
+        "{request}"
+    );
+    assert!(
+        !request.contains("First."),
+        "the parent's answer came after the fork:\n{request}"
+    );
+    service.close_side_conversation(side.id).await.unwrap();
+    finish(service, paths);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_driven_child_runs_a_turn_answers_and_is_interrupted() {
     let server = FakeServer::start(vec![
         (assistant_events("Parent answer."), Duration::ZERO),

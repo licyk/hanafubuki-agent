@@ -60,6 +60,34 @@ impl Harness {
 }
 
 #[test]
+fn a_side_conversation_opens_while_the_first_turn_still_runs() {
+    let mut harness = Harness::start_timed(
+        vec![(assistant_events("Hi."), Duration::from_secs(2))],
+        true,
+        TranscriptMode::Terminal,
+    );
+    harness.type_and_submit("Hello.");
+    harness.pump_until("the first turn's request", |harness| {
+        harness.server.requests().len() == 1
+    });
+
+    // The conversation has started and its answer has not come: the side
+    // conversation opens beside it.
+    harness.type_and_submit("/side");
+    let screen = harness.pump_until_screen_shows("Side conversation · fixture-model");
+    assert!(
+        !screen.contains("unavailable until the current conversation"),
+        "{screen}"
+    );
+    let side = harness.session();
+    assert_eq!(harness.origin(side), Some(AgentSessionOrigin::Side));
+    harness.pump_until_turn_ends();
+    harness.type_and_submit("/close");
+    harness.pump_until_screen_shows("Side conversation closed.");
+    assert_eq!(harness.origin(side), None);
+}
+
+#[test]
 fn a_side_conversation_takes_its_own_messages_and_esc_returns_to_the_main_one() {
     let mut harness = Harness::start(vec![
         assistant_events("Hi."),

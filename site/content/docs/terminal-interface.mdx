@@ -357,7 +357,7 @@ Esc 返回上一页，在标签页上回到设置中心。用 `--safe-mode` 启�
 
 在旁路界面中，**`/close`** 或 `hide_pane` 的按键关闭该界面并中断它的回合，运行中也可使用，不会退出主 Agent。旁路界面里的 Ctrl-C 保持它在记录中的含义（复制选中的文字、清空草稿、中断回合），因此不再关闭界面。主界面仍支持 `/side close`。旁路界面命令列表包含 `/close` 和 `/subagents`，隐藏 `/side` 和 `/btw`；主界面的 Ctrl-C 保持原有中断／退出行为。
 
-`/side`（或 `/btw`）打开会话的[旁路对话](/docs/sessions#side)：在会话旁边临时开的一段对话，用来快速问一个问题，而不打扰会话正在做的事。`/side 问题` 打开它并把问题发到那里。会话必须已经有过回合：在你发送第一条消息之前，`/side` 会提示 `'/side' is unavailable until the current conversation has started.`。[评审](#review)运行期间，或会话的上下文正在压缩时，也会拒绝打开。
+`/side`（或 `/btw`）打开会话的[旁路对话](/docs/sessions#side)：在会话旁边临时开的一段对话，用来快速问一个问题，而不打扰会话正在做的事。`/side 问题` 打开它并把问题发到那里。会话必须已经开始过一个回合，无论是已经答完还是仍在运行：只有在你发送第一条消息之前，`/side` 才会提示 `'/side' is unavailable until the current conversation has started.`。[评审](#review)运行期间，或会话的上下文正在压缩时，也会拒绝打开。
 
 - **Fullscreen**：旁路对话是停靠在对话右侧的窗格，有自己的对话、输入框和状态栏；每个窗格顶部有一行标题，两个窗格之间有分隔线。窗格打开时获得焦点。它的消息发给旁路会话，主对话的消息发给主会话，两边都保持运行：一边的回合在你于另一边输入时继续进行。屏幕窄于 100 列或放大（`leader z`）时，获得焦点的对话占满屏幕，上方显示它的标题。用鼠标拖动分隔线，或用 `leader <` 和 `leader >`，调整窗格宽度；`leader =` 让两个窗格等宽；在另一个窗格中单击会让它获得焦点。
 - **Scrollback**：界面切换到旁路对话：先在回滚区写入 `Side conversation · ctrl-x x or /close closes · Esc returns`，再写旁路对话。这期间主对话写出的内容会先保留，回到主对话时再写入。
