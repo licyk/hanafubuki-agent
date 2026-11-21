@@ -38,8 +38,9 @@ use crate::update_notice::TuiUpdateNotice;
 pub(crate) use context::new_context_output;
 pub(crate) use live::LiveCell;
 pub(crate) use messages::{
-    insert_before, new_user_prompt, splice_stream, stream_span, user_prompt, AgentMarkdownCell,
-    AgentMessageCell, StreamId, StreamTailCell, UserHistoryCell,
+    insert_before, new_steering_prompt, new_user_prompt, splice_stream, steering_prompt,
+    stream_span, user_prompt, AgentMarkdownCell, AgentMessageCell, StreamId, StreamTailCell,
+    UserHistoryCell,
 };
 pub(crate) use plan::{new_proposed_plan_stream, PlanUpdateCell, ProposedPlanCell};
 pub(crate) use reports::{new_mcp_output, new_skills_output};

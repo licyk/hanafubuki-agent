@@ -23,8 +23,9 @@
 //! The chosen prompt is kept as a count from the latest, never as a cell
 //! index, so cells that arrive (or earlier pages spliced in) while browsing
 //! do not move it. Codex's browsing from an open Ctrl+T transcript,
-//! steering-aware prompt restoration, mention bindings and side
-//! conversations are not here.
+//! mention bindings and side conversations are not here; a message sent
+//! while the Agent worked is shown with the conversation but is not one to
+//! edit, having started no turn.
 
 use std::io::{self, Write};
 use std::time::Instant;
@@ -211,13 +212,19 @@ impl App {
         true
     }
 
-    /// The indices of the prompt cells, latest first.
+    /// The indices of the prompt cells that started their turn, latest
+    /// first: a message sent while the Agent worked has no turn of its own
+    /// to edit.
     fn prompt_indices(&self) -> Vec<usize> {
         self.transcript_cells
             .iter()
             .enumerate()
             .rev()
-            .filter(|(_, cell)| cell.as_any().is::<UserHistoryCell>())
+            .filter(|(_, cell)| {
+                cell.as_any()
+                    .downcast_ref::<UserHistoryCell>()
+                    .is_some_and(UserHistoryCell::starts_turn)
+            })
             .map(|(index, _)| index)
             .collect()
     }

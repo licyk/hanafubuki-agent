@@ -87,7 +87,7 @@ fn a_prompt_counted_from_the_latest_maps_to_its_turn_past_the_items_that_are_not
 }
 
 #[test]
-fn a_steering_message_is_a_prompt_but_not_a_turn_to_edit() {
+fn a_steering_message_is_stepped_over_and_is_not_a_prompt_to_count() {
     let items = [
         turn(1),
         user("Start."),
@@ -95,12 +95,16 @@ fn a_steering_message_is_a_prompt_but_not_a_turn_to_edit() {
         turn(2),
         user("Next."),
     ];
+    // The transcript offers the messages that started turns, latest
+    // first; the steer between them is stepped over.
     assert_eq!(
-        scan(&items, &["Next.", "Also this.", "Start."]),
+        scan(&items, &["Next.", "Start."]),
         Ok(Some(AgentTurnId::new(1)))
     );
+    // A list counting the steer would misread every prompt after it, which
+    // the mismatch says rather than picking the wrong turn.
     let error = scan(&items, &["Next.", "Also this."]).unwrap_err();
-    assert!(error.contains("cannot be edited on its own"), "{error}");
+    assert!(error.contains("no longer matches"), "{error}");
 }
 
 #[test]

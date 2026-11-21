@@ -215,3 +215,48 @@ fn browsing_in_the_terminal_overlay_edits_and_the_fork_goes_on() {
     );
     assert_eq!(harness.saved_messages(original), vec!["First?", "Second?"]);
 }
+
+#[test]
+fn a_message_sent_while_the_turn_ran_is_browsed_past_to_the_turn_that_started_it() {
+    let mut harness = Harness::start_timed(
+        vec![
+            (
+                [HOLD.as_bytes(), &assistant_events("Working on it.")].concat(),
+                Duration::ZERO,
+            ),
+            (assistant_events("Steered."), Duration::ZERO),
+        ],
+        true,
+        TranscriptMode::Terminal,
+    );
+    harness.type_and_submit("Start.");
+    harness.pump_until("the turn to run", |harness| {
+        harness.app.chat_widget.is_task_running()
+    });
+    harness.type_and_submit("Also this.");
+    harness.pump_until_steered();
+    harness.pump_until_screen_shows("↳ Also this.");
+    harness.server.hold.notify_one();
+    harness.pump_until_screen_shows("Steered.");
+    harness.pump_until_turn_ends();
+    // The conversation shows both, the steer written once the turn read it.
+    let transcript = harness.transcript();
+    assert!(transcript.contains("Also this."), "{transcript}");
+
+    // Browsing offers the message that started the turn: the steer started
+    // none, so it is stepped over rather than refused.
+    harness.key(KeyCode::Esc);
+    harness.key(KeyCode::Esc);
+    harness.pump_until_screen_shows("Browsing");
+    let highlighted = harness.highlighted();
+    assert!(highlighted.contains("Start."), "{highlighted}");
+    harness.key(KeyCode::Left);
+    harness.app.draw(&mut harness.tui).unwrap();
+    assert!(harness.highlighted().contains("Start."));
+
+    harness.key(KeyCode::Enter);
+    harness.pump_until_screen_shows("the original is archived");
+    assert!(!harness.screen().contains("was not edited"));
+    let composer = harness.bottom_rows(4);
+    assert!(composer.contains("Start."), "{composer}");
+}

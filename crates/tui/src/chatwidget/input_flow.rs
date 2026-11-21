@@ -102,7 +102,7 @@ impl ChatWidget {
     /// images.
     fn write_steer(&mut self, message: &UserMessage) {
         message.remove_pasted_files();
-        self.add_to_history(history_cell::new_user_prompt(message));
+        self.add_to_history(history_cell::new_steering_prompt(message));
     }
 
     /// A message sent to start a turn met a turn the chat had not heard of

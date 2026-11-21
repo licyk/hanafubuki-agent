@@ -10,9 +10,10 @@
 //! a saved message, so a prompt that never reached the session (a turn
 //! refused at its start) fails the mapping instead of picking the wrong
 //! turn. Only messages show as prompts: continuation context, side and
-//! approval notes and compaction summaries are skipped. A message sent
-//! while the Agent worked (steering) is a prompt but not a turn of its
-//! own, so it cannot be edited.
+//! approval notes and compaction summaries are skipped, and so is a
+//! message sent while the Agent worked (steering): it shows with the
+//! conversation but started no turn, so the transcript does not offer it
+//! for editing and the scan steps over it.
 
 use hanafubuki_agent::{
     AgentHistorySortDirection, AgentSessionId, AgentTranscriptPageRequest, AgentTurnId,
@@ -113,25 +114,13 @@ impl<'a> PromptScan<'a> {
         let chosen = self.matched == self.prompts.len();
         match item {
             ConversationItem::TurnStart { turn_id } if chosen => Ok(Some(*turn_id)),
-            ConversationItem::UserMessage { text, .. }
-            | ConversationItem::SteeringMessage { text, .. }
-                if !chosen =>
-            {
+            ConversationItem::UserMessage { text, .. } if !chosen => {
                 if self.prompts.get(self.matched) != Some(text) {
                     return Err(
                         "the transcript no longer matches the saved conversation".to_string()
                     );
                 }
                 self.matched += 1;
-                if self.matched == self.prompts.len()
-                    && matches!(item, ConversationItem::SteeringMessage { .. })
-                {
-                    return Err(
-                        "a message sent while the Agent worked cannot be edited on its \
-                        own: edit the message that started that turn"
-                            .to_string(),
-                    );
-                }
                 Ok(None)
             }
             _ => Ok(None),

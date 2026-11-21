@@ -48,6 +48,8 @@ pub(crate) enum ReplayedItem {
     User {
         text: String,
         images: Vec<String>,
+        /// Whether it started its turn, rather than arriving while one ran.
+        starts_turn: bool,
     },
     /// What the model thought, as Markdown, and for how long.
     Reasoning {
@@ -96,11 +98,16 @@ pub(crate) fn transcript(
     let mut calls = HashMap::new();
     for (item_id, content) in items.into_iter().rev() {
         match content {
-            ConversationItem::UserMessage { text, images }
-            | ConversationItem::SteeringMessage { text, images, .. } => {
+            ConversationItem::UserMessage { text, images } => transcript.push(ReplayedItem::User {
+                text,
+                images: images.into_iter().map(|image| image.display_name).collect(),
+                starts_turn: true,
+            }),
+            ConversationItem::SteeringMessage { text, images, .. } => {
                 transcript.push(ReplayedItem::User {
                     text,
                     images: images.into_iter().map(|image| image.display_name).collect(),
+                    starts_turn: false,
                 })
             }
             ConversationItem::Reasoning {

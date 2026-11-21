@@ -64,7 +64,8 @@ impl Harness {
         });
     }
 
-    fn pump_until_steered(&mut self) {
+    /// Runs the app loop's steps until the Agent accepted a steer.
+    pub(super) fn pump_until_steered(&mut self) {
         let deadline = Instant::now() + super::DEADLINE;
         loop {
             let event = self

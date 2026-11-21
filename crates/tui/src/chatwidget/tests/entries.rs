@@ -435,6 +435,7 @@ fn a_replayed_reasoning_item_is_a_completed_cell() {
             ReplayedItem::User {
                 text: "Why?".to_string(),
                 images: Vec::new(),
+                starts_turn: true,
             },
             ReplayedItem::Reasoning {
                 item_id: 4,

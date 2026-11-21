@@ -130,9 +130,18 @@ impl ChatWidget {
                 }
             }
             match item {
-                ReplayedItem::User { text, images } => cells.push(Box::new(
-                    history_cell::user_prompt(text, image_rows(images.iter().map(String::as_str))),
-                )),
+                ReplayedItem::User {
+                    text,
+                    images,
+                    starts_turn,
+                } => {
+                    let rows = image_rows(images.iter().map(String::as_str));
+                    cells.push(Box::new(if starts_turn {
+                        history_cell::user_prompt(text, rows)
+                    } else {
+                        history_cell::steering_prompt(text, rows)
+                    }))
+                }
                 ReplayedItem::Reasoning {
                     item_id,
                     text,

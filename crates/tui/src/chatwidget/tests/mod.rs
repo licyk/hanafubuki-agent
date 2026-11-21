@@ -181,6 +181,7 @@ fn an_opened_session_replays_its_transcript_after_its_header() {
             ReplayedItem::User {
                 text: "What changed?".to_string(),
                 images: Vec::new(),
+                starts_turn: true,
             },
             ReplayedItem::Tool {
                 call_id: "call-1".to_string(),

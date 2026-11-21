@@ -626,7 +626,7 @@ In Fullscreen the conversation's other keys (Page Up/Page Down, Home/End, F3) st
 
 Enter edits in a copy of the session: it is forked before the message's turn and the interface switches to the fork, whose conversation ends before the message, with the message back in the composer to change and send. The original session is archived, whole: `hanafubuki-agent sessions list --archived` finds it ([Sessions](/docs/sessions#edit)). Files the Agent changed are not restored, which the first edit of a run says. The message's images come back with it, as `[Image #1]` and on, the copies the session keeps.
 
-- A message sent while a turn ran (steering) did not start a turn of its own and cannot be edited by itself: edit the message that started the turn.
+- A message sent while a turn ran (steering) did not start a turn of its own, so browsing steps over it: editing reaches the message that started that turn, with which the steer was sent.
 - While a turn runs, Esc interrupts it, as before; the edit is refused until no turn runs and no message waits.
 - With no message yet, the second Esc says `No previous message to edit.` In Fullscreen, browsing reaches the messages loaded so far; scrolling up loads earlier ones. In Scrollback, those of a resumed session's latest 200 items.
 

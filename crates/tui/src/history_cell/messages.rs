@@ -39,10 +39,18 @@ pub(crate) struct UserHistoryCell {
     pub message: String,
     /// `[Image #N: name]` for each of its images.
     images: Vec<String>,
+    /// Whether it started its turn. A message sent into a running turn
+    /// (steering) is shown as a prompt but has no turn of its own.
+    starts_turn: bool,
     activity_id: String,
 }
 
 impl UserHistoryCell {
+    /// Whether the message started a turn, which an edit restarts.
+    pub(crate) fn starts_turn(&self) -> bool {
+        self.starts_turn
+    }
+
     /// The message wrapped at `width`, behind its `›`, then a row for each
     /// image.
     fn rows(&self, width: u16) -> Vec<Line<'static>> {
@@ -114,11 +122,26 @@ pub(crate) fn new_user_prompt(message: &UserMessage) -> UserHistoryCell {
     user_prompt(message.text.clone(), message.image_rows())
 }
 
+/// A message sent into a running turn, `images` its images' rows.
+pub(crate) fn new_steering_prompt(message: &UserMessage) -> UserHistoryCell {
+    steering_prompt(message.text.clone(), message.image_rows())
+}
+
 /// A message as sent, `images` its images' rows.
 pub(crate) fn user_prompt(message: String, images: Vec<String>) -> UserHistoryCell {
+    prompt(message, images, true)
+}
+
+/// A message sent into a running turn, as [`user_prompt`].
+pub(crate) fn steering_prompt(message: String, images: Vec<String>) -> UserHistoryCell {
+    prompt(message, images, false)
+}
+
+fn prompt(message: String, images: Vec<String>, starts_turn: bool) -> UserHistoryCell {
     UserHistoryCell {
         message,
         images,
+        starts_turn,
         activity_id: next_activity_id("user:"),
     }
 }
