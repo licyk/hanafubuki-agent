@@ -74,8 +74,9 @@ pub use session::{
     AgentSessionTitle, AgentSessionTitleRenameRequest, AgentSessionTitleSource, AgentSkillRef,
     AgentTaskPlanSnapshot, AgentTurnInput, AgentUserInputAccepted, AgentUserInputAnswer,
     AgentUserInputOption, AgentUserInputQuestion, AgentUserInputRequest, AgentUserInputResolution,
-    AgentUserShellCommand, ConfirmedAgentSessionDeletion, PreparedAgentSessionDeletion,
-    AGENT_SESSION_TITLE_MAX_CHARS, MAXIMUM_HOST_CONTEXT_BYTES, MAXIMUM_USER_IMAGES_PER_MESSAGE,
+    AgentUserInputResponse, AgentUserShellCommand, ConfirmedAgentSessionDeletion,
+    PreparedAgentSessionDeletion, AGENT_SESSION_TITLE_MAX_CHARS, MAXIMUM_HOST_CONTEXT_BYTES,
+    MAXIMUM_USER_IMAGES_PER_MESSAGE,
 };
 pub use turn::{
     AgentCompactionImplementation, AgentCompactionOutcome, AgentCompactionPhase,

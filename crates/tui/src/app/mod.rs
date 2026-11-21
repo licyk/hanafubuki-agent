@@ -193,6 +193,7 @@ impl App {
                 Err(RecvTimeoutError::Disconnected) => break,
             }
             if self.next_frame.is_some_and(|at| at <= Instant::now()) {
+                self.chat_widget.tick_active_view();
                 self.draw(tui)?;
             }
         }

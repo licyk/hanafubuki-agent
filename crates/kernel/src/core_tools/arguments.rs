@@ -20,6 +20,13 @@ pub(crate) struct UpdateTaskPlanTool {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RequestUserInputTool {
     pub questions: Vec<crate::model::AgentUserInputQuestion>,
+    /// Whether the turn waits for the answers; absent (or `true`) blocks.
+    #[serde(default = "blocking_by_default")]
+    pub is_blocking: bool,
+}
+
+fn blocking_by_default() -> bool {
+    true
 }
 
 /// One validated call of a kernel tool.
@@ -103,7 +110,7 @@ fn validate_update_task_plan(call: &UpdateTaskPlanTool) -> Result<(), ToolCallVa
 }
 
 fn validate_user_input_request(call: &RequestUserInputTool) -> Result<(), ToolCallValidationError> {
-    if call.questions.is_empty() || call.questions.len() > 3 {
+    if call.questions.is_empty() || call.questions.len() > 10 {
         return Err(ToolCallValidationError::InvalidArgument("questions"));
     }
     let mut question_ids = std::collections::HashSet::new();
@@ -115,7 +122,7 @@ fn validate_user_input_request(call: &RequestUserInputTool) -> Result<(), ToolCa
             || question.question.is_empty()
             || question.question.len() > 1024
             || question.options.len() < 2
-            || question.options.len() > 3
+            || question.options.len() > 5
         {
             return Err(ToolCallValidationError::InvalidArgument("questions"));
         }

@@ -10,4 +10,4 @@ expression: "render(&view, 60)"
   › 1. The TUI only         Leave the CLI alone
     2. The TUI and the CLI
 
-  enter to answer | ←/→ questions | esc to interrupt
+  enter to answer | ←/→ or alt+1-9 questions | esc to inte

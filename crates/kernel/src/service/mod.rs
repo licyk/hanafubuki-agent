@@ -52,10 +52,10 @@ use crate::model::{
     AgentTaskPlanSnapshot, AgentTurnAccepted, AgentTurnCancellationOutcome, AgentTurnId,
     AgentTurnOutcome, AgentTurnPhase, AgentTurnTerminalReason, AgentUsageSource,
     AgentUserInputAccepted, AgentUserInputAnswer, AgentUserInputRequest, AgentUserInputRequestId,
-    AgentUserInputResolution, AgentWorldStateSection, AgentWorldStateSnapshot,
-    AgentWorldStateUpdate, ConfirmedAgentSessionDeletion, ContextSectionKind, ConversationItem,
-    PermissionAssessment, PermissionAssessmentOutcome, PermissionReviewStatus,
-    PreparedAgentSessionDeletion, MAXIMUM_AGENT_WORLD_STATE_SECTIONS,
+    AgentUserInputResolution, AgentUserInputResponse, AgentWorldStateSection,
+    AgentWorldStateSnapshot, AgentWorldStateUpdate, ConfirmedAgentSessionDeletion,
+    ContextSectionKind, ConversationItem, PermissionAssessment, PermissionAssessmentOutcome,
+    PermissionReviewStatus, PreparedAgentSessionDeletion, MAXIMUM_AGENT_WORLD_STATE_SECTIONS,
     MAXIMUM_AGENT_WORLD_STATE_SECTION_BYTES, MAXIMUM_AGENT_WORLD_STATE_TOTAL_BYTES,
 };
 use crate::permission::{review_permission, PermissionReviewError};

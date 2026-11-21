@@ -1095,11 +1095,15 @@
       "type": "function"
     },
     {
-      "description": "Pause the turn and ask the user one to three structured questions.",
+      "description": "Pause the turn and ask the user up to ten structured questions, each with up to five options. A question whose `isOther` is true also accepts an answer in the user's own words.",
       "name": "request_user_input",
       "parameters": {
         "additionalProperties": false,
         "properties": {
+          "isBlocking": {
+            "description": "Whether the turn waits for the answers (default true); when false the questions are shown and the turn goes on, and the person's answers reach it if they come",
+            "type": "boolean"
+          },
           "questions": {
             "items": {
               "additionalProperties": false,
@@ -1113,6 +1117,10 @@
                   "maxLength": 64,
                   "minLength": 1,
                   "type": "string"
+                },
+                "isOther": {
+                  "description": "Whether the user may answer in their own words too",
+                  "type": "boolean"
                 },
                 "options": {
                   "items": {
@@ -1140,7 +1148,7 @@
                     ],
                     "type": "object"
                   },
-                  "maxItems": 3,
+                  "maxItems": 5,
                   "minItems": 2,
                   "type": "array"
                 },
@@ -1158,7 +1166,7 @@
               ],
               "type": "object"
             },
-            "maxItems": 3,
+            "maxItems": 10,
             "minItems": 1,
             "type": "array"
           }

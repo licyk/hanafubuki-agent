@@ -44,24 +44,35 @@ pub(super) fn model_spec(tool: AgentCoreTool) -> ModelToolSpec {
             },
             AgentCoreTool::RequestUserInput => ModelToolSpec { strict: true,
                 name: tool.name().to_owned(),
-                description: "Pause the turn and ask the user one to three structured questions.".to_owned(),
+                description: "Pause the turn and ask the user up to ten structured questions, each \
+                              with up to five options. A question whose `isOther` is true also \
+                              accepts an answer in the user's own words."
+                    .to_owned(),
                 input_schema: serde_json::json!({
                     "type": "object",
                     "properties": {
+                        "isBlocking": {
+                            "type": "boolean",
+                            "description": "Whether the turn waits for the answers (default true); when false the questions are shown and the turn goes on, and the person's answers reach it if they come"
+                        },
                         "questions": {
                             "type": "array",
                             "minItems": 1,
-                            "maxItems": 3,
+                            "maxItems": 10,
                             "items": {
                                 "type": "object",
                                 "properties": {
                                     "id": { "type": "string", "minLength": 1, "maxLength": 64 },
                                     "header": { "type": "string", "minLength": 1, "maxLength": 64 },
                                     "question": { "type": "string", "minLength": 1, "maxLength": 1024 },
+                                    "isOther": {
+                                        "type": "boolean",
+                                        "description": "Whether the user may answer in their own words too"
+                                    },
                                     "options": {
                                         "type": "array",
                                         "minItems": 2,
-                                        "maxItems": 3,
+                                        "maxItems": 5,
                                         "items": {
                                             "type": "object",
                                             "properties": {

@@ -27,6 +27,18 @@ pub(crate) trait BottomPaneView: Renderable {
         false
     }
 
+    /// When the view next needs to act on its own, if it does: the
+    /// interface wakes for it then. A view with a countdown answers here.
+    fn next_deadline(&self) -> Option<std::time::Instant> {
+        None
+    }
+
+    /// Act on what [`Self::next_deadline`] announced. Returns whether the
+    /// view changed, so the interface redraws.
+    fn on_deadline(&mut self) -> bool {
+        false
+    }
+
     /// Pasted text, while this view is active; `false` when it takes none.
     fn handle_paste(&mut self, _pasted: String) -> bool {
         false
@@ -89,5 +101,26 @@ impl super::BottomPane {
             return view.pointer_key(mouse);
         }
         self.composer.pointer_key(mouse)
+    }
+
+    /// Lets the active view act on what it announced as due, then schedules
+    /// the frame it needs next. Returns whether the view changed.
+    pub(crate) fn tick_active_view(&mut self) -> bool {
+        let Some(view) = self.view_stack.last_mut() else {
+            return false;
+        };
+        let changed = view.on_deadline();
+        if view.is_complete() {
+            self.view_stack.pop();
+            self.on_active_view_complete();
+        }
+        match self.view_stack.last().and_then(|view| view.next_deadline()) {
+            Some(at) => self
+                .frame_requester
+                .schedule_frame_in(at.saturating_duration_since(std::time::Instant::now())),
+            None if changed => self.request_redraw(),
+            None => {}
+        }
+        changed
     }
 }

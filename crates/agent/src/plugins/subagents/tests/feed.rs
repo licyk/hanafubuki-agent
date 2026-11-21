@@ -10,7 +10,7 @@
 
 use hanafubuki_agent_kernel::{
     AgentEventKind, AgentSessionTitleRenameRequest, AgentSubagentWake, AgentUserInputAnswer,
-    AgentWakePolicy, AgentWakeSource, ApprovalUserDecision,
+    AgentUserInputResponse, AgentWakePolicy, AgentWakeSource, ApprovalUserDecision,
 };
 
 use super::wake::{agents_done, ended, held, person, queued, spawn_on_second, waking, Discard};
@@ -379,7 +379,9 @@ async fn an_agents_approval_and_question_reach_the_host_as_child_events() {
             request.request_id,
             vec![AgentUserInputAnswer {
                 question_id: "scope".to_string(),
-                option_id: "focused".to_string(),
+                response: AgentUserInputResponse::Option {
+                    option_id: "focused".to_string(),
+                },
             }],
         )
         .unwrap();

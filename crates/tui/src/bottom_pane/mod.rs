@@ -652,7 +652,12 @@ impl BottomPane {
 
         let modal = RequestUserInputOverlay::new(request, self.app_event_tx.clone());
         self.pause_status_timer_for_modal();
+        let deadline = modal.next_deadline();
         self.push_view(Box::new(modal));
+        if let Some(at) = deadline {
+            self.frame_requester
+                .schedule_frame_in(at.saturating_duration_since(std::time::Instant::now()));
+        }
     }
 
     pub(crate) fn dismiss_user_input(&mut self, request_id: AgentUserInputRequestId) {

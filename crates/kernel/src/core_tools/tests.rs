@@ -16,6 +16,66 @@ fn every_core_tool_uses_codex_style_non_strict_schema() {
     }
 }
 
+/// One question with `count` options, named `id`.
+fn question(id: &str, count: usize) -> Value {
+    json!({
+        "id": id,
+        "header": "Header",
+        "question": "Which?",
+        "options": (0..count)
+            .map(|index| json!({
+                "id": format!("o{index}"),
+                "label": format!("Option {index}"),
+                "description": ""
+            }))
+            .collect::<Vec<_>>(),
+    })
+}
+
+#[test]
+fn a_question_to_the_user_takes_ten_questions_of_five_options() {
+    let questions = |asked: usize, options: usize| {
+        Value::Array(
+            (0..asked)
+                .map(|index| question(&format!("q{index}"), options))
+                .collect(),
+        )
+    };
+
+    assert!(parse(
+        AgentCoreTool::RequestUserInput,
+        json!({ "questions": questions(10, 5) })
+    )
+    .is_ok());
+    assert!(parse(
+        AgentCoreTool::RequestUserInput,
+        json!({ "questions": questions(11, 2) })
+    )
+    .is_err());
+    assert!(parse(
+        AgentCoreTool::RequestUserInput,
+        json!({ "questions": questions(1, 6) })
+    )
+    .is_err());
+}
+
+#[test]
+fn the_question_schema_states_the_same_limits() {
+    let spec = AgentCoreTool::RequestUserInput.model_spec();
+    let questions = &spec.input_schema["properties"]["questions"];
+
+    assert_eq!(questions["maxItems"], 10);
+    assert_eq!(questions["items"]["properties"]["options"]["maxItems"], 5);
+    assert_eq!(
+        questions["items"]["properties"]["isOther"]["type"], "boolean",
+        "a question says whether it takes an answer in the person's words"
+    );
+    assert_eq!(
+        spec.input_schema["properties"]["isBlocking"]["type"],
+        "boolean"
+    );
+}
+
 #[test]
 fn plan_mode_keeps_only_the_question_to_the_user_and_the_context_tools() {
     for tool in AgentCoreTool::ALL {

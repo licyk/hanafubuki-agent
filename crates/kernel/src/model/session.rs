@@ -271,6 +271,10 @@ pub struct AgentUserInputQuestion {
     pub header: String,
     pub question: String,
     pub options: Vec<AgentUserInputOption>,
+    /// Whether the person may answer this question in their own words as
+    /// well as with one of its options.
+    #[serde(default)]
+    pub is_other: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -279,14 +283,83 @@ pub struct AgentUserInputRequest {
     pub request_id: AgentUserInputRequestId,
     pub call_id: String,
     pub questions: Vec<AgentUserInputQuestion>,
+    /// Whether the turn waits for the answers. A blocking request is the
+    /// default, so a record written before this field reads as blocking; a
+    /// request that is not blocking is shown to the person but answers
+    /// itself with nothing once nobody has looked at it for a while, and the
+    /// turn goes on.
+    #[serde(default = "default_true")]
+    pub is_blocking: bool,
     pub requested_at: u128,
 }
 
+/// What one question was answered with: one of its options, or the person's
+/// own words when the question allows them.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    tag = "kind",
+    rename_all_fields = "camelCase"
+)]
+pub enum AgentUserInputResponse {
+    Option {
+        option_id: String,
+    },
+    /// The answer in the person's words, as they typed it.
+    Text {
+        text: String,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentUserInputAnswer {
     pub question_id: String,
-    pub option_id: String,
+    pub response: AgentUserInputResponse,
+}
+
+/// Reads an answer as this version writes it, and as an earlier version
+/// wrote it (`optionId` alone). A record that cannot be read is not a reason
+/// to refuse the session: the answer becomes `None`, which the resolution
+/// carries as an unanswered question.
+impl<'de> Deserialize<'de> for AgentUserInputAnswer {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct WireAnswer {
+            question_id: String,
+            #[serde(default)]
+            response: Option<AgentUserInputResponse>,
+            #[serde(default)]
+            option_id: Option<String>,
+            #[serde(default)]
+            text: Option<String>,
+        }
+
+        let wire = WireAnswer::deserialize(deserializer)?;
+        let response = wire
+            .response
+            .or_else(|| {
+                wire.option_id
+                    .map(|option_id| AgentUserInputResponse::Option { option_id })
+            })
+            .or_else(|| wire.text.map(|text| AgentUserInputResponse::Text { text }))
+            .unwrap_or(AgentUserInputResponse::Text {
+                text: String::new(),
+            });
+        Ok(Self {
+            question_id: wire.question_id,
+            response,
+        })
+    }
+}
+
+/// A field that a record written before it existed reads as `true`.
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

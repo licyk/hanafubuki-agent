@@ -6,7 +6,8 @@ use std::collections::{BTreeSet, HashMap};
 use std::io::{BufRead, IsTerminal, Write};
 
 use hanafubuki_agent::{
-    AgentUserInputAnswer, AgentUserInputRequest, ApprovalRequest, ApprovalUserDecision,
+    AgentUserInputAnswer, AgentUserInputRequest, AgentUserInputResponse, ApprovalRequest,
+    ApprovalUserDecision,
 };
 
 use super::output::Output;
@@ -131,15 +132,25 @@ impl Answers {
             for (index, option) in question.options.iter().enumerate() {
                 eprintln!("  {}. {} — {}", index + 1, option.label, option.description);
             }
+            if question.is_other {
+                eprintln!("  or type your own answer");
+            }
             let choice = read_line(&format!("choose 1-{}: ", question.options.len()))?;
-            let option = choice
-                .trim()
-                .parse::<usize>()
-                .ok()
-                .and_then(|choice| question.options.get(choice.checked_sub(1)?))?;
+            let choice = choice.trim();
+            let response = match choice.parse::<usize>() {
+                Ok(index) => AgentUserInputResponse::Option {
+                    option_id: question.options.get(index.checked_sub(1)?)?.id.clone(),
+                },
+                // Anything that is not a choice is the answer in the
+                // person's own words, where the question takes one.
+                Err(_) if question.is_other && !choice.is_empty() => AgentUserInputResponse::Text {
+                    text: choice.to_string(),
+                },
+                Err(_) => return None,
+            };
             answers.push(AgentUserInputAnswer {
                 question_id: question.id.clone(),
-                option_id: option.id.clone(),
+                response,
             });
         }
         output.note("questions answered");

@@ -167,9 +167,6 @@ pub(in crate::service) fn validate_user_input_answers(
     request: &AgentUserInputRequest,
     answers: &[AgentUserInputAnswer],
 ) -> Result<(), AgentError> {
-    if answers.len() != request.questions.len() {
-        return Err(AgentError::StaleUserInput);
-    }
     let mut answered = HashSet::new();
     for answer in answers {
         if !answered.insert(answer.question_id.as_str()) {
@@ -180,12 +177,22 @@ pub(in crate::service) fn validate_user_input_answers(
             .iter()
             .find(|question| question.id == answer.question_id)
             .ok_or(AgentError::StaleUserInput)?;
-        if !question
-            .options
-            .iter()
-            .any(|option| option.id == answer.option_id)
-        {
-            return Err(AgentError::StaleUserInput);
+        match &answer.response {
+            AgentUserInputResponse::Option { option_id } => {
+                if !question
+                    .options
+                    .iter()
+                    .any(|option| option.id == *option_id)
+                {
+                    return Err(AgentError::StaleUserInput);
+                }
+            }
+            // The person's own words are taken as they typed them, but only
+            // where the question asked for them.
+            AgentUserInputResponse::Text { .. } if !question.is_other => {
+                return Err(AgentError::StaleUserInput);
+            }
+            AgentUserInputResponse::Text { .. } => {}
         }
     }
     Ok(())

@@ -209,6 +209,11 @@ impl ChatWidget {
         true
     }
 
+    /// Lets the active modal act on what it announced as due.
+    pub(crate) fn tick_active_view(&mut self) -> bool {
+        self.bottom_pane.tick_active_view()
+    }
+
     /// Records where the footer's counts are, for a test of what a click on
     /// them does.
     #[cfg(test)]

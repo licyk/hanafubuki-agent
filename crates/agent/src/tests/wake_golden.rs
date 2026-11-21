@@ -145,6 +145,8 @@ async fn with_the_wake_off_a_request_is_the_one_before_wakes() {
 /// request goldens, separately from this immutable pre-wake fixture.
 /// Those also pin the Skill schemas, which now include plugin identities.
 /// The current execution schema documents PowerShell's `login` override.
+/// `request_user_input` now asks up to ten questions of five options, each
+/// optionally answerable in the person's words, and says whether it blocks.
 fn without_reworded(mut request: Value) -> Value {
     request["tools"].as_array_mut().unwrap().retain(|tool| {
         !matches!(
@@ -169,6 +171,8 @@ fn without_reworded(mut request: Value) -> Value {
                     | "research"
                     | "cache_search"
                     | "fetch_web_page"
+                    // Its schema grew past what the pre-wake fixture recorded.
+                    | "request_user_input"
             )
         )
     });

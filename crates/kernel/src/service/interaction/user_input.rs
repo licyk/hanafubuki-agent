@@ -1,3 +1,5 @@
+use serde_json::Value;
+
 use super::*;
 
 impl AgentService {
@@ -83,6 +85,7 @@ impl AgentService {
             request_id,
             call_id: call_id.clone(),
             questions: call.questions,
+            is_blocking: call.is_blocking,
             requested_at: now_millis(),
         };
         let (sender, mut receiver) = tokio::sync::oneshot::channel();
@@ -169,9 +172,10 @@ impl AgentService {
             return Err(error);
         }
         event_sink.emit(event);
-        Ok(AgentToolOutput::success(
-            json!({ "answers": resolution.answers }),
-        ))
+        Ok(AgentToolOutput::success(model_visible_answers(
+            &request,
+            &resolution.answers,
+        )))
     }
 
     pub(super) async fn abandon_user_input(
@@ -230,4 +234,51 @@ impl AgentService {
             }
         }
     }
+}
+
+/// What the model is told a request was answered with: one entry per
+/// question, in the order they were asked, naming the option the person
+/// chose or the words they typed. A question nobody answered is present as
+/// such, so silence is never mistaken for a choice.
+fn model_visible_answers(
+    request: &AgentUserInputRequest,
+    answers: &[AgentUserInputAnswer],
+) -> Value {
+    let answers = request
+        .questions
+        .iter()
+        .map(|question| {
+            match answers
+                .iter()
+                .find(|answer| answer.question_id == question.id)
+            {
+                Some(answer) => match &answer.response {
+                    AgentUserInputResponse::Option { option_id } => {
+                        let label = question
+                            .options
+                            .iter()
+                            .find(|option| option.id == *option_id)
+                            .map(|option| option.label.clone());
+                        json!({
+                            "questionId": question.id,
+                            "question": question.question,
+                            "optionId": option_id,
+                            "label": label,
+                        })
+                    }
+                    AgentUserInputResponse::Text { text } => json!({
+                        "questionId": question.id,
+                        "question": question.question,
+                        "text": text,
+                    }),
+                },
+                None => json!({
+                    "questionId": question.id,
+                    "question": question.question,
+                    "unanswered": true,
+                }),
+            }
+        })
+        .collect::<Vec<_>>();
+    json!({ "answers": answers })
 }

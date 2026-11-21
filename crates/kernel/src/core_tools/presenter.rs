@@ -84,21 +84,45 @@ fn question_display(arguments: &Value, output: &ToolOutput) -> Option<AgentToolD
         return None;
     }
     let call: super::RequestUserInputTool = serde_json::from_value(arguments.clone()).ok()?;
-    let answers: Vec<crate::model::AgentUserInputAnswer> =
-        serde_json::from_value(structured_output(output)?.get("answers")?.clone()).ok()?;
+    let answers = structured_output(output)?
+        .get("answers")?
+        .as_array()?
+        .clone();
     let lines = call
         .questions
         .iter()
         .map(|question| {
-            let answer = answers
-                .iter()
-                .find(|answer| answer.question_id == question.id)?;
-            let label = question
-                .options
-                .iter()
-                .find(|option| option.id == answer.option_id)
-                .map_or(answer.option_id.as_str(), |option| option.label.as_str());
-            Some(format!("{} → {}", question.question, label))
+            let answer = answers.iter().find(|answer| {
+                answer.get("questionId").and_then(Value::as_str) == Some(question.id.as_str())
+            })?;
+            let label = answer
+                .get("label")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .or_else(|| {
+                    answer
+                        .get("text")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                })
+                .or_else(|| {
+                    let option_id = answer.get("optionId").and_then(Value::as_str)?;
+                    Some(
+                        question
+                            .options
+                            .iter()
+                            .find(|option| option.id == option_id)
+                            .map_or_else(|| option_id.to_string(), |option| option.label.clone()),
+                    )
+                })
+                .or_else(|| {
+                    answer
+                        .get("unanswered")
+                        .and_then(Value::as_bool)
+                        .filter(|unanswered| *unanswered)
+                        .map(|_| "unanswered".to_string())
+                })?;
+            Some(format!("{} → {label}", question.question))
         })
         .collect::<Option<Vec<_>>>()?;
     Some(AgentToolDisplay::Text {

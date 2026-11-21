@@ -283,6 +283,22 @@ The permission mode starts as the configuration's (`permissionMode`, or `--permi
   - **Browse worktrees** lists the repository's worktrees, each with its commit, its branch (`detached` for a new one) and its session. Choosing one offers Resume session N, Copy path and Remove worktree; removing asks first (Cancel is selected), deletes the checkout with its local changes and keeps the session. The worktree the working directory is in is not removed: `/cd` out of it first.
 - When a step after the worktree was made fails (the fork, the change of directory), the worktree is kept, and the conversation says where; Browse worktrees removes it.
 
+## Questions for you [#questions]
+
+`request_user_input` puts up to ten questions on screen, one at a time, each with up to five options; its progress line reads `Question 2/10`. A question whose `isOther` is true also takes an answer in your own words: its last row is **Write my own answer**, and typing anything while that question is showing writes into it (Backspace deletes, Enter commits). The answer you choose or type is what the model is told; a question you leave alone is reported to it as unanswered.
+
+| Key | Does |
+| --- | --- |
+| ↑/↓, `k`/`j`, Ctrl+P/N | Moves between a question's options, including its own-words row |
+| `1`-`9` | Picks that option and moves on |
+| Alt+`1`-`9` | Jumps to that question, keeping every answer |
+| ←/→, Tab | Moves between questions |
+| Enter | Commits the answer and moves on; on the last question it submits them all |
+| Click | Picks the row clicked, and focuses a question's own-words row |
+| Esc, Ctrl-C | Interrupts the turn |
+
+A request the model marked as not blocking (`isBlocking: false`) does not hold the turn forever: if nobody touches it for a minute and then leaves its one-minute countdown alone, it answers itself with nothing and the turn goes on, and the footer says how long is left. Anything you do — a key, a click — stops the countdown.
+
 ## First-run setup [#setup]
 
 When the interface starts with no default Provider (none is configured, or none is enabled), or with no model chosen for new sessions and none given with `-m`, it opens the [settings center](#config) at the Providers instead of letting the first message fail:

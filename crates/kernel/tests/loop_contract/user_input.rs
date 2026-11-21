@@ -348,7 +348,15 @@ async fn structured_user_input_pauses_exact_turn_and_resumes_with_tool_output() 
         },
         ModelInputItem::ToolOutput {
             call_id: "call-question".to_string(),
-            output: json!({ "answers": [{ "questionId": "scope", "optionId": "focused" }] }).into(),
+            output: json!({
+                "answers": [{
+                    "questionId": "scope",
+                    "question": "Choose a scope",
+                    "optionId": "focused",
+                    "label": "Focused"
+                }]
+            })
+            .into(),
         },
     ]);
     let question_events = vec![
@@ -417,7 +425,9 @@ async fn structured_user_input_pauses_exact_turn_and_resumes_with_tool_output() 
             pending.request_id,
             vec![hanafubuki_agent_kernel::AgentUserInputAnswer {
                 question_id: "scope".to_string(),
-                option_id: "focused".to_string(),
+                response: hanafubuki_agent_kernel::AgentUserInputResponse::Option {
+                    option_id: "focused".to_string(),
+                },
             }],
         ),
         Err(AgentError::StaleUserInput)
@@ -430,7 +440,9 @@ async fn structured_user_input_pauses_exact_turn_and_resumes_with_tool_output() 
             pending.request_id,
             vec![hanafubuki_agent_kernel::AgentUserInputAnswer {
                 question_id: "scope".to_string(),
-                option_id: "focused".to_string(),
+                response: hanafubuki_agent_kernel::AgentUserInputResponse::Option {
+                    option_id: "focused".to_string(),
+                },
             }],
         )
         .unwrap();
