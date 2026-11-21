@@ -8,7 +8,9 @@
 // (http://www.apache.org/licenses/LICENSE-2.0).
 // Modified for hanafubuki-agent: staging is the store's own area; `.git`
 // directories are not copied; a failed command migration is an issue of
-// the install.
+// the install; the version installed again replaces its own directory
+// rather than the whole cache entry, which Windows refuses to rename into
+// one of its own subdirectories.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -140,16 +142,20 @@ fn activate(
         return fs::rename(staged_base, base)
             .map_err(|error| io_error("activate the plugin cache entry", error));
     }
+    // The same version, installed again: only its own directory is replaced.
+    // Moving the staged entry itself into `base` would rename it into its own
+    // subdirectory, which Windows refuses with `ERROR_ACCESS_DENIED`.
     let backup = staging.path().join("previous");
-    fs::rename(base, &backup).map_err(|error| io_error("back up the plugin cache entry", error))?;
-    if let Err(error) = fs::rename(staged_base, base) {
-        return match fs::rename(&backup, base) {
-            Ok(()) => Err(io_error("activate the updated plugin cache entry", error)),
+    fs::rename(&target_version, &backup)
+        .map_err(|error| io_error("back up the plugin version", error))?;
+    if let Err(error) = fs::rename(staged_base.join(version), &target_version) {
+        return match fs::rename(&backup, &target_version) {
+            Ok(()) => Err(io_error("activate the updated plugin version", error)),
             Err(rollback) => {
                 let kept = keep_backup(&backup, base);
                 Err(PackageError::Io(format!(
-                    "failed to activate the updated plugin cache entry at {}: {error}; failed to restore the previous one (left at {}): {rollback}",
-                    base.display(),
+                    "failed to activate plugin version `{version}` at {}: {error}; failed to restore the previous one (left at {}): {rollback}",
+                    target_version.display(),
                     kept.display()
                 )))
             }

@@ -64,15 +64,14 @@ impl AgentSkillApplication {
         self.service.as_ref().map(|_| ()).map_err(Clone::clone)
     }
 
-    /// The roots discovery reads now, nearest repository first.
-    pub(crate) fn discovery_roots(&self) -> Option<Vec<PathBuf>> {
-        self.service.as_ref().ok().map(|service| {
-            service
-                .discovery_roots()
-                .into_iter()
-                .map(|(root, _)| root)
-                .collect()
-        })
+    /// The roots the catalog follows now, nearest repository first, without
+    /// the installed plugins': their roots are directories in the package
+    /// cache, which an OS watch would hold open while an install moves them.
+    pub(crate) fn watched_roots(&self) -> Option<Vec<PathBuf>> {
+        self.service
+            .as_ref()
+            .ok()
+            .map(|service| service.watched_roots())
     }
 
     fn service(&self) -> Result<&SkillService, String> {

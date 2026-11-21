@@ -152,6 +152,19 @@ impl SkillService {
             .collect()
     }
 
+    /// The roots whose changes the catalog follows: [`Self::discovery_roots`]
+    /// without the installed plugins'. A plugin's root is a directory in the
+    /// package cache, which the OS watch would hold open there; installing
+    /// that package again moves the directory, which Windows refuses while a
+    /// handle is on it. The plugins are reloaded as their packages change,
+    /// so nothing is missed.
+    pub fn watched_roots(&self) -> Vec<PathBuf> {
+        self.discovery_roots()
+            .into_iter()
+            .filter_map(|(root, scope)| (scope != SkillScope::Plugin).then_some(root))
+            .collect()
+    }
+
     /// [`Self::discovery_roots`], each plugin root with its plugin.
     pub(crate) fn scanned_roots(&self) -> Vec<(PathBuf, SkillScope, Option<PluginSkillRoot>)> {
         let mut roots = self

@@ -170,7 +170,7 @@ pub(crate) fn launch_start(slot: &AgentSlot) {
         let watcher = launcher.skill_watcher.clone();
         let roots = run_start(slot, runtime, launcher, claim)
             .await
-            .and_then(|agent| agent.skill_discovery_roots());
+            .and_then(|agent| agent.skill_watch_roots());
         if let Some(roots) = roots {
             watcher.restart(&roots, Arc::new(watching));
         }

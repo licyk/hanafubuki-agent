@@ -172,8 +172,8 @@ impl AgentApplicationService {
 
     /// The roots the Skill catalog reads now, for its watcher; none when the
     /// catalog did not open.
-    pub(crate) fn skill_discovery_roots(&self) -> Option<Vec<PathBuf>> {
-        self.skills.discovery_roots()
+    pub(crate) fn skill_watch_roots(&self) -> Option<Vec<PathBuf>> {
+        self.skills.watched_roots()
     }
 }
 
