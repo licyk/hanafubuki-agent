@@ -95,6 +95,114 @@ fn compaction_boundary_changes_model_context_without_removing_display_history() 
 }
 
 #[test]
+fn a_compacted_segment_is_the_whole_model_context_of_its_forks() {
+    let (_temporary, _paths, workers, store) = open_store();
+    let parent = store.allocate_session_id().unwrap();
+    store
+        .create_session(AgentConversationCommit {
+            runtime: runtime(parent, 0, 5),
+            history_mutations: vec![
+                AgentHistoryMutation::AppendItem {
+                    item: turn_start(1, 1),
+                },
+                AgentHistoryMutation::AppendItem {
+                    item: item(2, 0, "the parent's first question"),
+                },
+            ],
+        })
+        .unwrap();
+    store
+        .append_commit(AgentConversationCommit {
+            runtime: runtime(parent, 1, 5),
+            history_mutations: vec![
+                AgentHistoryMutation::AppendItem {
+                    item: turn_start(3, 2),
+                },
+                AgentHistoryMutation::AppendItem {
+                    item: item(4, 0, "the parent's second question"),
+                },
+            ],
+        })
+        .unwrap();
+    let child = store.allocate_session_id().unwrap();
+    let mut child_runtime = runtime(child, 0, 4);
+    child_runtime.forked_from_session_id = Some(parent);
+    store
+        .create_fork(
+            parent,
+            AgentTurnId::new(2),
+            AgentConversationCommit {
+                runtime: child_runtime,
+                history_mutations: Vec::new(),
+            },
+        )
+        .unwrap();
+    // The child compacts: everything the lineage contributed before it is
+    // folded into the summary, so the window it kept is its whole model
+    // context. Reading the parent's turn as well would leave a user message
+    // outside any turn.
+    let mut compacted = runtime(child, 1, 4);
+    let source_window = compacted.context_window;
+    let target_window = source_window.next().unwrap();
+    let snapshot = AgentCompactionSnapshot {
+        id: AgentCompactionId::new(1),
+        generation: AgentCompactionGeneration::new(1),
+        trigger: AgentCompactionTrigger::Automatic,
+        phase: AgentCompactionPhase::MidTurn,
+        reason: AgentCompactionReason::ContextLimit,
+        implementation: AgentCompactionImplementation::LocalSummary,
+        status: AgentCompactionStatus::Completed,
+        source_revision: AgentRevision::new(0),
+        source_window_id: source_window.window_id,
+        target_window,
+        turn_generation: None,
+        summary: Some("summary".to_string()),
+        usage: None,
+        last_error: None,
+        created_at: 1,
+        updated_at: 2,
+    };
+    compacted.context_window = target_window;
+    compacted.compaction = Some(snapshot.clone());
+    compacted.model_context_boundary = AgentModelContextBoundary::Compacted {
+        checkpoint: AgentCompactionCheckpoint {
+            checkpoint_item_id: AgentHistoryItemId::new(6),
+            snapshot,
+            replacement_history: vec![item(40, 0, "retained user"), item(50, 0, "summary")],
+            window_chain: vec![source_window, target_window],
+            future_items_after_item_id: 50,
+            initial_context_digest: [7; 32],
+        },
+    };
+    let boundary = compacted.model_context_boundary.clone();
+    store
+        .append_commit(AgentConversationCommit {
+            runtime: compacted,
+            history_mutations: vec![
+                AgentHistoryMutation::AppendItem {
+                    item: item(6, 0, "summary"),
+                },
+                AgentHistoryMutation::SetModelContextBoundary { boundary },
+            ],
+        })
+        .unwrap();
+    assert_eq!(
+        store
+            .load_latest_model_context(child)
+            .unwrap()
+            .iter()
+            .map(|item| item.item_id.value())
+            .collect::<Vec<_>>(),
+        vec![40, 50]
+    );
+    store.shutdown_session(child).unwrap();
+    store.shutdown_session(parent).unwrap();
+    assert!(workers
+        .shutdown(Instant::now() + Duration::from_secs(2))
+        .is_empty());
+}
+
+#[test]
 fn a_fork_of_a_compacted_parent_inherits_its_window_not_its_transcript() {
     let (_temporary, _paths, workers, store) = open_store();
     let parent = store.allocate_session_id().unwrap();

@@ -7,13 +7,18 @@ impl FileAgentHistoryStore {
     ) -> Result<Vec<AgentHistoryItem>, AgentHistoryStoreError> {
         let runtime = self.load_runtime_state_inner(session_id)?;
         let visible = self.read_visible_items(session_id, Some(runtime.revision))?;
-        let mut context = Vec::new();
+        let mut context: Vec<AgentHistoryItem> = Vec::new();
         let mut segment: Option<(AgentSessionId, AgentModelContextBoundary)> = None;
         let mut items: Vec<AgentHistoryItem> = Vec::new();
         for (source_session_id, _, item) in visible {
             if segment.as_ref().map(|(id, _)| *id) != Some(source_session_id) {
                 if let Some((_, boundary)) = segment.take() {
-                    context.extend(segment_model_context(boundary, items));
+                    let (compacted, segment_context) = segment_model_context(boundary, items);
+                    if compacted {
+                        context = segment_context;
+                    } else {
+                        context.extend(segment_context);
+                    }
                     items = Vec::new();
                 }
                 segment = Some((source_session_id, self.segment_boundary(source_session_id)?));
@@ -21,7 +26,12 @@ impl FileAgentHistoryStore {
             items.push(item);
         }
         if let Some((_, boundary)) = segment {
-            context.extend(segment_model_context(boundary, items));
+            let (compacted, segment_context) = segment_model_context(boundary, items);
+            if compacted {
+                context = segment_context;
+            } else {
+                context.extend(segment_context);
+            }
         }
         Ok(context)
     }
@@ -55,18 +65,21 @@ impl FileAgentHistoryStore {
 
 /// `items`, the lineage segment one session contributed, as that session's
 /// own model context: a compacted segment is the window its compaction kept,
-/// which is what its forks inherit, not its transcript.
+/// which is what its forks inherit, not its transcript. It also reports
+/// whether the segment compacted, because a compaction folds everything the
+/// lineage contributed before it into its summary: what it kept is the whole
+/// model context, and the segments before it are never read again.
 fn segment_model_context(
     boundary: AgentModelContextBoundary,
     items: Vec<AgentHistoryItem>,
-) -> Vec<AgentHistoryItem> {
+) -> (bool, Vec<AgentHistoryItem>) {
     let AgentModelContextBoundary::Compacted { checkpoint } = boundary else {
-        return items;
+        return (false, items);
     };
     let mut context = checkpoint.replacement_history;
     context.extend(items.into_iter().filter(|item| {
         item.item_id.value() > checkpoint.future_items_after_item_id
             && item.item_id != checkpoint.checkpoint_item_id
     }));
-    context
+    (true, context)
 }
