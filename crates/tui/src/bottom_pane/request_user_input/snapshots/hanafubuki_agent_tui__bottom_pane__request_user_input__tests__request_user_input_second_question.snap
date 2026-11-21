@@ -5,9 +5,9 @@ expression: "render(&view, 60)"
 
   Question 2/2
   Tests
-  Add snapshot tests?
+  Should tests come with it?
 
-  › 1. Yes  Regenerate them
+  › 1. Yes
     2. No
 
-  enter to submit | ←/→ or alt+1-9 questions | esc to inte
+  enter to review | ←/→ or alt+1-9 questions | esc to inte

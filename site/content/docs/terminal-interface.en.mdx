@@ -285,19 +285,24 @@ The permission mode starts as the configuration's (`permissionMode`, or `--permi
 
 ## Questions for you [#questions]
 
-`request_user_input` puts up to ten questions on screen, one at a time, each with up to five options; its progress line reads `Question 2/10`. A question whose `isOther` is true also takes an answer in your own words: its last row is **Write my own answer**, and typing anything while that question is showing writes into it (Backspace deletes, Enter commits). The answer you choose or type is what the model is told; a question you leave alone is reported to it as unanswered.
+`request_user_input` puts up to ten questions on screen, one at a time, each with up to five options; its progress line reads `Question 2/10`. The answer you choose or type is what the model is told; a question you leave alone is reported to it as unanswered.
 
-| Key                    | Does                                                                      |
-| ---------------------- | ------------------------------------------------------------------------- |
-| ↑/↓, `k`/`j`, Ctrl+P/N | Moves between a question's options, including its own-words row           |
-| `1`-`9`                | Picks that option and moves on                                            |
-| Alt+`1`-`9`            | Jumps to that question, keeping every answer                              |
-| ←/→, Tab               | Moves between questions                                                   |
-| Enter                  | Commits the answer and moves on; on the last question it submits them all |
-| Click                  | Picks the row clicked, and focuses a question's own-words row             |
-| Esc, Ctrl-C            | Interrupts the turn                                                       |
+A question whose `isOther` is true also takes an answer in your own words. Writing one is an explicit move — `i`, or Enter on its **Write my own answer** row — so moving the cursor onto that row leaves the options reachable. While you write, every printable key is text, digits and `k`/`j` included, so an answer that begins with `1` stays an answer; Enter finishes writing, Esc stops without losing what was written, and Backspace deletes.
 
-A request the model marked as not blocking (`isBlocking: false`) does not hold the turn forever: if nobody touches it for a minute and then leaves its one-minute countdown alone, it answers itself with nothing and the turn goes on, and the footer says how long is left. Anything you do — a key, a click — stops the countdown.
+| Key                                | Does                                                                |
+| ---------------------------------- | ------------------------------------------------------------------- |
+| ↑/↓, `k`/`j`, Ctrl+P/N             | Moves between a question's options, including its own-words row     |
+| `1`-`9`                            | Picks that option and moves on                                      |
+| Alt+`1`-`9`                        | Jumps to that question, keeping every answer                        |
+| `i`, or Enter on the own-words row | Starts writing the answer                                           |
+| ←/→, Tab                           | Moves between questions                                             |
+| Enter                              | Commits the answer and moves on; after the last question it reviews |
+| Click                              | Picks the row clicked                                               |
+| Esc, Ctrl-C                        | Interrupts the turn                                                 |
+
+After the last question a review page lists every question with its answer and offers **Submit the answers** and **Cancel, answering nothing**. Cancel drops every answer and interrupts the turn; ← from that page goes back to the questions with the answers kept.
+
+A request the model marked as not blocking (`isBlocking: false`) does not hold the turn forever: if nobody touches it for a minute and then leaves its one-minute countdown alone, it answers itself with nothing and the turn goes on, and the footer says how long is left. Anything you do — a key, a click — stops the countdown. The tool call itself still waits for the answer, so `isBlocking: false` bounds that wait rather than removing it.
 
 ## First-run setup [#setup]
 
