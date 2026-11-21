@@ -2173,6 +2173,7 @@ name = "hanafubuki-agent-packages"
 version = "0.10.5"
 dependencies = [
  "chrono",
+ "flate2",
  "hanafubuki-agent-foundation",
  "hanafubuki-agent-process",
  "hex",
@@ -2183,7 +2184,9 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "sha2 0.11.1",
+ "tar",
  "tempfile",
+ "url",
 ]
 
 [[package]]

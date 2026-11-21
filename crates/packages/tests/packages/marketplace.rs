@@ -4,10 +4,10 @@
 // `codex-rs/core-plugins/src/marketplace_remove.rs` at commit `57a808a392`.
 // Copyright 2025 OpenAI. Licensed under the Apache License, Version 2.0
 // (http://www.apache.org/licenses/LICENSE-2.0).
-// Modified for hanafubuki-agent: npm sources are skipped as unsupported;
-// discovery from the home directory and the repository and the product
-// policy are not ported; add and remove return records rather than writing
-// the configuration.
+// Modified for hanafubuki-agent: an npm source is read and normalized as
+// Codex reads it; discovery from the home directory and the repository and
+// the product policy are not ported; add and remove return records rather
+// than writing the configuration.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -29,6 +29,111 @@ fn write_marketplace(root: &Path, relative: &str, contents: &serde_json::Value) 
 
 fn agents(root: &Path, contents: serde_json::Value) -> PathBuf {
     write_marketplace(root, ".agents/plugins/marketplace.json", &contents)
+}
+
+/// The entry an npm source produces, or why it cannot be used.
+fn npm_source(root: &Path, source: serde_json::Value) -> Result<PackageSource, String> {
+    let path = agents(
+        root,
+        json!({"name": "npm-market", "plugins": [{"name": "npm-plugin", "source": source}]}),
+    );
+    let marketplace = load_marketplace(&path).unwrap();
+    match marketplace.installable("npm-plugin") {
+        Ok(plugin) => Ok(plugin.source.clone()),
+        Err(error) => Err(match marketplace.issues.first() {
+            Some(issue) => issue.clone(),
+            None => error.to_string(),
+        }),
+    }
+}
+
+#[test]
+fn reads_an_npm_source_with_its_package_version_and_registry() {
+    let directory = tempfile::tempdir().unwrap();
+
+    let source = npm_source(
+        directory.path(),
+        json!({
+            "source": "npm",
+            "package": " @acme/plugin ",
+            "version": " 1.2.0 ",
+            "registry": "https://registry.example.com"
+        }),
+    )
+    .unwrap();
+
+    assert_eq!(
+        source,
+        PackageSource::Npm {
+            package: "@acme/plugin".to_string(),
+            version: Some("1.2.0".to_string()),
+            registry: Some("https://registry.example.com".to_string()),
+        }
+    );
+}
+
+#[test]
+fn reads_an_npm_source_with_only_its_package() {
+    let directory = tempfile::tempdir().unwrap();
+
+    let source = npm_source(
+        directory.path(),
+        json!({"source": "npm", "package": "plugin"}),
+    )
+    .unwrap();
+
+    assert_eq!(
+        source,
+        PackageSource::Npm {
+            package: "plugin".to_string(),
+            version: None,
+            registry: None,
+        }
+    );
+}
+
+#[test]
+fn rejects_the_npm_sources_codex_rejects() {
+    let directory = tempfile::tempdir().unwrap();
+    let cases = [
+        (json!({"source": "npm"}), "an npm source has a package"),
+        (
+            json!({"source": "npm", "package": ""}),
+            "invalid npm source package: ",
+        ),
+        (
+            json!({"source": "npm", "package": "two/segments"}),
+            "invalid npm source package: two/segments",
+        ),
+        (
+            json!({"source": "npm", "package": "@scope/one/two"}),
+            "invalid npm source package: @scope/one/two",
+        ),
+        (
+            json!({"source": "npm", "package": "_private"}),
+            "invalid npm source package: _private",
+        ),
+        (
+            json!({"source": "npm", "package": "plugin", "version": "github:acme/plugin"}),
+            "an npm source's version must come from the registry: github:acme/plugin",
+        ),
+        (
+            json!({"source": "npm", "package": "plugin", "version": ""}),
+            "an npm source's version must not be empty",
+        ),
+        (
+            json!({"source": "npm", "package": "plugin", "registry": "http://registry.example.com"}),
+            "invalid npm source registry: http://registry.example.com",
+        ),
+        (
+            json!({"source": "npm", "package": "plugin", "registry": "https://user:secret@registry.example.com"}),
+            "invalid npm source registry: https://user:secret@registry.example.com",
+        ),
+    ];
+    for (source, expected) in cases {
+        let error = npm_source(directory.path(), source.clone()).unwrap_err();
+        assert!(error.contains(expected), "{source}: {error}");
+    }
 }
 
 #[test]
@@ -173,7 +278,7 @@ fn unsupported_and_invalid_entries_are_skipped_and_the_marketplace_kept() {
     let path = agents(
         directory.path(),
         json!({"name": "m", "plugins": [
-            {"name": "npm", "source": {"source": "npm", "package": "@scope/p"}},
+            {"name": "bad-npm", "source": {"source": "npm", "package": "two/segments"}},
             {"name": "github", "source": {"source": "github", "repo": "owner/repo"}},
             {"name": "root-subdir", "source": {"source": "git-subdir", "url": "owner/repo", "path": "./"}},
             {"name": "escape", "source": "./../outside"},

@@ -22,7 +22,7 @@ An install turns the plugin on, and its Skills, MCP servers, hooks and roles joi
 
 ## On, off and away [#lifecycle]
 
-`plugins enable ID` and `plugins disable ID` (Space in `/plugins`) turn a plugin on or off without a restart; turning off one with code stops its process. `plugins update ID` installs it again from its marketplace or directory (a linked one is never updated). `plugins remove ID` uninstalls it, or unlinks a linked one and keeps its directory, and keeps its data directory unless `--purge-data`. Started with `--safe-mode`, the Agent loads no installed plugin. Turning off the built-in row `plugins` (`disabledPlugins`) stops every plugin's code; their Skills, MCP servers and hooks still run, and their roles stay.
+`plugins enable ID` and `plugins disable ID` (Space in `/plugins`) turn a plugin on or off without a restart; turning off one with code stops its process. `plugins update ID` installs it again from its marketplace or directory (a linked one is never updated); when its version did not change, only that version's directory in the cache is replaced. `plugins remove ID` uninstalls it, or unlinks a linked one and keeps its directory, and keeps its data directory unless `--purge-data`. Started with `--safe-mode`, the Agent loads no installed plugin. Turning off the built-in row `plugins` (`disabledPlugins`) stops every plugin's code; their Skills, MCP servers and hooks still run, and their roles stay.
 
 ## When one fails [#failures]
 

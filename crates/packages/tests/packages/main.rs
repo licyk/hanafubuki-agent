@@ -16,6 +16,7 @@ mod lifecycle;
 mod link;
 mod manifest;
 mod marketplace;
+mod npm;
 mod options;
 mod probe;
 mod settings;

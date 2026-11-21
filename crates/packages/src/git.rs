@@ -12,23 +12,15 @@
 // filesystem monitoring off and bare repositories only when explicit; one
 // clone serves marketplaces and package sources.
 
+use std::collections::BTreeMap;
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::thread;
-use std::time::Duration;
 
-use hanafubuki_agent_process::executor::manager::{
-    dispose_reserved_executor, read_reserved_executor_output, release_executor_reservation,
-    reserve_executor_id, start_reserved_executor, ReservedExecutorReceipt,
-};
-use hanafubuki_agent_process::executor::{
-    EnvironmentInheritance, ExecutorIoMode, ExecutorManager, ExecutorStartRequest, OutputStream,
-};
-use hanafubuki_agent_process::ownership::ProcessOwnerId;
+use hanafubuki_agent_process::executor::ExecutorManager;
+
+use crate::program::{self, ProgramRequest};
 
 const GIT_TIMEOUT_MS: u64 = 10 * 60 * 1_000;
 const GIT_OUTPUT_CAP: usize = 4 * 1024 * 1024;
-const POLL: Duration = Duration::from_millis(20);
 const DISABLED_HOOKS_PATH: &str = if cfg!(windows) { "NUL" } else { "/dev/null" };
 
 /// What a wrapper of `git` may have exported to select another repository.
@@ -51,7 +43,17 @@ const REPOSITORY_SELECTORS: [&str; 16] = [
     "GIT_COMMON_DIR",
 ];
 
-static NEXT_GIT: AtomicU64 = AtomicU64::new(1);
+/// The variables `git` reads, as the Agent's processes inherit them.
+fn git_environment() -> BTreeMap<String, Option<String>> {
+    REPOSITORY_SELECTORS
+        .iter()
+        .map(|name| (name.to_string(), None))
+        .chain([
+            ("GIT_TERMINAL_PROMPT".to_string(), Some("0".to_string())),
+            ("GIT_OPTIONAL_LOCKS".to_string(), Some("0".to_string())),
+        ])
+        .collect()
+}
 
 /// A clone to make.
 pub(crate) struct CloneRequest<'a> {
@@ -157,40 +159,19 @@ fn is_full_sha(value: &str) -> bool {
 /// Runs `git args` in `cwd` to its end and returns its stdout; a failure is
 /// its stderr.
 fn git(executor: &ExecutorManager, cwd: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
-    let executor_id = format!("packages-git-{}", NEXT_GIT.fetch_add(1, Ordering::Relaxed));
-    let reservation = reserve_executor_id(executor, &executor_id, &ProcessOwnerId::generate())?;
-    let request = ExecutorStartRequest {
-        executor_id: Some(executor_id),
-        command: command(args),
-        cwd: Some(cwd.to_path_buf()),
-        environment_inheritance: EnvironmentInheritance::Inherit,
-        env: REPOSITORY_SELECTORS
-            .iter()
-            .map(|name| (name.to_string(), None))
-            .chain([
-                ("GIT_TERMINAL_PROMPT".to_string(), Some("0".to_string())),
-                ("GIT_OPTIONAL_LOCKS".to_string(), Some("0".to_string())),
-            ])
-            .collect(),
-        io_mode: ExecutorIoMode::Pipe,
-        stream_stdin: false,
-        stream_output: true,
-        cols: None,
-        rows: None,
-        timeout_ms: Some(GIT_TIMEOUT_MS),
-        output_bytes_cap: Some(GIT_OUTPUT_CAP),
-    };
-    let receipt = match start_reserved_executor(executor, request, &reservation) {
-        Ok((_, receipt)) => receipt,
-        Err(error) => {
-            release_executor_reservation(executor, &reservation);
-            return Err(format!("git did not start: {error}"));
-        }
-    };
-    let finished = wait(executor, &receipt);
-    let disposed = dispose_reserved_executor(executor, &receipt);
-    let (exit_code, stdout, stderr) = finished?;
-    disposed?;
+    let command = command(args);
+    let env = git_environment();
+    let (exit_code, stdout, stderr) = program::run(
+        executor,
+        ProgramRequest {
+            name: "git",
+            command: &command,
+            cwd,
+            env: &env,
+            timeout_ms: GIT_TIMEOUT_MS,
+            output_cap: GIT_OUTPUT_CAP,
+        },
+    )?;
     if exit_code == Some(0) {
         return Ok(stdout);
     }
@@ -215,27 +196,6 @@ fn command(args: &[&str]) -> Vec<String> {
     ];
     command.extend(args.iter().map(|arg| arg.to_string()));
     command
-}
-
-type Finished = (Option<i32>, Vec<u8>, Vec<u8>);
-
-/// Polls the execution until it ends (the executor's timeout ends it at
-/// the latest) and splits its output by stream.
-fn wait(executor: &ExecutorManager, receipt: &ReservedExecutorReceipt) -> Result<Finished, String> {
-    loop {
-        let output = read_reserved_executor_output(executor, receipt, Some(0), None)?;
-        if output.status.is_terminal() {
-            let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-            for chunk in output.chunks {
-                match chunk.stream {
-                    OutputStream::Stdout => stdout.extend(chunk.data),
-                    OutputStream::Stderr | OutputStream::Merged => stderr.extend(chunk.data),
-                }
-            }
-            return Ok((output.exit_code, stdout, stderr));
-        }
-        thread::sleep(POLL);
-    }
 }
 
 #[cfg(test)]

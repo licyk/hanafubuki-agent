@@ -372,6 +372,38 @@ fn reinstalling_the_same_version_replaces_it() {
 }
 
 #[test]
+fn reinstalling_the_same_version_keeps_the_other_versions_beside_it() {
+    let fixture = fixture();
+    let sample = id("sample-plugin", "debug");
+    let v1 = write_plugin(fixture.path(), "v1", "sample-plugin", Some("1.0.0"));
+    let v2 = write_plugin(fixture.path(), "v2", "sample-plugin", Some("2.0.0"));
+    fixture.store.install_directory(&v1, &sample).unwrap();
+    fixture.store.install_directory(&v2, &sample).unwrap();
+    write(&v2.join("skills/SKILL.md"), "changed");
+
+    fixture.store.install_directory(&v2, &sample).unwrap();
+
+    let base = fixture.plugins().join("cache/debug/sample-plugin");
+    assert_eq!(
+        fs::read_to_string(base.join("2.0.0/skills/SKILL.md")).unwrap(),
+        "changed"
+    );
+    assert!(
+        !base.join("1.0.0").exists(),
+        "the older version is still pruned"
+    );
+    assert!(
+        !fixture
+            .plugins()
+            .join(".staging")
+            .read_dir()
+            .unwrap()
+            .any(|_| true),
+        "no staging directory outlives the install"
+    );
+}
+
+#[test]
 fn install_rejects_manifest_names_with_path_separators() {
     let fixture = fixture();
     let source = write_plugin(fixture.path(), "source-dir", "../../etc", None);

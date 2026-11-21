@@ -11,6 +11,8 @@ pub enum PackageError {
     Io(String),
     /// `git` failed or could not run.
     Git(String),
+    /// `npm` failed, could not run, or wrote a package that cannot be used.
+    Npm(String),
 }
 
 impl fmt::Display for PackageError {
@@ -19,7 +21,8 @@ impl fmt::Display for PackageError {
             Self::Invalid(message)
             | Self::NotFound(message)
             | Self::Io(message)
-            | Self::Git(message) => formatter.write_str(message),
+            | Self::Git(message)
+            | Self::Npm(message) => formatter.write_str(message),
         }
     }
 }

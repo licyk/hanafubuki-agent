@@ -328,7 +328,7 @@ Agent 的其余部分以及嵌入它的宿主都不受影响：程序是另一�
 }
 ```
 
-来源可以是市场内的路径（`./…`）、`{"source": "local", "path": …}`、一个 git 仓库（`{"source": "url", "url": …}`）或其中的一个目录（`{"source": "git-subdir", "url": …, "path": …}`），可选 `ref` 或 `sha`。用户添加市场并从中安装：
+来源可以是市场内的路径（`./…`）、`{"source": "local", "path": …}`、一个 git 仓库（`{"source": "url", "url": …}`）或其中的一个目录（`{"source": "git-subdir", "url": …, "path": …}`），可选 `ref` 或 `sha`；也可以是发布到 npm 的包（`{"source": "npm", "package": "@scope/name", "version": …, "registry": …}`，后两项可选）。用户添加市场并从中安装：
 
 ```sh
 hanafubuki-agent plugins marketplace add me/my-marketplace

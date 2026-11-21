@@ -6,7 +6,7 @@
 // Copyright 2025 OpenAI. Licensed under the Apache License, Version 2.0
 // (http://www.apache.org/licenses/LICENSE-2.0).
 // Modified for hanafubuki-agent: an entry is read field by field from its
-// JSON object; npm sources are skipped as unsupported (not ported yet); a
+// JSON object; an npm source is read and normalized as Codex reads it; a
 // source is recorded with the install, so it is serializable; a linked
 // directory is a source of the install record alone.
 
@@ -42,6 +42,16 @@ pub enum PackageSource {
         ref_name: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         sha: Option<String>,
+    },
+    /// A package published to an npm registry, fetched with `npm pack`: its
+    /// name (`scope/name` included), a registry version selector, and the
+    /// registry itself (the user's, when it is not named).
+    Npm {
+        package: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        version: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        registry: Option<String>,
     },
 }
 
@@ -80,12 +90,13 @@ pub(super) fn resolve(
             load_manifest(path).ok().map(|loaded| loaded.manifest)
         }
         PackageSource::Local { path } if fallback.has_metadata => parse_fallback(path, &fallback),
-        PackageSource::Git { .. } if fallback.has_metadata => {
+        PackageSource::Git { .. } | PackageSource::Npm { .. } if fallback.has_metadata => {
             parse_fallback(Path::new(""), &fallback).map(without_paths)
         }
-        PackageSource::Local { .. } | PackageSource::Git { .. } | PackageSource::Linked { .. } => {
-            None
-        }
+        PackageSource::Local { .. }
+        | PackageSource::Git { .. }
+        | PackageSource::Npm { .. }
+        | PackageSource::Linked { .. } => None,
     };
     let mut interface = manifest
         .as_ref()
@@ -173,9 +184,85 @@ fn source(root: &Path, manifest: &Path, raw: Option<&Value>) -> Result<PackageSo
                     sha: selector(object, "sha"),
                 })
             }
+            Some("npm") => {
+                let package = string(object, "package").ok_or("an npm source has a package")?;
+                Ok(PackageSource::Npm {
+                    package: npm_package(&package)?,
+                    version: optional_npm_field(string(object, "version"), "version")?
+                        .map(|version| npm_version(&version))
+                        .transpose()?,
+                    registry: optional_npm_field(string(object, "registry"), "registry")?
+                        .map(|registry| npm_registry(&registry))
+                        .transpose()?,
+                })
+            }
             _ => Err("the source is not supported".to_string()),
         },
         _ => Err("the source is not supported".to_string()),
+    }
+}
+
+/// An npm package's name: one segment, or `@scope/name`.
+fn npm_package(package: &str) -> Result<String, String> {
+    let package = package.trim();
+    let (segments, scoped) = match package.strip_prefix('@') {
+        Some(scoped) => (scoped.split('/').collect::<Vec<_>>(), true),
+        None => (package.split('/').collect::<Vec<_>>(), false),
+    };
+    let expected = if scoped { 2 } else { 1 };
+    let valid = !package.is_empty()
+        && segments.len() == expected
+        && segments.iter().all(|segment| {
+            !segment.is_empty()
+                && *segment != "."
+                && *segment != ".."
+                && (scoped || !segment.starts_with(['.', '_']))
+                && segment
+                    .chars()
+                    .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
+        });
+    if !valid {
+        return Err(format!("invalid npm source package: {package}"));
+    }
+    Ok(package.to_string())
+}
+
+/// A version from the registry: not a path, not a URL selector.
+fn npm_version(version: &str) -> Result<String, String> {
+    if version == "." || version == ".." || version.contains(['/', '\\', ':']) {
+        return Err(format!(
+            "an npm source's version must come from the registry: {version}"
+        ));
+    }
+    Ok(version.to_string())
+}
+
+/// An `https` registry without credentials, a query or a fragment.
+fn npm_registry(registry: &str) -> Result<String, String> {
+    let invalid = || format!("invalid npm source registry: {registry}");
+    let parsed = url::Url::parse(registry).map_err(|_| invalid())?;
+    if parsed.scheme() != "https"
+        || parsed.host_str().is_none()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+    {
+        return Err(invalid());
+    }
+    Ok(registry.to_string())
+}
+
+fn optional_npm_field(value: Option<String>, field: &str) -> Result<Option<String>, String> {
+    match value {
+        None => Ok(None),
+        Some(value) => {
+            let value = value.trim();
+            if value.is_empty() {
+                return Err(format!("an npm source's {field} must not be empty"));
+            }
+            Ok(Some(value.to_string()))
+        }
     }
 }
 

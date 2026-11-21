@@ -607,5 +607,14 @@ fn source_text(source: Option<&PackageSource>) -> String {
             Some(ref_name) => format!("Git · {url}@{ref_name}"),
             None => format!("Git · {url}"),
         },
+        Some(PackageSource::Npm {
+            package,
+            version,
+            registry,
+        }) => match (version, registry) {
+            (Some(version), _) => format!("npm · {package}@{version}"),
+            (None, Some(registry)) => format!("npm · {package} · {registry}"),
+            (None, None) => format!("npm · {package}"),
+        },
     }
 }

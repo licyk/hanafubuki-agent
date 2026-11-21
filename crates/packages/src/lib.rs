@@ -21,8 +21,11 @@
 //! or a git repository, upgraded and removed; the store returns their
 //! `[marketplaces]` records and never writes the configuration
 //! ([`PluginsSettings`], [`MarketplaceRecord`]). `git` runs through the
-//! Agent's `ExecutorManager`.
+//! Agent's `ExecutorManager`, and so does the `npm` that fetches an npm
+//! source, whose `npm pack --ignore-scripts` archive is unpacked into
+//! staging.
 
+mod archive;
 mod claude_agents;
 mod commands;
 mod error;
@@ -31,7 +34,9 @@ mod hash;
 mod id;
 mod manifest;
 mod marketplace;
+mod npm;
 mod options;
+mod program;
 mod settings;
 mod store;
 mod version;

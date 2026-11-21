@@ -479,6 +479,20 @@ fn source_text(source: Option<&PackageSource>) -> String {
             }
             parts.join(", ")
         }
+        Some(PackageSource::Npm {
+            package,
+            version,
+            registry,
+        }) => {
+            let mut parts = vec![format!("npm `{package}`")];
+            if let Some(version) = version {
+                parts.push(format!("version `{version}`"));
+            }
+            if let Some(registry) = registry {
+                parts.push(format!("registry `{registry}`"));
+            }
+            parts.join(", ")
+        }
     }
 }
 

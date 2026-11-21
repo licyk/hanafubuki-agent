@@ -7,10 +7,10 @@
 // Copyright 2025 OpenAI. Licensed under the Apache License, Version 2.0
 // (http://www.apache.org/licenses/LICENSE-2.0).
 // Modified for hanafubuki-agent: the clone of a git source runs through the
-// Agent's `ExecutorManager`; the install takes the package's content hash
-// and records it with the version and the source in `install.json`; a
-// package linked under the same id is not replaced; the curated-marketplace
-// version and npm sources are not ported.
+// Agent's `ExecutorManager`, and so does an npm source's `npm pack`; the
+// install takes the package's content hash and records it with the version
+// and the source in `install.json`; a package linked under the same id is
+// not replaced; the curated-marketplace version is not ported.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -26,6 +26,7 @@ use crate::manifest::{
     agent_plugins_schema_status, find_manifest, load_manifest, parse_manifest, ManifestFormat,
     SchemaStatus,
 };
+use crate::npm;
 use crate::version::{validate_version_segment, LOCAL_VERSION};
 use crate::{content_hash, Marketplace, PackageError, PackageSource, PluginId};
 
@@ -101,6 +102,22 @@ impl PackageStore {
                 let source = path
                     .as_ref()
                     .map_or(checkout.clone(), |path| checkout.join(path));
+                self.install(&source, &entry.id, fallback, entry.source.clone())
+            }
+            PackageSource::Npm {
+                package,
+                version,
+                registry,
+            } => {
+                let staging = self.staging("npm-")?;
+                let source = npm::materialize(
+                    self.executor(),
+                    staging.path(),
+                    package,
+                    version.as_deref(),
+                    registry.as_deref(),
+                )
+                .map_err(PackageError::Npm)?;
                 self.install(&source, &entry.id, fallback, entry.source.clone())
             }
             PackageSource::Linked { .. } => Err(PackageError::Invalid(format!(

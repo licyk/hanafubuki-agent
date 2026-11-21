@@ -328,7 +328,7 @@ A plugin is published in a **marketplace**: a directory or a git repository with
 }
 ```
 
-A source is a path in the marketplace (`./…`), `{"source": "local", "path": …}`, a git repository (`{"source": "url", "url": …}`) or a directory of one (`{"source": "git-subdir", "url": …, "path": …}`), with an optional `ref` or `sha`. Users add the marketplace and install from it:
+A source is a path in the marketplace (`./…`), `{"source": "local", "path": …}`, a git repository (`{"source": "url", "url": …}`) or a directory of one (`{"source": "git-subdir", "url": …, "path": …}`), with an optional `ref` or `sha`, or a package published to npm (`{"source": "npm", "package": "@scope/name", "version": …, "registry": …}`, the last two optional). Users add the marketplace and install from it:
 
 ```sh
 hanafubuki-agent plugins marketplace add me/my-marketplace
