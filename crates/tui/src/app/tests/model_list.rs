@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use hanafubuki_agent::test_support::{FakeListing, FakeServer};
-use hanafubuki_agent::{AgentConfig, AgentImageInputPolicy};
+use hanafubuki_agent::{AgentConfig, AgentImageInputPolicy, AgentModelProtocol};
 use ratatui::crossterm::event::KeyCode;
 use tokio::sync::Notify;
 
@@ -46,6 +46,45 @@ fn row<'a>(screen: &'a str, text: &str) -> &'a str {
         .lines()
         .find(|line| line.contains(text))
         .unwrap_or_else(|| panic!("no row {text}:\n{screen}"))
+}
+
+#[test]
+fn the_model_picker_includes_gemini_models_from_later_pages() {
+    let mut harness = Harness::listing(
+        vec![
+            FakeListing::ok(
+                r#"{"models":[{"name":"models/fixture-model"}],"nextPageToken":"next"}"#,
+            ),
+            FakeListing::ok(
+                r#"{"models":[{"name":"models/gemini-later","inputTokenLimit":1000000}]}"#,
+            ),
+        ],
+        TranscriptMode::Owned,
+        |_| {},
+    );
+    harness.type_and_submit("/providers");
+    harness.pump_until_screen_shows("Settings › Providers");
+    harness.select_setting("Fixture Provider");
+    harness.key(KeyCode::Enter);
+    harness.select_setting("Protocol");
+    harness.key(KeyCode::Enter);
+    let choices = harness.pump_until_screen_shows("4. Gemini GenerateContent");
+    assert!(choices.contains("5. Gemini Interactions"), "{choices}");
+    harness.key(KeyCode::Char('4'));
+    harness.pump_until("the selected Gemini protocol to be saved", |harness| {
+        harness.registry().providers[0].protocol == AgentModelProtocol::GeminiGenerateContent
+    });
+    harness.app.close_settings_center(&mut harness.tui);
+    harness.type_and_submit("/model");
+    let screen = harness.pump_until_screen_shows("gemini-later");
+    assert!(
+        row(&screen, "gemini-later").contains("Fixture Provider"),
+        "{screen}"
+    );
+    assert_eq!(
+        harness.server.listing_requests()[1].path,
+        "/v1/models?pageToken=next"
+    );
 }
 
 #[test]

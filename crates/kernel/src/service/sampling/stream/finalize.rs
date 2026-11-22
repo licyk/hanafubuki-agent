@@ -154,6 +154,13 @@ impl AgentService {
                     tool_calls.push(call.clone());
                     items.push(AgentSamplingItem::ToolCall(call));
                 }
+                PendingModelItem::PartLayout(layout) => draft.push(ConversationItem::Reasoning {
+                    text: String::new(),
+                    duration_millis: 0,
+                    sampling_step,
+                    truncated: false,
+                    replay: Some(layout),
+                }),
                 PendingModelItem::Reasoning(reasoning) => {
                     // A response that stopped early completed its open
                     // reasoning items when it stopped; one that went on to

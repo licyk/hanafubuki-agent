@@ -3,23 +3,34 @@
 use serde_json::Value;
 
 use super::{shapes, ModelCatalogEntry};
-use crate::ModelReasoningEffort;
+use crate::{ModelApiProtocol, ModelReasoningEffort};
 
 const MAX_MODEL_ID_BYTES: usize = 512;
 const MAX_REASONING_EFFORTS_PER_MODEL: usize = 32;
 
-/// The entry `item` describes, or `None` when it names no usable model: no
-/// `id` (OpenAI-compatible servers) and no `slug` (Codex, and the Responses
-/// API of z.ai), not a string, blank, or over 512 bytes; `id` first. Any
-/// other field it cannot read is unknown, and a reasoning effort that does
-/// not parse is left out.
-pub(super) fn decode_entry(item: &Value) -> Option<ModelCatalogEntry> {
-    let id = ["id", "slug"]
+/// Reads a model id from Google's resource name, OpenAI's id or Codex's
+/// slug. A missing or unusable id skips the entry; other fields are optional.
+pub(super) fn decode_entry(protocol: ModelApiProtocol, item: &Value) -> Option<ModelCatalogEntry> {
+    let google = matches!(
+        protocol,
+        ModelApiProtocol::GeminiGenerateContent | ModelApiProtocol::GeminiInteractions
+    );
+    let id_fields: &[&str] = if google {
+        &["name", "id", "slug"]
+    } else {
+        &["id", "slug"]
+    };
+    let id = id_fields
         .iter()
         .filter_map(|key| item.get(*key).and_then(Value::as_str))
+        .map(|id| protocol.model_id(id))
         .find(|id| !id.trim().is_empty() && id.len() <= MAX_MODEL_ID_BYTES)?;
     let display_name = item
-        .get("display_name")
+        .get(if google {
+            "displayName"
+        } else {
+            "display_name"
+        })
         .and_then(Value::as_str)
         .filter(|name| !name.trim().is_empty())
         .map(|name| bounded_text(name, MAX_MODEL_ID_BYTES));
@@ -37,6 +48,25 @@ pub(super) fn decode_entry(item: &Value) -> Option<ModelCatalogEntry> {
         image_input: shapes::image_input(item),
         reasoning: shapes::reasoning(item, reports_levels),
     })
+}
+
+/// An explicit embedding-only list cannot serve an Agent turn. Unknown
+/// methods and absent lists leave the model available.
+pub(super) fn embedding_only(item: &Value) -> bool {
+    let Some(methods) = item["supportedGenerationMethods"].as_array() else {
+        return false;
+    };
+    let mut embedding = false;
+    for method in methods {
+        match method.as_str() {
+            Some(
+                "embedContent" | "batchEmbedContents" | "asyncBatchEmbedContent" | "embedText",
+            ) => embedding = true,
+            Some("countTokens" | "countTextTokens") => {}
+            _ => return false,
+        }
+    }
+    embedding
 }
 
 /// The efforts the entry lists (`shapes::reasoning_efforts`), each once,

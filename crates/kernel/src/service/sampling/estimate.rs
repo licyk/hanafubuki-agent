@@ -2,6 +2,7 @@
 //! bytes-per-token estimate (`hanafubuki_agent_contracts::estimate_tokens`).
 
 use hanafubuki_agent_contracts::estimate_tokens;
+use hanafubuki_agent_model_api::{GeminiReplayPart, ModelReasoningReplay};
 
 use super::*;
 
@@ -51,6 +52,42 @@ pub(super) fn without_media(
                         matches!(detail, hanafubuki_agent_model_api::ModelImageDetail::Low),
                     )?;
                     data.clear();
+                }
+            }
+            ModelInputItem::Reasoning {
+                replay: ModelReasoningReplay::GeminiGenerate { parts, .. },
+            } => {
+                // Ordinary text already contributes through its assistant message.
+                for part in parts {
+                    if let GeminiReplayPart::Text {
+                        text,
+                        thought: false,
+                        ..
+                    } = part
+                    {
+                        text.clear();
+                    }
+                }
+            }
+            ModelInputItem::Reasoning {
+                replay:
+                    ModelReasoningReplay::GeminiInteractionsThought {
+                        summary: Some(summary),
+                        ..
+                    },
+            } => {
+                for block in summary.iter_mut().filter(|block| block["type"] == "image") {
+                    if let Some(bytes) = block["data"]
+                        .as_str()
+                        .map(|s| base64::decoded_len_estimate(s.len()))
+                    {
+                        add_estimated_image_tokens(
+                            &mut images,
+                            bytes,
+                            block["resolution"] == "low",
+                        )?;
+                        block["data"] = serde_json::Value::String(String::new());
+                    }
                 }
             }
             ModelInputItem::ToolOutput { output, .. }

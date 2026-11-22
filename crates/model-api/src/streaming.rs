@@ -33,6 +33,14 @@ pub(crate) fn trace_wire_body(
     if !log::log_enabled!(log::Level::Trace) {
         return;
     }
+    // Native Gemini frames can carry opaque thought signatures in any part.
+    if matches!(protocol, "gemini_generate_content" | "gemini_interactions") {
+        log::trace!(
+            "model.wire.{stage} protocol={protocol} bytes={}",
+            body.len()
+        );
+        return;
+    }
     let body = String::from_utf8_lossy(body);
     log::trace!(
         "model.wire.{stage} protocol={protocol} endpoint={endpoint} body={}",
@@ -64,6 +72,7 @@ type HttpBody = Pin<Box<dyn Stream<Item = Result<Bytes, reqwest::Error>> + Send>
 pub(crate) enum Authentication {
     Bearer,
     Anthropic,
+    Google,
 }
 
 #[derive(Clone)]
@@ -108,11 +117,25 @@ pub(crate) fn authenticated_request(
                     .header("x-api-key", value)
                     .header("anthropic-version", ANTHROPIC_VERSION);
             }
+            Authentication::Google => {
+                let value = HeaderValue::from_str(credential.expose()).map_err(|_| {
+                    ModelError::InvalidRequest("invalid Google API credential".into())
+                })?;
+                request = request.header("x-goog-api-key", value);
+            }
         }
     } else if authentication == Authentication::Anthropic {
         request = request.header("anthropic-version", ANTHROPIC_VERSION);
     }
     for header in provider.headers() {
+        // Existing compatible endpoints can use a custom Google header.
+        // On a native Google route the configured API key takes precedence.
+        if authentication == Authentication::Google
+            && provider.credential().is_some()
+            && header.name() == "x-goog-api-key"
+        {
+            continue;
+        }
         let (name, value) = header.parts();
         request = request.header(name, value);
     }
@@ -454,8 +477,16 @@ pub(crate) async fn read_remote_error(
     let parsed = serde_json::from_slice::<Value>(&body).ok();
     let error = parsed.as_ref().and_then(|value| value.get("error"));
     let code = error
-        .and_then(|error| error.get("code").or_else(|| error.get("type")))
-        .and_then(value_to_string)
+        .and_then(|error| {
+            // Google's numeric code repeats HTTP status; its symbolic code
+            // is in `status`. Other providers normally use a string `code`.
+            error["code"]
+                .as_str()
+                .or_else(|| error["status"].as_str())
+                .map(str::to_owned)
+                .or_else(|| error.get("code").and_then(value_to_string))
+                .or_else(|| error.get("type").and_then(value_to_string))
+        })
         .map(|code| bounded_metadata(&provider.bound_diagnostic(code)));
     let message = error
         .and_then(|error| error.get("message"))

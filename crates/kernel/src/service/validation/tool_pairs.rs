@@ -156,7 +156,10 @@ pub(in crate::service) fn interrupted_tool_outputs(
 
 pub(in crate::service) fn normalized_tool_pairs_for_model(
     history: &[ConversationItem],
+    protocol: hanafubuki_agent_model_api::ModelApiProtocol,
 ) -> Result<Vec<ConversationItem>, AgentError> {
+    use hanafubuki_agent_model_api::ModelApiProtocol::{GeminiGenerateContent, GeminiInteractions};
+    let keep_model_parts = matches!(protocol, GeminiGenerateContent | GeminiInteractions);
     let mut normalized = history
         .iter()
         .filter(|item| !is_interrupted_tool_output(item))
@@ -197,7 +200,26 @@ pub(in crate::service) fn normalized_tool_pairs_for_model(
         .collect::<Vec<_>>();
     missing.sort_by_key(|(index, _)| std::cmp::Reverse(*index));
     for (index, output) in missing {
-        normalized.insert(index.saturating_add(1), output);
+        // One model response may interleave calls, text, and signed replay
+        // data. Finish its assistant group before inserting a tool result.
+        let start = index + 1;
+        let end = if keep_model_parts {
+            start
+                + normalized[start..]
+                    .iter()
+                    .take_while(|item| {
+                        matches!(
+                            item,
+                            ConversationItem::ToolCall { .. }
+                                | ConversationItem::AssistantMessage { .. }
+                                | ConversationItem::Reasoning { .. }
+                        )
+                    })
+                    .count()
+        } else {
+            start
+        };
+        normalized.insert(end, output);
     }
     // A tool can commit context immediately after its own result, while
     // other calls from the same response still await results. Providers
@@ -209,6 +231,8 @@ pub(in crate::service) fn normalized_tool_pairs_for_model(
         match &item {
             ConversationItem::ToolCall { .. } => pending_count += 1,
             ConversationItem::ToolOutput { .. } => pending_count -= 1,
+            ConversationItem::AssistantMessage { .. } | ConversationItem::Reasoning { .. }
+                if keep_model_parts => {}
             _ if pending_count > 0 => {
                 deferred.push(item);
                 continue;

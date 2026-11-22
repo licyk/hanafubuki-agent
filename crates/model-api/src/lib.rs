@@ -2,12 +2,13 @@
 //!
 //! This crate is the wire/mechanism boundary below the Agent state machine. It
 //! does not resolve Config credentials, execute tools, or own conversation
-//! state. Its transports implement the Responses, Chat Completions, and Anthropic
-//! Messages HTTP/SSE protocols without depending on Config or Tauri.
+//! state. Its transports implement the Responses, Chat Completions, Anthropic Messages, and Gemini
+//! GenerateContent and Interactions HTTP/SSE protocols without depending on Config or Tauri.
 
 mod anthropic_messages;
 mod chat_completions;
 mod context_overflow;
+mod gemini;
 mod http_proxy;
 mod image_input;
 pub mod model;
@@ -35,6 +36,7 @@ pub mod test_support;
 pub use anthropic_messages::AnthropicMessagesModelTransport;
 pub use chat_completions::ChatCompletionsModelTransport;
 pub use context_overflow::{context_limit_in, PLAUSIBLE_CONTEXT_WINDOW};
+pub use gemini::GeminiModelTransport;
 pub use hanafubuki_agent_foundation::trace_content::{
     bounded_trace_content, MAX_TRACE_CONTENT_BYTES,
 };
@@ -45,15 +47,16 @@ pub use image_input::{
     ImageSanitizationReport, IMAGE_INPUT_OMITTED_PLACEHOLDER,
 };
 pub use model::{
-    ModelCompactionCapability, ModelCompactionResult, ModelContextRole, ModelEvent,
-    ModelImageDetail, ModelImageInputCapability, ModelImageInputPolicy, ModelInputCapabilities,
-    ModelInputCapabilityPolicy, ModelInputItem, ModelJsonSchemaOutput, ModelMessagePhase,
-    ModelOpaqueCompactionPayload, ModelOutputFormat, ModelOutputItem, ModelReasoningConfig,
-    ModelReasoningEffort, ModelReasoningReplay, ModelReasoningTextKind, ModelRequest,
-    ModelResponseMetadata, ModelStructuredOutputCapability, ModelToolArgumentError, ModelToolCall,
-    ModelToolCallOrigin, ModelToolChoice, ModelToolSpec, ModelUsage, ModelUserContent,
-    RateLimitMetadata, FALLBACK_TOOL_SEARCH_NAME, MAX_MODEL_REASONING_EFFORT_BYTES,
-    MAX_MODEL_REASONING_REPLAY_BYTES, MAX_TOOL_ARGUMENT_PREVIEW_BYTES, NATIVE_TOOL_SEARCH_NAME,
+    GeminiReplayPart, ModelCompactionCapability, ModelCompactionResult, ModelContextRole,
+    ModelEvent, ModelImageDetail, ModelImageInputCapability, ModelImageInputPolicy,
+    ModelInputCapabilities, ModelInputCapabilityPolicy, ModelInputItem, ModelJsonSchemaOutput,
+    ModelMessagePhase, ModelOpaqueCompactionPayload, ModelOutputFormat, ModelOutputItem,
+    ModelReasoningConfig, ModelReasoningEffort, ModelReasoningReplay, ModelReasoningTextKind,
+    ModelRequest, ModelResponseMetadata, ModelStructuredOutputCapability, ModelToolArgumentError,
+    ModelToolCall, ModelToolCallOrigin, ModelToolChoice, ModelToolSpec, ModelUsage,
+    ModelUserContent, RateLimitMetadata, FALLBACK_TOOL_SEARCH_NAME,
+    MAX_MODEL_REASONING_EFFORT_BYTES, MAX_MODEL_REASONING_REPLAY_BYTES,
+    MAX_TOOL_ARGUMENT_PREVIEW_BYTES, NATIVE_TOOL_SEARCH_NAME,
 };
 pub use model_catalog::{ModelCatalogClient, ModelCatalogEntry, ModelCatalogListing};
 pub use model_metadata::{

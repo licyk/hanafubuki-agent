@@ -121,6 +121,10 @@ fn transcript_line(item: &ConversationItem) -> Option<String> {
         ConversationItem::UserMessage { text, .. } => Some(format!("user: {text}")),
         ConversationItem::SteeringMessage { text, .. } => Some(format!("user (steering): {text}")),
         ConversationItem::Reasoning {
+            replay: Some(replay),
+            ..
+        } if replay.is_part_layout() => None,
+        ConversationItem::Reasoning {
             duration_millis, ..
         } => Some(crate::exec::thought_for(*duration_millis)),
         ConversationItem::AssistantMessage { text, .. } => Some(format!("assistant: {text}")),

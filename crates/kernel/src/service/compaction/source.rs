@@ -166,7 +166,8 @@ fn compaction_request(
     tool_plan: &AgentToolPlan,
     reasoning: Option<ModelReasoningConfig>,
 ) -> Result<(ModelRequest, AgentCompactionImplementation, Vec<usize>), AgentError> {
-    let (mut input, local_trim_prefix_ends) = build_compaction_input(source, images)?;
+    let (mut input, local_trim_prefix_ends) =
+        build_compaction_input(source, images, record.settings.config.provider_protocol)?;
     let implementation =
         AgentCompactionImplementation::from(record.settings.config.compaction_capability);
     if model.compaction_capability() != record.settings.config.compaction_capability {
@@ -207,10 +208,11 @@ fn compaction_request(
 fn build_compaction_input(
     source: &[ConversationItem],
     images: &LoadedImages,
+    protocol: hanafubuki_agent_model_api::ModelApiProtocol,
 ) -> Result<(Vec<ModelInputItem>, Vec<usize>), AgentError> {
     let mut input = Vec::new();
     let mut trim_prefix_ends = Vec::new();
-    let normalized = normalized_tool_pairs_for_model(source)?;
+    let normalized = normalized_tool_pairs_for_model(source, protocol)?;
     for item in &normalized {
         // Capability snapshots are refreshed for the new window; the
         // summarizer reads conversation evidence, not superseded guidance.

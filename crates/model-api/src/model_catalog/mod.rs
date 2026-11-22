@@ -1,10 +1,10 @@
 //! A Provider's model listing (`GET {base}/models`), read tolerantly: an
 //! entry the Agent cannot use is left out and counted, a field it cannot
 //! read is unknown, and only a page whose entries are under neither a `data`
-//! array (OpenAI-compatible servers) nor a `models` array (Codex, and the
-//! Responses API of z.ai) fails.
+//! array (OpenAI-compatible servers) nor a `models` array (Google, Codex,
+//! and the Responses API of z.ai) fails.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 
 use futures_util::StreamExt;
@@ -15,7 +15,7 @@ use serde_json::Value;
 
 use crate::port::{ModelError, ModelResult};
 use crate::protocol::ModelApiProtocol;
-use crate::provider::ModelProvider;
+use crate::provider::{set_query_parameter, ModelProvider};
 use crate::streaming::{
     authenticated_request, build_client, read_remote_error, response_metadata, retry_establishment,
     retryable_status, wait_cancelled, Authentication,
@@ -76,12 +76,16 @@ impl ModelCatalogClient {
                 Authentication::Bearer
             }
             ModelApiProtocol::AnthropicMessages => Authentication::Anthropic,
+            ModelApiProtocol::GeminiGenerateContent | ModelApiProtocol::GeminiInteractions => {
+                Authentication::Google
+            }
         };
         let mut endpoint = self.provider.endpoint().models_url()?;
         if protocol == ModelApiProtocol::AnthropicMessages {
             set_query_parameter(&mut endpoint, "limit", "100");
         }
         let mut entries = BTreeMap::<String, ModelCatalogEntry>::new();
+        let mut cursors = HashSet::new();
         let mut skipped = 0usize;
         loop {
             let value = self
@@ -92,29 +96,27 @@ impl ModelCatalogClient {
                 .find_map(|key| value.get(*key).and_then(Value::as_array))
                 .ok_or_else(|| ModelError::Protocol("model catalog has no models array".into()))?;
             for item in data {
-                let Some(entry) = entry::decode_entry(item) else {
+                if authentication == Authentication::Google && entry::embedding_only(item) {
+                    continue;
+                }
+                let Some(entry) = entry::decode_entry(protocol, item) else {
                     skipped += 1;
                     continue;
                 };
                 entries.entry(entry.id.clone()).or_insert(entry);
             }
-            if protocol != ModelApiProtocol::AnthropicMessages
-                || !value
-                    .get("has_more")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false)
-            {
-                break;
-            }
-            // `last_id` is nullable: without it the listing is what was read.
-            let Some(after_id) = value
-                .get("last_id")
-                .and_then(Value::as_str)
-                .filter(|value| !value.is_empty())
-            else {
+            let (parameter, field) = match authentication {
+                Authentication::Google => ("pageToken", "nextPageToken"),
+                Authentication::Anthropic if value["has_more"] == true => ("after_id", "last_id"),
+                _ => break,
+            };
+            let Some(cursor) = value[field].as_str().filter(|value| !value.is_empty()) else {
                 break;
             };
-            set_query_parameter(&mut endpoint, "after_id", after_id);
+            if !cursors.insert(cursor.to_owned()) {
+                break;
+            }
+            set_query_parameter(&mut endpoint, parameter, cursor);
         }
         if skipped > 0 {
             log::warn!("model.catalog.entries_skipped count={skipped} reason=no_usable_id");
@@ -286,18 +288,4 @@ async fn read_body(
             None => return Ok(body),
         }
     }
-}
-
-fn set_query_parameter(endpoint: &mut reqwest::Url, name: &str, value: &str) {
-    let retained = endpoint
-        .query_pairs()
-        .filter(|(current, _)| current != name)
-        .map(|(name, value)| (name.into_owned(), value.into_owned()))
-        .collect::<Vec<_>>();
-    endpoint.set_query(None);
-    let mut query = endpoint.query_pairs_mut();
-    for (name, value) in retained {
-        query.append_pair(&name, &value);
-    }
-    query.append_pair(name, value);
 }

@@ -393,6 +393,63 @@ async fn model_catalog_supports_openai_and_paginated_anthropic_shapes() {
 }
 
 #[tokio::test]
+async fn google_catalog_normalizes_model_resources_and_follows_page_tokens() {
+    for protocol in [
+        ModelApiProtocol::GeminiGenerateContent,
+        ModelApiProtocol::GeminiInteractions,
+    ] {
+        let page =
+            |value: serde_json::Value| PlannedResponse::status(200, value.to_string().into_bytes());
+        let server = FakeHttpServer::start(vec![
+            page(json!({"models": [
+                {"name":"models/gemini-first","displayName":"First","inputTokenLimit":1000000,"outputTokenLimit":8192,"thinking":true},
+                {"name":"models/embed","supportedGenerationMethods":["embedContent","countTokens"]},
+                {"name":"models/"}
+            ],"nextPageToken":"next +/"})),
+            page(json!({"models": [{"name":"models/gemini-next","supportedGenerationMethods":["generateContent","embedContent"]}],
+                        "nextPageToken":"next +/"})),
+        ]).await;
+        let provider = ModelProvider::new(
+            ModelEndpoint::parse(&format!("{}/gateway/v1?tenant=unit", server.base_url())).unwrap(),
+            Some(ModelCredential::new("api-secret").unwrap()),
+        )
+        .with_header(ModelHeader::new("x-scope", "example").unwrap())
+        .with_header(ModelHeader::new("x-goog-api-key", "obsolete-key").unwrap());
+        let listing = ModelCatalogClient::new(provider)
+            .unwrap()
+            .list(protocol, CancellationToken::default())
+            .await
+            .unwrap();
+        assert_eq!(listing.skipped, 1);
+        assert_eq!(
+            listing.entries,
+            [
+                ModelCatalogEntry {
+                    display_name: Some("First".into()),
+                    context_window: Some(1000000),
+                    max_output_tokens: Some(8192),
+                    reasoning: Some(true),
+                    ..unknown_entry("gemini-first")
+                },
+                unknown_entry("gemini-next"),
+            ]
+        );
+        let requests = server.requests();
+        assert_eq!(requests.len(), 2);
+        assert_eq!(requests[0].path, "/v1/gateway/v1/models?tenant=unit");
+        assert_eq!(
+            requests[1].path,
+            "/v1/gateway/v1/models?tenant=unit&pageToken=next+%2B%2F"
+        );
+        for request in requests {
+            assert_eq!(request.headers["x-goog-api-key"], "api-secret");
+            assert_eq!(request.headers["x-scope"], "example");
+            assert!(!request.headers.contains_key("authorization"));
+        }
+    }
+}
+
+#[tokio::test]
 async fn an_anthropic_page_with_more_but_no_last_id_ends_the_listing() {
     let server = FakeHttpServer::start(vec![PlannedResponse::status(
         200,

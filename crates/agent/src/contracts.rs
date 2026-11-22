@@ -99,6 +99,12 @@ pub(crate) fn model_api_protocol(
         AgentModelProtocol::AnthropicMessages => {
             hanafubuki_agent_kernel::ModelApiProtocol::AnthropicMessages
         }
+        AgentModelProtocol::GeminiGenerateContent => {
+            hanafubuki_agent_kernel::ModelApiProtocol::GeminiGenerateContent
+        }
+        AgentModelProtocol::GeminiInteractions => {
+            hanafubuki_agent_kernel::ModelApiProtocol::GeminiInteractions
+        }
     }
 }
 

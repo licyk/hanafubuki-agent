@@ -329,16 +329,16 @@ requestHeaders = []
 
 不限制 Provider 数量。读取文件时保留全部有效条目，不会因数量较多而触发配置修复。批量查询模型列表时，最多同时请求 32 个 Provider，其余依次等待。
 
-| 键               | 类型和取值                                                  | 含义                                                                                                                               |
-| ---------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `id`             | 1–64 个字母、数字、`_` 或 `-`                               | Provider 的 ID；`providers add` 分配最小的空闲 `provider-N`                                                                        |
-| `displayName`    | 1–128 字节                                                  | 显示名称                                                                                                                           |
-| `enabled`        | 布尔值                                                      | 是否启用                                                                                                                           |
-| `protocol`       | `"responses"`、`"chat_completions"`、`"anthropic_messages"` | 协议，见 [Provider 与模型](/docs/providers-models#protocols)                                                                       |
-| `baseUrl`        | `http` 或 `https` URL，不含凭据、查询和片段                 | 接口地址，协议的路径追加在它后面                                                                                                   |
-| `apiToken`       | 字符串，可选                                                | API 令牌，原样保存                                                                                                                 |
-| `requestHeaders` | `{ name, value }` 的数组，最多 32 个                        | 附加到每个请求的请求头；不能设置 `Authorization`、`x-api-key`、`anthropic-version`、`Host`、`Content-Type` 等由 Agent 管理的请求头 |
-| `models`         | 以模型 ID 为键的表，每项是一个表（见下），可省略            | 为该 Provider 的每个模型设置的内容                                                                                                 |
+| 键               | 类型和取值                                                                                                        | 含义                                                                                                                               |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | 1–64 个字母、数字、`_` 或 `-`                                                                                     | Provider 的 ID；`providers add` 分配最小的空闲 `provider-N`                                                                        |
+| `displayName`    | 1–128 字节                                                                                                        | 显示名称                                                                                                                           |
+| `enabled`        | 布尔值                                                                                                            | 是否启用                                                                                                                           |
+| `protocol`       | `"responses"`、`"chat_completions"`、`"anthropic_messages"`、`"gemini_generate_content"`、`"gemini_interactions"` | 协议，见 [Provider 与模型](/docs/providers-models#protocols)                                                                       |
+| `baseUrl`        | `http` 或 `https` URL，不含凭据、查询和片段                                                                       | 接口地址，协议的路径追加在它后面                                                                                                   |
+| `apiToken`       | 字符串，可选                                                                                                      | API 令牌，原样保存                                                                                                                 |
+| `requestHeaders` | `{ name, value }` 的数组，最多 32 个                                                                              | 附加到每个请求的请求头；不能设置 `Authorization`、`x-api-key`、`anthropic-version`、`Host`、`Content-Type` 等由 Agent 管理的请求头 |
+| `models`         | 以模型 ID 为键的表，每项是一个表（见下），可省略                                                                  | 为该 Provider 的每个模型设置的内容                                                                                                 |
 
 默认 Provider 被删除或禁用时，默认改为列表中第一个启用的 Provider。
 

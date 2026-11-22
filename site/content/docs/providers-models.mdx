@@ -10,17 +10,19 @@ Provider 和模型策略都保存在配置目录的 `providers.toml` 中，见[�
 
 ## 协议 [#protocols]
 
-| 协议               | `--protocol`         | 请求路径（追加在接口地址后） | 认证                                                 | 常见服务                                      |
-| ------------------ | -------------------- | ---------------------------- | ---------------------------------------------------- | --------------------------------------------- |
-| OpenAI Responses   | `responses`（默认）  | `responses`                  | `Authorization: Bearer 令牌`                         | OpenAI、vLLM 等兼容服务                       |
-| Chat Completions   | `chat-completions`   | `chat/completions`           | `Authorization: Bearer 令牌`                         | DeepSeek、OpenRouter、Ollama 等大多数兼容服务 |
-| Anthropic Messages | `anthropic-messages` | `messages`                   | `x-api-key: 令牌` 和 `anthropic-version: 2023-06-01` | Anthropic                                     |
+| 协议                   | `--protocol`              | 请求路径（追加在接口地址后）                   | 认证                                                 | 常见服务                                      |
+| ---------------------- | ------------------------- | ---------------------------------------------- | ---------------------------------------------------- | --------------------------------------------- |
+| OpenAI Responses       | `responses`（默认）       | `responses`                                    | `Authorization: Bearer 令牌`                         | OpenAI、vLLM 等兼容服务                       |
+| Chat Completions       | `chat-completions`        | `chat/completions`                             | `Authorization: Bearer 令牌`                         | DeepSeek、OpenRouter、Ollama 等大多数兼容服务 |
+| Anthropic Messages     | `anthropic-messages`      | `messages`                                     | `x-api-key: 令牌` 和 `anthropic-version: 2023-06-01` | Anthropic                                     |
+| Gemini GenerateContent | `gemini-generate-content` | `models/{model}:streamGenerateContent?alt=sse` | `x-goog-api-key`                                     | Google Gemini Developer API                   |
+| Gemini Interactions    | `gemini-interactions`     | `interactions`                                 | `x-goog-api-key`                                     | Google Gemini Developer API                   |
 
-接口地址末尾的 `/` 可有可无，协议的路径直接追加在它后面：`https://api.openai.com/v1` 加上 `responses` 就是 `https://api.openai.com/v1/responses`。地址中的查询参数会保留。模型列表从同一地址的 `models` 读取。
+接口地址末尾的 `/` 可有可无，协议的路径直接追加在它后面：`https://api.openai.com/v1` 加上 `responses` 就是 `https://api.openai.com/v1/responses`。Provider 设置接受路径前缀，凭据填入 API 令牌或请求头。直接构建 model-api 传输层的宿主还可以传入查询参数。模型列表从同一地址的 `models` 读取。
 
 ## 添加 Provider [#add]
 
-<Tabs items={["OpenAI", "Anthropic", "Chat Completions", "本地服务"]}>
+<Tabs items={["OpenAI", "Anthropic", "Gemini", "Chat Completions", "本地服务"]}>
   <Tab value="OpenAI">
     ```sh
     hanafubuki-agent providers add OpenAI --base-url https://api.openai.com/v1 --api-key-env OPENAI_API_KEY
@@ -31,6 +33,17 @@ Provider 和模型策略都保存在配置目录的 `providers.toml` 中，见[�
     hanafubuki-agent providers add Anthropic --protocol anthropic-messages \
       --base-url https://api.anthropic.com/v1 --api-key-env ANTHROPIC_API_KEY
     ```
+  </Tab>
+  <Tab value="Gemini">
+    ```sh
+    hanafubuki-agent providers add Gemini --protocol gemini-generate-content \
+      --base-url https://generativelanguage.googleapis.com/v1beta --api-key-env GEMINI_API_KEY
+    hanafubuki-agent providers add Gemini-Interactions --protocol gemini-interactions \
+      --base-url https://generativelanguage.googleapis.com/v1 --api-key-env GEMINI_API_KEY
+    ```
+
+    两条路由可任选其一。Interactions 使用本地历史，并发送 `store: false`。两种协议都会读取 Google 模型目录的后续页。
+
   </Tab>
   <Tab value="Chat Completions">
     ```sh
@@ -79,7 +92,7 @@ provider-2 DeepSeek  ChatCompletions  https://api.deepseek.com/v1  token: set
 [终端界面](/docs/terminal-interface#providers)中的 `/providers` 在 Provider 处打开[设置中心](/docs/terminal-interface#config)，可以完成上面这些命令的工作，并直接编辑 Provider：
 
 - **Provider 列表**：每个 Provider 显示协议和基础 URL，默认的一项旁标有 `default`，停用的旁标有 `off`。`a` 添加一个（它的字段由 **Add a Provider** 一起保存），`d` 确认后删除，Enter 打开。
-- **Provider**：名称、是否启用、协议（`responses`、`chat_completions` 或 `anthropic_messages`）、基础 URL、API 令牌和请求头，每个字段改动时即保存。已设置的令牌默认显示为 `••••`。Enter 打开已保存的值，Ctrl+R 显示或隐藏且不触发保存，Enter 保存编辑，在编辑框外按 `r` 删除它。请求头是 `NAME=VALUE` 形式的条目，只按名称列出：它们的值从不显示，只写名称的条目保留原来的值。
+- **Provider**：名称、是否启用、协议（`responses`、`chat_completions`、`anthropic_messages`、`gemini_generate_content` 或 `gemini_interactions`）、基础 URL、API 令牌和请求头，每个字段改动时即保存。已设置的令牌默认显示为 `••••`。Enter 打开已保存的值，Ctrl+R 显示或隐藏且不触发保存，Enter 保存编辑，在编辑框外按 `r` 删除它。请求头是 `NAME=VALUE` 形式的条目，只按名称列出：它们的值从不显示，只写名称的条目保留原来的值。
 - **Make default** 把它设为默认 Provider，**List models** 测试它（Provider 回答之前，标题下方一行显示 `List models…`；之后显示 Provider 列出的模型数量和前几个，或 Provider 返回的错误），**Delete** 确认后删除它。
 - **Choose the model** 列出它的模型。Provider 回答之前显示 `• Listing the models…`，从第一秒起附上已等待的时间。之后每个模型显示列表给出的名称（如果有），以及与 `/model` 相同的 `Context`、`Thinking` 和 `Vision` 列（`yes`、`no`，没有任何来源说明时为 `?`），不足约 51 列时堆叠显示；列表下方是选中模型的各项信息及其来源，以及按键说明，末尾是 `? not known`（[模型列表](/docs/terminal-interface#model-list)）。列出失败时只剩 **Enter a model id…**，下方显示 Provider 返回的错误。选中的模型（Provider 没有列出时，用 **Enter a model id…** 手动输入）成为新会话使用的模型，这个 Provider 成为默认 Provider。按 Esc 则保持原来的模型。`/model` 仍然只修改当前会话的模型。
 - **模型策略**（`/providers policy`，或 Model 标签页中的 Model policy）：默认 Provider 和模型、推理强度（旁边写出该模型已知的档位，来自其目录或其[单独设置](#per-model)；按 Enter 时提供的选项与 `/effort` 相同，见[推理强度与思考过程](#reasoning)）、图片输入、上下文窗口（未设置时，旁边写出该模型已知的窗口及其来源）、自动压缩及其阈值、远程压缩，以及 **Custom turn budget**：关闭时回合使用 Agent 的上限；打开时是它的十一个字段，从这些上限开始。模型的单独设置不在其中：它们是 Model 标签页中它旁边的 **Model overrides**（[按模型的设置](#per-model)）。
@@ -110,11 +123,15 @@ reasoningEffort = "medium"   # minimal、low、medium、high、xhigh
 
 每种协议都会发送推理强度，各用自己的字段：
 
-| 协议               | 请求发送的内容                                                                                                                                                                                                  |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Responses          | `reasoning: {effort, summary: "auto"}`                                                                                                                                                                          |
-| Chat Completions   | `reasoning_effort`，OpenAI 的字段，DeepSeek 的文档也列出了它，OpenRouter 把它列在参数中（其推理指南对 Anthropic 模型只提到它的 `reasoning` 对象）                                                               |
-| Anthropic Messages | Claude 4.6 及以后：自适应思考 `thinking: {type: "adaptive", display: "summarized"}`，加上 `output_config: {effort}`（`minimal` 按 `low` 发送）。Claude 4.5 及以前，以及 ID 不是 Claude 的模型：思考预算，见下文 |
+| 协议                   | 请求发送的内容                                                                                                                                                                                                  |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Responses              | `reasoning: {effort, summary: "auto"}`                                                                                                                                                                          |
+| Chat Completions       | `reasoning_effort`，OpenAI 的字段，DeepSeek 的文档也列出了它，OpenRouter 把它列在参数中（其推理指南对 Anthropic 模型只提到它的 `reasoning` 对象）                                                               |
+| Anthropic Messages     | Claude 4.6 及以后：自适应思考 `thinking: {type: "adaptive", display: "summarized"}`，加上 `output_config: {effort}`（`minimal` 按 `low` 发送）。Claude 4.5 及以前，以及 ID 不是 Claude 的模型：思考预算，见下文 |
+| Gemini GenerateContent | 通过 `generationConfig.thinkingConfig` 发送。Gemini 2.5 使用 token 预算，后续型号使用思考等级。                                                                                                                 |
+| Gemini Interactions    | 通过 `generation_config.thinking_level` 发送，开启自动思考摘要。                                                                                                                                                |
+
+在 Gemini 2.5 的 GenerateContent 协议中，`minimal`、`low`、`medium`、`high` 和 `xhigh` 分别对应 512、1,024、8,192、16,384 和 24,576 个思考 token。
 
 没有设置推理强度时，请求不携带它，由 Provider 的默认值决定。`/status` 会显示当前会话的推理强度；当对模型已知的信息改变了它时，还会显示实际发送的值（`reasoning xhigh, sends high`，或 `not sent: the model takes none`）。
 
@@ -159,9 +176,11 @@ Provider 拒绝推理参数时（状态码 400 或 422，并指名该参数，�
 | Responses          | 设置了推理强度时，Agent 会请求思考摘要；兼容服务（例如 vLLM 上的 gpt-oss）也可能发送原始思考文本 |
 | Chat Completions   | 服务在 `reasoning_content` 或 `reasoning` 中发送的内容（DeepSeek、Qwen、OpenRouter 等）          |
 | Anthropic Messages | 请求的自适应思考摘要，或预算允许的思考内容；服务未经请求发送的 `thinking` 块也会显示出来         |
+| Gemini             | GenerateContent 中标记为思考的文本，或 Interactions 的流式思考摘要。                             |
 
-思考内容保存在会话历史中，每一段最多 256 KiB，超出的部分被截断。这些文本只用于显示，不会再发送给模型。有两种协议要求回传思考，Agent 照做：
+思考内容保存在会话历史中，每一段最多 256 KiB，超出的部分被截断。这些文本只用于显示，不会再发送给模型。部分协议另有回放要求。
 
+- **Gemini** 把不透明思考签名保存在本地历史中。GenerateContent 还保留签名所在的 part 边界和函数调用 ID，恢复或分叉后仅向原模型路由回传。Interactions 回传完整的思考 step，包括在同一 Interactions 端点切换模型之后。
 - **使用预算的 Anthropic 思考**：本轮的思考块会连同签名原样随它之前的工具调用回传，仅限该轮剩余的请求。它们只保存在内存中，从不写入历史，所以重启后恢复的轮次，下一个请求不带思考。自适应思考不回传任何思考块：Anthropic 允许在此省略它们，而它最新的模型会拒绝前文已改变的思考块，Agent 的请求在步骤之间恰恰会改变前文。
 - **Chat Completions 的 `reasoning_content`**（DeepSeek 的思考模式：带工具的请求中，之前的助手消息缺少它就会被拒绝）：以 `reasoning_content` 到达的每一段思考，其完整文本（最多 1 MiB）作为它之前那条助手消息的 `reasoning_content` 回传，来自仍在上下文窗口中的每一轮，压缩的请求也一样，无论是否设置了推理强度。它随消息写入历史，所以恢复的会话也会发送它。以 `reasoning`（OpenRouter 的字段）到达的思考不回传。没有文本可回传的助手消息（Agent 开始回传之前的消息，或思考超过 1 MiB 的消息）不带这个字段发送；只要这样的消息还在上下文窗口中，带工具的 DeepSeek 就可能拒绝该会话的请求，包括压缩的请求：这时请新建会话。
 

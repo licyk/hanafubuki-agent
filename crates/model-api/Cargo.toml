@@ -11,6 +11,7 @@ rust-version.workspace = true
 test-support = []
 
 [dependencies]
+uuid = { workspace = true, features = ["v4"] }
 hanafubuki-agent-foundation.workspace = true
 hanafubuki-agent-tool-contracts.workspace = true
 base64.workspace = true

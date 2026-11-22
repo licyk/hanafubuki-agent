@@ -2,12 +2,14 @@
 //! scripted model provider and MCP servers, plugins mounted on their own
 //! root, and an Agent built over temporary paths with a host's ports.
 
+mod gemini;
 mod mcp_server;
 mod model_server;
 mod plugins;
 mod service;
 mod wake;
 
+pub use gemini::{gemini_content_events, gemini_interaction_events};
 pub use mcp_server::{annotated_tool, scripted_tool, McpCallHold, ScriptedMcpServers};
 pub use model_server::{
     anthropic_assistant_events, anthropic_thinking_tool_events, anthropic_tool_events,

@@ -268,6 +268,7 @@ enum PendingModelItem {
     },
     ToolCall(ModelToolCall),
     Reasoning(sampling::PendingReasoning),
+    PartLayout(hanafubuki_agent_model_api::ModelReasoningReplay),
     Ignored {
         item_type: String,
         completed: bool,

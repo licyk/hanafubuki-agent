@@ -464,3 +464,55 @@ fn a_request_is_composed_of_its_groups_and_they_add_up_to_its_estimate() {
         + composition.other_tokens;
     assert_eq!(sum, estimate);
 }
+
+#[test]
+fn gemini_estimates_count_visible_text_once_and_signed_images_as_media() {
+    use hanafubuki_agent_model_api::{
+        GeminiReplayPart, ModelApiProtocol, ModelEndpoint, ModelReasoningReplay, ModelRouteKey,
+        ModelToolChoice,
+    };
+    let endpoint = ModelEndpoint::parse("https://example.test/v1").unwrap();
+    let visible = "This file is ready. ".repeat(2048);
+    let mut request = ModelRequest {
+        model: "fixture".into(),
+        instructions: String::new(),
+        input: vec![ModelInputItem::AssistantMessage {
+            phase: None,
+            text: visible.clone(),
+        }],
+        tools: vec![],
+        tool_choice: ModelToolChoice::None,
+        parallel_tool_calls: false,
+        reasoning: None,
+        output_format: None,
+    };
+    let base = estimate_model_request_tokens(&request).unwrap();
+    let layout = ModelReasoningReplay::GeminiGenerate {
+        route: ModelRouteKey::new(
+            ModelApiProtocol::GeminiGenerateContent,
+            &endpoint,
+            "fixture",
+        ),
+        parts: vec![GeminiReplayPart::Text {
+            text: visible,
+            thought: false,
+            signature: Some("signed".into()),
+        }],
+    };
+    assert_eq!(layout.text_len(), "signed".len());
+    request
+        .input
+        .push(ModelInputItem::Reasoning { replay: layout });
+    assert!(estimate_model_request_tokens(&request).unwrap() < base + 256);
+    request.input.pop();
+    request.input.push(ModelInputItem::Reasoning { replay: ModelReasoningReplay::GeminiInteractionsThought {
+        route: ModelRouteKey::new(ModelApiProtocol::GeminiInteractions,&endpoint,"fixture"), signature:"signed".into(),
+        summary:Some(vec![serde_json::json!({"type":"image","data":"A".repeat(1024*1024),"mime_type":"image/png","resolution":"low"})])
+    }});
+    let (measured, media) = estimate::without_media(&request).unwrap();
+    assert_eq!((media.count, media.tokens), (1, 85));
+    assert!(
+        estimate::serialized_len(&measured).unwrap() + 1024 * 1024
+            <= estimate::serialized_len(&request).unwrap()
+    );
+}

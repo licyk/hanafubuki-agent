@@ -235,6 +235,8 @@ pub(crate) enum Protocol {
     Responses,
     ChatCompletions,
     AnthropicMessages,
+    GeminiGenerateContent,
+    GeminiInteractions,
 }
 
 #[derive(Debug, Subcommand)]

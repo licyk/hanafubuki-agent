@@ -166,7 +166,8 @@ pub enum ConversationItem {
         /// without thinking. Chat Completions' `reasoning_content` goes back
         /// from every turn and is persisted with the item (absent when
         /// there is none), so a resumed session still sends it; it is left
-        /// out of a transcript too.
+        /// out of a transcript too. Native Gemini replay is durable and
+        /// its transport checks the endpoint before sending it.
         #[serde(
             default,
             skip_serializing_if = "replay_not_persisted",
@@ -599,19 +600,15 @@ fn serialize_replay<S: serde::Serializer>(
         .serialize(serializer)
 }
 
-/// A persisted `replay`: a block that outlives its turn, within the bound;
-/// anything else (another shape, a turn's block, an oversized text) reads
-/// as none rather than failing the item.
+/// Unknown or unusable replay leaves the rest of the history item readable.
 fn deserialize_replay<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<hanafubuki_agent_model_api::ModelReasoningReplay>, D::Error> {
-    use hanafubuki_agent_model_api::{ModelReasoningReplay, MAX_MODEL_REASONING_REPLAY_BYTES};
+    use hanafubuki_agent_model_api::ModelReasoningReplay;
     let value = Value::deserialize(deserializer)?;
     Ok(ModelReasoningReplay::deserialize(value)
         .ok()
-        .filter(|replay| {
-            replay.outlives_its_turn() && replay.text_len() <= MAX_MODEL_REASONING_REPLAY_BYTES
-        }))
+        .filter(ModelReasoningReplay::is_persistable))
 }
 
 /// A display-only field of a persisted item that does not decode is its

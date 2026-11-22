@@ -32,7 +32,12 @@ fn compaction_groups_parallel_tool_results_and_keeps_turn_trim_boundaries() {
     .into_iter()
     .map(|value| serde_json::from_value(value).unwrap())
     .collect::<Vec<_>>();
-    let (input, ends) = build_compaction_input(&source, &LoadedImages::default()).unwrap();
+    let (input, ends) = build_compaction_input(
+        &source,
+        &LoadedImages::default(),
+        hanafubuki_agent_model_api::ModelApiProtocol::Responses,
+    )
+    .unwrap();
     assert_eq!(ends, [5, 7]);
     assert!(matches!(&input[2], ModelInputItem::ToolOutput { call_id, .. } if call_id == "skill"));
     assert!(matches!(&input[3], ModelInputItem::ToolOutput { call_id, .. } if call_id == "plan"));

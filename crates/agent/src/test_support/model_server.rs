@@ -135,7 +135,8 @@ impl FakeServer {
             while !responses.is_empty() || !listings.is_empty() {
                 let (mut stream, _) = listener.accept().await.unwrap();
                 let request = read_request(&mut stream).await;
-                if routes_listings && request.method == "GET" && request.path.ends_with("/models") {
+                let path = request.path.split('?').next().unwrap_or_default();
+                if routes_listings && request.method == "GET" && path.ends_with("/models") {
                     listed.lock().unwrap().push(request);
                     if let Some(listing) = listings.pop_front() {
                         tokio::spawn(answer_listing(stream, listing));

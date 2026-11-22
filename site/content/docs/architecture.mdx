@@ -102,7 +102,7 @@ Agent 是一个**内核**（`hanafubuki-agent-kernel`），拥有会话、轮次
 
 ### 线路上的名字 [#names-on-the-wire]
 
-工具在 Agent 内部的身份是 `ToolName`（命名空间段和本地名），注册表按扁平形式 `namespace__name` 索引它，这个字符串从不被反向解析。线路名按请求选择（`ProviderToolTable`）：Responses 接受命名空间，带命名空间的函数保留命名空间和本地名；其他协议使用扁平名。每个名字被适配到协议的上限（Responses 与 Anthropic Messages 为 128 字节，Chat Completions 为 64 字节）；后来者发生冲突或过长时被截断，并加上 `_` 和它 `(provider id, tool id)` 哈希的 12 位十六进制，每一步都相同。返回的调用按 `(namespace, name)` 查找解析，历史记录两者。
+工具在 Agent 内部的身份是 `ToolName`（命名空间段和本地名），注册表按扁平形式 `namespace__name` 索引它，这个字符串从不被反向解析。线路名按请求选择（`ProviderToolTable`）：Responses 接受命名空间，带命名空间的函数保留命名空间和本地名；其他协议使用扁平名。每个名字被适配到协议的上限（Responses、Anthropic Messages 与两种 Gemini 协议为 128 字节，Chat Completions 为 64 字节）；后来者发生冲突或过长时被截断，并加上 `_` 和它 `(provider id, tool id)` 哈希的 12 位十六进制，每一步都相同。返回的调用按 `(namespace, name)` 查找解析，历史记录两者。
 
 schema 遵循同样的按协议规则：支持 `strict_json_schema` 的协议（Responses）收到完整 schema，其他协议收到所有 OpenAI 兼容端点都接受的关键字（`portable_model_schema`）。从不发送 `strict`，内核无论如何都按完整 schema 校验参数。
 
@@ -340,7 +340,7 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 
 ## 模型 API [#the-model-api]
 
-`hanafubuki-agent-model-api` 实现三种协议：Responses、Chat Completions 和 Anthropic Messages，包括编码、流式解码、工具降级和模型列表。它用 `ModelRouteKey`（其中端点为 `ModelEndpointKey`）命名 Agent 访问的模型，端点取规范化 base URL 的 SHA-256 而不是 URL 本身，因为键会写入日志和磁盘，而 base URL 的查询串里可能带有凭据。它不知道任何插件和任何上下文段类型，也不依赖插件 API。Provider 的流是外部输入，容错解码：空的工具参数是 `{}`；无法解析的是 `{}` 加 `argument_error`；缺失的用量计数是 0；没有结束原因的流以未知的 `end_turn` 结束；Responses 的 `response.incomplete` 保留已完成的条目和已流出的文本，只有什么都没产生时才失败。每种协议都发送推理强度，各用自己的字段（`responses/encode.rs`、`chat_completions/reasoning.rs`、`anthropic_messages/thinking.rs`；对照表见 [Provider 与模型](/docs/providers-models#reasoning)）；Anthropic 用自适应思考还是预算，按模型 ID 判断，因为两类模型互相拒绝对方的形式。线路正文只按[内容日志规则](/docs/contributing#content-logging)在 `trace` 级别、截断后记录。
+`hanafubuki-agent-model-api` 实现 Responses、Chat Completions、Anthropic Messages、Gemini GenerateContent 和 Gemini Interactions，包括编码、流式解码、工具降级和模型列表。它用 `ModelRouteKey`（其中端点为 `ModelEndpointKey`）命名 Agent 访问的模型，端点取规范化 base URL 的 SHA-256 而不是 URL 本身，因为键会写入日志和磁盘，而 base URL 的查询串里可能带有凭据。它不知道任何插件和任何上下文段类型，也不依赖插件 API。Provider 的流是外部输入，容错解码：空的工具参数是 `{}`；无法解析的是 `{}` 加 `argument_error`；缺失的用量计数是 0；没有结束原因的流以未知的 `end_turn` 结束；Responses 的 `response.incomplete` 保留已完成的条目和已流出的文本，只有什么都没产生时才失败。每种协议都发送推理强度，各用自己的字段（`responses/encode.rs`、`chat_completions/reasoning.rs`、`anthropic_messages/thinking.rs`；对照表见 [Provider 与模型](/docs/providers-models#reasoning)）；Anthropic 用自适应思考还是预算，按模型 ID 判断，因为两类模型互相拒绝对方的形式。线路正文只按[内容日志规则](/docs/contributing#content-logging)在 `trace` 级别、截断后记录。Gemini 原生请求和流事件可能携带思考签名，日志只记录字节数。
 
 提供商打开事件流后，如果在首个输出项之前返回限流错误，Agent 会按会话的流重试设置重发同一请求。推理、文本或工具输出项一旦开始，收到限流错误就结束该轮，以免重复输出。
 

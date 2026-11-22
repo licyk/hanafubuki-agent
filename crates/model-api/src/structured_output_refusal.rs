@@ -9,12 +9,16 @@
 const CODES: [&str; 2] = ["unsupported_parameter", "unsupported_value"];
 
 /// The names of native structured output.
-const STRUCTURED_OUTPUT: [&str; 5] = [
+const STRUCTURED_OUTPUT: [&str; 9] = [
     "text.format",
     "response_format",
     "json_schema",
     "structured output",
     "structured_output",
+    "responsejsonschema",
+    "response_json_schema",
+    "responsemimetype",
+    "response_mime_type",
 ];
 
 /// Wordings that refuse a parameter.
@@ -53,7 +57,10 @@ pub(crate) fn is_unsupported_tool_choice(
     message: &str,
 ) -> bool {
     refuses(status, code, message, |message| {
-        message.contains("tool_choice") || message.contains("tools")
+        message.contains("tool_choice")
+            || message.contains("functioncallingconfig")
+            || message.contains("function_calling_config")
+            || message.contains("tools")
     })
 }
 

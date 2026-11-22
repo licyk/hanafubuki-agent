@@ -8,7 +8,7 @@ use hanafubuki_agent_foundation::agent_settings::{
     parse_model_request_header, validate_model_secret_value,
 };
 
-use crate::{ModelError, ModelHttpProxy};
+use crate::{ModelApiProtocol, ModelError, ModelHttpProxy};
 
 const MAX_DIAGNOSTIC_BYTES: usize = 4 * 1024;
 const MAX_REQUEST_ATTEMPTS: u32 = 10;
@@ -126,6 +126,21 @@ impl ModelEndpoint {
         self.join_endpoint("messages", "Anthropic Messages")
     }
 
+    pub(crate) fn generate_content_url(&self, model: &str) -> Result<Url, ModelError> {
+        let model = ModelApiProtocol::GeminiGenerateContent.model_id(model);
+        let mut endpoint = self.models_url()?;
+        endpoint
+            .path_segments_mut()
+            .map_err(|_| ModelError::InvalidRequest("invalid Gemini model endpoint".into()))?
+            .push(&format!("{model}:streamGenerateContent"));
+        set_query_parameter(&mut endpoint, "alt", "sse");
+        Ok(endpoint)
+    }
+
+    pub(crate) fn interactions_url(&self) -> Result<Url, ModelError> {
+        self.join_endpoint("interactions", "Gemini Interactions")
+    }
+
     pub(crate) fn models_url(&self) -> Result<Url, ModelError> {
         self.join_endpoint("models", "models")
     }
@@ -144,6 +159,20 @@ impl ModelEndpoint {
         endpoint.set_query(query.as_deref());
         Ok(endpoint)
     }
+}
+
+pub(crate) fn set_query_parameter(endpoint: &mut Url, name: &str, value: &str) {
+    let retained = endpoint
+        .query_pairs()
+        .filter(|(current, _)| current != name)
+        .map(|(name, value)| (name.into_owned(), value.into_owned()))
+        .collect::<Vec<_>>();
+    endpoint.set_query(None);
+    let mut query = endpoint.query_pairs_mut();
+    for (name, value) in retained {
+        query.append_pair(&name, &value);
+    }
+    query.append_pair(name, value);
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

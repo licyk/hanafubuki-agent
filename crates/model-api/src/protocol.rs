@@ -15,14 +15,28 @@ pub enum ModelApiProtocol {
     Responses,
     ChatCompletions,
     AnthropicMessages,
+    GeminiGenerateContent,
+    GeminiInteractions,
 }
 
 impl ModelApiProtocol {
+    /// Google uses resource names in its catalog and short ids in sampling.
+    pub(crate) fn model_id(self, model: &str) -> &str {
+        match self {
+            Self::GeminiGenerateContent | Self::GeminiInteractions => {
+                model.strip_prefix("models/").unwrap_or(model)
+            }
+            _ => model,
+        }
+    }
+
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Responses => "responses",
             Self::ChatCompletions => "chat_completions",
             Self::AnthropicMessages => "anthropic_messages",
+            Self::GeminiGenerateContent => "gemini_generate_content",
+            Self::GeminiInteractions => "gemini_interactions",
         }
     }
 
@@ -59,10 +73,9 @@ impl ModelApiProtocol {
                     hanafubuki_agent_tool_contracts::MultimodalToolOutputTransport::SyntheticUserMessage,
                 required_named_tool_choice: true,
             },
-            Self::AnthropicMessages => ToolProviderCapabilities {
+            Self::AnthropicMessages | Self::GeminiGenerateContent | Self::GeminiInteractions => ToolProviderCapabilities {
                 function_tools: true,
                 strict_json_schema: false,
-                // A client tool's name matches `^[a-zA-Z0-9_-]{1,128}$`.
                 maximum_tool_name_bytes: 128,
                 namespace_tools: false,
                 native_tool_search: false,
@@ -78,9 +91,10 @@ impl ModelApiProtocol {
 
     pub const fn structured_output_capability(self) -> ModelStructuredOutputCapability {
         match self {
-            Self::Responses | Self::ChatCompletions => {
-                ModelStructuredOutputCapability::NativeJsonSchema
-            }
+            Self::Responses
+            | Self::ChatCompletions
+            | Self::GeminiGenerateContent
+            | Self::GeminiInteractions => ModelStructuredOutputCapability::NativeJsonSchema,
             Self::AnthropicMessages => ModelStructuredOutputCapability::RequiredTool,
         }
     }
@@ -90,7 +104,10 @@ impl ModelApiProtocol {
     pub const fn supports_remote_compaction(self) -> bool {
         match self {
             Self::Responses => true,
-            Self::ChatCompletions | Self::AnthropicMessages => false,
+            Self::ChatCompletions
+            | Self::AnthropicMessages
+            | Self::GeminiGenerateContent
+            | Self::GeminiInteractions => false,
         }
     }
 }

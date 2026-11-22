@@ -28,6 +28,8 @@ fn protocol_capabilities_are_explicit_and_only_responses_has_extended_tools() {
     for protocol in [
         ModelApiProtocol::ChatCompletions,
         ModelApiProtocol::AnthropicMessages,
+        ModelApiProtocol::GeminiGenerateContent,
+        ModelApiProtocol::GeminiInteractions,
     ] {
         let capabilities = protocol.tool_capabilities();
         assert!(capabilities.function_tools);

@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 use hanafubuki_agent_compression::{is_rendered_summary, Message, Role};
+use hanafubuki_agent_model_api::{GeminiReplayPart, ModelReasoningReplay};
 use hanafubuki_agent_tool_contracts::{ToolOutput, ToolOutputContent};
 
 use super::*;
@@ -75,7 +76,8 @@ impl<'a> MessageLog<'a> {
     /// each summary it rendered at its place, as a summary item. Reasoning
     /// stays with the message after it: before it, after the summaries
     /// placed before it, and out of the view with it, since it is sent back
-    /// on that message.
+    /// on that message. A GenerateContent layout instead follows the model
+    /// response whose parts it describes.
     pub(super) fn apply_view(&self, view: &[Message]) -> Vec<ConversationItem> {
         let position: HashMap<&str, usize> = view
             .iter()
@@ -87,10 +89,16 @@ impl<'a> MessageLog<'a> {
             .iter()
             .map(|message| (message.id.as_str(), message))
             .collect();
+        let mut layouts = self.projected_layouts(view, &position, &originals);
         let mut projected = Vec::with_capacity(self.items.len());
         let mut reasoning = Vec::new();
         let mut next = 0;
-        for (item, id) in self.items.iter().zip(&self.ids) {
+        for (index, (item, id)) in self.items.iter().zip(&self.ids).enumerate() {
+            if matches!(&item.content, ConversationItem::Reasoning { replay: Some(replay), .. } if replay.is_part_layout())
+            {
+                projected.extend(layouts.remove(&index));
+                continue;
+            }
             let Some(id) = id else {
                 if matches!(item.content, ConversationItem::Reasoning { .. }) {
                     reasoning.push(item.content.clone());
@@ -116,10 +124,97 @@ impl<'a> MessageLog<'a> {
                 }
                 _ => item.content.clone(),
             });
+            projected.extend(layouts.remove(&index));
         }
         projected.append(&mut reasoning);
         projected.extend(view[next.min(view.len())..].iter().filter_map(summary_item));
         projected
+    }
+
+    /// GenerateContent's trailing layout describes the entire preceding model
+    /// response. A partial view can still echo an unchanged call's signature,
+    /// but must take its visible text from the view.
+    fn projected_layouts(
+        &self,
+        view: &[Message],
+        position: &HashMap<&str, usize>,
+        originals: &HashMap<&str, &Message>,
+    ) -> HashMap<usize, ConversationItem> {
+        let mut layouts = HashMap::new();
+        let mut start = 0;
+        for (index, item) in self.items.iter().enumerate() {
+            let (route, parts, step) = match &item.content {
+                ConversationItem::Reasoning {
+                    sampling_step,
+                    replay: Some(ModelReasoningReplay::GeminiGenerate { route, parts }),
+                    ..
+                } => (route, parts, *sampling_step),
+                ConversationItem::AssistantMessage { .. }
+                | ConversationItem::ToolCall { .. }
+                | ConversationItem::Reasoning { .. } => continue,
+                _ => {
+                    start = index + 1;
+                    continue;
+                }
+            };
+            let mut previous = None;
+            let mut intact = true;
+            for id in self.ids[start..index].iter().flatten() {
+                let Some(&at) = position.get(id.as_str()) else {
+                    intact = false;
+                    continue;
+                };
+                intact &= previous.is_none_or(|last| last + 1 == at)
+                    && view[at].text == originals[id.as_str()].text;
+                previous = Some(at);
+            }
+            if previous.is_some() && intact {
+                layouts.insert(index, item.content.clone());
+            } else if previous.is_some() {
+                for at in start..index {
+                    let ConversationItem::ToolCall { call_id, .. } = &self.items[at].content else {
+                        continue;
+                    };
+                    let Some(id) = self.ids[at].as_deref() else {
+                        continue;
+                    };
+                    let Some(&shown) = position.get(id) else {
+                        continue;
+                    };
+                    let binding = parts.iter().find(|part| {
+                        matches!(part, GeminiReplayPart::Call { call_id: id, .. } if id == call_id)
+                    });
+                    if let Some(GeminiReplayPart::Call {
+                        provider_id,
+                        signature,
+                        ..
+                    }) = binding
+                    {
+                        let same_args = view[shown].text == originals[id].text;
+                        let replay = ModelReasoningReplay::GeminiGenerate {
+                            route: route.clone(),
+                            parts: vec![GeminiReplayPart::Call {
+                                call_id: call_id.clone(),
+                                provider_id: provider_id.clone(),
+                                signature: if same_args { signature.clone() } else { None },
+                            }],
+                        };
+                        layouts.insert(
+                            at,
+                            ConversationItem::Reasoning {
+                                text: String::new(),
+                                duration_millis: 0,
+                                sampling_step: step,
+                                truncated: false,
+                                replay: Some(replay),
+                            },
+                        );
+                    }
+                }
+            }
+            start = index + 1;
+        }
+        layouts
     }
 }
 

@@ -2,6 +2,7 @@ use super::persistence::validate_turn_boundaries;
 use super::tool_pairs::interrupted_tool_output;
 use super::*;
 use crate::AgentCompactionCheckpoint;
+use hanafubuki_agent_model_api::ModelApiProtocol;
 
 fn item(value: serde_json::Value) -> ConversationItem {
     serde_json::from_value(value).unwrap()
@@ -28,9 +29,11 @@ fn prompt_projection_moves_a_late_interruption_output_next_to_its_call() {
         hanafubuki_agent_model_api::ModelToolCallOrigin::Function,
     );
 
-    let normalized =
-        normalized_tool_pairs_for_model(&[call.clone(), later_message.clone(), output.clone()])
-            .unwrap();
+    let normalized = normalized_tool_pairs_for_model(
+        &[call.clone(), later_message.clone(), output.clone()],
+        ModelApiProtocol::Responses,
+    )
+    .unwrap();
 
     assert_eq!(normalized, vec![call, output, later_message]);
 }
@@ -52,8 +55,11 @@ fn prompt_projection_inserts_an_output_for_an_unmatched_call() {
         "text": "continue after the failed tool"
     }));
 
-    let normalized =
-        normalized_tool_pairs_for_model(&[call.clone(), later_message.clone()]).unwrap();
+    let normalized = normalized_tool_pairs_for_model(
+        &[call.clone(), later_message.clone()],
+        ModelApiProtocol::Responses,
+    )
+    .unwrap();
 
     assert!(matches!(
         &normalized[1],
@@ -97,7 +103,7 @@ fn prompt_projection_keeps_parallel_results_together_without_rewriting_history()
         output("next"),
     ];
     let original = history.clone();
-    let projected = normalized_tool_pairs_for_model(&history).unwrap();
+    let projected = normalized_tool_pairs_for_model(&history, ModelApiProtocol::Responses).unwrap();
     assert_eq!(
         projected,
         vec![
@@ -115,7 +121,7 @@ fn prompt_projection_keeps_parallel_results_together_without_rewriting_history()
     );
     assert_eq!(history, original);
     assert_eq!(
-        normalized_tool_pairs_for_model(&projected).unwrap(),
+        normalized_tool_pairs_for_model(&projected, ModelApiProtocol::Responses).unwrap(),
         projected
     );
 }

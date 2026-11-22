@@ -136,7 +136,7 @@ Kardia 0.3 的恢复策略保持默认的 `Manual`，包括已安装 Guest 的 l
 - 内部模型请求遵循相同的身份规则。没有命名空间的强制结果工具（标题、回顾、记忆提取）和记忆工作区工具只接受对应的精确顶层名称。权限审查不提供工具，并拒绝工具调用形式的回答。纯文本结构化请求附带完整输出 schema；审批的严格解析规则不变。
 - 工具的名字是它的 `ToolName`（命名空间段与本地名）。注册表与规划器按扁平形式（`namespace__name`）索引它，这个字符串从不被反向解析。
 - `ToolRegistry::admit` 拒绝扁平名是保留名、已经注册或长于工具 ID（128 字节）的注册。`RegistrationError` 让注册的插件在启动时失败，什么都不注册；其他插件和轮次不受影响。
-- 线路名按请求决定：`assign_provider_names` 在为步骤的协议构建计划时把它写进每个计划工具的提供者规格。协议接受命名空间时（Responses），带命名空间的函数保留命名空间与本地名；其他情况，以及命名空间已被另一个提供者使用时，名字被扁平化。每个名字适配到 `ToolProviderCapabilities::maximum_tool_name_bytes`（Responses 128，按 `namespace__name` 计；Anthropic Messages 128；Chat Completions 64，OpenAI 的函数名上限）。
+- 线路名按请求决定：`assign_provider_names` 在为步骤的协议构建计划时把它写进每个计划工具的提供者规格。协议接受命名空间时（Responses），带命名空间的函数保留命名空间与本地名；其他情况，以及命名空间已被另一个提供者使用时，名字被扁平化。每个名字适配到 `ToolProviderCapabilities::maximum_tool_name_bytes`（Responses 128，按 `namespace__name` 计；Anthropic Messages 和两种 Gemini 原生协议 128；Chat Completions 64，OpenAI 的函数名上限）。
 - 名字按扁平形式唯一，`tool_search`、`search_tools` 和 `tool_list` 为计划的工具发现保留。按规划顺序（信任，然后名字、提供者 ID、工具 ID）第一个工具保留名字；之后冲突或过长的被截断，并以 `_` 加它 `(provider id, tool id)` 哈希的 12 位十六进制结尾，每一步都相同。冲突（只有工具源的工具会冲突，因为注册拒绝其他的）在 `tool_catalog_omissions` 中以“renamed to `<name>`”报告，工具仍被规划。名字从不让步骤失败。
 - 返回的调用按它的 `(namespace, name)` 在计划中查找解析（`AgentToolPlan::resolve_call`）；请求中没有的名字是未知工具。解码器把提供者的命名空间与名字分开返回，历史记录两者，所以 Responses 以命名空间回放调用，没有命名空间的协议以 `namespace__name` 回放。
 - schema 按同样的按协议规则降级：设置了 `strict_json_schema` 能力的协议（Responses）收到完整 schema；没有的收到可移植的关键字（`portable_model_schema`）。工具从不发送 `strict`。内核无论如何按完整 schema 校验参数。

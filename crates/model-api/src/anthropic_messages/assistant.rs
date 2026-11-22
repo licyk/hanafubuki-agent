@@ -63,6 +63,8 @@ fn thinking_block(block: &ModelReasoningReplay) -> Option<Value> {
         ModelReasoningReplay::RedactedThinking { data } => {
             Some(json!({"type": "redacted_thinking", "data": data}))
         }
-        ModelReasoningReplay::ReasoningContent { .. } => None,
+        ModelReasoningReplay::ReasoningContent { .. }
+        | ModelReasoningReplay::GeminiGenerate { .. }
+        | ModelReasoningReplay::GeminiInteractionsThought { .. } => None,
     }
 }

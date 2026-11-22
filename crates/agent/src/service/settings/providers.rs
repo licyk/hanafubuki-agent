@@ -50,6 +50,8 @@ fn fields() -> Vec<SettingSpec> {
                     protocol(AgentModelProtocol::Responses, "Responses"),
                     protocol(AgentModelProtocol::ChatCompletions, "Chat Completions"),
                     protocol(AgentModelProtocol::AnthropicMessages, "Anthropic Messages"),
+                    protocol(AgentModelProtocol::GeminiGenerateContent, "Gemini GenerateContent"),
+                    protocol(AgentModelProtocol::GeminiInteractions, "Gemini Interactions"),
                 ],
             },
         ),

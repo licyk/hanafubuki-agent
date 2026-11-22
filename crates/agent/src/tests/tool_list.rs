@@ -2,6 +2,7 @@
 //! Responses' native search path and both function-search fallbacks.
 
 use super::*;
+use crate::test_support::{gemini_content_events, gemini_interaction_events};
 use serde_json::Value;
 
 #[tokio::test]
@@ -11,6 +12,8 @@ async fn listing_names_is_visible_without_admitting_mcp_tools_on_every_protocol(
         (AgentModelProtocol::Responses, true),
         (AgentModelProtocol::ChatCompletions, false),
         (AgentModelProtocol::AnthropicMessages, false),
+        (AgentModelProtocol::GeminiGenerateContent, false),
+        (AgentModelProtocol::GeminiInteractions, false),
     ] {
         let mcp = ScriptedMcpServers::start(BTreeMap::from([(
             "fixture",
@@ -43,6 +46,14 @@ async fn listing_names_is_visible_without_admitting_mcp_tools_on_every_protocol(
             AgentModelProtocol::AnthropicMessages => {
                 anthropic_assistant_events("Listed, discovered and called.")
             }
+            AgentModelProtocol::GeminiGenerateContent => {
+                gemini_content_events(json!({"text":"Listed, discovered and called."}))
+            }
+            AgentModelProtocol::GeminiInteractions => gemini_interaction_events(
+                json!({"type":"model_output"}),
+                json!({"type":"text","text":"Listed, discovered and called."}),
+                "completed",
+            ),
         };
         let model = FakeServer::start(vec![
             (
@@ -119,17 +130,19 @@ async fn listing_names_is_visible_without_admitting_mcp_tools_on_every_protocol(
             }
         }
         let listed = output(protocol, &bodies[1], "list");
-        let listed_text = match &listed {
-            Value::String(text) => text.as_str(),
-            Value::Array(content) => content[0]["text"].as_str().unwrap(),
-            _ => panic!("unexpected output: {listed}"),
+        let first = match &listed {
+            Value::Array(content) => &content[0],
+            value => value,
         };
-        // Notes can follow the JSON in a plain-text protocol output.
-        let page: Value = serde_json::Deserializer::from_str(listed_text)
-            .into_iter::<Value>()
-            .next()
-            .unwrap()
-            .unwrap();
+        let page = match first.as_str().or_else(|| first["text"].as_str()) {
+            // Notes can follow the JSON in a plain-text protocol output.
+            Some(text) => serde_json::Deserializer::from_str(text)
+                .into_iter::<Value>()
+                .next()
+                .unwrap()
+                .unwrap(),
+            None => first.clone(),
+        };
         // Chat Completions preserves the structured tool-result envelope.
         let page = page.get("structuredContent").unwrap_or(&page);
         let expected_names = std::iter::once("mcp__fixture__echo".to_string())
@@ -194,6 +207,8 @@ fn call(protocol: AgentModelProtocol, id: &str, name: &str, arguments: Value) ->
         }
         AgentModelProtocol::ChatCompletions => format!("data: {}\n\ndata: [DONE]\n\n", json!({"id":format!("response-{id}"),"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":id,"type":"function","function":{"name":name,"arguments":arguments.to_string()}}]},"finish_reason":"tool_calls"}]})).into_bytes(),
         AgentModelProtocol::AnthropicMessages => String::from_utf8(anthropic_tool_events(name, &arguments.to_string())).unwrap().replace("toolu-1", id).into_bytes(),
+        AgentModelProtocol::GeminiGenerateContent => gemini_content_events(json!({"functionCall":{"id":id,"name":name,"args":arguments},"thoughtSignature":"c2ln"})),
+        AgentModelProtocol::GeminiInteractions => gemini_interaction_events(json!({"type":"function_call","id":id,"name":name,"arguments":{}}), json!({"type":"arguments_delta","arguments":arguments.to_string()}), "requires_action"),
     }
 }
 
@@ -221,6 +236,28 @@ fn output(protocol: AgentModelProtocol, request: &Value, id: &str) -> Value {
             .flatten()
             .find(|item| item["type"] == "tool_result" && item["tool_use_id"] == id)
             .unwrap()["content"]
+            .clone(),
+        AgentModelProtocol::GeminiGenerateContent => {
+            let response = request["contents"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|message| message["parts"].as_array())
+                .flatten()
+                .map(|part| &part["functionResponse"])
+                .find(|response| response["id"] == id)
+                .unwrap();
+            response["response"]
+                .get("output")
+                .unwrap_or(&response["response"]["error"])
+                .clone()
+        }
+        AgentModelProtocol::GeminiInteractions => request["input"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|step| step["type"] == "function_result" && step["call_id"] == id)
+            .unwrap()["result"]
             .clone(),
     }
 }

@@ -111,6 +111,19 @@ async fn the_local_catalog_reads_every_owner_and_includes_editable_secrets() {
     );
     let providers = collection(&catalog, "providers");
     assert_eq!(providers.revision, Some(2));
+    let field = providers
+        .record
+        .iter()
+        .find(|spec| spec.key == "protocol")
+        .unwrap();
+    let SettingKind::Choice { values } = &field.kind else {
+        panic!("protocol must be selectable")
+    };
+    for protocol in ["gemini_generate_content", "gemini_interactions"] {
+        assert!(values
+            .iter()
+            .any(|choice| choice.value == protocol && choice.disabled.is_none()));
+    }
     let provider = &providers.records[0];
     assert_eq!(provider.state.as_deref(), Some("default"));
     assert_eq!(

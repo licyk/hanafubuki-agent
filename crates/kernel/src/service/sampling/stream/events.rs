@@ -342,6 +342,24 @@ impl AgentService {
         event_sink: &dyn AgentEventSink,
     ) -> Result<(), AgentError> {
         require_response_started(&response.started_response_id)?;
+        let item = match item {
+            ModelOutputItem::Reasoning {
+                item_id,
+                replay: Some(layout),
+                ..
+            } if layout.is_part_layout() => {
+                validate_bounded_identifier(&item_id)?;
+                if response.pending_items.contains_key(&item_id) {
+                    return Err(AgentError::Protocol("duplicate model replay item".into()));
+                }
+                response.item_order.push(item_id.clone());
+                response
+                    .pending_items
+                    .insert(item_id, PendingModelItem::PartLayout(layout));
+                return Ok(());
+            }
+            item => item,
+        };
         // A provider that completes an item it never announced has still
         // sent the whole item: start it here, then complete it as usual.
         if let Some(start) = unannounced_item_start(response, &item) {

@@ -112,6 +112,10 @@ pub(crate) fn transcript(
                 })
             }
             ConversationItem::Reasoning {
+                replay: Some(replay),
+                ..
+            } if replay.is_part_layout() => {}
+            ConversationItem::Reasoning {
                 text,
                 duration_millis,
                 truncated,

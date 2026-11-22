@@ -27,6 +27,19 @@ fn a_key_never_exposes_the_endpoint_or_its_query() {
 }
 
 #[test]
+fn googles_resource_name_and_short_id_share_the_same_route() {
+    for protocol in [
+        ModelApiProtocol::GeminiGenerateContent,
+        ModelApiProtocol::GeminiInteractions,
+    ] {
+        assert_eq!(
+            key(protocol, "https://one.test/v1", "models/flash"),
+            key(protocol, "https://one.test/v1", "flash")
+        );
+    }
+}
+
+#[test]
 fn a_route_is_its_protocol_canonical_endpoint_and_trimmed_model() {
     let route = key(ModelApiProtocol::Responses, "https://one.test/v1", "model");
     assert_eq!(

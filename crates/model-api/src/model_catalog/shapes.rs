@@ -40,6 +40,7 @@ const CONTEXT_WINDOW_FIELDS: &[&[&str]] = &[
 
 /// Anthropic's `max_tokens` is the largest output it accepts.
 const MAX_OUTPUT_FIELDS: &[&[&str]] = &[
+    &["outputTokenLimit"],
     &["max_output_tokens"],
     &["max_completion_tokens"],
     &["maxTokens"],
@@ -61,6 +62,7 @@ const IMAGE_INPUT_FLAGS: &[&[&str]] = &[
 
 const REASONING_FLAGS: &[&[&str]] = &[
     &["reasoning"],
+    &["thinking"],
     &["capabilities", "reasoning"],
     &["capabilities", "thinking"],
 ];

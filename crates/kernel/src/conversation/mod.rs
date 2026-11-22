@@ -370,6 +370,7 @@ impl Serialize for AgentTranscriptPage {
         let items = self
             .items
             .iter()
+            .filter(|item| !matches!(&item.content, ConversationItem::Reasoning { replay: Some(replay), .. } if replay.is_part_layout()))
             .cloned()
             .map(|mut item| {
                 match &mut item.content {

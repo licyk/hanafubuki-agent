@@ -116,6 +116,8 @@ pub enum AgentModelProtocol {
     Responses,
     ChatCompletions,
     AnthropicMessages,
+    GeminiGenerateContent,
+    GeminiInteractions,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

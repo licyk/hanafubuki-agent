@@ -6,8 +6,10 @@ mod support;
 
 use std::time::Duration;
 
-use hanafubuki_agent::test_support::{reasoning_answer_events, FakeServer};
-use serde_json::Value;
+use hanafubuki_agent::test_support::{
+    gemini_content_events, gemini_interaction_events, reasoning_answer_events, FakeServer,
+};
+use serde_json::{json, Value};
 use support::Home;
 
 #[test]
@@ -159,6 +161,67 @@ fn config_get_and_set_check_a_plugin_option_against_its_plugin() {
         "2"
     );
     assert_eq!(get(&["-p", "ci", "config", "get", key]), "2");
+}
+
+#[test]
+fn gemini_protocols_round_trip_through_provider_commands() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    for (protocol, label, reply, path) in [
+        (
+            "gemini-generate-content",
+            "GeminiGenerateContent",
+            gemini_content_events(json!({"text":"Confirmed."})),
+            "/v1/edge/models/flash:streamGenerateContent?alt=sse",
+        ),
+        (
+            "gemini-interactions",
+            "GeminiInteractions",
+            gemini_interaction_events(
+                json!({"type":"model_output"}),
+                json!({"type":"text","text":"Confirmed."}),
+                "completed",
+            ),
+            "/v1/edge/interactions",
+        ),
+    ] {
+        let home = Home::new();
+        home.run(&["config", "set", "modelMetadata.discovery", "off"])
+            .expect(0);
+        let server = runtime.block_on(FakeServer::start(vec![(reply, Duration::ZERO)]));
+        home.run(&[
+            "providers",
+            "add",
+            label,
+            "--base-url",
+            &format!("{}/edge", server.base_url),
+            "--protocol",
+            protocol,
+        ])
+        .expect(0);
+        assert!(home
+            .file("providers.toml")
+            .contains(&protocol.replace('-', "_")));
+        let list = home.run(&["providers", "list"]).expect(0).stdout();
+        assert!(list.contains(&format!("  {label}")), "{list}");
+        home.run(&[
+            "providers",
+            "default",
+            "provider-1",
+            "--model",
+            "models/flash",
+        ])
+        .expect(0);
+        let answer = home.run(&["exec", "Confirm."]);
+        let requests = server.requests();
+        assert_eq!(
+            requests.iter().map(|r| r.path.as_str()).collect::<Vec<_>>(),
+            [path],
+            "{protocol}: {}",
+            answer.stderr()
+        );
+        let answer = answer.expect(0).stdout();
+        assert!(answer.contains("Confirmed."), "{answer}");
+    }
 }
 
 #[test]

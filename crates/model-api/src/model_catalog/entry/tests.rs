@@ -2,6 +2,10 @@ use serde_json::json;
 
 use super::*;
 
+fn decode_entry(item: &Value) -> Option<ModelCatalogEntry> {
+    super::decode_entry(ModelApiProtocol::Responses, item)
+}
+
 #[test]
 fn an_entry_without_a_usable_id_is_left_out() {
     for item in [

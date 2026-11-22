@@ -30,7 +30,7 @@ impl ModelEndpointKey {
     pub fn route(&self, model: &str) -> ModelRouteKey {
         ModelRouteKey {
             endpoint: self.clone(),
-            model: model.trim().to_string(),
+            model: self.protocol.model_id(model.trim()).to_string(),
         }
     }
 }

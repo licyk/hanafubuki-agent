@@ -299,6 +299,10 @@ pub(super) fn configured_model(
             .map(|transport| Arc::new(transport) as Arc<dyn ModelPort>),
         ModelApiProtocol::AnthropicMessages => AnthropicMessagesModelTransport::new(provider)
             .map(|transport| Arc::new(transport) as Arc<dyn ModelPort>),
+        ModelApiProtocol::GeminiGenerateContent | ModelApiProtocol::GeminiInteractions => {
+            hanafubuki_agent_model_api::GeminiModelTransport::new(provider, protocol)
+                .map(|transport| Arc::new(transport) as Arc<dyn ModelPort>)
+        }
     }
     .map_err(|error| AgentError::InvalidInput(error.to_string()))
 }

@@ -185,7 +185,10 @@ fn regular_model_request(
     let visible_items = record.conversation.history.clone();
     let (visible_history, trailing, compression, compression_instructions) =
         projected_history(record, &visible_items);
-    let normalized_history = normalized_tool_pairs_for_model(&visible_history)?;
+    let normalized_history = normalized_tool_pairs_for_model(
+        &visible_history,
+        record.settings.config.provider_protocol,
+    )?;
     // A turn's reasoning blocks go back within it (after its `TurnStart`);
     // those that outlive their turn go back from every turn.
     let turn_start = normalized_history

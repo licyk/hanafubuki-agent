@@ -91,10 +91,8 @@ pub enum ModelInputItem {
         phase: Option<ModelMessagePhase>,
         text: String,
     },
-    /// A reasoning block the provider asks to have sent back with the
-    /// assistant message after it: Anthropic Messages sends its own blocks
-    /// (with manual thinking only), Chat Completions its `reasoning_content`;
-    /// each protocol leaves out the others'.
+    /// Provider-owned replay associated with a model response. The native
+    /// transport restores signed parts and steps at their wire positions.
     Reasoning {
         replay: super::ModelReasoningReplay,
     },
