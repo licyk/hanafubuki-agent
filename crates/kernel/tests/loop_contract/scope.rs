@@ -157,6 +157,7 @@ async fn the_kernels_tools_and_tool_search_survive_any_scope() {
                 "update_plan",
                 "new_context",
                 "request_user_input",
+                "request_user_input_async",
             ]),
         },
         ..AgentCapabilityScope::default()
@@ -175,6 +176,7 @@ async fn the_kernels_tools_and_tool_search_survive_any_scope() {
         [
             "new_context",
             "request_user_input",
+            "request_user_input_async",
             "search_tools",
             "tool_list",
             "update_plan"

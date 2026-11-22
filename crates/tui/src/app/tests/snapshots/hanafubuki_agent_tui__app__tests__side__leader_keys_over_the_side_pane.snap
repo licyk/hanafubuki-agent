@@ -3,18 +3,18 @@ source: crates/tui/src/app/tests/side.rs
 expression: harness.snapshot_screen()
 ---
  Main conversation                                             │ Side · ctrl-x x or /close closes
-╭──────────────────────────────╮                               │┌ ctrl-x ──────────────────────────┐
-│ >_ hanafubuki-agent (v0.1.0) │                               ││ left   main conversation         │
-│                              │                               ││ right  side pane                 │
-│ model:     fixture-model     │                               ││ tab    other pane                │
-│ directory: /project          │                               ││ <      divider left              │
-╰──────────────────────────────╯                               ││ >      divider right             │
-                                                               ││ =      equal widths              │
-› Hello.                                                       ││ z      zoom pane                 │
+╭──────────────────────────────╮                               │ What is 2…×                     +
+│ >_ hanafubuki-agent (v0.1.0) │                               │┌ ctrl-x ──────────────────────────┐
+│                              │                               ││ left   main conversation         │
+│ model:     fixture-model     │                               ││ right  side pane                 │
+│ directory: /project          │                               ││ tab    other pane                │
+╰──────────────────────────────╯                               ││ <      divider left              │
+                                                               ││ >      divider right             │
+› Hello.                                                       ││ =      equal widths              │
+                                                               ││ z      zoom pane                 │
                                                                ││ x      close the side pane       │
-                                                               │└──────────────────────────────────┘
-• Hi.                                                          │• Four.
-                                                               │
+• Hi.                                                          │└──────────────────────────────────┘
+                                                               │• Four.
                                                                │
                                                                │
                                                                │

@@ -300,6 +300,7 @@ fn waiting_messages_show_between_the_status_and_the_composer() {
         held: Vec::new(),
         queued: vec!["Then update the docs.".to_string()],
         steer_is_editable: true,
+        ..Default::default()
     });
     pane.set_composer_text("A draft".to_string());
     let width = 60;
@@ -321,6 +322,7 @@ fn consumed_messages_release_their_rows_while_the_turn_keeps_running() {
         held: Vec::new(),
         queued: Vec::new(),
         steer_is_editable: false,
+        ..Default::default()
     };
     pane.set_pending_input(steer("Check the tests first."));
     let waiting = pane.desired_height(width);

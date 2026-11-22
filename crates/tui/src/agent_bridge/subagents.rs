@@ -77,6 +77,53 @@ impl AgentBridge {
         None
     }
 
+    pub(crate) fn list_sidebar_sessions(&self, parent: AgentSessionId) {
+        let agent = self.agent.clone();
+        let sender = self.app_event_tx.untagged();
+        self.agent.runtime().handle().spawn(async move {
+            let for_history = agent.clone();
+            let saved =
+                tokio::task::spawn_blocking(move || for_history.saved_side_conversations(parent))
+                    .await
+                    .map_err(|err| err.to_string())
+                    .and_then(|result| result.map_err(|err| err.to_string()))
+                    .map(|chats| {
+                        chats
+                            .into_iter()
+                            .map(|chat| {
+                                (
+                                    chat.session_id,
+                                    chat.title.map_or_else(
+                                        || format!("Side chat {}", chat.session_id),
+                                        |title| title.value,
+                                    ),
+                                )
+                            })
+                            .collect()
+                    });
+            let agents = navigation_agents(&agent, parent)
+                .await
+                .map(|agents| {
+                    agents
+                        .into_iter()
+                        .skip(1)
+                        .map(|agent| {
+                            (
+                                agent.session_id,
+                                format!("{} · {:?}", agent.title, agent.status),
+                            )
+                        })
+                        .collect()
+                })
+                .map_err(subagents_error);
+            sender.send(AppEvent::Workspace(WorkspaceEvent::SidebarSessions {
+                parent,
+                saved,
+                agents,
+            }));
+        });
+    }
+
     /// The subagents of `parent`, read off the interface's thread, for
     /// Alt+Left or Alt+Right (`forward`) to step through.
     pub(crate) fn list_subagents_to_step(&self, parent: AgentSessionId, forward: bool) {

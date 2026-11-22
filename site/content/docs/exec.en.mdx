@@ -91,6 +91,8 @@ The [permission mode](/docs/permissions) decides which tool calls need an approv
 
 `ask` needs both standard input and standard error to be a terminal; otherwise it denies. Each answer is printed as a line such as `· approval denied: exec_command: Run ...`.
 
+Optional questions (`request_user_input_async`) are printed as notes and appear as `async_questions_asked` in the JSON stream. They do not read standard input or change the exit code.
+
 The model may also ask you a question (to choose between approaches, say). `exec` prints the question and its options on standard error, and you answer with an option's number. Without a terminal, or without a valid answer, `exec` cancels the turn and exits with 3.
 
 <Callout type="warn" title="Allow with care">

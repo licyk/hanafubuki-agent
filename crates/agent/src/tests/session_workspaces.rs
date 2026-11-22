@@ -277,3 +277,96 @@ async fn clipboard_images_are_normalized_staged_and_readable_without_a_file_path
     );
     let _ = std::fs::remove_dir_all(paths.app_data_dir);
 }
+
+#[tokio::test]
+async fn workspace_browser_uses_all_bound_roots_and_filters_protected_and_outside_children() {
+    use hanafubuki_agent_foundation::paths::PathKey;
+    let parent = tempfile::tempdir().unwrap();
+    let extra = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let secret = parent.path().join("private");
+    std::fs::create_dir(&secret).unwrap();
+    std::fs::write(secret.join("credential"), "protected").unwrap();
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(outside.path(), parent.path().join("external")).unwrap();
+        std::os::unix::fs::symlink(&secret, parent.path().join("alias")).unwrap();
+    }
+    let (service, paths, _) = service_with_host(
+        "file-browser",
+        |paths| {
+            let mut host = test_host(paths);
+            host.workspace = Arc::new(FixedWorkspaceRoots {
+                roots: agent_workspace_roots_from([parent.path().to_owned()]).unwrap(),
+                protected_roots: vec![secret.clone()],
+            });
+            host
+        },
+        |_, cfg| configure_test_provider(cfg, "http://127.0.0.1:1/v1", None),
+    );
+    let id = service
+        .create_session_with_workspaces(
+            AgentSessionMode::Default,
+            None,
+            vec![
+                parent.path().to_string_lossy().into_owned(),
+                extra.path().to_string_lossy().into_owned(),
+            ],
+        )
+        .await
+        .unwrap()
+        .id;
+    std::fs::write(parent.path().join("main.txt"), "hello").unwrap();
+    let sibling = extra.path().join("extra.txt");
+    std::fs::write(&sibling, "next").unwrap();
+    let entries = service
+        .browse_workspace_directory(Some(id), parent.path())
+        .unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].path.file_name().unwrap(), "main.txt");
+    assert_eq!(
+        service
+            .read_workspace_document(Some(id), std::path::Path::new("main.txt"), 5)
+            .unwrap()
+            .bytes,
+        b"hello"
+    );
+    assert!(service
+        .read_workspace_document(Some(id), std::path::Path::new("main.txt"), 4)
+        .is_err());
+    let read = service
+        .read_workspace_document(Some(id), &sibling, 4)
+        .unwrap();
+    assert_eq!(PathKey::of(&read.path), PathKey::of(&sibling));
+    assert!(service
+        .read_workspace_document(Some(id), &secret.join("credential"), 100)
+        .is_err());
+    assert!(service
+        .browse_workspace_directory(Some(id), outside.path())
+        .is_err());
+    assert!(service
+        .read_workspace_document(None, &sibling, 100)
+        .is_err());
+    let (tx, rx) = std::sync::mpsc::channel();
+    let _watch = service
+        .watch_workspace_document(Some(id), &sibling, move || {
+            let _ = tx.send(());
+        })
+        .unwrap();
+    let replacement = extra.path().join("replacement");
+    std::fs::write(&replacement, "changed").unwrap();
+    std::fs::rename(replacement, &sibling).unwrap();
+    rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert_eq!(
+        service
+            .read_workspace_document(Some(id), &sibling, 7)
+            .unwrap()
+            .bytes,
+        b"changed"
+    );
+    assert_eq!(
+        service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
+        []
+    );
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}

@@ -225,6 +225,11 @@ impl AgentService {
                 AgentEventKind::SteeringConsumed {
                     first_sequence,
                     through_sequence,
+                    answered_questions: pending
+                        .iter()
+                        .flat_map(|input| crate::AgentAsyncQuestionReply::from_message(&input.text))
+                        .map(|reply| reply.question_item_id)
+                        .collect(),
                     item_count: items.len(),
                 },
                 self.inner.limits,

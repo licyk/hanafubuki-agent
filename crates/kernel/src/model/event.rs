@@ -159,6 +159,10 @@ pub enum AgentEventKind {
     TaskPlanUpdated {
         plan: AgentTaskPlanSnapshot,
     },
+    AsyncQuestionsAsked {
+        call_id: String,
+        questions: Vec<AgentAsyncQuestion>,
+    },
     UserInputRequested {
         request: AgentUserInputRequest,
     },
@@ -198,6 +202,8 @@ pub enum AgentEventKind {
     SteeringConsumed {
         first_sequence: AgentSteeringSequence,
         through_sequence: AgentSteeringSequence,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        answered_questions: Vec<String>,
         item_count: usize,
     },
     ModelRetryScheduled {

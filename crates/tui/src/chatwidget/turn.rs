@@ -76,6 +76,7 @@ impl ChatWidget {
             TurnUpdate::ApprovalResolved(request_id) => {
                 self.bottom_pane.dismiss_approval(request_id)
             }
+            TurnUpdate::AsyncQuestions(call, questions) => self.receive_async_questions(call, questions),
             TurnUpdate::UserInputRequested(request) => {
                 self.bottom_pane.push_user_input_request(request)
             }
@@ -83,7 +84,10 @@ impl ChatWidget {
                 self.bottom_pane.dismiss_user_input(request_id)
             }
             TurnUpdate::Steered { id, outcome } => self.on_steered(id, outcome),
-            TurnUpdate::SteeringConsumed(through) => self.on_steering_consumed(through),
+            TurnUpdate::SteeringConsumed(through, answered) => {
+                self.resolve_async_questions(&answered);
+                self.on_steering_consumed(through);
+            }
             TurnUpdate::Undelivered(text) => self.on_undelivered(text),
             TurnUpdate::Retry(header) => {
                 self.retry_status_header = Some(header.clone());
@@ -326,6 +330,7 @@ impl ChatWidget {
                 status.and_then(StatusIndicatorWidget::thinking_duration),
             ));
         }
+        self.finish_async_questions();
         self.bottom_pane.dismiss_all_requests();
         self.bottom_pane.set_task_running(false);
         self.retry_status_header = None;
@@ -371,7 +376,7 @@ fn adds_entry(update: &TurnUpdate) -> bool {
         update,
         TurnUpdate::ReasoningStarted(_)
             | TurnUpdate::ToolStarted { .. }
-            | TurnUpdate::SteeringConsumed(_)
+            | TurnUpdate::SteeringConsumed(..)
             | TurnUpdate::Work(_)
             | TurnUpdate::CompressionFailed(_)
             | TurnUpdate::ContextWindowLearned(_)

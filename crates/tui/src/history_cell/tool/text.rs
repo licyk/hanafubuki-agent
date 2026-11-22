@@ -47,7 +47,11 @@ fn command_title(call: &ToolCall, verb: &str, failed: bool) -> View {
 pub(super) fn view(call: &ToolCall, failed: bool, lines: Vec<String>, extent: Extent) -> View {
     let summary = matches!(
         call.name.as_str(),
-        "request_user_input" | "create_goal" | "get_goal" | "update_goal"
+        "request_user_input"
+            | "request_user_input_async"
+            | "create_goal"
+            | "get_goal"
+            | "update_goal"
     );
     let shown = if call.name == COMPRESS {
         1
@@ -117,8 +121,8 @@ fn named(call: &ToolCall) -> Vec<Span<'static>> {
 
 fn operation_title(call: &ToolCall, running: bool) -> Option<Vec<Span<'static>>> {
     let verb = match (call.name.as_str(), running) {
-        ("request_user_input", true) => "Asking user",
-        ("request_user_input", false) => "Asked user",
+        ("request_user_input" | "request_user_input_async", true) => "Asking user",
+        ("request_user_input" | "request_user_input_async", false) => "Asked user",
         ("create_goal", true) => "Creating goal",
         ("create_goal", false) => "Created goal",
         ("get_goal", true) => "Reading goal",

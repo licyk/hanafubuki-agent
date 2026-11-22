@@ -101,6 +101,7 @@ impl AgentService {
                 session_revision: crate::AgentRevision::new(record.status.revision),
                 sampling_step: 1,
                 mode: record.settings.config.mode,
+                async_user_input: record.offers_async_user_input(),
                 input_capabilities: record.settings.effective_input_capabilities,
                 provider_capabilities: model.tool_capabilities(),
                 selected_deferred_tools: BTreeSet::new(),

@@ -118,6 +118,33 @@ fn the_thinking_time_goes_to_stderr_without_its_text() {
 }
 
 #[test]
+fn async_questions_in_exec_json_do_not_wait_for_a_terminal() {
+    let questions =
+        serde_json::json!([{"title":"Scope?", "options":["Tests"]}, {"title":"Anything else?"}]);
+    let model = Model::start(vec![
+        tool_events(
+            "request_user_input_async",
+            &serde_json::json!({"questions":questions}).to_string(),
+        ),
+        assistant_events("Continued."),
+    ]);
+    let home = Home::new().with_provider(&model.server.base_url);
+    let run = home
+        .run(&["exec", "--json", "Ask while working."])
+        .expect(0);
+    let event = run
+        .stdout()
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .find(|v| v["kind"]["type"] == "async_questions_asked")
+        .unwrap();
+    assert_eq!(event["kind"]["callId"], "call-tool");
+    assert_eq!(event["kind"]["questions"], questions);
+    assert!(run.stderr().contains("Scope?"));
+    assert_eq!(model.request_count(), 2);
+}
+
+#[test]
 fn json_prints_one_event_per_line_ending_with_the_completion() {
     let model = Model::start(vec![assistant_events("Lines.")]);
     let home = Home::new().with_provider(&model.server.base_url);

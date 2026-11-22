@@ -93,7 +93,7 @@ fn lineage_pages_share_parent_records_and_require_closed_batch_delete() {
     store
         .create_fork(
             parent,
-            AgentTurnId::new(2),
+            AgentHistoryForkPoint::BeforeTurn(AgentTurnId::new(2)),
             AgentConversationCommit {
                 runtime: child_runtime,
                 history_mutations: vec![AgentHistoryMutation::AppendItem {

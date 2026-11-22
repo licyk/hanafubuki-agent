@@ -369,10 +369,14 @@ impl AgentBridge {
         &self,
         session_id: AgentSessionId,
     ) -> Result<(OpenedSession, AgentSessionRuntimeSnapshot), String> {
-        let opened = self
+        let mut opened = self
             .agent
             .open_session(session_id, self.page_size)
             .map_err(|error| format!("the session was not opened: {error}"))?;
+        let side = opened.runtime.origin == Some(hanafubuki_agent::AgentSessionOrigin::Side);
+        if side {
+            keep_side_history(&mut opened.transcript, session_id);
+        }
         let items = opened
             .transcript
             .items
@@ -398,6 +402,7 @@ impl AgentBridge {
                     session_id,
                     cursor,
                     through_revision: opened.through_revision,
+                    side,
                 }),
         };
         Ok((session, opened.runtime))
@@ -409,7 +414,7 @@ impl AgentBridge {
         &self,
         older: &OlderTranscript,
     ) -> Result<(Vec<ReplayedItem>, Option<OlderTranscript>), String> {
-        let page = self
+        let mut page = self
             .agent
             .read_transcript_page(AgentTranscriptPageRequest {
                 session_id: older.session_id,
@@ -419,6 +424,9 @@ impl AgentBridge {
                 through_revision: Some(older.through_revision),
             })
             .map_err(|error| format!("earlier messages were not read: {error}"))?;
+        if older.side {
+            keep_side_history(&mut page, older.session_id);
+        }
         let items = page
             .items
             .into_iter()
@@ -440,6 +448,18 @@ impl AgentBridge {
         self.agent
             .snapshot(session_id)
             .map_err(|error| error.to_string())
+    }
+}
+
+// Side chats show their own exchange; the model also reads their inherited history.
+fn keep_side_history(page: &mut hanafubuki_agent::AgentTranscriptPage, id: AgentSessionId) {
+    if let Some(boundary) = page
+        .items
+        .iter()
+        .position(|item| item.source_session_id != id)
+    {
+        page.items.truncate(boundary);
+        page.older_cursor = None;
     }
 }
 

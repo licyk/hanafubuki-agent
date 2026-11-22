@@ -146,7 +146,8 @@ impl AgentActivityTracker {
                 None,
                 now,
             ),
-            AgentEventKind::UserInputResolved { resolution: _ } => None,
+            AgentEventKind::UserInputResolved { .. }
+            | AgentEventKind::AsyncQuestionsAsked { .. } => None,
             AgentEventKind::ApprovalRequested { request } => {
                 Some(self.start_approval(request, now))
             }
@@ -296,14 +297,10 @@ impl AgentActivityTracker {
                     } if source_provider == provider_id && source_hook == hook_id
                 )
             },
-            if matches!(
+            outcome_phase(matches!(
                 outcome,
                 AgentContinuationHookOutcome::Failed | AgentContinuationHookOutcome::IgnoredFailure
-            ) {
-                AgentActivityPhase::Failed
-            } else {
-                AgentActivityPhase::Succeeded
-            },
+            )),
             now,
         )
     }

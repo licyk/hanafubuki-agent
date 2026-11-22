@@ -20,6 +20,17 @@ pub(in crate::service) struct SessionRecord {
     pub(in crate::service) runtime: SessionRuntime,
 }
 
+impl SessionRecord {
+    pub(in crate::service) fn offers_async_user_input(&self) -> bool {
+        self.lineage.parent_session_id.is_none()
+            && self.runtime.turn.as_ref().is_none_or(|turn| {
+                turn.extensions
+                    .get::<hanafubuki_agent_contracts::DisableAsyncUserInput>()
+                    .is_none()
+            })
+    }
+}
+
 /// Where the session came from and whether it is kept: its parent and why
 /// it was made, the workspace it was created in, and whether it lives in
 /// memory only.

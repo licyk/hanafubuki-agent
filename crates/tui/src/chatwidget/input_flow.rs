@@ -35,9 +35,9 @@ impl ChatWidget {
         self.send_user_message(message, true);
     }
 
-    fn send_user_message(&mut self, message: UserMessage, queue: bool) {
+    pub(super) fn send_user_message(&mut self, message: UserMessage, queue: bool) -> bool {
         if message.text.trim().is_empty() {
-            return;
+            return false;
         }
         if self.setup_needed && !self.session_open {
             self.bottom_pane.set_composer_message(message);
@@ -46,16 +46,16 @@ impl ChatWidget {
                     .to_string(),
             );
             self.open_setup();
-            return;
+            return false;
         }
         let message = match self.submit_shell_command(message) {
             Some(message) => message,
-            None => return,
+            None => return true,
         };
         if let Some(refusal) = self.images_refusal(&message) {
             self.add_error_message(refusal);
             self.bottom_pane.restore_draft(message);
-            return;
+            return false;
         }
         self.session_open = true;
         let running = self.bottom_pane.is_task_running();
@@ -71,6 +71,7 @@ impl ChatWidget {
             Submission::Waits => {}
         }
         self.sync_pending_input();
+        true
     }
 
     fn start_turn(&mut self, message: UserMessage) {
@@ -164,7 +165,9 @@ impl ChatWidget {
     }
 
     pub(super) fn sync_pending_input(&mut self) {
-        self.bottom_pane
-            .set_pending_input(self.input_queue.preview());
+        let mut preview = self.input_queue.preview();
+        preview.questions = self.async_questions.summary();
+        preview.question_deadline = self.async_questions.deadline();
+        self.bottom_pane.set_pending_input(preview);
     }
 }

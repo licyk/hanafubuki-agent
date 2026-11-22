@@ -63,6 +63,7 @@ impl AgentApplicationService {
         let core = self.core.clone();
         let files = self.session_files(session_id).await?;
         let permission_mode = self.driver.turn_permission_mode(session_id, None).await?;
+        let disable_async_input = input.host.get_arc::<crate::DisableAsyncUserInput>();
         let world_state = self
             .driver
             .collect_world_state(
@@ -74,11 +75,14 @@ impl AgentApplicationService {
             )
             .await
             .map_err(|error| error.to_string())?;
-        let turn = self
+        let mut turn = self
             .driver
             .collect_turn_extensions(session_id, session.mode)
             .await
             .map_err(|error| error.to_string())?;
+        if let Some(disabled) = disable_async_input {
+            turn.insert(disabled);
+        }
         // Durable admission writes the conversation repository. Keep only that
         // bounded synchronous commit off the async caller; the accepted turn
         // is then owned by hanafubuki-agent-kernel's managed Tokio task.

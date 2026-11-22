@@ -94,7 +94,7 @@ async fn a_side_conversation_inherits_its_parent_and_reads_the_side_policy_first
     assert_eq!(
         service.open_side_conversation(parent.id).unwrap().id,
         side.id,
-        "a parent has one side conversation"
+        "opening a temporary side conversation reuses the oldest one"
     );
     assert_eq!(
         list(
@@ -246,7 +246,9 @@ async fn a_side_conversation_opened_during_the_parents_first_turn_inherits_its_o
         (assistant_events("Side."), Duration::ZERO),
     ])
     .await;
-    let (service, paths) = configured_service("side-during-first-turn", &server.base_url);
+    let (service, paths, config) = service_with_config("side-during-first-turn", |_, config| {
+        configure_test_provider(config, &server.base_url, None);
+    });
     let parent = service
         .create_session(AgentSessionMode::Default, None)
         .await
@@ -268,6 +270,24 @@ async fn a_side_conversation_opened_during_the_parents_first_turn_inherits_its_o
     // has still started: its side conversation opens.
     let side = service.open_side_conversation(parent.id).unwrap();
     assert_eq!(side.parent_session_id, Some(parent.id));
+    let saved = service
+        .create_side_conversation(parent.id, AgentSessionPersistence::Durable)
+        .unwrap();
+    let other = service
+        .create_side_conversation(parent.id, AgentSessionPersistence::Ephemeral)
+        .unwrap();
+    assert_ne!(side.id, other.id);
+    assert_eq!(
+        service
+            .saved_side_conversations(parent.id)
+            .unwrap()
+            .iter()
+            .map(|chat| chat.session_id)
+            .collect::<Vec<_>>(),
+        vec![saved.id]
+    );
+    service.close_side_conversation(other.id).await.unwrap();
+    service.close_side_conversation(saved.id).await.unwrap();
     server.hold.notify_one();
     assert_eq!(first.await.unwrap().unwrap().final_answer, "First.");
     let answer = service
@@ -297,6 +317,30 @@ async fn a_side_conversation_opened_during_the_parents_first_turn_inherits_its_o
         "the parent's answer came after the fork:\n{request}"
     );
     service.close_side_conversation(side.id).await.unwrap();
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    drop(service);
+    let service =
+        crate::test_support::reopen_service(config, crate::test_support::test_host(&paths), &paths);
+    let reopened = service.open_session(saved.id, 100).unwrap();
+    assert!(reopened.transcript.items.iter().any(|item| matches!(&item.content, ConversationItem::UserMessage {text, ..} if text == "First question.")));
+    assert!(!reopened
+        .transcript
+        .items
+        .iter()
+        .any(|item| matches!(&item.content, ConversationItem::AssistantMessage { .. })));
+    service
+        .archive_session(
+            saved.id,
+            reopened.runtime.generation,
+            reopened.runtime.revision,
+        )
+        .unwrap();
+    assert!(service
+        .saved_side_conversations(parent.id)
+        .unwrap()
+        .is_empty());
     finish(service, paths);
 }
 

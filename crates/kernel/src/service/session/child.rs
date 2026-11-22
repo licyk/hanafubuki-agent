@@ -14,8 +14,8 @@ struct ChildHistory {
     next_history_item_id: u64,
     next_message_id: u64,
     context_window: AgentContextWindowSnapshot,
-    /// The parent's running turn the history stops before, if one ran.
-    before_turn_id: Option<AgentTurnId>,
+    /// Where the durable fork stops when the parent is running a turn.
+    fork_point: Option<AgentHistoryForkPoint>,
     /// The hierarchical compression state the history comes with.
     compression: Option<Arc<crate::AgentCompressionState>>,
 }
@@ -39,7 +39,11 @@ impl AgentService {
         let parent_id = request.parent_session_id;
         let parent = (*self.session(parent_id)?.lock_after_persistence_blocking()?).clone();
         let ephemeral = request.persistence == AgentSessionPersistence::Ephemeral;
-        let base = self.child_history(&parent, request.base, ephemeral)?;
+        let base = self.child_history(
+            &parent,
+            request.base,
+            ephemeral || request.origin == AgentSessionOrigin::Side,
+        )?;
         // History starts with a turn: context can only follow one.
         if base.history.is_empty() && !request.context.is_empty() {
             return Err(AgentError::InvalidInput(
@@ -52,7 +56,7 @@ impl AgentService {
             .history_store
             .allocate_session_id()
             .map_err(history_store_error)?;
-        let before_turn_id = base.before_turn_id;
+        let fork_point = base.fork_point;
         let mut record = child_record(session_id, &parent, &request, base);
         normalize_session_config(&mut record.settings.config);
         // The role instructions come from the request, not the parent.
@@ -71,7 +75,7 @@ impl AgentService {
                 return Err(error);
             }
         };
-        let persisted = match (ephemeral, request.base, before_turn_id) {
+        let persisted = match (ephemeral, request.base, fork_point) {
             (true, _, _) | (false, AgentChildSessionBase::Empty, _) => {
                 self.persist_current_conversation(&cell, true)
             }
@@ -80,8 +84,8 @@ impl AgentService {
                 parent_id,
                 AgentRevision::new(parent.status.revision),
             ),
-            (false, AgentChildSessionBase::ParentHead, Some(turn_id)) => {
-                self.persist_current_fork(&cell, parent_id, turn_id)
+            (false, AgentChildSessionBase::ParentHead, Some(point)) => {
+                self.persist_current_fork(&cell, parent_id, point)
             }
         };
         if let Err(error) = persisted {
@@ -170,7 +174,7 @@ impl AgentService {
         &self,
         parent: &SessionRecord,
         base: AgentChildSessionBase,
-        ephemeral: bool,
+        inherit_opening: bool,
     ) -> Result<ChildHistory, AgentError> {
         if base == AgentChildSessionBase::Empty {
             return Ok(ChildHistory {
@@ -180,7 +184,7 @@ impl AgentService {
                 next_history_item_id: 1,
                 next_message_id: 1,
                 context_window: AgentContextWindowSnapshot::initial(),
-                before_turn_id: None,
+                fork_point: None,
                 compression: None,
             });
         }
@@ -199,23 +203,26 @@ impl AgentService {
                 next_history_item_id: parent.conversation.next_history_item_id,
                 next_message_id: parent.conversation.next_message_id,
                 context_window: parent.runtime.context_window,
-                before_turn_id: None,
+                fork_point: None,
                 // At the head the child has the parent's window, so the
                 // same blocks project it.
                 compression: parent.runtime.compression.clone(),
             });
         };
         let fork = self.load_fork_material(parent, turn_id)?;
-        // The parent's first turn has nothing before it, and a history
-        // starts with a turn: an ephemeral child — the side conversation
-        // that may be opened while that turn works — inherits the turn's
-        // own opening, the message and the context it came with, never the
-        // model's output or a call left open. One that is persisted keeps
-        // the refusal instead: its base is the parent's head, which already
-        // holds what that turn has committed.
-        let (history, before_turn_id) = match (fork.history.is_empty(), ephemeral) {
-            (true, true) => (turn_opening(&parent.conversation.history, turn_id), None),
-            _ => (fork.history, Some(turn_id)),
+        // A side chat opened in the first turn inherits only its opening.
+        // Pin a durable fork to that record, even if the parent has since produced output.
+        let (history, fork_point) = if fork.history.is_empty() && inherit_opening {
+            let opening = turn_opening(&parent.conversation.history, turn_id);
+            let point = opening
+                .last()
+                .map(|item| AgentHistoryForkPoint::ThroughItem(item.item_id));
+            (opening, point)
+        } else {
+            (
+                fork.history,
+                Some(AgentHistoryForkPoint::BeforeTurn(turn_id)),
+            )
         };
         let contents = history_contents(&history);
         validate_persisted_history(&contents, &parent.settings.config, self.inner.limits)?;
@@ -235,7 +242,7 @@ impl AgentService {
             next_history_item_id: parent.conversation.next_history_item_id,
             next_message_id: parent.conversation.next_message_id,
             context_window: AgentContextWindowSnapshot::initial(),
-            before_turn_id,
+            fork_point,
         })
     }
 }
@@ -276,6 +283,8 @@ fn child_record(
 ) -> SessionRecord {
     let now = now_millis();
     let from_parent = request.base == AgentChildSessionBase::ParentHead;
+    let saved_side = request.origin == AgentSessionOrigin::Side
+        && request.persistence == AgentSessionPersistence::Durable;
     SessionRecord {
         session_id,
         forked_from_session_id: from_parent.then_some(request.parent_session_id),
@@ -290,7 +299,9 @@ fn child_record(
             pending_model: None,
             pending_effort: None,
             model: parent.settings.model.clone(),
-            title: from_parent.then(|| parent.settings.title.clone()).flatten(),
+            title: (from_parent && !saved_side)
+                .then(|| parent.settings.title.clone())
+                .flatten(),
             // A child works for its parent: it never pursues the parent's goal.
             goal: None,
             config: AgentSessionConfig {

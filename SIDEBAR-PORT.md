@@ -21,3 +21,10 @@
 6. **验证与文档。** 用真实 facade、工具循环及 TUI 输入入口测试，核对上述上游测试和快照。更新涉及行为的中英文开发、嵌入、工具和终端文档及移植署名。运行 cargo fmt、带警告检查的 workspace check、Clippy、cargo xtask check、workspace tests。分别报告本机终端、操作系统与 CI 实际验证范围。
 
 历史沿用本项目的类型和存储契约。沿用已有队列、订阅、渲染器和路径边界；文件 I/O 和图片解码放到绘制循环外。只有实际资源或协议需要才加限制；单个坏条目局部呈现错误，继续处理其他条目。
+
+## 实现落点与验收方式
+
+- 异步问题的模型契约在 `crates/kernel/src/model/async_question.rs` 和 `core_tools`。TUI 在 `crates/tui/src/chatwidget/async_questions/` 维护每道题的输入和建议项。宿主可按回合通过 `DisableAsyncUserInput` 关闭该工具。无终端的 `exec --json` 输出提问事件并继续执行。
+- `crates/tui/src/app/workspace/sidebar/` 负责选择器、文档选择和标签栏，`side_tabs.rs` 复用原有会话 bridge。临时入口为 `/side`，选择器的 **New side chat** 创建随父会话保存的对话。只读子代理和文件可以在主回合运行时打开。默认选择器快捷键用 `leader s`，项目原有的 `leader t` 继续打开任务列表。
+- `crates/agent/src/workspace_browser.rs` 对读取和监听统一应用会话的工作区策略。`crates/tui/src/sidebar_files/` 处理增量引用、文档定位和预览。终端绘制按协议选择 Kitty 或 Sixel；tmux 等环境使用彩色半块字符。
+- TUI 的 VT100 测试通过真实 Agent、输入和绘制路径检查提问、后台侧对话、文本链接和图像协议。Linux 的独立 tmux 会话另行验证了首次发送消息前打开选择器、浏览文本、显示 1290 × 1219 PNG、缩窄窗口并关闭图片返回文本。物理 Kitty、Sixel 终端和其他操作系统留待原生验证。

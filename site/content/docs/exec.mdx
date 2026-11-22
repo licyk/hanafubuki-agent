@@ -89,6 +89,8 @@ hanafubuki-agent exec --json "列出最大的五个文件"
 | `ask`                | 询问终端前的人：`y` 允许一次，`s` 在本会话内都允许（仅在可用时提供），其他输入拒绝      |
 | `allow:工具[,工具…]` | 列出的工具每次请求时都允许一次，其他工具一律拒绝，例如 `allow:exec_command,apply_patch` |
 
+可选提问（`request_user_input_async`）以提示输出，JSON 流中出现 `async_questions_asked`。可选提问不会读取标准输入或改变退出码。
+
 `ask` 需要标准输入和标准错误都是终端，否则一律拒绝。每个回答都会打印一行，例如 `· approval denied: exec_command: Run ...`。
 
 模型也可能向你提问（例如让你在几个方案中选择）。`exec` 会把问题和选项打印到标准错误，你输入选项编号回答。没有终端，或者没有给出有效回答时，`exec` 取消回合并以退出码 3 退出。

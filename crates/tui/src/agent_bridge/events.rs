@@ -16,6 +16,16 @@ impl AgentBridge {
         if Some(event.session_id) != self.session_id {
             return None;
         }
+        if self.watch_only
+            && matches!(
+                event.kind,
+                AgentEventKind::ApprovalRequested { .. }
+                    | AgentEventKind::UserInputRequested { .. }
+                    | AgentEventKind::AsyncQuestionsAsked { .. }
+            )
+        {
+            return None;
+        }
         self.denials.observe(event.session_id, &event.kind);
         self.adopt_followed_turn(&event.kind, event.turn_id);
         if let AgentEventKind::CompactionUpdated { compaction } = &event.kind {
@@ -113,6 +123,9 @@ impl AgentBridge {
             AgentEventKind::ApprovalResolved { request_id, .. } => {
                 TurnUpdate::ApprovalResolved(request_id)
             }
+            AgentEventKind::AsyncQuestionsAsked { call_id, questions } => {
+                TurnUpdate::AsyncQuestions(call_id, questions)
+            }
             AgentEventKind::UserInputRequested { request } => {
                 TurnUpdate::UserInputRequested(request)
             }
@@ -124,8 +137,10 @@ impl AgentBridge {
                 return None;
             }
             AgentEventKind::SteeringConsumed {
-                through_sequence, ..
-            } => TurnUpdate::SteeringConsumed(through_sequence.value()),
+                through_sequence,
+                answered_questions,
+                ..
+            } => TurnUpdate::SteeringConsumed(through_sequence.value(), answered_questions),
             AgentEventKind::ContextCompressionFailed { message } => {
                 TurnUpdate::CompressionFailed(message)
             }

@@ -21,7 +21,7 @@ pub trait AgentHistoryStore: Send + Sync {
     fn create_fork(
         &self,
         source_session_id: AgentSessionId,
-        before_turn_id: AgentTurnId,
+        point: AgentHistoryForkPoint,
         commit: AgentConversationCommit,
     ) -> Result<AgentHistoryBase, AgentHistoryStoreError>;
     fn create_fork_at_head(

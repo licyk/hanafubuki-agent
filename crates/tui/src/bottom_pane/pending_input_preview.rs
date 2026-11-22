@@ -6,8 +6,7 @@
 //! interrupts it to send them at once; the messages sent at the turn's end
 //! (sent while a review ran, or a steer that did not reach the turn); and
 //! the messages queued with Tab, with the key that puts the last one back
-//! in the composer. A message shows its first three lines. Codex's links
-//! and the questions sharing the group are not ported.
+//! in the composer. Optional questions share this preview without taking focus.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -34,11 +33,23 @@ pub(crate) struct PendingInput {
     /// Whether Shift+Left takes one of `steers` back: the turn still runs
     /// and one of them waits for it to send it.
     pub(crate) steer_is_editable: bool,
+    pub(crate) questions: usize,
+    pub(crate) question_deadline: Option<std::time::Instant>,
+}
+
+impl super::BottomPane {
+    pub(crate) fn append_question_drafts(&mut self, drafts: &str) {
+        self.composer.append_question_drafts(drafts);
+        self.request_redraw();
+    }
 }
 
 impl PendingInput {
     pub(crate) fn is_empty(&self) -> bool {
-        self.steers.is_empty() && self.held.is_empty() && self.queued.is_empty()
+        self.steers.is_empty()
+            && self.held.is_empty()
+            && self.queued.is_empty()
+            && self.questions == 0
     }
 
     fn lines(&self, width: u16) -> Vec<Line<'static>> {
@@ -47,6 +58,27 @@ impl PendingInput {
         }
         let width = usize::from(width);
         let mut lines = Vec::new();
+        if self.questions > 0 {
+            let noun = if self.questions == 1 {
+                "question"
+            } else {
+                "questions"
+            };
+            let timer = self
+                .question_deadline
+                .and_then(|deadline| deadline.checked_duration_since(std::time::Instant::now()))
+                .filter(|remaining| remaining.as_secs() < 20)
+                .map(|remaining| format!(" · {}s", remaining.as_secs() + 1))
+                .unwrap_or_default();
+            lines.push(
+                Line::from(format!(
+                    "? {} {noun} · {} to answer{timer}",
+                    self.questions,
+                    keymap::current().label(Action::EditQueuedMessage)
+                ))
+                .cyan(),
+            );
+        }
         if !self.steers.is_empty() {
             let mut header = vec![Span::from("Messages to be submitted after next tool call")];
             if let Some(key) = keymap::hint(Action::InterruptTurn) {

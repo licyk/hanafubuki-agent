@@ -46,6 +46,7 @@ mod resume_picker;
 mod settings_center;
 mod shimmer;
 mod shortcut_help;
+mod sidebar_files;
 mod status_indicator_widget;
 mod streaming;
 mod style;

@@ -11,6 +11,57 @@ impl AgentEventSink for Discard {
     fn emit(&self, _event: AgentEvent) {}
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn the_host_can_disable_async_questions_for_one_turn() {
+    let server = FakeServer::start(vec![(assistant_events("Done."), Duration::ZERO); 4]).await;
+    let (service, paths) = configured_service("no-async-input", &server.base_url);
+    let session = service
+        .create_session(AgentSessionMode::Default, None)
+        .await
+        .unwrap();
+    for disabled in [true, false] {
+        let mut host = hanafubuki_agent_contracts::TurnExtensions::default();
+        if disabled {
+            host.insert(Arc::new(crate::DisableAsyncUserInput));
+        }
+        service
+            .submit_turn_with_sink(
+                session.id,
+                AgentTurnRequest {
+                    text: "Hello.".into(),
+                    images: Vec::new(),
+                    skills: Vec::new(),
+                    host,
+                },
+                Arc::new(Discard),
+            )
+            .await
+            .unwrap();
+        wait_for_turn_end(&service, session.id).await;
+        let request: serde_json::Value = server
+            .requests()
+            .into_iter()
+            .map(|r| serde_json::from_slice::<serde_json::Value>(&r.body).unwrap())
+            .rfind(|r| {
+                r["tools"]
+                    .as_array()
+                    .is_some_and(|tools| tools.iter().any(|t| t["name"] == "request_user_input"))
+            })
+            .unwrap();
+        let tools = request["tools"].as_array().unwrap();
+        assert_eq!(
+            tools
+                .iter()
+                .any(|t| t["name"] == "request_user_input_async"),
+            !disabled
+        );
+    }
+    assert!(service
+        .shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE)
+        .is_empty());
+    let _ = std::fs::remove_dir_all(paths.app_data_dir);
+}
+
 // The managed turns' tasks must finish while `shutdown` blocks this thread.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_session_permission_mode_replaces_the_configured_one_for_that_session_only() {

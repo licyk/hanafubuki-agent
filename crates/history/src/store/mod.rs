@@ -11,9 +11,9 @@ use hanafubuki_agent_foundation::file_lock::FileLock;
 use hanafubuki_agent_foundation::persistence::discard_sqlite;
 use hanafubuki_agent_kernel::{
     AgentCompressionChain, AgentCompressionUpdate, AgentConversationCommit, AgentConversationDelta,
-    AgentHistoryAppendAck, AgentHistoryBase, AgentHistoryItem, AgentHistoryMutation,
-    AgentHistoryRecord, AgentHistoryRecordPayload, AgentHistorySortDirection, AgentHistoryStore,
-    AgentHistoryStoreError, AgentModelContextBoundary, AgentRecoveredSession,
+    AgentHistoryAppendAck, AgentHistoryBase, AgentHistoryForkPoint, AgentHistoryItem,
+    AgentHistoryMutation, AgentHistoryRecord, AgentHistoryRecordPayload, AgentHistorySortDirection,
+    AgentHistoryStore, AgentHistoryStoreError, AgentModelContextBoundary, AgentRecoveredSession,
     AgentRecoveryLoadFailure, AgentRevision, AgentSessionId, AgentSessionLifecycle,
     AgentSessionListRequest, AgentSessionPage, AgentSessionSummary, AgentTranscriptPage,
     AgentTranscriptPageRequest, AgentTurnId, AgentTurnPageRequest, AgentTurnPhase,
@@ -272,11 +272,11 @@ impl AgentHistoryStore for FileAgentHistoryStore {
     fn create_fork(
         &self,
         source_session_id: AgentSessionId,
-        before_turn_id: AgentTurnId,
+        point: AgentHistoryForkPoint,
         commit: AgentConversationCommit,
     ) -> Result<AgentHistoryBase, AgentHistoryStoreError> {
         self.claim_session(source_session_id)?;
-        self.create_fork_inner(source_session_id, before_turn_id, commit)
+        self.create_fork_inner(source_session_id, point, commit)
     }
 
     fn create_fork_at_head(

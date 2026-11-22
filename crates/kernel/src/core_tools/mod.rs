@@ -25,6 +25,7 @@ pub enum AgentCoreTool {
     NewContext,
     UpdatePlan,
     RequestUserInput,
+    RequestUserInputAsync,
     /// billion-context's core tools, planned while the session's strategy is
     /// `hierarchical`.
     Compress,
@@ -40,10 +41,11 @@ pub enum AgentCoreTool {
 }
 
 impl AgentCoreTool {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::NewContext,
         Self::UpdatePlan,
         Self::RequestUserInput,
+        Self::RequestUserInputAsync,
         Self::Compress,
         Self::Decompress,
         Self::SearchContext,
@@ -72,6 +74,7 @@ impl AgentCoreTool {
             Self::NewContext => "new_context",
             Self::UpdatePlan => "update_plan",
             Self::RequestUserInput => "request_user_input",
+            Self::RequestUserInputAsync => "request_user_input_async",
             Self::Compress => hanafubuki_agent_compression::COMPRESS_TOOL_NAME,
             Self::Decompress => hanafubuki_agent_compression::DECOMPRESS_TOOL_NAME,
             Self::SearchContext => hanafubuki_agent_compression::SEARCH_CONTEXT_TOOL_NAME,
@@ -125,7 +128,8 @@ impl AgentCoreTool {
         match mode {
             AgentSessionMode::Default => true,
             AgentSessionMode::Plan => {
-                matches!(self, Self::RequestUserInput) || self.is_compression()
+                matches!(self, Self::RequestUserInput | Self::RequestUserInputAsync)
+                    || self.is_compression()
             }
         }
     }
@@ -142,7 +146,9 @@ impl AgentCoreTool {
             | Self::AcpRetrieve
             | Self::AcpRule => AgentActivityAction::USE_TOOL,
             Self::UpdatePlan => AgentActivityAction::UPDATE_PLAN,
-            Self::RequestUserInput => AgentActivityAction::REQUEST_USER_INPUT,
+            Self::RequestUserInput | Self::RequestUserInputAsync => {
+                AgentActivityAction::REQUEST_USER_INPUT
+            }
         }
     }
 }

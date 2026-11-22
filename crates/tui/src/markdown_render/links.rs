@@ -87,7 +87,9 @@ impl Writer<'_> {
         if style_label {
             self.push_inline_style(self.styles.link);
         }
-        let local_target_display = is_local_path_like_link(&destination).then(|| {
+        let local_target_display = (is_local_path_like_link(&destination)
+            || crate::sidebar_files::FileTarget::link(&destination).is_some())
+        .then(|| {
             render_local_link_target(&destination, self.cwd).unwrap_or_else(|| destination.clone())
         });
         self.link = Some(LinkState {
@@ -111,20 +113,23 @@ impl Writer<'_> {
         if link.show_destination || (!link.has_visible_label && link.web.is_some()) {
             let mut destination = HyperlinkLine::default();
             destination.push_span(
-                Span::styled(link.destination, self.styles.link),
+                Span::styled(link.destination.clone(), self.styles.link),
                 link.web.as_deref(),
             );
             self.push_link_part(HyperlinkLine::from(Line::from(" (")));
+            if link.web.is_none() {
+                destination = HyperlinkLine::reader_link(destination.line, &link.destination);
+            }
             self.push_link_part(destination);
             self.push_link_part(HyperlinkLine::from(Line::from(")")));
         } else if let Some(target) = link.local_target_display {
-            self.push_local_link(target, link.local_label_spans);
+            self.push_local_link(target, link.local_label_spans, &link.destination);
         }
     }
 
     /// A local file link: its label (when it has text) and its target, in
     /// the code style.
-    fn push_local_link(&mut self, target: String, label: Vec<Span<'static>>) {
+    fn push_local_link(&mut self, target: String, label: Vec<Span<'static>>, destination: &str) {
         let show_label = label.iter().any(|span| !span.content.trim().is_empty());
         let target = Span::styled(target, self.current_inline_style().patch(self.styles.code));
         if !self.in_table_cell() && self.pending_marker_line {
@@ -132,11 +137,11 @@ impl Writer<'_> {
         }
         if show_label {
             for span in label {
-                self.push_link_part(Line::from(span).into());
+                self.push_link_part(HyperlinkLine::reader_link(Line::from(span), destination));
             }
             self.push_link_part(Line::from(" (").into());
         }
-        self.push_link_part(Line::from(target).into());
+        self.push_link_part(HyperlinkLine::reader_link(Line::from(target), destination));
         if show_label {
             self.push_link_part(Line::from(")").into());
         }

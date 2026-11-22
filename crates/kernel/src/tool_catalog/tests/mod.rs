@@ -152,6 +152,7 @@ fn plan_context(mode: AgentSessionMode, strict_json_schema: bool) -> AgentToolCa
         turn_id: serde_json::from_value(json!(1)).unwrap(),
         generation: serde_json::from_value(json!(1)).unwrap(),
         session_revision: serde_json::from_value(json!(1)).unwrap(),
+        async_user_input: true,
         sampling_step: 1,
         compression_tools: Vec::new(),
         mode,

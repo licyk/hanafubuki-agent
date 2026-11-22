@@ -9,6 +9,10 @@ pub enum AgentSessionMode {
     Plan,
 }
 
+/// An embedding client sets this turn extension when it cannot present asynchronous questions.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DisableAsyncUserInput;
+
 /// Why a session was made as another session's child.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

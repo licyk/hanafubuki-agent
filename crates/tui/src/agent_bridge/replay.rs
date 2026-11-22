@@ -36,6 +36,7 @@ pub(crate) struct OpenedSession {
 pub(crate) struct OlderTranscript {
     pub(crate) session_id: AgentSessionId,
     pub(crate) cursor: String,
+    pub(crate) side: bool,
     /// The revision the first page was read at, so later pages read the
     /// same history.
     pub(crate) through_revision: AgentRevision,

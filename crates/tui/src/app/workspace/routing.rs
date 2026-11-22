@@ -16,6 +16,7 @@ pub(in crate::app) enum Route {
     /// To the conversation the app's fields hold, or the app itself.
     Here(AppEvent),
     Parked(AppEvent),
+    Hidden(usize, AppEvent),
     Parent(AppEvent),
     Workspace(WorkspaceEvent),
     /// A closed conversation's.
@@ -28,10 +29,36 @@ impl App {
     pub(in crate::app) fn route_event(&mut self, event: AppEvent) -> Route {
         let (event, owner) = match event {
             AppEvent::Second(id, inner) => {
+                if let AppEvent::Agent(event) = inner.as_ref() {
+                    if let hanafubuki_agent::AgentEventKind::SessionTitleUpdated { title } =
+                        &event.kind
+                    {
+                        if let Some(tab) = self
+                            .workspace
+                            .second
+                            .iter_mut()
+                            .chain(&mut self.workspace.hidden)
+                            .find(|tab| tab.id == id)
+                        {
+                            tab.title.clone_from(&title.value);
+                            self.workspace.sidebar.chooser_dirty = true;
+                        }
+                    }
+                }
                 if self.workspace.second.as_ref().map(|second| second.id) == Some(id) {
                     (*inner, Some(Focus::Second))
                 } else if self.workspace.child.as_ref().map(|child| child.id) == Some(id) {
                     (*inner, Some(Focus::Main))
+                } else if let Some(index) =
+                    self.workspace.hidden.iter().position(|tab| tab.id == id)
+                {
+                    return match *inner {
+                        AppEvent::Workspace(event) => Route::Workspace(event),
+                        AppEvent::ExternalEditor | AppEvent::PasteImage | AppEvent::Exit => {
+                            Route::Dropped
+                        }
+                        event => Route::Hidden(index, event),
+                    };
                 } else {
                     return Route::Dropped;
                 }
@@ -49,6 +76,9 @@ impl App {
             }
             // All conversations hear of the Agent's state and keep streaming.
             AppEvent::AgentBackground(hanafubuki_agent::AgentBackgroundEvent::Changed { root }) => {
+                for tab in &mut self.workspace.hidden {
+                    tab.parked.bridge.tree_changed(root);
+                }
                 if self.workspace.second.is_some() {
                     self.on_parked(|app| app.bridge.tree_changed(root));
                 }
@@ -60,6 +90,13 @@ impl App {
                 Route::Here(event)
             }
             AppEvent::AgentStatusChanged | AppEvent::CommitTick => {
+                for tab in &mut self.workspace.hidden {
+                    if matches!(event, AppEvent::CommitTick) {
+                        tab.parked.chat_widget.on_commit_tick();
+                    } else if let Some(update) = tab.parked.bridge.status_changed() {
+                        tab.parked.chat_widget.handle_turn_update(update);
+                    }
+                }
                 if self.workspace.second.is_some() {
                     self.on_parked(|app| app.conversation_tick(&event));
                 }
@@ -117,6 +154,22 @@ impl App {
         let keep_running = self.handle_here(tui, event);
         self.workspace.handling = None;
         self.swap_conversations();
+        keep_running
+    }
+
+    pub(in crate::app) fn handle_hidden<B: Backend<Error = io::Error> + Write>(
+        &mut self,
+        tui: &mut Tui<B>,
+        index: usize,
+        event: AppEvent,
+    ) -> bool {
+        let mut tab = self.workspace.hidden.remove(index);
+        self.swap_parked(&mut tab.parked);
+        self.workspace.handling = Some(Focus::Second);
+        let keep_running = self.handle_here(tui, event);
+        self.workspace.handling = None;
+        self.swap_parked(&mut tab.parked);
+        self.workspace.hidden.insert(index, tab);
         keep_running
     }
 

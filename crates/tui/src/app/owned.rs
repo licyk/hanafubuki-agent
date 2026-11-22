@@ -116,6 +116,9 @@ impl App {
             .is_browsing()
             .then(|| super::backtrack::browsing_footer(width));
         let dragging = self.workspace.is_dragging();
+        self.prepare_sidebar_frame();
+        let watch_only = self.active_sidebar_agent().is_some();
+        let second_focused = self.workspace.second_focused();
         let cells = &self.transcript_cells;
         let view = &mut self.transcript_view;
         let (scanning, measured_footer) = prepare_pane(view, cells, width, browsing.is_some());
@@ -125,7 +128,8 @@ impl App {
                 .or_else(|| browsing.clone().map(|line| vec![line])),
         );
         let chat_widget = &mut self.chat_widget;
-        let mut passive = layout.passive.zip(self.workspace.parked_mut());
+        let (sidebar, parked) = self.workspace.sidebar_and_parked();
+        let mut passive = layout.passive.zip(parked);
         let passive_animating = passive.as_mut().is_some_and(|(area, parked)| {
             prepare_pane(
                 &mut parked.transcript_view,
@@ -156,6 +160,7 @@ impl App {
                     view,
                     notice,
                     browsing,
+                    watch_only: watch_only && second_focused,
                 },
             );
             footer_rows = painted.footer_rows;
@@ -169,19 +174,28 @@ impl App {
                         view: &mut parked.transcript_view,
                         notice: None,
                         browsing: None,
+                        watch_only: watch_only && !second_focused,
                     },
                 );
             }
             super::workspace::paint_chrome(buf, &layout, dragging);
-            if let Some((x, y)) = painted.cursor.filter(|_| layout.hud.is_none()) {
+            frame.sidebar_image = sidebar.paint(&layout, buf);
+            if let Some((x, y)) = painted
+                .cursor
+                .filter(|_| layout.hud.is_none() && !sidebar.owns_input())
+            {
                 frame.set_cursor_position((x, y));
             }
         })?;
+        let layout_focused_empty = layout.focused.is_empty();
         self.workspace.remember_layout(layout);
         let view = &mut self.transcript_view;
         let dragging = view.tick_selection(&self.transcript_cells);
         let animating = view.is_following() && self.chat_widget.has_live_entries();
-        if footer_rows != measured_footer {
+        if !layout_focused_empty
+            && !(watch_only && second_focused)
+            && footer_rows != measured_footer
+        {
             self.schedule_frame(Instant::now());
         }
         if scanning || dragging {
@@ -207,6 +221,7 @@ struct PanePaint<'a> {
     view: &'a mut TranscriptView,
     notice: Option<String>,
     browsing: Option<Line<'static>>,
+    watch_only: bool,
 }
 
 /// What a painted pane leaves: the composer's cursor, and the footer rows
@@ -243,7 +258,28 @@ fn paint_pane(buf: &mut Buffer, area: Rect, pane: PanePaint<'_>) -> Painted {
         view,
         notice,
         browsing,
+        watch_only,
     } = pane;
+    if area.is_empty() {
+        return Painted {
+            cursor: None,
+            footer_rows: 0,
+        };
+    }
+    if watch_only {
+        let transcript = Rect {
+            height: area.height.saturating_sub(1),
+            ..area
+        };
+        view.render(transcript, buf, cells);
+        Line::from("Watching subagent · Esc to return")
+            .dim()
+            .render(Rect::new(area.x, area.bottom() - 1, area.width, 1), buf);
+        return Painted {
+            cursor: None,
+            footer_rows: 0,
+        };
+    }
     let width = area.width;
     let chat_height = chat_widget.desired_height(width).min(area.height);
 

@@ -117,7 +117,7 @@ impl AgentHistoryStore for EphemeralAgentHistoryStore {
     fn create_fork(
         &self,
         source_session_id: AgentSessionId,
-        _before_turn_id: AgentTurnId,
+        _point: AgentHistoryForkPoint,
         mut commit: AgentConversationCommit,
     ) -> Result<AgentHistoryBase, AgentHistoryStoreError> {
         let base = AgentHistoryBase {

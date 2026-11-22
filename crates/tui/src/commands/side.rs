@@ -27,7 +27,18 @@ pub(crate) const SECOND_CONVERSATION_COMMANDS: &[&str] = &[
     "pwd",
     "close",
     "subagents",
+    "sidebar",
 ];
+
+pub(super) static SIDEBAR: CommandSpec = CommandSpec {
+    name: "sidebar",
+    aliases: &[],
+    description: "open side chats, subagents and files in the sidebar",
+    inline_args: false,
+    during_task: true,
+    needs_session: false,
+    dispatch: |context, _| context.send(AppEvent::Workspace(WorkspaceEvent::OpenSidebar)),
+};
 
 pub(super) static CLOSE: CommandSpec = CommandSpec {
     name: "close",

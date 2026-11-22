@@ -219,6 +219,17 @@ impl Turn<'_> {
                             .note(&format!("the approval was not answered: {error}"));
                     }
                 }
+                AgentEventKind::AsyncQuestionsAsked { questions, .. } => {
+                    for question in questions {
+                        self.output.note(&hanafubuki_agent::render_plain_text(
+                            question.title.as_bytes(),
+                        ));
+                        for option in question.options.iter().flatten() {
+                            let option = hanafubuki_agent::render_plain_text(option.as_bytes());
+                            self.output.note(&format!("  - {option}"));
+                        }
+                    }
+                }
                 AgentEventKind::UserInputRequested { request } => {
                     match self.answers.questions(request, None, self.output) {
                         Some(answers) => {

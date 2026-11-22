@@ -45,7 +45,7 @@ impl ToolGroup {
             | "platform_search" | "video_search" | "domain_search" | "weather" | "research"
             | "cache_search" | "free_search_test" => Some(Self::Web),
             "create_goal" | "get_goal" | "update_goal" => Some(Self::Goals),
-            "request_user_input" => Some(Self::Questions),
+            "request_user_input" | "request_user_input_async" => Some(Self::Questions),
             "write_stdin" | "resize_execution" => Some(Self::Terminals),
             "list_agent_memories"
             | "search_agent_memories"
@@ -225,7 +225,7 @@ fn verb(name: &str) -> String {
         "create_goal" => "Create goal",
         "get_goal" => "Read goal",
         "update_goal" => "Update goal",
-        "request_user_input" => "Ask",
+        "request_user_input" | "request_user_input_async" => "Ask",
         "update_plan" => "Update plan",
         "write_stdin" => "Interact with",
         "resize_execution" => "Resize",

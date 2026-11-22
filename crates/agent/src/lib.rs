@@ -71,7 +71,9 @@ mod supervisor_runtime;
 pub mod test_support;
 mod titles;
 mod wake;
+mod workspace_browser;
 mod workspace_instructions;
+pub use workspace_browser::{AgentWorkspaceDocument, AgentWorkspaceEntry, AgentWorkspaceWatch};
 mod workspace_roots;
 
 use attachments::{prepare_and_stage_images, prepare_view_image};
@@ -196,7 +198,9 @@ pub use workspace_roots::{agent_workspace_roots_from, AgentWorkspaceRoots, Works
 
 /// What a running tool reports (`AgentEventKind::ExecutionProgress`'s
 /// `update`): a process's start, output and status.
-pub use hanafubuki_agent_contracts::{AgentExecutionProgressStatus, AgentToolProgressUpdate};
+pub use hanafubuki_agent_contracts::{
+    AgentExecutionProgressStatus, AgentToolProgressUpdate, DisableAsyncUserInput,
+};
 /// What an interface shows of a tool call, from the tool's presenter
 /// (`AgentHandle::tool_display`, `present_tool_call`).
 pub use hanafubuki_agent_contracts::{
@@ -261,15 +265,16 @@ pub use hanafubuki_agent_kernel::{
     AgentSentRequest, AgentSessionContext, AgentSessionForkOutcome, AgentSessionForkRequest,
     AgentSessionHeadForkOutcome, AgentSessionHeadForkRequest, AgentSessionId,
     AgentSessionLifecycle, AgentSessionListRequest, AgentSessionMode, AgentSessionOpenResult,
-    AgentSessionOrigin, AgentSessionPage, AgentSessionParentFilter, AgentSessionRuntimeSnapshot,
-    AgentSessionSummary, AgentSessionTitle, AgentSessionTitleRenameRequest,
-    AgentSessionTitleSource, AgentSkillRef, AgentSteeringAccepted, AgentTranscriptPage,
-    AgentTranscriptPageRequest, AgentTurnAccepted, AgentTurnCancellationOutcome, AgentTurnId,
-    AgentTurnOutcome, AgentTurnPageRequest, AgentTurnPhase, AgentTurnTerminalReason,
-    AgentUsageSource, AgentUserInputAccepted, AgentUserInputAnswer, AgentUserInputRequest,
-    AgentUserInputRequestId, AgentUserInputResponse, ApprovalRequest, ApprovalRequestId,
-    ApprovalUserDecision, ConfirmedAgentSessionDeletion, ConversationItem, ModelCatalogEntry,
-    MAXIMUM_HOST_CONTEXT_BYTES, MAXIMUM_USER_IMAGES_PER_MESSAGE, RECENT_USER_MESSAGES_MAX,
+    AgentSessionOrigin, AgentSessionPage, AgentSessionParentFilter, AgentSessionPersistence,
+    AgentSessionRuntimeSnapshot, AgentSessionSummary, AgentSessionTitle,
+    AgentSessionTitleRenameRequest, AgentSessionTitleSource, AgentSkillRef, AgentSteeringAccepted,
+    AgentTranscriptPage, AgentTranscriptPageRequest, AgentTurnAccepted,
+    AgentTurnCancellationOutcome, AgentTurnId, AgentTurnOutcome, AgentTurnPageRequest,
+    AgentTurnPhase, AgentTurnTerminalReason, AgentUsageSource, AgentUserInputAccepted,
+    AgentUserInputAnswer, AgentUserInputRequest, AgentUserInputRequestId, AgentUserInputResponse,
+    ApprovalRequest, ApprovalRequestId, ApprovalUserDecision, ConfirmedAgentSessionDeletion,
+    ConversationItem, ModelCatalogEntry, MAXIMUM_HOST_CONTEXT_BYTES,
+    MAXIMUM_USER_IMAGES_PER_MESSAGE, RECENT_USER_MESSAGES_MAX,
 };
 /// What is known of a model, fact by fact with its source, and what the
 /// person configured for it.
@@ -283,6 +288,14 @@ pub use hanafubuki_agent_kernel::{
     wake_events_record, AgentBackgroundWork, AgentSubagentWake, AgentTerminalWake, AgentWakeEvent,
     AgentWakePolicy, AgentWakeQueued, AgentWakeSource, AgentWakeTurnAccepted,
 };
+/// What a turn's events carry, which a terminal interface renders: the task
+/// checklist, the questions the model asks, the approvals it needs, the
+/// automatic reviews' verdicts and the output of a committed tool call.
+pub use hanafubuki_agent_kernel::{
+    AgentAsyncQuestion, AgentAsyncQuestionReply, AgentTaskPlanSnapshot, AgentTaskPlanStep,
+    AgentTaskPlanStepStatus, AgentToolPresentation, AgentUserInputOption, AgentUserInputQuestion,
+    ApprovalAction, ApprovalActionKind, PermissionReviewStatus, SandboxEscalation,
+};
 /// What a role narrows (`AgentResolvedRole::scope`), and what a session's
 /// snapshot shows of it.
 pub use hanafubuki_agent_kernel::{
@@ -290,14 +303,6 @@ pub use hanafubuki_agent_kernel::{
 };
 pub use hanafubuki_agent_kernel::{AgentQuarantinedSession, AgentRecoveryReport};
 use hanafubuki_agent_kernel::{AgentService, ModelCompactionCapability};
-/// What a turn's events carry, which a terminal interface renders: the task
-/// checklist, the questions the model asks, the approvals it needs, the
-/// automatic reviews' verdicts and the output of a committed tool call.
-pub use hanafubuki_agent_kernel::{
-    AgentTaskPlanSnapshot, AgentTaskPlanStep, AgentTaskPlanStepStatus, AgentToolPresentation,
-    AgentUserInputOption, AgentUserInputQuestion, ApprovalAction, ApprovalActionKind,
-    PermissionReviewStatus, SandboxEscalation,
-};
 /// What the Agent tells a host about its MCP servers, and the servers it is
 /// told to connect.
 pub use hanafubuki_agent_mcp::{

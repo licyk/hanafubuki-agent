@@ -79,7 +79,8 @@ pub use prompt::{
     PromptPrepareFuture, PromptRequest, PromptStep,
 };
 pub use session::{
-    AgentBackgroundWork, AgentSessionMode, AgentSessionOrigin, AgentTurnOrigin, TurnWake,
+    AgentBackgroundWork, AgentSessionMode, AgentSessionOrigin, AgentTurnOrigin,
+    DisableAsyncUserInput, TurnWake,
 };
 pub use skills::{SelectableSkill, SelectableSkills};
 pub use tokens::{estimate_tokens, token_budget_bytes};

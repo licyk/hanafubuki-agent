@@ -18,6 +18,8 @@ The model does its work through tools. Each tool comes from a plugin, which `dis
 | `goal`         | `get_goal`, `create_goal`, `update_goal`                                                                         |
 | `subagents`    | `spawn_agent`, `send_message`, `followup_task`, `wait_agent`, `list_agents`, `interrupt_agent`                   |
 
+In a top-level conversation the model can also offer optional questions with `request_user_input_async`. The tool accepts one or more titles, each with optional suggested answers. It acknowledges them immediately so work can continue. Replies arrive individually as user messages.
+
 A few tools are always there: `update_plan` (the task plan), `request_user_input` (asking you), `new_context` (a fresh context window), and `search_tools` and `tool_list` when some tools are offered on demand.
 
 ## Tool discovery [#tool-discovery]

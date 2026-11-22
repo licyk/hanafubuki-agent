@@ -18,6 +18,10 @@ use crate::wrapping::display_width;
 
 pub(crate) const OSC8_CLOSE: &str = "\x1b]8;;\x07";
 
+fn is_terminal_destination(destination: &str) -> bool {
+    destination.starts_with("https://") || destination.starts_with("http://")
+}
+
 pub(crate) fn osc8_open(destination: &str) -> String {
     format!("\x1b]8;;{destination}\x07")
 }
@@ -44,10 +48,10 @@ pub(crate) fn decorate_spans(line: &HyperlinkLine) -> Vec<Span<'static>> {
             {
                 link_index += 1;
             }
-            let selected = line
-                .hyperlinks
-                .get(link_index)
-                .and_then(|link| link.columns.contains(&column).then_some(link_index));
+            let selected = line.hyperlinks.get(link_index).and_then(|link| {
+                (link.columns.contains(&column) && is_terminal_destination(&link.destination))
+                    .then_some(link_index)
+            });
             if active != selected {
                 if active.is_some() {
                     append_to_last_span(&mut out, OSC8_CLOSE);
@@ -91,6 +95,9 @@ fn append_to_last_span(out: &mut [Span<'static>], content: &str) {
 /// which is sanitised already: the cell keeps its width for the diff, its
 /// symbol carries the link.
 pub(crate) fn mark_hyperlink_cells(buf: &mut Buffer, row: Rect, destination: &str) {
+    if !is_terminal_destination(destination) {
+        return;
+    }
     let row = row.intersection(buf.area);
     let mut x = row.left();
     while x < row.right() {

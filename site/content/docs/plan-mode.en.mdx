@@ -15,7 +15,7 @@ A session `/new` starts is always in the default mode, and so is `exec`'s.
 ## What plan mode has [#tools]
 
 - Read-only tools only: reading files, listing directories, searching text, web search and fetch, read-only MCP tools, listing and reading Skills, and the like.
-- Questions for you (`request_user_input`), to choose between approaches, say.
+- Questions for you (`request_user_input` and, in top-level sessions, `request_user_input_async`), to choose between approaches, say.
 - No tool that runs commands, changes files or turns Skills on or off, whatever the [permission mode](/docs/permissions).
 
 Once it has explored, the model gives a **proposed plan**, shown in the conversation as `• Proposed Plan` and its text.

@@ -119,6 +119,7 @@ async fn a_session_takes_its_role_and_an_unknown_role_is_refused() {
             "new_context",
             "read_file",
             "request_user_input",
+            "request_user_input_async",
             "update_plan"
         ]
     );

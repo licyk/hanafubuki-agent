@@ -97,6 +97,24 @@ impl AgentService {
             CoreToolCall::Compression(tool) => {
                 self.execute_compression_tool(identity, call, tool).await
             }
+            CoreToolCall::AsyncQuestions(questions) => {
+                let cell = self.session(identity.session_id)?;
+                let event = {
+                    let mut record = cell.lock_after_persistence().await?;
+                    exact_turn_identity(&record, identity)?;
+                    record_event(
+                        &mut record,
+                        identity,
+                        AgentEventKind::AsyncQuestionsAsked {
+                            call_id: call.call_id.clone(),
+                            questions,
+                        },
+                        self.inner.limits,
+                    )
+                };
+                event_sink.emit(event);
+                Ok(AgentToolOutput::success(json!({"accepted": true})))
+            }
             CoreToolCall::RequestUserInput(request) => {
                 self.request_user_input(
                     identity,

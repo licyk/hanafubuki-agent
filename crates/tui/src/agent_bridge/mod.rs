@@ -45,6 +45,7 @@ mod review;
 mod sessions;
 mod settings;
 mod side;
+mod sidebar_files;
 mod start;
 mod status;
 mod steering;
@@ -84,7 +85,7 @@ pub(crate) use replay::{OlderTranscript, OpenedSession, ReplayedItem};
 pub(crate) use review::{ReviewCall, ReviewEnd, ReviewReply};
 pub(crate) use sessions::{ExportDestination, SessionCall, SessionReply};
 pub(crate) use settings::{MemoriesState, SettingsCall, SettingsReply, Warning, WarningSource};
-pub(crate) use side::OpenedSide;
+pub(crate) use side::{OpenedSide, SidebarSession};
 use start::Start;
 pub(crate) use status::{SessionStatus, UsageSummary};
 pub(crate) use steering::SteerOutcome;
@@ -151,6 +152,7 @@ pub(crate) enum TurnUpdate {
     ApprovalRequested(ApprovalRequest),
     /// Answered, by the person or by a policy; its overlay closes.
     ApprovalResolved(ApprovalRequestId),
+    AsyncQuestions(String, Vec<hanafubuki_agent::AgentAsyncQuestion>),
     UserInputRequested(AgentUserInputRequest),
     UserInputResolved(AgentUserInputRequestId),
     /// What became of the steering message `id` the chat sent.
@@ -159,7 +161,7 @@ pub(crate) enum TurnUpdate {
         outcome: SteerOutcome,
     },
     /// The turn took the steering it was sent through this sequence.
-    SteeringConsumed(u64),
+    SteeringConsumed(u64, Vec<String>),
     /// A message that was to start a turn reached none: it goes back to
     /// the composer.
     Undelivered(crate::user_message::UserMessage),
@@ -309,6 +311,7 @@ pub(crate) struct AgentBridge {
     /// The session was woken while a review ran, or its woken turn was
     /// refused: tried again when a review or a compaction ends.
     missed_wake: bool,
+    pub(crate) watch_only: bool,
 }
 
 impl AgentBridge {
@@ -343,6 +346,7 @@ impl AgentBridge {
             following: None,
             waking: None,
             missed_wake: false,
+            watch_only: false,
         }
     }
 
@@ -358,6 +362,11 @@ impl AgentBridge {
     /// Carries out what the interface asked; what it leads to arrives as
     /// events and replies.
     pub(crate) fn submit(&mut self, op: Op) -> Option<TurnUpdate> {
+        if self.watch_only {
+            return Some(TurnUpdate::Error(
+                "This subagent is controlled by its parent.".into(),
+            ));
+        }
         if let Some(waiting) = self.creating.as_mut().or(self.waking.as_mut()) {
             waiting.push(op);
             return None;
@@ -496,7 +505,9 @@ impl AgentBridge {
                 self.turn_running = false;
                 self.load_session_status();
                 // Its subagents may still work, and ask.
-                self.read_child_requests();
+                if !self.watch_only {
+                    self.read_child_requests();
+                }
                 Some(TurnUpdate::SessionOpened(opened))
             }
             AgentReply::Update(update) => match *update {

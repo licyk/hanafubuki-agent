@@ -22,9 +22,9 @@ use serde_json::json;
 use crate::activity::AgentActivityTracker;
 use crate::budget::{AgentTurnBudgetLedger, AgentTurnBudgetPolicy};
 use crate::conversation::{
-    AgentConversationCommit, AgentConversationDelta, AgentHistoryBase, AgentHistoryItem,
-    AgentHistoryItemId, AgentHistoryMutation, AgentHistorySortDirection, AgentHistoryStore,
-    AgentHistoryStoreError, AgentModelContextBoundary, AgentSessionListRequest,
+    AgentConversationCommit, AgentConversationDelta, AgentHistoryBase, AgentHistoryForkPoint,
+    AgentHistoryItem, AgentHistoryItemId, AgentHistoryMutation, AgentHistorySortDirection,
+    AgentHistoryStore, AgentHistoryStoreError, AgentModelContextBoundary, AgentSessionListRequest,
     AgentSessionOpenResult, AgentSessionPage, AgentTranscriptPage, AgentTranscriptPageRequest,
     AgentTurnPageRequest, AgentTurnRecovery, EphemeralAgentHistoryStore,
     PersistedAgentRuntimeState, PersistedAgentTurn,

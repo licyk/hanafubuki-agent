@@ -102,7 +102,7 @@ hanafubuki-agent 的许可证是 **GPL-3.0-only**（[LICENSE](https://github.com
 
 - **OpenAI Codex**（Apache License 2.0）。每个派生的文件在开头几行说明这一点及其来源版本（“Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).”、“Modified from OpenAI Codex 57a808a392 (Apache-2.0).” 或注明来源的 “Derived from OpenAI Codex” 文件头）；NOTICE 带有 Codex 的 NOTICE 和许可证。派生的代码：
   - 环境选择、POSIX Shell 启动捕获及本地 MCP 继承（`crates/foundation/src/environment_policy.rs`、`crates/execution/src/snapshot.rs`、`crates/mcp/src/stdio/environment.rs`），来自 Codex `57a808a392`；这里的快照保存在内存中，通过 Agent 进程管理器运行；
-  - 终端界面 `crates/tui`，来自 `codex-rs/tui`（`rust-v0.93.0`，之后的工作来自 `57a808a392`），它的文件搜索（`crates/tui/src/file_search`）来自 `codex-rs/file-search`；
+  - 终端界面 `crates/tui`，来自 `codex-rs/tui`（`rust-v0.93.0`，之后的工作来自 `57a808a392`，侧边栏与异步提问来自 `cf3ff1530d82`），它的文件搜索（`crates/tui/src/file_search`）来自 `codex-rs/file-search`；
   - `crates/config/src/overrides.rs` 及其测试，来自 `codex-rs/common/src/config_override.rs`；
   - `recap` 插件的提示词和对话选取（`crates/agent/src/plugins/recap/prompt.rs`、`history.rs`），来自 `codex-rs/context-fragments/src/recap_prompt.rs`、`codex-rs/tui/src/app/recap.rs` 和 `recap_history.rs`（`57a808a392`）；
   - MCP OAuth 的本机回调（`crates/agent/src/service/mcp/oauth_login.rs`），来自 `codex-rs/rmcp-client/src/perform_oauth_login.rs`（`57a808a392`）；

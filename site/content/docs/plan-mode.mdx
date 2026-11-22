@@ -15,7 +15,7 @@ icon: ClipboardList
 ## 计划模式中有什么 [#tools]
 
 - 只有只读的工具：读取文件、列出目录、搜索文本、网页搜索和抓取、只读的 MCP 工具、Skill 的列表和读取等。
-- 可以向你提问（`request_user_input`），例如在几个方案中选择。
+- 可以向你提问（`request_user_input`；顶层会话还有 `request_user_input_async`），例如在几个方案中选择。
 - 没有运行命令、修改文件、启用或停用 Skill 的工具，任何[权限模式](/docs/permissions)都不会改变这一点。
 
 模型探索完成后，给出一份**提议的计划**，在对话中显示为 `• Proposed Plan` 及其内容。

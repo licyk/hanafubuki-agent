@@ -18,7 +18,7 @@ impl AgentToolContributor for CoreAgentToolContributor {
             if cancellation.is_cancelled() {
                 return Err(AgentToolCatalogError::Cancelled);
             }
-            core_tool_registrations(&context.compression_tools)
+            core_tool_registrations(&context.compression_tools, context.async_user_input)
                 .map(AgentToolContribution::from_tools)
         })
     }
@@ -26,11 +26,13 @@ impl AgentToolContributor for CoreAgentToolContributor {
 
 pub(super) fn core_tool_registrations(
     compression_tools: &[crate::AgentCoreTool],
+    async_user_input: bool,
 ) -> Result<Vec<AgentPlannedTool>, AgentToolCatalogError> {
     let provider_id = AgentToolProviderId::parse("builtin".to_string())
         .map_err(|_| AgentToolCatalogError::InvalidToolName)?;
     crate::AgentCoreTool::STANDARD
         .iter()
+        .chain(async_user_input.then_some(&crate::AgentCoreTool::RequestUserInputAsync))
         .chain(compression_tools)
         .copied()
         .map(|tool| {

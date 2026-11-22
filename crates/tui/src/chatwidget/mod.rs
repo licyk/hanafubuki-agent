@@ -13,6 +13,7 @@
 //! `input_queue`), or runs as a slash command (`commands`).
 
 mod appearance;
+mod async_questions;
 mod commands;
 mod images;
 mod input_flow;
@@ -130,6 +131,7 @@ pub(crate) struct ChatWidget {
     hooks_checked: bool,
     /// What the person sent that the conversation has not taken yet.
     input_queue: input_queue::InputQueue,
+    async_questions: async_questions::Questions,
     /// A `!command` was sent and its turn has not ended.
     user_shell: bool,
     welcome: crate::welcome::Welcome,
@@ -190,6 +192,7 @@ impl ChatWidget {
             model_override,
             hooks_checked: false,
             input_queue: input_queue::InputQueue::default(),
+            async_questions: Default::default(),
             user_shell: false,
         }
     }
@@ -211,6 +214,18 @@ impl ChatWidget {
 
     /// Lets the active modal act on what it announced as due.
     pub(crate) fn tick_active_view(&mut self) -> bool {
+        if let Some(remaining) = self
+            .async_questions
+            .deadline()
+            .and_then(|at| at.checked_duration_since(std::time::Instant::now()))
+        {
+            let delay = remaining.saturating_sub(std::time::Duration::from_secs(20));
+            self.frame_requester.schedule_frame_in(if delay.is_zero() {
+                std::time::Duration::from_secs(1).min(remaining)
+            } else {
+                delay
+            });
+        }
         self.bottom_pane.tick_active_view()
     }
 
@@ -298,7 +313,7 @@ impl ChatWidget {
             if key_event.kind == KeyEventKind::Press
                 && self.bottom_pane.no_modal_or_popup_active()
                 && ((keymap::matches(Action::EditQueuedMessage, &key_event)
-                    && self.edit_queued_message())
+                    && (self.open_async_question() || self.edit_queued_message()))
                     || (keymap::matches(Action::InterruptTurn, &key_event)
                         && self.bottom_pane.is_task_running()
                         && self.esc_handled()))
@@ -307,6 +322,7 @@ impl ChatWidget {
                 return;
             }
         }
+        let question_open = self.async_questions.expanded();
         let input = self.bottom_pane.handle_key_event(key_event);
         if matches!(input, InputResult::Submitted(_) | InputResult::Queued(_)) {
             self.app_event_tx
@@ -317,6 +333,9 @@ impl ChatWidget {
             InputResult::Queued(text) => self.queue_user_message(text),
             InputResult::Command(command, args) => self.dispatch_command(command, args),
             InputResult::None => {}
+        }
+        if question_open {
+            self.take_async_answer();
         }
         self.reap_failed_views();
         self.request_redraw();

@@ -299,7 +299,7 @@ fn fork_memory_evidence_contains_only_child_local_jsonl_items() {
     store
         .create_fork(
             parent,
-            AgentTurnId::new(2),
+            AgentHistoryForkPoint::BeforeTurn(AgentTurnId::new(2)),
             AgentConversationCommit {
                 runtime: child_runtime,
                 history_mutations: vec![AgentHistoryMutation::AppendItem { item: child_item }],

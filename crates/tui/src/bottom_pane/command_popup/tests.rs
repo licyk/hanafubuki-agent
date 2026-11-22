@@ -95,6 +95,7 @@ fn the_unfiltered_list_is_the_registry_in_order() {
         "recap",
         "review",
         "side",
+        "sidebar",
         "close",
         "maintenance",
         "subagents",

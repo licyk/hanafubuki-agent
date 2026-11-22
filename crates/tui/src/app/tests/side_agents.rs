@@ -9,6 +9,46 @@ use super::{subagents::spawn_and_wait, Harness};
 use crate::transcript_mode::TranscriptMode;
 
 #[test]
+fn scrollback_chooser_docks_a_saved_chat_and_a_read_only_subagent() {
+    let mut h = Harness::start(vec![
+        spawn_and_wait("Count the files."),
+        assistant_events("Twelve files."),
+        assistant_events("There are twelve."),
+    ]);
+    let parent = h.answered("Delegate the count.", "There are twelve.");
+    let child = h.subagents_of(parent)[0];
+    h.type_and_submit("/sidebar");
+    h.pump_until_screen_shows("New side chat");
+    h.key(KeyCode::Enter);
+    h.pump_until("new side chat docked", |h| {
+        h.app.active_sidebar_chat().is_some()
+    });
+    assert!(h.tui.terminal.backend().vt100().screen().alternate_screen());
+    assert!(h.app.workspace.last_layout().unwrap().strip.is_some());
+    h.key(KeyCode::Esc);
+    h.pump_until_screen_shows("Subagents");
+    h.key(KeyCode::Home);
+    h.key(KeyCode::Down);
+    h.key(KeyCode::Down);
+    h.key(KeyCode::Enter);
+    h.pump_until("subagent docked", |h| {
+        h.app.active_sidebar_agent() == Some(child)
+    });
+    assert!(h.tui.terminal.backend().vt100().screen().alternate_screen());
+    h.pump_until_screen_shows("read-only");
+    h.key(KeyCode::Char('x'));
+    assert!(h.app.chat_widget.composer_is_empty());
+    h.key(KeyCode::Esc);
+    h.pump_until_screen_shows("Open in sidebar");
+    h.key_with(KeyCode::Char('x'), KeyModifiers::CONTROL);
+    h.key(KeyCode::Char('x'));
+    h.pump_until("native main transcript", |h| {
+        h.app.bridge.session_id() == Some(parent)
+            && !h.tui.terminal.backend().vt100().screen().alternate_screen()
+    });
+}
+
+#[test]
 fn the_parent_keeps_streaming_with_a_child_selected_and_side_focused() {
     for mode in [TranscriptMode::Terminal, TranscriptMode::Owned] {
         let mut harness = Harness::start_timed(

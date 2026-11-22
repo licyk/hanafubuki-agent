@@ -96,7 +96,7 @@ impl App {
         tui: &mut Tui<B>,
     ) {
         self.reset_backtrack();
-        if !self.mode.is_owned() {
+        if !self.using_owned_view() {
             self.tail.flush_all();
             let width = tui.terminal.last_known_screen_size.width;
             let lines = self
@@ -116,7 +116,7 @@ impl App {
         tui: &mut Tui<B>,
         focus: Focus,
     ) {
-        if !self.mode.is_owned() {
+        if !self.using_owned_view() {
             let lines = vec![Line::from("").into(), self.workspace.banner(focus).into()];
             if self.alt_screen_open() {
                 self.deferred_history_lines.extend(lines);

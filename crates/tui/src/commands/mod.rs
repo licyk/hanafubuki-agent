@@ -92,7 +92,7 @@ pub(crate) use subagents::SUBAGENTS;
 pub(crate) use warnings::{show_warnings, WARNINGS};
 
 /// Every command, in presentation order: the most used first.
-pub(crate) static COMMANDS: [&CommandSpec; 58] = [
+pub(crate) static COMMANDS: [&CommandSpec; 59] = [
     &advisor::ADVISOR,
     &advisor::OFF,
     &advisor::MANUAL,
@@ -120,6 +120,7 @@ pub(crate) static COMMANDS: [&CommandSpec; 58] = [
     &recap::RECAP,
     &review::REVIEW,
     &side::SIDE,
+    &side::SIDEBAR,
     &side::CLOSE,
     &maintenance::MAINTENANCE,
     &subagents::SUBAGENTS,

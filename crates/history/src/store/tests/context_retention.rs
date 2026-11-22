@@ -130,7 +130,7 @@ fn a_compacted_segment_is_the_whole_model_context_of_its_forks() {
     store
         .create_fork(
             parent,
-            AgentTurnId::new(2),
+            AgentHistoryForkPoint::BeforeTurn(AgentTurnId::new(2)),
             AgentConversationCommit {
                 runtime: child_runtime,
                 history_mutations: Vec::new(),
@@ -292,7 +292,7 @@ fn a_fork_of_a_compacted_parent_inherits_its_window_not_its_transcript() {
     store
         .create_fork(
             parent,
-            AgentTurnId::new(2),
+            AgentHistoryForkPoint::BeforeTurn(AgentTurnId::new(2)),
             AgentConversationCommit {
                 runtime: child_runtime,
                 history_mutations: Vec::new(),
@@ -341,7 +341,7 @@ fn retention_is_disabled_by_default_and_never_selects_a_referenced_parent() {
     store
         .create_fork(
             parent,
-            AgentTurnId::new(2),
+            AgentHistoryForkPoint::BeforeTurn(AgentTurnId::new(2)),
             AgentConversationCommit {
                 runtime: child_runtime,
                 history_mutations: Vec::new(),

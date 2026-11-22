@@ -28,6 +28,7 @@ const SIDE_DURING_COMPACTION: &str =
 pub(crate) struct OpenedSide {
     pub(crate) parent: AgentSessionId,
     pub(crate) session: OpenedSession,
+    pub(crate) saved: bool,
 }
 
 /// A subagent opened to be shown: its transcript, its parent's title,
@@ -43,7 +44,52 @@ pub(crate) struct OpenedChild {
     waiting: Vec<ApprovalRequest>,
 }
 
+pub(crate) enum SidebarSession {
+    Saved(Box<OpenedSession>, String),
+    Agent(Box<OpenedChild>),
+}
+
 impl AgentBridge {
+    pub(crate) fn read_sidebar_session(
+        &self,
+        parent: AgentSessionId,
+        id: AgentSessionId,
+        child: bool,
+    ) {
+        let sender = self.app_event_tx.untagged();
+        let mut reader = self.companion(sender.clone());
+        reader.page_size = self.page_size;
+        self.agent.runtime().handle().spawn_blocking(move || {
+            let read = if child {
+                reader
+                    .open_child(id)
+                    .map(|opened| SidebarSession::Agent(Box::new(opened)))
+            } else {
+                reader
+                    .open_with_snapshot(id)
+                    .and_then(|(session, snapshot)| {
+                        if snapshot.parent_session_id != Some(parent)
+                            || snapshot.origin != Some(AgentSessionOrigin::Side)
+                            || snapshot.ephemeral
+                        {
+                            return Err(
+                                "This saved side chat belongs to another conversation.".into()
+                            );
+                        }
+                        let title = snapshot
+                            .title
+                            .map_or_else(|| format!("Side chat {id}"), |t| t.value);
+                        Ok(SidebarSession::Saved(Box::new(session), title))
+                    })
+            };
+            sender.send(AppEvent::Workspace(WorkspaceEvent::SidebarSession {
+                parent,
+                id,
+                read,
+            }));
+        });
+    }
+
     /// A bridge over the same Agent with no session, whose replies and
     /// events go through `app_event_tx`.
     pub(crate) fn companion(&self, app_event_tx: AppEventSender) -> AgentBridge {
@@ -59,7 +105,7 @@ impl AgentBridge {
     /// Opens the session's side conversation (or finds the open one) on a
     /// thread of its own: the facade reads the history to fork it.
     /// `message` is sent there once it is shown.
-    pub(crate) fn open_side(&self, message: Option<String>) -> Result<(), String> {
+    pub(crate) fn open_side(&self, message: Option<String>, saved: bool) -> Result<(), String> {
         if self.review_running() {
             return Err(SIDE_DURING_REVIEW.to_string());
         }
@@ -68,9 +114,17 @@ impl AgentBridge {
         let app_event_tx = self.app_event_tx.clone();
         std::thread::spawn(move || {
             let opened = agent
-                .open_side_conversation(parent)
+                .create_side_conversation(
+                    parent,
+                    if saved {
+                        hanafubuki_agent::AgentSessionPersistence::Durable
+                    } else {
+                        hanafubuki_agent::AgentSessionPersistence::Ephemeral
+                    },
+                )
                 .map(|snapshot| OpenedSide {
                     parent,
+                    saved,
                     session: OpenedSession {
                         work: None,
                         session_id: Some(snapshot.id),
@@ -94,15 +148,31 @@ impl AgentBridge {
 
     /// Closes the side conversation `side`: its turn is interrupted and it
     /// is dropped.
-    pub(crate) fn close_side(&self, side: AgentSessionId) {
+    pub(crate) fn close_side(&self, side: AgentSessionId, archive: bool) {
         let app_event_tx = self.app_event_tx.clone();
         let agent = self.agent.clone();
         self.agent.runtime().handle().spawn(async move {
-            let closed = agent
-                .close_side_conversation(side)
-                .await
-                .map_err(|error| format!("the side conversation was not closed: {error}"));
-            app_event_tx.send(AppEvent::Workspace(WorkspaceEvent::SideClosed(closed)));
+            let closed = async {
+                agent.close_side_conversation(side).await?;
+                if archive {
+                    tokio::task::spawn_blocking(move || {
+                        let current = agent.snapshot(side)?;
+                        agent.archive_session(side, current.generation, current.revision)
+                    })
+                    .await
+                    .map_err(|error| AgentError::Persistence(error.to_string()))??;
+                }
+                Ok::<_, AgentError>(())
+            }
+            .await
+            .map_err(|error| format!("the side conversation was not closed: {error}"));
+            app_event_tx
+                .untagged()
+                .send(AppEvent::Workspace(WorkspaceEvent::SideClosed {
+                    side,
+                    archive,
+                    closed,
+                }));
         });
     }
 
@@ -198,7 +268,9 @@ impl AgentBridge {
                 updates.push(TurnUpdate::RestoreElapsed(started));
                 updates.push(TurnUpdate::Reasoning(reasoning));
             }
-            updates.extend(child.waiting.into_iter().map(TurnUpdate::ApprovalRequested));
+            if !self.watch_only {
+                updates.extend(child.waiting.into_iter().map(TurnUpdate::ApprovalRequested));
+            }
         }
         updates
     }

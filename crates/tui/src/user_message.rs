@@ -41,6 +41,20 @@ pub(crate) enum ImageSource {
     Attachment(AgentImageAttachmentRef),
 }
 
+/// Both the live preview and the transcript show the answer in someone's
+/// words while sending and copying the actual user message.
+pub(crate) fn display_text(message: &str) -> String {
+    let answers = hanafubuki_agent::AgentAsyncQuestionReply::from_message(message);
+    if answers.is_empty() {
+        return crate::mention_codec::display_text(message);
+    }
+    answers
+        .into_iter()
+        .map(|reply| format!("{} → {}", reply.question, reply.answer))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// The label image `number` (from 1) has in a message's text.
 pub(crate) fn image_label(number: usize) -> String {
     format!("[Image #{number}]")

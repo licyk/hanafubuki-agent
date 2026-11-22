@@ -7,6 +7,7 @@ pub struct AgentToolCatalogContext {
     pub generation: AgentGeneration,
     pub session_revision: crate::AgentRevision,
     pub sampling_step: u32,
+    pub async_user_input: bool,
     pub mode: crate::AgentSessionMode,
     pub input_capabilities: hanafubuki_agent_model_api::ModelInputCapabilities,
     pub provider_capabilities: hanafubuki_agent_tool_contracts::ToolProviderCapabilities,

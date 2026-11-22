@@ -325,7 +325,7 @@ impl InputQueue {
     }
 
     pub(super) fn preview(&self) -> PendingInput {
-        let text = |message: &UserMessage| crate::mention_codec::display_text(&message.text);
+        let text = |message: &UserMessage| crate::user_message::display_text(&message.text);
         PendingInput {
             steers: self
                 .steers
@@ -335,6 +335,7 @@ impl InputQueue {
             held: self.held.iter().map(text).collect(),
             queued: self.queued.iter().map(text).collect(),
             steer_is_editable: self.steer_is_editable(),
+            ..Default::default()
         }
     }
 }

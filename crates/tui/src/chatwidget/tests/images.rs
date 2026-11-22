@@ -50,7 +50,7 @@ fn a_steer_carries_its_images_whose_copies_go_once_the_turn_read_it() {
         outcome: SteerOutcome::Accepted(1),
     });
     assert!(copy_exists(&image));
-    chat.handle_turn_update(TurnUpdate::SteeringConsumed(1));
+    chat.handle_turn_update(TurnUpdate::SteeringConsumed(1, Vec::new()));
     let cells = trimmed(drain(&events).0);
     assert_eq!(cells, ["› [Image #1] look\n  [Image #1: clipboard-1.png]"]);
     assert!(!copy_exists(&image));

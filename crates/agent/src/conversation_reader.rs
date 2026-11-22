@@ -166,6 +166,8 @@ impl AgentConversationReader {
         session_id: AgentSessionId,
     ) -> Result<Option<String>, AgentError> {
         self.core.activate_session(session_id)?;
+        let side = self.core.snapshot(session_id)?.origin
+            == Some(hanafubuki_agent_kernel::AgentSessionOrigin::Side);
         let mut cursor = None;
         let mut through_revision = None;
         loop {
@@ -176,10 +178,14 @@ impl AgentConversationReader {
                 direction: AgentHistorySortDirection::Ascending,
                 through_revision,
             })?;
-            let first = page.items.into_iter().find_map(|item| match item.content {
-                ConversationItem::UserMessage { text, .. } => Some(text),
-                _ => None,
-            });
+            let first = page
+                .items
+                .into_iter()
+                .filter(|item| !side || item.source_session_id == session_id)
+                .find_map(|item| match item.content {
+                    ConversationItem::UserMessage { text, .. } => Some(text),
+                    _ => None,
+                });
             if first.is_some() {
                 return Ok(first);
             }

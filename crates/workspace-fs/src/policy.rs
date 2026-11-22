@@ -109,6 +109,21 @@ impl WorkspaceFsPolicy {
             .any(|root| path.starts_with(root))
     }
 
+    /// Resolve a local browser request under one of the current workspace roots.
+    pub fn resolve_browser_path(&self, value: &Path) -> Result<ResolvedPath, WorkspaceFsError> {
+        let path = self.workspace_roots[0]
+            .join_request(value)
+            .map_err(resolution_error)?;
+        let resolved = ResolvedPath::resolve(path).map_err(resolution_error)?;
+        self.ensure_unprotected(&resolved)?;
+        if !self.is_within_workspace(&resolved) {
+            return Err(WorkspaceFsError::InvalidRequest(
+                "file is outside the conversation workspace".into(),
+            ));
+        }
+        Ok(resolved)
+    }
+
     pub(crate) fn ensure_unprotected(&self, path: &ResolvedPath) -> Result<(), WorkspaceFsError> {
         if self
             .protected_roots

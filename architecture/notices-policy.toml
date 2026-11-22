@@ -16,8 +16,19 @@ path = "crates/tui/src"
 markers = [
     "Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0).",
     "Modified from OpenAI Codex 57a808a392 (Apache-2.0).",
+    "Modified from OpenAI Codex cf3ff1530d82 (Apache-2.0).",
 ]
 notice = "crates/tui"
+
+[[derived]]
+path = "crates/kernel/src/core_tools/specs.rs"
+markers = ["Modified from OpenAI Codex cf3ff1530d82 (Apache-2.0)."]
+notice = "crates/kernel/src/core_tools/specs.rs"
+
+[[derived]]
+path = "crates/kernel/src/model/async_question.rs"
+markers = ["Modified from OpenAI Codex cf3ff1530d82 (Apache-2.0)."]
+notice = "crates/kernel/src/model/async_question.rs"
 
 [[derived]]
 path = "crates/config/src/overrides.rs"
@@ -88,6 +99,10 @@ notice = "crates/agent/src/plugins/subagents"
 path = "crates/agent/src/plugins/subagents/service/runs.rs"
 markers = ["Derived from OpenAI Codex (https://github.com/openai/codex),"]
 notice = "crates/agent/src/plugins/subagents"
+
+[[original]]
+path = "crates/tui/src/chatwidget/tests/async_questions.rs"
+reason = "Exercises this project's event routing, steering and terminal views."
 
 [[original]]
 path = "crates/agent/src/plugins/subagents/service/statuses.rs"
@@ -2120,3 +2135,23 @@ reason = "Native commands for explicit Advisor activation, one-off consultations
 [[original]]
 path = "crates/tui/src/bottom_pane/actions.rs"
 reason = "The Agent's clickable dialog actions map their rendered terminal cells to the keys handled by each view."
+
+[[original]]
+path = "crates/tui/src/app/tests/sidebar.rs"
+reason = "Exercises this Agent's chooser and filesystem facade together through its VT100 harness."
+
+[[original]]
+path = "crates/tui/src/agent_bridge/sidebar_files.rs"
+reason = "Native bridge for paginated conversation history and session-scoped workspace reads and watches."
+
+[[original]]
+path = "crates/tui/src/sidebar_files/tests.rs"
+reason = "Exercises the Agent's document reader, linked history files and image buffer."
+
+[[original]]
+path = "crates/tui/src/sidebar_files/image/tests.rs"
+reason = "Exercises native preview encoding and frame replacement using the Agent's terminal backend."
+
+[[original]]
+path = "crates/tui/src/app/tests/sidebar_files.rs"
+reason = "Verifies file discovery across persisted and live turns through the standalone runtime."

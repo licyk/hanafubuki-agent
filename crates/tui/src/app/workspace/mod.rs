@@ -16,6 +16,8 @@ mod keys;
 mod panes;
 mod routing;
 mod settings;
+mod side_tabs;
+mod sidebar;
 mod tasks;
 
 use std::io::{self, Write};
@@ -46,6 +48,8 @@ pub(super) use routing::Route;
 
 /// What the app does with its conversations.
 pub(crate) enum WorkspaceEvent {
+    OpenSidebar,
+    Files(Box<crate::sidebar_files::FileUpdate>),
     /// `/side [message]`: the side conversation, opened or shown again;
     /// the message is sent there.
     OpenSide(Option<String>),
@@ -56,7 +60,21 @@ pub(crate) enum WorkspaceEvent {
         opened: Result<Box<OpenedSide>, String>,
         message: Option<String>,
     },
-    SideClosed(Result<(), String>),
+    SideClosed {
+        side: AgentSessionId,
+        archive: bool,
+        closed: Result<(), String>,
+    },
+    SidebarSession {
+        parent: AgentSessionId,
+        id: AgentSessionId,
+        read: Result<crate::agent_bridge::SidebarSession, String>,
+    },
+    SidebarSessions {
+        parent: AgentSessionId,
+        saved: Result<Vec<(AgentSessionId, String)>, String>,
+        agents: Result<Vec<(AgentSessionId, String)>, String>,
+    },
     /// Shows a subagent in place of the main conversation.
     OpenChild(AgentSessionId),
     /// Alt+Right (`forward`) or Alt+Left on an empty composer: the next or
@@ -139,6 +157,8 @@ pub(super) struct Second {
     id: u64,
     parent: AgentSessionId,
     session: AgentSessionId,
+    kind: side_tabs::TabKind,
+    title: String,
     pub(super) parked: Parked,
     /// Which conversation the app's fields hold.
     pub(super) focus: Focus,
@@ -146,7 +166,13 @@ pub(super) struct Second {
 
 #[derive(Default)]
 pub(super) struct Workspace {
+    pub(in crate::app) sidebar: sidebar::Sidebar,
     second: Option<Second>,
+    hidden: Vec<Second>,
+    reading_tab: Option<AgentSessionId>,
+    pub(in crate::app) saved_chats: Vec<(AgentSessionId, String)>,
+    pub(in crate::app) sidebar_agents: Vec<(AgentSessionId, String)>,
+    closing_tabs: std::collections::BTreeSet<AgentSessionId>,
     child: Option<Child>,
     next_id: u64,
     /// The side conversation is being opened.
@@ -204,9 +230,13 @@ impl Workspace {
     /// Whether the conversation not in the app's fields has no streamed
     /// row queued.
     pub(super) fn parked_streams_idle(&self) -> bool {
-        self.second
-            .as_ref()
-            .is_none_or(|second| second.parked.chat_widget.stream_queues_idle())
+        self.hidden
+            .iter()
+            .all(|second| second.parked.chat_widget.stream_queues_idle())
+            && self
+                .second
+                .as_ref()
+                .is_none_or(|second| second.parked.chat_widget.stream_queues_idle())
             && self
                 .child
                 .as_ref()
@@ -246,22 +276,43 @@ impl App {
         tui: &mut Tui<B>,
         event: WorkspaceEvent,
     ) {
+        self.workspace.sidebar.chooser_dirty = true;
         match event {
+            WorkspaceEvent::OpenSidebar => self.open_sidebar(tui),
+            WorkspaceEvent::Files(update) => self.workspace.sidebar.files.apply(*update),
             WorkspaceEvent::OpenSide(message) => self.open_side(tui, message),
             WorkspaceEvent::CloseSide => self.close_second(tui),
             WorkspaceEvent::SideOpened { opened, message } => {
                 self.workspace.opening_side = false;
                 match opened {
                     Ok(side) => self.side_opened(tui, *side, message),
-                    Err(error) => self.chat_widget.add_error_message(error),
+                    Err(error) => self.side_open_error(tui, error),
                 }
             }
-            WorkspaceEvent::SideClosed(closed) => match closed {
-                Ok(()) => self
-                    .chat_widget
-                    .add_info_message("Side conversation closed.".to_string()),
-                Err(error) => self.chat_widget.add_error_message(error),
-            },
+            WorkspaceEvent::SideClosed {
+                side,
+                archive,
+                closed,
+            } => self.side_tab_closed(tui, side, archive, closed),
+            WorkspaceEvent::SidebarSession { parent, id, read } => {
+                self.sidebar_session_read(tui, parent, id, read)
+            }
+            WorkspaceEvent::SidebarSessions {
+                parent,
+                saved,
+                agents,
+            } => {
+                if self.main_session_id() == Some(parent) {
+                    match saved {
+                        Ok(saved) => self.workspace.saved_chats = saved,
+                        Err(error) => self.workspace.sidebar.notice = Some(error),
+                    }
+                    match agents {
+                        Ok(agents) => self.workspace.sidebar_agents = agents,
+                        Err(error) => self.workspace.sidebar.notice = Some(error),
+                    }
+                }
+            }
             WorkspaceEvent::OpenChild(child) => self.open_child(tui, child),
             WorkspaceEvent::StepAgent { forward } => self.list_agents_to_step(forward),
             WorkspaceEvent::StepAgentListed {
@@ -310,7 +361,19 @@ impl App {
         tui: &mut Tui<B>,
         message: Option<String>,
     ) {
-        if self.workspace.second.is_some() {
+        if self.active_sidebar_chat().is_none() {
+            if let Some(id) = self
+                .workspace
+                .hidden
+                .iter()
+                .rev()
+                .find(|tab| tab.kind.is_chat())
+                .map(|tab| tab.session)
+            {
+                self.select_side_chat(tui, id);
+            }
+        }
+        if self.active_sidebar_chat().is_some() {
             self.set_focus(tui, Focus::Second);
             if let Some(message) = message {
                 self.chat_widget
@@ -321,7 +384,7 @@ impl App {
         if self.workspace.opening_side {
             return;
         }
-        match self.main_bridge().open_side(message) {
+        match self.main_bridge().open_side(message, false) {
             Ok(()) => self.workspace.opening_side = true,
             Err(error) => self.chat_widget.add_error_message(error),
         }
@@ -337,17 +400,33 @@ impl App {
             return;
         };
         // The interface moved to another session meanwhile.
-        if self.workspace.second.is_some() || self.main_session_id() != Some(side.parent) {
-            self.bridge.close_side(session);
+        if self.main_session_id() != Some(side.parent) {
+            self.bridge.close_side(session, false);
             return;
         }
-        self.install_second(tui, side.parent, session);
+        let parked = self.workspace.sidebar.showing_panel();
+        let title = message.as_ref().map_or_else(
+            || format!("Side chat {session}"),
+            |s| s.lines().next().unwrap_or(s).to_owned(),
+        );
+        let kind = if side.saved {
+            side_tabs::TabKind::Saved
+        } else {
+            side_tabs::TabKind::Temporary
+        };
+        self.install_second(tui, side.parent, session, kind, title);
+        if side.saved {
+            self.request_sidebar_sessions();
+        }
         if let Some(update) = self.bridge.reply(AgentReply::SessionOpened(side.session)) {
             self.show_update(update);
         }
         if let Some(message) = message {
             self.chat_widget
                 .submit_user_message(UserMessage::from_text(message));
+        }
+        if parked {
+            self.hide_side_chat(tui);
         }
     }
 
@@ -358,7 +437,10 @@ impl App {
         tui: &mut Tui<B>,
         parent: AgentSessionId,
         session: AgentSessionId,
+        kind: side_tabs::TabKind,
+        title: String,
     ) {
+        self.hide_side_chat(tui);
         let (id, parked) = self.new_parked();
         self.workspace.zoomed = false;
         self.workspace.second = Some(Second {
@@ -366,6 +448,8 @@ impl App {
             parent,
             session,
             parked,
+            kind,
+            title,
             focus: Focus::Main,
         });
         self.set_focus(tui, Focus::Second);
@@ -419,8 +503,7 @@ impl App {
 
     fn close_second<B: Backend<Error = io::Error> + Write>(&mut self, tui: &mut Tui<B>) {
         if let Some(side) = self.workspace.second.as_ref().map(|second| second.session) {
-            self.leave_second(tui);
-            self.bridge.close_side(side);
+            self.close_side_tab(tui, side, false);
         } else if self.workspace.child.is_some() {
             self.leave_child(tui);
         } else {
@@ -433,6 +516,7 @@ impl App {
     fn leave_second<B: Backend<Error = io::Error> + Write>(&mut self, tui: &mut Tui<B>) {
         self.set_focus(tui, Focus::Main);
         self.workspace.second = None;
+        self.leave_panel(tui);
         self.workspace.zoomed = false;
         self.workspace.dragging = false;
         self.workspace.layout = None;
@@ -442,17 +526,32 @@ impl App {
     /// After an event: a side conversation whose parent the main one no
     /// longer shows (`/new`, `/resume`, …) is closed.
     pub(super) fn sync_second<B: Backend<Error = io::Error> + Write>(&mut self, tui: &mut Tui<B>) {
-        let Some(Second {
-            parent, session, ..
-        }) = self.workspace.second.as_ref()
-        else {
-            return;
-        };
-        let (parent, session) = (*parent, *session);
-        if self.main_session_id() != Some(parent) {
-            self.leave_second(tui);
-            self.bridge.close_side(session);
+        let main = self.main_session_id();
+        if self
+            .workspace
+            .second
+            .as_ref()
+            .is_some_and(|tab| Some(tab.parent) != main)
+        {
+            self.hide_side_chat(tui);
         }
+        if self
+            .workspace
+            .hidden
+            .iter()
+            .all(|tab| Some(tab.parent) == main)
+        {
+            return;
+        }
+        let mut remaining = Vec::new();
+        for tab in std::mem::take(&mut self.workspace.hidden) {
+            if Some(tab.parent) == main {
+                remaining.push(tab);
+            } else if tab.kind.is_chat() {
+                self.bridge.close_side(tab.session, false);
+            }
+        }
+        self.workspace.hidden = remaining;
     }
 
     /// The panes' keys (a pane action, wherever it is read), and in a
@@ -486,7 +585,11 @@ impl App {
             && !self.chat_widget.is_task_running()
             && !self.chat_widget.has_pending_input();
         if returns {
-            self.return_to_main(tui);
+            if self.workspace.sidebar.uses_fullscreen() && self.workspace.second_focused() {
+                self.open_sidebar(tui);
+            } else {
+                self.return_to_main(tui);
+            }
         }
         returns
     }
@@ -512,6 +615,10 @@ impl App {
                 }
             }
             PaneAction::ToggleZoom => self.workspace.zoomed = !self.workspace.zoomed,
+            PaneAction::Close if self.workspace.sidebar.uses_fullscreen() => {
+                self.hide_side_chat(tui);
+                self.leave_panel(tui);
+            }
             PaneAction::Close => self.close_second(tui),
         }
         self.schedule_frame(Instant::now());

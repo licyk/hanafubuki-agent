@@ -27,6 +27,7 @@ impl ChatWidget {
             crate::welcome::Welcome::new(opened.transcript.is_empty() && opened.older.is_none());
         self.welcome.configure(&self.preferences);
         self.input_queue = super::input_queue::InputQueue::default();
+        self.reset_async_questions();
         self.user_shell = false;
         self.sync_pending_input();
         self.running_tools.clear();

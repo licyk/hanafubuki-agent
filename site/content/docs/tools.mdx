@@ -18,6 +18,8 @@ icon: Wrench
 | `goal`         | `get_goal`、`create_goal`、`update_goal`                                                                      |
 | `subagents`    | `spawn_agent`、`send_message`、`followup_task`、`wait_agent`、`list_agents`、`interrupt_agent`                |
 
+顶层会话还可通过 `request_user_input_async` 提出可选问题。工具接受一个或多个标题，各题可附建议答案。提问立即得到确认，模型可继续工作；用户逐题以普通消息回答。
+
 另外有几个总是存在的工具：`update_plan`（更新任务计划）、`request_user_input`（向你提问）、`new_context`（开始新的上下文窗口），以及在有延迟提供的工具时出现的 `search_tools` 和 `tool_list`。
 
 ## 工具发现 [#tool-discovery]

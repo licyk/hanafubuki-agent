@@ -16,14 +16,13 @@ impl AgentApplicationService {
     /// Opens the side conversation of `parent`: an ephemeral fork of its
     /// history at its last turn boundary (before the turn it runs, if one
     /// does), with the side policy and the boundary its model reads first.
-    /// A parent has at most one: opening it again returns the open one.
+    /// Reuses the oldest temporary side chat when one is already open.
     /// Turns run on it through [`Self::submit_turn_with_sink`]; it is never
     /// listed and is gone once closed or when the Agent stops.
     pub fn open_side_conversation(
         &self,
         parent: AgentSessionId,
     ) -> Result<AgentSessionRuntimeSnapshot, AgentError> {
-        self.activate_session(parent)?;
         let _opening = self.side_conversations.lock();
         if let Some(side) = self
             .core
@@ -32,10 +31,21 @@ impl AgentApplicationService {
         {
             return self.core.snapshot(*side);
         }
+        self.create_side_conversation(parent, AgentSessionPersistence::Ephemeral)
+    }
+
+    /// Creates a new side chat. A durable one is attached to its parent and
+    /// can be reopened after its tab closes or the application restarts.
+    pub fn create_side_conversation(
+        &self,
+        parent: AgentSessionId,
+        persistence: AgentSessionPersistence,
+    ) -> Result<AgentSessionRuntimeSnapshot, AgentError> {
+        self.activate_session(parent)?;
         self.driver.create_child(AgentChildSessionRequest {
             parent_session_id: parent,
             origin: AgentSessionOrigin::Side,
-            persistence: AgentSessionPersistence::Ephemeral,
+            persistence,
             base: AgentChildSessionBase::ParentHead,
             context: side_conversation_context(),
             scope: Default::default(),
@@ -43,11 +53,29 @@ impl AgentApplicationService {
         })
     }
 
-    /// Closes the side conversation `side`: interrupts its running turn,
-    /// stops its background terminals and drops it.
+    /// Lists the saved side chats attached to this parent, oldest first.
+    pub fn saved_side_conversations(
+        &self,
+        parent: AgentSessionId,
+    ) -> Result<Vec<AgentSessionSummary>, AgentError> {
+        self.driver.children(parent, AgentSessionOrigin::Side)
+    }
+
+    /// Interrupts the side chat and stops its terminals. A temporary chat is
+    /// dropped; a saved chat keeps its history.
     pub async fn close_side_conversation(&self, side: AgentSessionId) -> Result<(), AgentError> {
-        let snapshot = self.core.snapshot(side)?;
-        if snapshot.origin != Some(AgentSessionOrigin::Side) || !snapshot.ephemeral {
+        let core = self.core.clone();
+        let snapshot = hanafubuki_agent_foundation::blocking::run_blocking_operation(
+            self.blocking.as_ref(),
+            "open side conversation for close",
+            move || {
+                core.activate_session(side)?;
+                core.snapshot(side)
+            },
+        )
+        .await
+        .map_err(AgentError::Persistence)??;
+        if snapshot.origin != Some(AgentSessionOrigin::Side) {
             return Err(AgentError::InvalidInput(format!(
                 "Agent session {side} is not a side conversation"
             )));

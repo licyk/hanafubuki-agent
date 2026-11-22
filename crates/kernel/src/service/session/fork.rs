@@ -87,9 +87,11 @@ impl AgentService {
             },
         };
         let cell = self.inner.sessions.insert(record, &self.inner.accepting)?;
-        if let Err(error) =
-            self.persist_current_fork(&cell, request.source_session_id, request.before_turn_id)
-        {
+        if let Err(error) = self.persist_current_fork(
+            &cell,
+            request.source_session_id,
+            AgentHistoryForkPoint::BeforeTurn(request.before_turn_id),
+        ) {
             self.remove_unpersisted_session(&cell);
             return Err(error);
         }

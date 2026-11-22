@@ -9,9 +9,9 @@ use hanafubuki_agent_kernel::test_support::FakeTools;
 use hanafubuki_agent_kernel::{
     AgentActivityAction, AgentConfiguredModelFacts, AgentConversationCommit, AgentEvent,
     AgentEventKind, AgentEventSink, AgentExecutionProgressStatus, AgentHistoryAppendAck,
-    AgentHistoryBase, AgentHistoryItem, AgentHistoryMutation, AgentHistoryStore,
-    AgentHistoryStoreError, AgentKernelRegistries, AgentRecoveredSession, AgentRevision,
-    AgentService, AgentSessionConfig, AgentSessionId, AgentSessionListRequest,
+    AgentHistoryBase, AgentHistoryForkPoint, AgentHistoryItem, AgentHistoryMutation,
+    AgentHistoryStore, AgentHistoryStoreError, AgentKernelRegistries, AgentRecoveredSession,
+    AgentRevision, AgentService, AgentSessionConfig, AgentSessionId, AgentSessionListRequest,
     AgentSessionModelConfigurationUpdate, AgentSessionOpenResult, AgentSessionPage,
     AgentToolProgressUpdate, AgentTranscriptPage, AgentTranscriptPageRequest, AgentTurnId,
     AgentTurnInput, AgentTurnPageRequest, ConversationItem, EphemeralAgentHistoryStore,
@@ -454,12 +454,11 @@ impl AgentHistoryStore for RecordingHistoryStore {
     fn create_fork(
         &self,
         source_session_id: AgentSessionId,
-        before_turn_id: AgentTurnId,
+        point: AgentHistoryForkPoint,
         commit: AgentConversationCommit,
     ) -> Result<AgentHistoryBase, AgentHistoryStoreError> {
         self.commits.lock().unwrap().push(commit.clone());
-        self.inner
-            .create_fork(source_session_id, before_turn_id, commit)
+        self.inner.create_fork(source_session_id, point, commit)
     }
 
     fn flush_session(&self, session_id: AgentSessionId) -> Result<(), AgentHistoryStoreError> {

@@ -229,6 +229,13 @@ pub struct AgentHistoryBase {
     pub end_byte_offset: u64,
 }
 
+/// The persisted record where a fork leaves its source.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AgentHistoryForkPoint {
+    BeforeTurn(AgentTurnId),
+    ThroughItem(AgentHistoryItemId),
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentConversationCommit {

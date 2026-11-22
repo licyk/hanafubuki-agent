@@ -41,6 +41,22 @@ impl ChatComposer {
         }
     }
 
+    pub(crate) fn append_question_drafts(&mut self, drafts: &str) {
+        if self.history_search.is_none() {
+            if let Some(paste) = self.paste_burst.flush_before_modified_input() {
+                self.handle_paste(paste);
+            }
+        }
+        self.edit_draft(|composer| {
+            composer.textarea.set_cursor(composer.textarea.text().len());
+            if !composer.textarea.is_empty() {
+                composer.textarea.insert_str("\n\n");
+            }
+            composer.textarea.insert_str(drafts);
+            composer.sync_popups();
+        });
+    }
+
     /// Runs `edit` on the draft, whether it shows or is put aside behind a
     /// match.
     pub(in crate::bottom_pane::chat_composer) fn edit_draft(

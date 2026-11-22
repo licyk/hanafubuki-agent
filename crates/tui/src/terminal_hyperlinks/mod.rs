@@ -60,6 +60,15 @@ impl HyperlinkLine {
         }
     }
 
+    /// Carries a local reader link through wrapping without emitting a terminal escape.
+    pub(crate) fn reader_link(line: Line<'static>, destination: &str) -> Self {
+        let mut result = Self::new(line);
+        if crate::sidebar_files::FileTarget::link(destination).is_some() {
+            result.push_link(0..result.width(), destination.to_owned());
+        }
+        result
+    }
+
     pub(crate) fn width(&self) -> usize {
         self.line.spans.iter().map(span_width).sum()
     }

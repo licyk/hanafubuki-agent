@@ -29,7 +29,7 @@ mod blocks;
 mod links;
 mod list_spacing;
 mod lists;
-mod local_links;
+pub(crate) mod local_links;
 mod math;
 mod mermaid;
 mod output;

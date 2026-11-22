@@ -133,6 +133,60 @@ impl Harness {
 }
 
 #[test]
+fn async_questions_keep_working_and_deliver_only_the_chosen_answer() {
+    let questions = hanafubuki_agent::test_support::tool_events(
+        "request_user_input_async",
+        r#"{"questions":[{"title":"Which scope?","options":["Whole workspace","Tests only"]},{"title":"What else should I know?"}]}"#,
+    );
+    let mut harness = Harness::timed(vec![
+        now(questions),
+        held(assistant_events("Independent work.")),
+        now(assistant_events("Received.")),
+    ]);
+    harness.type_and_submit("Start.");
+    harness.pump_until_screen_shows("2 questions");
+    harness.pump_until("sampling to continue before any answer", |h| {
+        h.server.requests().len() == 2
+    });
+    harness.type_draft("Main draft.");
+    harness.key_with(KeyCode::Left, KeyModifiers::SHIFT);
+    harness.pump_until_screen_shows("Question 1 of 2");
+    harness.key_with(KeyCode::Left, KeyModifiers::SHIFT);
+    harness.pump_until_screen_shows("Question 2 of 2");
+    assert!(harness
+        .app
+        .handle_event(&mut harness.tui, AppEvent::Paste("待补充".into())));
+    harness.key(KeyCode::BackTab);
+    harness.pump_until_screen_shows("Question 1 of 2");
+    harness.key(KeyCode::Down);
+    harness.pump_until_screen_shows("› 2. Tests only");
+    harness.key(KeyCode::Enter);
+    harness.pump_until_steered();
+    harness.key(KeyCode::Esc);
+    assert_eq!(harness.app.chat_widget.composer_text(), "Main draft.");
+    harness.server.hold.notify_one();
+    harness.pump_until_screen_shows("Received.");
+    harness.pump_until_turn_ends();
+    let prompts = harness.saved_prompts();
+    assert_eq!(prompts.len(), 2, "{prompts:?}");
+    let replies = hanafubuki_agent::AgentAsyncQuestionReply::from_message(
+        prompts[1].strip_prefix("steering: ").unwrap(),
+    );
+    assert_eq!(
+        replies[0].question_item_id,
+        hanafubuki_agent::AgentAsyncQuestion::item_id("call-tool", 0)
+    );
+    assert_eq!(replies[0].answer, "Tests only");
+    assert_eq!(replies[0].question, "Which scope?");
+    let draft = harness.app.chat_widget.composer_text();
+    assert!(
+        draft.starts_with("Main draft.") && draft.ends_with("待补充"),
+        "{draft}"
+    );
+    assert!(harness.transcript().contains("Which scope? → Tests only"));
+}
+
+#[test]
 fn enter_steers_the_running_turn_which_reads_it_at_its_next_step() {
     let mut harness = Harness::timed(vec![
         held(assistant_events("Working on it.")),

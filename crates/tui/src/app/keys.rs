@@ -36,6 +36,46 @@ const PAGER: [Context; 2] = [Context::Global, Context::Pager];
 const AGENTS: [Context; 1] = [Context::Agents];
 
 impl App {
+    /// Pasted text goes to the composer, or to a transcript search being
+    /// edited; the other overlays take none.
+    pub(super) fn handle_paste(&mut self, text: String) {
+        self.cancel_primed_backtrack();
+        // Pasted text arrives with `\r` line endings in many terminals.
+        let text = text.replace("\r\n", "\n").replace('\r', "\n");
+        if self.handle_settings_paste(&text)
+            || (self.overlay.is_none()
+                && self.resume_picker.is_none()
+                && !self.workspace.agents_open()
+                && self.sidebar_paste(&text))
+        {
+            return;
+        }
+        let owned = self.using_owned_view();
+        let to_search = match self.overlay.as_mut() {
+            Some(Overlay::Transcript(transcript)) => transcript.handle_paste(&text),
+            Some(Overlay::Static(_)) => false,
+            None if self.workspace.agents_open() => self
+                .workspace
+                .agents_mut()
+                .is_some_and(|center| center.paste(&text)),
+            None if self.resume_picker.is_some() => false,
+            None if owned && self.transcript_view.is_search_editing() => {
+                self.transcript_view.paste_search(&text)
+            }
+            None => {
+                self.transcript_view.clear_activity_focus();
+                if text.is_empty() {
+                    return self.paste_image(super::paste_image::PasteTrigger::EmptyPaste);
+                }
+                self.chat_widget.handle_paste(text);
+                return;
+            }
+        };
+        if to_search {
+            self.schedule_frame(Instant::now());
+        }
+    }
+
     /// `false` when the app should exit.
     pub(super) fn handle_key_event<B: Backend<Error = io::Error> + Write>(
         &mut self,
@@ -63,7 +103,9 @@ impl App {
         if self.handle_settings_key(tui, key) {
             return true;
         }
-        let contexts: &[Context] = if self.chat_widget.captures_keys() {
+        let contexts: &[Context] = if self.workspace.sidebar.owns_input() {
+            &[Context::Global]
+        } else if self.chat_widget.captures_keys() {
             &[]
         } else if self.overlay.is_some() {
             &PAGER
@@ -132,6 +174,9 @@ impl App {
         tui: &mut Tui<B>,
         key: KeyEvent,
     ) -> bool {
+        if self.overlay.is_none() && self.sidebar_key(tui, key) {
+            return true;
+        }
         if self.handle_workspace_key(tui, key) {
             return true;
         }
@@ -157,7 +202,7 @@ impl App {
             self.schedule_frame(Instant::now());
             return true;
         }
-        if self.mode.is_owned() {
+        if self.using_owned_view() {
             if self.handle_owned_key(key) {
                 self.schedule_frame(Instant::now());
                 return true;

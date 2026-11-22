@@ -1,4 +1,5 @@
 mod activity;
+mod async_question;
 mod compression;
 mod configured_facts;
 mod context_composition;
@@ -20,6 +21,7 @@ pub use activity::{
     AgentActivityKind, AgentActivityOutputPreview, AgentActivityPhase, AgentActivitySnapshot,
     AgentExecutionActivityRef,
 };
+pub use async_question::{AgentAsyncQuestion, AgentAsyncQuestionReply};
 pub use compression::{
     compress_call_ranges, AgentCompressRange, AgentCompressionChain, AgentCompressionDelta,
     AgentCompressionState, AgentCompressionStats, AgentCompressionStatus, AgentCompressionSummary,

@@ -267,10 +267,10 @@ impl FileAgentHistoryStore {
     pub(in crate::store) fn create_fork_inner(
         &self,
         source_session_id: AgentSessionId,
-        before_turn_id: AgentTurnId,
+        point: AgentHistoryForkPoint,
         mut commit: AgentConversationCommit,
     ) -> Result<AgentHistoryBase, AgentHistoryStoreError> {
-        let history_base = self.lookup_before_turn_base(source_session_id, before_turn_id)?;
+        let history_base = self.lookup_fork_base(source_session_id, point)?;
         commit.runtime.history_base = Some(history_base);
         self.create_session_inner(commit)?;
         Ok(history_base)

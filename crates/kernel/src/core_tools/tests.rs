@@ -60,6 +60,23 @@ fn a_question_to_the_user_takes_ten_questions_of_five_options() {
 }
 
 #[test]
+fn async_questions_accept_free_text_suggestions_and_future_fields() {
+    let tool = AgentCoreTool::RequestUserInputAsync;
+    let valid = json!({"questions":[{"title":"Why?","future":3},{"title":"Choose","options":["Only suggestion"]}]});
+    assert!(
+        matches!(parse(tool, valid), Ok(CoreToolCall::AsyncQuestions(q)) if q.len()==2 && q[0].options.is_none())
+    );
+    for invalid in [
+        json!([]),
+        json!([{"title":" "}]),
+        json!([{"title":"Choose","options":[]}]),
+        json!([{"title":"Choose","options":[" "]}]),
+    ] {
+        assert!(parse(tool, json!({"questions":invalid})).is_err());
+    }
+}
+
+#[test]
 fn the_question_schema_states_the_same_limits() {
     let spec = AgentCoreTool::RequestUserInput.model_spec();
     let questions = &spec.input_schema["properties"]["questions"];
@@ -82,7 +99,10 @@ fn plan_mode_keeps_only_the_question_to_the_user_and_the_context_tools() {
         assert!(tool.allowed_in_mode(AgentSessionMode::Default));
         assert_eq!(
             tool.allowed_in_mode(AgentSessionMode::Plan),
-            tool == AgentCoreTool::RequestUserInput || tool.is_compression(),
+            matches!(
+                tool,
+                AgentCoreTool::RequestUserInput | AgentCoreTool::RequestUserInputAsync
+            ) || tool.is_compression(),
             "{}",
             tool.name()
         );

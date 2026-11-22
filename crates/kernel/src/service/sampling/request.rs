@@ -29,6 +29,7 @@ pub(in crate::service) fn tool_catalog_context(
         session_revision: crate::AgentRevision::new(record.status.revision),
         sampling_step,
         mode: record.settings.config.mode,
+        async_user_input: record.offers_async_user_input(),
         input_capabilities: record.settings.effective_input_capabilities,
         provider_capabilities: turn.model_session.tool_capabilities(),
         selected_deferred_tools: selected_deferred_tools(&record.conversation.history),

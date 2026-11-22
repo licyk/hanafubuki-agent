@@ -173,6 +173,7 @@ fn without_reworded(mut request: Value) -> Value {
                     | "fetch_web_page"
                     // Its schema grew past what the pre-wake fixture recorded.
                     | "request_user_input"
+                    | "request_user_input_async"
             )
         )
     });

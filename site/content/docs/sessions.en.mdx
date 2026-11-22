@@ -85,7 +85,7 @@ hanafubuki-agent sessions delete 2
 
 - **Archive**: the session leaves `sessions list` and the resume picker but is kept; `sessions list --archived` finds it. Its child sessions are archived with it.
 - **Delete**: removes the session and its history for good, with its child sessions, archived or not. It is refused, with the reason as the error, while a fork or a quarantined session file still needs the session or one of its children; a child that cannot be deleted refuses the whole deletion.
-- Either closes the session's [side conversation](#side). Restoring a session does not restore its children.
+- Both close its live [temporary side chats](#side). Restoring a session does not restore its children.
 - In the terminal interface, `/archive` and `/delete` do the same for the session shown, after a confirmation, and then show no session. The resume picker lists the archived sessions under Tab, where Ctrl+A or Enter restores one, and Ctrl+A archives another session ([Terminal interface](/docs/terminal-interface#resume)).
 
 ## Editing an earlier message [#edit]
@@ -95,7 +95,7 @@ Editing one of your earlier messages (Esc twice in the [terminal interface](/doc
 - The session is forked before the turn the message started. The fork has everything before that message, records the session as its source (`forkedFromSessionId`), and gets the message back, its text and images, to edit and send.
 - The original is archived, whole, children and all: `sessions list --archived` finds it and `sessions show` reads it. The fork is listed in its place.
 - Files the Agent changed are not restored.
-- It is refused while a turn runs in the session, and in a child session: a [side conversation](#side) is temporary.
+- Editing is available in an idle top-level session.
 
 ## Worktrees [#worktrees]
 
@@ -119,13 +119,14 @@ Every session records, when it is created, the workspace's primary directory (`c
 
 ## Side conversations [#side]
 
-A side conversation is a temporary conversation beside a session, for a question you want answered without disturbing the session's work.
+You can open multiple side conversations beside a session and ask separate questions while the parent keeps working.
 
 - It starts with everything the session had at its last turn boundary: the whole conversation when no turn runs, and the conversation before the running turn otherwise, so you can ask while the session works. When the running turn is the session's first, that turn's own opening is what it inherits — your message and the context it came with, never an answer. Only a session that has not been given a turn at all has nothing to open beside.
 - Its model is told it is in a side conversation: the inherited conversation is reference only, not instructions to carry on; it answers questions and explores without changing files, the workspace or settings unless you ask it to in the side conversation.
-- It is **ephemeral**: kept in memory only, never written to the history, never listed, and gone when it is closed, when its session is archived or deleted, or when the Agent stops. Its transcript starts at the side conversation, not with the inherited history.
-- A session has at most one; opening it again returns the open one. Closing it stops its running turn and its background terminals.
-- **In the terminal interface**, `/side` (or `/btw`) opens it: in Fullscreen a pane beside the conversation, in Scrollback a switch to it; Esc returns and `/side close` closes it ([Terminal interface](/docs/terminal-interface#side)).
+- **Saved side chats** appear under their parent in the sidebar and can be reopened after closing the tab or restarting the Agent. Archiving a chat removes it from that list.
+- **Temporary side chats** live in memory and disappear when closed, when the parent is archived or deleted, or when the Agent stops.
+- Switching tabs preserves each chat’s draft and running turn. Closing a chat stops its turn and background terminals. The transcript shows the chat’s own messages, and the model also receives the inherited parent context.
+- In the terminal, `/side` or `/btw` returns to the current side chat or opens a temporary one. The sidebar chooser can create additional chats. [Terminal interface](/docs/terminal-interface#side).
 
 ## Sub-agents [#subagents]
 

@@ -26,6 +26,7 @@
 use std::io;
 use std::io::Write;
 
+use crate::sidebar_files::ImagePlacement;
 use ratatui::backend::ClearType;
 use ratatui::backend::{Backend, IntoCrossterm};
 use ratatui::buffer::Buffer;
@@ -46,6 +47,7 @@ use ratatui::style::Modifier;
 
 #[derive(Debug, Hash)]
 pub struct Frame<'a> {
+    pub(crate) sidebar_image: Option<ImagePlacement>,
     /// Where should the cursor be after drawing this frame?
     ///
     /// If `None`, the cursor is hidden and its position is controlled by the backend. If `Some((x,
@@ -98,6 +100,7 @@ where
 {
     /// The backend used to interface with the terminal
     backend: B,
+    sidebar_image: Option<ImagePlacement>,
     /// Holds the results of the current and previous draw calls. The two are compared at the end
     /// of each draw pass to output the necessary updates to the terminal
     buffers: [Buffer; 2],
@@ -119,6 +122,7 @@ where
     B: Backend<Error = io::Error> + Write,
 {
     fn drop(&mut self) {
+        let _ = self.clear_sidebar_image();
         // Attempt to restore the cursor state
         if self.hidden_cursor {
             let _ = self.show_cursor();
@@ -136,6 +140,7 @@ where
         let cursor_pos = backend.get_cursor_position()?;
         Ok(Self {
             backend,
+            sidebar_image: None,
             buffers: [Buffer::empty(Rect::ZERO), Buffer::empty(Rect::ZERO)],
             current: 0,
             hidden_cursor: false,
@@ -149,6 +154,7 @@ where
     pub fn get_frame(&mut self) -> Frame<'_> {
         Frame {
             cursor_position: None,
+            sidebar_image: None,
             viewport_area: self.viewport_area,
             buffer: self.current_buffer_mut(),
         }
@@ -307,9 +313,27 @@ where
         // stdout first. But we also can't keep the frame around, since it holds a &mut to
         // Buffer. Thus, we're taking the important data out of the Frame and dropping it.
         let cursor_position = frame.cursor_position;
+        let image = frame.sidebar_image.take();
+        if let Some(image) = &image {
+            image.reserve(frame.buffer);
+        }
+        let changed = match (&self.sidebar_image, &image) {
+            (Some(a), Some(b)) => !a.same_image(b),
+            (None, None) => false,
+            _ => true,
+        };
+        if changed {
+            self.clear_sidebar_image()?;
+        }
 
         // Draw to stdout
         self.flush()?;
+        if changed {
+            if let Some(image) = image {
+                image.paint(&mut self.backend)?;
+                self.sidebar_image = Some(image);
+            }
+        }
 
         match cursor_position {
             None => self.hide_cursor()?,
@@ -356,8 +380,16 @@ where
         Ok(())
     }
 
+    pub(crate) fn clear_sidebar_image(&mut self) -> io::Result<()> {
+        if let Some(image) = self.sidebar_image.take() {
+            image.erase(&mut self.backend)?;
+        }
+        Ok(())
+    }
+
     /// Clear the terminal and force a full redraw on the next draw call.
     pub fn clear(&mut self) -> io::Result<()> {
+        self.clear_sidebar_image()?;
         if self.viewport_area.is_empty() {
             return Ok(());
         }

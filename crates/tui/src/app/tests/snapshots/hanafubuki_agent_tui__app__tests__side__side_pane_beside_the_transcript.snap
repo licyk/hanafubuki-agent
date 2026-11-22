@@ -3,18 +3,18 @@ source: crates/tui/src/app/tests/side.rs
 expression: harness.snapshot_screen()
 ---
  Main conversation                                             │ Side · ctrl-x x or /close closes
-╭──────────────────────────────╮                               │╭──────────────────────────────╮
-│ >_ hanafubuki-agent (v0.1.0) │                               ││ >_ hanafubuki-agent (v0.1.0) │
-│                              │                               ││                              │
-│ model:     fixture-model     │                               ││ model:     fixture-model     │
-│ directory: /project          │                               ││ directory: /project          │
-╰──────────────────────────────╯                               │╰──────────────────────────────╯
+╭──────────────────────────────╮                               │ What is 2…×                     +
+│ >_ hanafubuki-agent (v0.1.0) │                               │╭──────────────────────────────╮
+│                              │                               ││ >_ hanafubuki-agent (v0.1.0) │
+│ model:     fixture-model     │                               ││                              │
+│ directory: /project          │                               ││ model:     fixture-model     │
+╰──────────────────────────────╯                               ││ directory: /project          │
+                                                               │╰──────────────────────────────╯
+› Hello.                                                       │
+                                                               │› What is 2 + 2?
                                                                │
-› Hello.                                                       │› What is 2 + 2?
-                                                               │
-                                                               │
-• Hi.                                                          │• Four.
-                                                               │
+• Hi.                                                          │
+                                                               │• Four.
                                                                │
                                                                │
                                                                │

@@ -108,6 +108,9 @@ impl App {
     /// one it showed and the one it shows are seen now, so that only what
     /// changes after marks them unread.
     pub(crate) fn note_shown(&mut self) {
+        if self.workspace.handling_parked() {
+            return;
+        }
         let shown = self.main_session_id();
         if shown == self.workspace.shown {
             return;
@@ -117,6 +120,8 @@ impl App {
         for session_id in [self.workspace.shown, shown].into_iter().flatten() {
             seen.insert(session_id, now);
         }
+        self.workspace.saved_chats.clear();
+        self.workspace.sidebar_agents.clear();
         self.workspace.shown = shown;
         self.tui_state.save();
     }

@@ -932,6 +932,8 @@ mod shell;
 mod shortcuts;
 mod side;
 mod side_agents;
+mod sidebar;
+mod sidebar_files;
 mod stability;
 mod streaming;
 mod subagents;

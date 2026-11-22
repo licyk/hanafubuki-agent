@@ -138,6 +138,83 @@ fn a_side_conversation_takes_its_own_messages_and_esc_returns_to_the_main_one() 
 }
 
 #[test]
+fn hidden_side_chats_finish_in_their_own_transcript_and_restore_their_drafts() {
+    let mut harness = Harness::start_timed(
+        vec![
+            (assistant_events("Main answer."), Duration::ZERO),
+            (
+                assistant_events("Saved answer."),
+                Duration::from_millis(400),
+            ),
+        ],
+        true,
+        TranscriptMode::Terminal,
+    );
+    let parent = harness.answered("Parent message.", "Main answer.");
+    harness.app.new_side_chat(&mut harness.tui, true);
+    harness.pump_until("the saved chat to open", |h| {
+        h.app.active_sidebar_chat().is_some()
+    });
+    let saved = harness.session();
+    harness.type_and_submit("Saved question.");
+    harness.pump_until("the saved turn to begin", |h| {
+        h.server.requests().len() == 2
+    });
+    harness
+        .app
+        .chat_widget
+        .set_composer_text("saved draft".into());
+    harness.app.new_side_chat(&mut harness.tui, false);
+    harness.pump_until("a second chat", |h| {
+        h.app.active_sidebar_chat().is_some_and(|id| id != saved)
+    });
+    let temporary = harness.session();
+    harness
+        .app
+        .chat_widget
+        .set_composer_text("other draft".into());
+    harness.pump_until("the hidden answer to finish", |h| {
+        h.runtime
+            .slot()
+            .agent()
+            .unwrap()
+            .snapshot(saved)
+            .unwrap()
+            .turn
+            .is_some_and(|turn| turn.phase.is_terminal())
+    });
+    assert!(!harness.transcript().contains("Saved answer."));
+    harness.app.select_side_chat(&mut harness.tui, saved);
+    harness.pump_until("saved answer to render", |h| {
+        h.transcript().contains("Saved answer.")
+    });
+    assert_eq!(harness.app.chat_widget.composer_text(), "saved draft");
+    harness.app.close_side_tab(&mut harness.tui, saved, false);
+    harness.pump_until("saved tab to close", |h| {
+        h.app.active_sidebar_chat().is_none()
+    });
+    harness.app.select_side_chat(&mut harness.tui, saved);
+    harness.pump_until("persisted answer to reopen", |h| {
+        h.app.active_sidebar_chat() == Some(saved) && h.transcript().contains("Saved answer.")
+    });
+    assert!(!harness.transcript().contains("Parent message."));
+    assert!(harness.app.chat_widget.composer_is_empty());
+    harness.app.select_side_chat(&mut harness.tui, temporary);
+    assert_eq!(harness.app.chat_widget.composer_text(), "other draft");
+    harness.app.close_side_tab(&mut harness.tui, saved, true);
+    harness.pump_until("saved chat to be archived", |h| {
+        h.runtime
+            .slot()
+            .agent()
+            .unwrap()
+            .saved_side_conversations(parent)
+            .unwrap()
+            .is_empty()
+    });
+    assert_eq!(harness.app.active_sidebar_chat(), Some(temporary));
+}
+
+#[test]
 fn no_side_conversation_opens_while_a_review_runs() {
     let mut harness = Harness::start_timed(
         vec![

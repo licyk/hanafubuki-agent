@@ -207,9 +207,11 @@ impl App {
         tui: &mut Tui<B>,
         event: AppEvent,
     ) -> bool {
+        self.workspace.sidebar.note_event(&event);
         let keep_running = match self.route_event(event) {
             workspace::Route::Here(event) => self.handle_here(tui, event),
             workspace::Route::Parked(event) => self.handle_parked(tui, event),
+            workspace::Route::Hidden(index, event) => self.handle_hidden(tui, index, event),
             workspace::Route::Parent(event) => self.handle_parent(tui, event),
             workspace::Route::Workspace(event) => {
                 self.workspace_event(tui, event);
@@ -218,6 +220,7 @@ impl App {
             workspace::Route::Dropped => true,
         };
         self.sync_second(tui);
+        self.sync_sidebar_parent(tui);
         keep_running
     }
 
@@ -319,15 +322,16 @@ impl App {
     /// What a reply or a request led to, for the chat; a session opened
     /// replaces the transcript, which starts with its header.
     pub(crate) fn show_update(&mut self, update: TurnUpdate) {
+        self.update_sidebar_agents(&update);
         if let TurnUpdate::SessionOpened(opened) = &update {
             self.transcript_cells.clear();
-            self.older_transcript = opened.older.clone().filter(|_| self.mode.is_owned());
+            self.older_transcript = opened.older.clone().filter(|_| self.using_owned_view());
             let history = if self.older_transcript.is_some() {
                 TranscriptHistoryState::Partial
             } else {
                 TranscriptHistoryState::Complete
             };
-            if self.mode.is_owned() {
+            if self.using_owned_view() {
                 self.transcript_view = new_view(self.render_mode, history);
             } else {
                 // The tail's view writes the entries as they were shown.
@@ -336,40 +340,6 @@ impl App {
         }
         self.chat_widget.handle_turn_update(update);
         self.note_shown();
-    }
-
-    /// Pasted text goes to the composer, or to a transcript search being
-    /// edited; the other overlays take none.
-    fn handle_paste(&mut self, text: String) {
-        self.cancel_primed_backtrack();
-        // Pasted text arrives with `\r` line endings in many terminals.
-        let text = text.replace("\r\n", "\n").replace('\r', "\n");
-        if self.handle_settings_paste(&text) {
-            return;
-        }
-        let to_search = match self.overlay.as_mut() {
-            Some(Overlay::Transcript(transcript)) => transcript.handle_paste(&text),
-            Some(Overlay::Static(_)) => false,
-            None if self.workspace.agents_open() => self
-                .workspace
-                .agents_mut()
-                .is_some_and(|center| center.paste(&text)),
-            None if self.resume_picker.is_some() => false,
-            None if self.mode.is_owned() && self.transcript_view.is_search_editing() => {
-                self.transcript_view.paste_search(&text)
-            }
-            None => {
-                self.transcript_view.clear_activity_focus();
-                if text.is_empty() {
-                    return self.paste_image(paste_image::PasteTrigger::EmptyPaste);
-                }
-                self.chat_widget.handle_paste(text);
-                return;
-            }
-        };
-        if to_search {
-            self.schedule_frame(Instant::now());
-        }
     }
 
     fn handle_mouse<B: Backend<Error = io::Error> + Write>(
@@ -407,7 +377,9 @@ impl App {
         {
             return;
         }
-        if self.overlay.is_none() && self.handle_workspace_mouse(mouse) {
+        if self.overlay.is_none()
+            && (self.sidebar_mouse(tui, mouse) || self.handle_workspace_mouse(mouse))
+        {
             return;
         }
         if self.overlay.is_none()
@@ -419,10 +391,11 @@ impl App {
         if !self.mode.is_owned() && !self.alt_screen_open() {
             return self.handle_tail_mouse(mouse);
         }
+        let owned = self.using_owned_view();
         let action = match self.overlay.as_mut() {
             Some(Overlay::Transcript(transcript)) => transcript.handle_mouse(mouse),
             Some(Overlay::Static(_)) => None,
-            None if self.resume_picker.is_none() && self.mode.is_owned() => self
+            None if self.resume_picker.is_none() && owned => self
                 .transcript_view
                 .handle_mouse(mouse, &self.transcript_cells),
             None => None,
@@ -465,11 +438,16 @@ impl App {
         self.schedule_frame(Instant::now());
     }
 
+    fn using_owned_view(&self) -> bool {
+        self.mode.is_owned() || self.workspace.sidebar.uses_fullscreen()
+    }
+
     fn alt_screen_open(&self) -> bool {
         self.overlay.is_some()
             || self.resume_picker.is_some()
             || self.workspace.agents_open()
             || self.workspace.settings_open()
+            || self.workspace.sidebar.uses_fullscreen()
     }
 
     fn open_overlay<B: Backend<Error = io::Error> + Write>(
@@ -542,6 +520,9 @@ impl App {
     /// scrollback; in owned mode, the transcript view takes the pointer
     /// back.
     fn leave_alt_screen<B: Backend<Error = io::Error> + Write>(&mut self, tui: &mut Tui<B>) {
+        if self.alt_screen_open() {
+            return;
+        }
         if self.mode.is_owned() {
             let _ = tui.set_mouse_capture(true);
         } else {
@@ -651,7 +632,7 @@ impl App {
         if self.overlay.is_some() {
             return self.draw_overlay(tui);
         }
-        if self.mode.is_owned() {
+        if self.using_owned_view() {
             return self.draw_owned(tui);
         }
         self.chat_widget.set_navigation_footer(None);

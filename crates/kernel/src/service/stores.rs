@@ -107,11 +107,11 @@ impl AgentHistoryStore for SessionStores {
     fn create_fork(
         &self,
         source_session_id: AgentSessionId,
-        before_turn_id: AgentTurnId,
+        point: AgentHistoryForkPoint,
         commit: AgentConversationCommit,
     ) -> Result<AgentHistoryBase, AgentHistoryStoreError> {
         self.store(commit.runtime.id)
-            .create_fork(source_session_id, before_turn_id, commit)
+            .create_fork(source_session_id, point, commit)
     }
 
     fn create_fork_at_head(

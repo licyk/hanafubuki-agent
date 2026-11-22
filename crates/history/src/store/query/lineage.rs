@@ -58,27 +58,49 @@ impl FileAgentHistoryStore {
         Ok(segments)
     }
 
-    pub(in crate::store) fn lookup_before_turn_base(
+    pub(in crate::store) fn lookup_fork_base(
         &self,
         source_session_id: AgentSessionId,
-        before_turn_id: AgentTurnId,
+        point: AgentHistoryForkPoint,
     ) -> Result<AgentHistoryBase, AgentHistoryStoreError> {
         let _database = self.inner.database_gate.lock();
         let connection = self.connection()?;
         let lineage = self.resolve_lineage(source_session_id, &connection)?;
+        let (query, id) = match point {
+            AgentHistoryForkPoint::BeforeTurn(turn) => (
+                "SELECT r.record_ordinal, r.record_ordinal, r.start_byte_offset
+                 FROM agent_turns t JOIN agent_history_records r
+                   ON r.session_id = t.session_id AND r.record_ordinal = t.first_record_ordinal
+                 WHERE t.session_id = ? AND t.turn_id = ?",
+                turn.value(),
+            ),
+            AgentHistoryForkPoint::ThroughItem(item) => (
+                "SELECT r.record_ordinal, r.record_ordinal + 1, r.end_byte_offset
+                 FROM agent_history_items i JOIN agent_history_records r
+                   ON r.session_id = i.session_id AND r.record_ordinal = i.first_record_ordinal
+                 WHERE i.session_id = ? AND i.item_id = ?",
+                item.value(),
+            ),
+        };
         for segment in lineage.into_iter().rev() {
             let row = connection
                 .query_row(
-                    "SELECT first_record_ordinal FROM agent_turns WHERE session_id = ? AND turn_id = ?",
+                    query,
                     params![
                         to_i64(segment.session_id.value(), "session id")?,
-                        to_i64(before_turn_id.value(), "turn id")?,
+                        to_i64(id, "fork point")?,
                     ],
-                    |row| row.get::<_, i64>(0),
+                    |row| {
+                        Ok((
+                            row.get::<_, i64>(0)?,
+                            row.get::<_, i64>(1)?,
+                            row.get::<_, i64>(2)?,
+                        ))
+                    },
                 )
                 .optional()
                 .map_err(database_error)?;
-            let Some(record_ordinal) = row else {
+            let Some((record_ordinal, end_ordinal, byte_offset)) = row else {
                 continue;
             };
             let record_ordinal = from_i64(record_ordinal, "turn record ordinal")?;
@@ -88,19 +110,9 @@ impl FileAgentHistoryStore {
             {
                 continue;
             }
-            let byte_offset = connection
-                .query_row(
-                    "SELECT start_byte_offset FROM agent_history_records WHERE session_id = ? AND record_ordinal = ?",
-                    params![
-                        to_i64(segment.session_id.value(), "session id")?,
-                        to_i64(record_ordinal, "record ordinal")?,
-                    ],
-                    |row| row.get::<_, i64>(0),
-                )
-                .map_err(database_error)?;
             return Ok(AgentHistoryBase {
                 session_id: segment.session_id,
-                end_ordinal_exclusive: record_ordinal,
+                end_ordinal_exclusive: from_i64(end_ordinal, "fork end ordinal")?,
                 end_byte_offset: from_i64(byte_offset, "record byte offset")?,
             });
         }

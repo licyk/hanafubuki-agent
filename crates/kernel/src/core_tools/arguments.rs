@@ -35,6 +35,7 @@ pub(crate) enum CoreToolCall {
     NewContext,
     UpdatePlan(UpdateTaskPlanTool),
     RequestUserInput(RequestUserInputTool),
+    AsyncQuestions(Vec<crate::AgentAsyncQuestion>),
     /// A compression tool: its arguments are the algorithm's to read, as
     /// leniently as billion-context reads them.
     Compression(AgentCoreTool),
@@ -63,6 +64,24 @@ fn parse(
             let call: UpdateTaskPlanTool = decode_arguments(arguments)?;
             validate_update_task_plan(&call)?;
             Ok(CoreToolCall::UpdatePlan(call))
+        }
+        AgentCoreTool::RequestUserInputAsync => {
+            #[derive(Deserialize)]
+            struct Args {
+                questions: Vec<crate::AgentAsyncQuestion>,
+            }
+            let Args { questions } = decode_arguments(arguments)?;
+            if questions.is_empty()
+                || questions.iter().any(|q| {
+                    q.title.trim().is_empty()
+                        || q.options.as_ref().is_some_and(|options| {
+                            options.is_empty() || options.iter().any(|s| s.trim().is_empty())
+                        })
+                })
+            {
+                return Err(ToolCallValidationError::InvalidArgument("questions"));
+            }
+            Ok(CoreToolCall::AsyncQuestions(questions))
         }
         AgentCoreTool::RequestUserInput => {
             let call: RequestUserInputTool = decode_arguments(arguments)?;

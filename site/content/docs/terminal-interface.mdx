@@ -157,6 +157,7 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 | `/compression [cache]`     | 会话的[分层压缩](#compression)：它的块、尚可折叠的范围和节省的 token；`cache` 显示它的缓存报告                                                                                                                                                                                                                                                                                                                                                              | 可用                           |
 | `/recap`                   | 由会话的模型简要回顾对话，有下一步时一并给出                                                                                                                                                                                                                                                                                                                                                                                                                | 不可用                         |
 | `/review [instructions]`   | 在只读的子会话中评审仓库的改动，并把发现报告到对话中：打开目标选择器，或按你的要求评审（[见下文](#review)）                                                                                                                                                                                                                                                                                                                                                 | 不可用                         |
+| `/sidebar`                 | 打开侧边栏选择器（[见下文](#side)）。                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `/side [message]`、`/btw`  | 打开会话的旁路对话，或再次显示它，并把消息发到那里；`/side close` 关闭它（[见下文](#side)）                                                                                                                                                                                                                                                                                                                                                                 | 可用                           |
 | `/subagents`               | 列出会话的子代理及其状态，并用其中一个代替会话显示（[见下文](#subagents)）                                                                                                                                                                                                                                                                                                                                                                                  | 可用                           |
 | `/agents`                  | 指挥中心：会话及其状态，按标题分组，可以打开、新建（也可以在新工作树中）、分叉、重命名、停止、置顶、隐藏、归档或删除（[见下文](#agents)）                                                                                                                                                                                                                                                                                                                   | 可用                           |
@@ -284,6 +285,8 @@ Fullscreen 下还有阅读对话的按键：Page Up/Page Down、F3、F4、Ctrl-S
 
 ## 向你提问 [#questions]
 
+模型可用 `request_user_input_async` 提问，同时继续工作。草稿上方显示待答问题数。Shift+Left（或 Alt+Up）打开问题，再按一次切到下一题，Shift+Tab 返回上一题。用 ↑/↓ 或点击选择建议，也可以直接输入或粘贴自己的答案。Enter 将答案作为补充消息发送，Tab 排队到后续轮次，Ctrl+S 跳过本题，Esc 返回主草稿。每个问题单独保留草稿，轮次结束时未发送的草稿与问题标题一起回到输入框。倒计时不会自动代答。
+
 `request_user_input` 最多一次显示十个问题，逐个显示，每个问题最多五个选项；进度行显示 `Question 2/10`。你选择或输入的答案就是模型收到的内容；你完全没有回答的问题，会以“未回答”告知模型。
 
 打开了 `isOther` 的问题还接受你自己写的答案。进入输入是显式动作——按 `i`，或在自己填写那一行按回车——所以光标移到那一行并不会自动开始输入，其他选项仍然可选。输入期间所有可打印键都是文本（数字、`k`/`j` 也不例外），以 `1` 开头的答案就还是答案；回车结束输入，Esc 停止输入但保留已写内容，退格删除。
@@ -374,24 +377,40 @@ Esc 返回上一页，在标签页上回到设置中心。用 `--safe-mode` 启�
 
 界面启动时如果有需要审查的钩子（新的，或信任之后被修改的），对话中会显示 `N hooks need review: /hooks`，并记下这条警告；不会有任何东西等你处理。
 
+## 浏览工作区文件和图片 [#sidebar-files]
+
+输入 `/sidebar` 打开 **Open in sidebar**。Files 区会列出各工作区根目录的 **Browse** 入口，以及对话提到的文件。选中目录可浏览其内容，`../` 返回上一级。点击对话里的本地 Markdown 文件链接也能打开文档。每个文件在独立标签中保留阅读位置。
+
+- 可用滚轮、上下方向键、`j` / `k` 或 Page Up / Page Down 滚动。Home、End 跳转到首尾，`/` 搜索。鼠标拖选后可用对话阅读器的复制快捷键复制。
+- Markdown 文件以文档形式显示。点击文件链接，或用 Tab / Shift+Tab 选择后按 Enter 打开。文档内的相对链接从文档所在目录解析。`src/lib.rs#L12C3` 这类源码链接会跳到指定行列。修改文件或用新文件替换后，预览自动刷新。文本预览支持最大 1 MiB 的文件，以控制换行与搜索所需内存。
+- PNG、JPEG、GIF 和 WebP 图片预览会显示格式和尺寸。在支持的终端中使用 Kitty 图形协议或 Sixel，在其他终端和终端复用器中使用彩色半块字符。改变终端尺寸时，图片随面板缩放。
+
 ## 旁路对话 [#side]
 
-在旁路界面中，**`/close`** 或 `hide_pane` 的按键关闭该界面并中断它的回合，运行中也可使用，不会退出主 Agent。旁路界面里的 Ctrl-C 保持它在记录中的含义（复制选中的文字、清空草稿、中断回合），因此不再关闭界面。主界面仍支持 `/side close`。旁路界面命令列表包含 `/close` 和 `/subagents`，隐藏 `/side` 和 `/btw`；主界面的 Ctrl-C 保持原有中断／退出行为。
+输入 `/sidebar`、按 `leader s` 或点击标签栏的 **+**，打开 **Open in sidebar**。选 **New side chat** 可新建随当前主会话保存的旁路对话。**Side chats** 列出已打开和可恢复的旁路对话，**Subagents** 打开子代理的只读实时记录，**Files** 可浏览工作区目录与主会话提及的文件。发送第一条消息前也能打开选择器浏览工作区。
+
+单击一行，或用 ↑/↓ 选中后按 Enter 打开。滚轮可浏览列表，在文件行上按 `p` 可看完整路径。在选择器按 Esc 会回到最近使用的标签；按 `leader x` 可隐藏侧边栏。点击标签可切换，中键点击或点击 **×** 可关闭；标签放不下时，可点两端箭头或在标签栏上滚动切换。在其他标签中阅读时，已打开的对话各自保留草稿、阅读位置和正在执行的回合。已保存的旁路标签关闭后仍可从 **Side chats** 恢复。选中其条目后按 Delete 可归档；确认框会列出即将丢失的内容。
+
+在旁路对话中，`/close` 关闭当前对话。Ctrl-C 仍用于复制选区、清空草稿或中断回合。在主窗格可用 `/side close` 关闭当前旁路对话。
 
 `/side`（或 `/btw`）打开会话的[旁路对话](/docs/sessions#side)：在会话旁边临时开的一段对话，用来快速问一个问题，而不打扰会话正在做的事。`/side 问题` 打开它并把问题发到那里。会话必须已经开始过一个回合，无论是已经答完还是仍在运行：只有在你发送第一条消息之前，`/side` 才会提示 `'/side' is unavailable until the current conversation has started.`。[评审](#review)运行期间，或会话的上下文正在压缩时，也会拒绝打开。
 
 - **Fullscreen**：旁路对话是停靠在对话右侧的窗格，有自己的对话、输入框和状态栏；每个窗格顶部有一行标题，两个窗格之间有分隔线。窗格打开时获得焦点。它的消息发给旁路会话，主对话的消息发给主会话，两边都保持运行：一边的回合在你于另一边输入时继续进行。屏幕窄于 100 列或放大（`leader z`）时，获得焦点的对话占满屏幕，上方显示它的标题。用鼠标拖动分隔线，或用 `leader <` 和 `leader >`，调整窗格宽度；`leader =` 让两个窗格等宽；在另一个窗格中单击会让它获得焦点。
-- **Scrollback**：界面切换到旁路对话：先在回滚区写入 `Side conversation · ctrl-x x or /close closes · Esc returns`，再写旁路对话。这期间主对话写出的内容会先保留，回到主对话时再写入。
-- **返回和关闭**：在空输入框上、没有任务运行时按 Esc（`chat.edit_previous` 的按键），或 `leader left`，回到主对话。旁路对话保持打开：`/side`、`leader right` 或 `leader tab` 会再次显示它，连同它的记录和草稿。旁路界面的 `/close`、主界面的 `/side close`，或 `leader x`（`hide_pane`）关闭它：中断它正在运行的回合并丢弃这个会话（`Side conversation closed.`）。主对话切换到别的会话时（`/new`、`/resume`、`/fork` 等），它也会被关闭。
-- 旁路对话支持以下查看**命令**：`/copy`、`/agents`、`/tasks`、`/export`、`/raw`、`/diff`、`/mention`、`/status`、`/warnings`、`/pwd`、`/close` 和 `/subagents`。弹出列表只列出这些；其他命令会提示 `'/x' is unavailable here; Esc returns to the main conversation.`。旁路对话中之前的消息不能编辑。
+- **Scrollback**。打开选择器会临时切换到可接收鼠标输入的全屏界面。从中选择的旁路对话或子代理会带着标签栏显示；按 `leader x` 隐藏侧边栏并回到终端滚动历史。直接通过 `/side` 打开的临时对话仍使用原生回滚区。
+- **返回主对话**。按 `leader left` 切换到主窗格。在停靠对话的输入框空闲且没有草稿时按 Esc，可返回选择器。使用选择器在多条旁路对话间切换。通过 `/side` 创建的临时对话会保留到关闭或切换主会话；已保存的旁路对话可在重启后从原主会话恢复。
+- 旁路对话支持以下查看**命令**：`/copy`、`/agents`、`/tasks`、`/export`、`/raw`、`/diff`、`/mention`、`/status`、`/warnings`、`/pwd`、`/close`、`/sidebar` 和 `/subagents`。弹出列表只列出这些；其他命令会提示 `'/x' is unavailable here; Esc returns to the main conversation.`。旁路对话中之前的消息不能编辑。
 
 窗格的按键是[按键映射](#keymap)中的动作，默认是前导键（Ctrl-X）再按一个键：
 
-**Ctrl+/** 在当前选中的 agent 与旁路对话之间切换焦点，保留两边的草稿。兼容旧终端上报的 Ctrl+\_ 或 Ctrl+7，可通过 `global.toggle_side_conversation` 重新绑定；原有的 `leader tab` 也保留。未打开旁路对话时，此键不执行操作。旁路对话开启或获得焦点时，空输入框下的 Alt+Left、Alt+Right 仍可切换 agent：仅改变 agent 面板，旁路的记录、草稿和运行中的回合都保留。Fullscreen 下，选中的子 agent 与旁路面板并排显示。从旁路返回时先聚焦选中的 agent；在子 agent 上再按 Esc 返回主 agent。
+**Ctrl+/** 在当前选中的 agent 与旁路对话之间切换焦点，保留两边的草稿。兼容旧终端上报的 Ctrl+\_ 或 Ctrl+7，可通过 `global.toggle_side_conversation` 重新绑定；原有的 `leader tab` 也保留。侧边栏关闭时，此键打开选择器。旁路对话开启或获得焦点时，空输入框下的 Alt+Left、Alt+Right 仍可切换 agent：仅改变 agent 面板，旁路的记录、草稿和运行中的回合都保留。Fullscreen 下，选中的子 agent 与旁路面板并排显示。从旁路返回时先聚焦选中的 agent；在子 agent 上再按 Esc 返回主 agent。
 
 | 按键     | 动作                                                    | 作用                                               |
 | -------- | ------------------------------------------------------- | -------------------------------------------------- |
 | `left`   | `global.focus_pane_left`                                | 回到主对话                                         |
+| `s`      | `global.focus_sidebar_tabs`                             | 打开侧边栏选择器                                   |
+| `w`      | `global.close_sidebar_tab`                              | 关闭选中的标签                                     |
+| `up`     | `global.sidebar_up`                                     | 上一个侧边栏标签                                   |
+| `down`   | `global.sidebar_down`                                   | 下一个侧边栏标签                                   |
 | `right`  | `global.focus_pane_right`                               | 让旁路对话获得焦点                                 |
 | `tab`    | `global.toggle_side_conversation`                       | 切换到另一个对话                                   |
 | `<`、`>` | `global.move_divider_left`、`global.move_divider_right` | 移动分隔线（Fullscreen）                           |
@@ -929,6 +948,10 @@ yank = []
 | `global.focus_activity`           | `f4`                                                                  | 聚焦工具调用的分组，以展开或折叠                             |
 | `global.select_transcript`        | `leader [`                                                            | 用键盘在对话中选择（Fullscreen）                             |
 | `global.focus_pane_left`          | `leader left`                                                         | 从旁路对话或子代理回到主对话                                 |
+| `global.focus_sidebar_tabs`       | `leader s`                                                            | 打开侧边栏选择器                                             |
+| `global.close_sidebar_tab`        | `leader w`                                                            | 关闭选中的标签                                               |
+| `global.sidebar_up`               | `leader up`                                                           | 上一个侧边栏标签                                             |
+| `global.sidebar_down`             | `leader down`                                                         | 下一个侧边栏标签                                             |
 | `global.focus_pane_right`         | `leader right`                                                        | 让旁路对话获得焦点                                           |
 | `global.toggle_side_conversation` | `leader tab`                                                          | 在主对话和旁路对话之间切换                                   |
 | `global.move_divider_left`        | `leader <`                                                            | 向左移动窗格分隔线：旁路窗格变宽（Fullscreen）               |

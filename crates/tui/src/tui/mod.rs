@@ -176,6 +176,7 @@ impl<B: Backend<Error = io::Error> + Write> Tui<B> {
 
     /// Leaves the alternate screen and restores the inline viewport.
     pub(crate) fn leave_alt_screen(&mut self) -> Result<()> {
+        self.terminal.clear_sidebar_image()?;
         let left = ALTERNATE_SCREEN.leave(self.terminal.backend_mut());
         if let Some(saved) = self.alt_saved_viewport.take() {
             self.terminal.set_viewport_area(saved);

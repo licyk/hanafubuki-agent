@@ -41,7 +41,7 @@ pub(super) fn render_local_link_target(destination: &str, cwd: Option<&str>) -> 
 
 /// The destination's path (forward slashes, decoded) and its location
 /// suffix as `:line[:column][-line[:column]]`.
-fn parse_local_link_target(destination: &str) -> Option<(String, Option<String>)> {
+pub(crate) fn parse_local_link_target(destination: &str) -> Option<(String, Option<String>)> {
     if destination.starts_with("file://") {
         let url = Url::parse(destination).ok()?;
         let path_text = normalize_local_link_path_text(&file_url_path(&url));
@@ -120,7 +120,7 @@ fn push_hash_location_point(out: &mut String, point: &str) -> Option<()> {
 
 /// The trailing `:line`, `:line:column` or range (`-` or `–` between two of
 /// them) of a path; a drive's colon (`C:/`) is never one.
-pub(super) fn colon_location_suffix(path_text: &str) -> Option<&str> {
+pub(crate) fn colon_location_suffix(path_text: &str) -> Option<&str> {
     path_text
         .match_indices(':')
         .map(|(index, _)| &path_text[index..])

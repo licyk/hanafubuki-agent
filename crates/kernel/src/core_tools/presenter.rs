@@ -18,11 +18,15 @@ impl AgentToolPresenter for CoreToolPresenter {
             hanafubuki_agent_compression::COMPRESS_TOOL_NAME,
             "update_plan",
             "request_user_input",
+            "request_user_input_async",
         ]
     }
 
     /// `m00002–m00005 Setup, m00009–m00012`: the ranges with their topics.
     fn subject(&self, tool: &str, arguments: &Value) -> Option<String> {
+        if tool == "request_user_input_async" {
+            return async_questions(arguments).next().map(|q| q.title);
+        }
         if tool == "update_plan" {
             return None;
         }
@@ -54,6 +58,25 @@ impl AgentToolPresenter for CoreToolPresenter {
         arguments: &Value,
         output: &ToolOutput,
     ) -> Option<AgentToolDisplay> {
+        if tool == "request_user_input_async" {
+            if output.is_error {
+                return None;
+            }
+            let lines = async_questions(arguments)
+                .flat_map(|question| {
+                    std::iter::once(question.title).chain(
+                        question
+                            .options
+                            .into_iter()
+                            .flatten()
+                            .map(|option| format!("  • {option}")),
+                    )
+                })
+                .collect::<Vec<_>>();
+            return Some(AgentToolDisplay::Text {
+                text: lines.join("\n"),
+            });
+        }
         if tool == "request_user_input" {
             return question_display(arguments, output);
         }
@@ -77,6 +100,15 @@ impl AgentToolPresenter for CoreToolPresenter {
         }
         Some(AgentToolDisplay::Text { text })
     }
+}
+
+fn async_questions(arguments: &Value) -> impl Iterator<Item = crate::AgentAsyncQuestion> + '_ {
+    arguments
+        .get("questions")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|question| serde_json::from_value(question.clone()).ok())
 }
 
 fn question_display(arguments: &Value, output: &ToolOutput) -> Option<AgentToolDisplay> {

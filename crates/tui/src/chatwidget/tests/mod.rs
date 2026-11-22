@@ -17,6 +17,7 @@ use crate::commands::{self, CommandSpec};
 use hanafubuki_agent::panic::is_panic_contained;
 use hanafubuki_agent::{AgentRevision, AgentSessionId, AgentToolDisplay};
 
+mod async_questions;
 mod entries;
 mod footer;
 mod images;
@@ -195,6 +196,7 @@ fn an_opened_session_replays_its_transcript_after_its_header() {
             ReplayedItem::Assistant("Two files **changed**.".to_string()),
         ],
         older: Some(OlderTranscript {
+            side: false,
             session_id: AgentSessionId::new(7),
             cursor: "older".to_string(),
             through_revision: AgentRevision::new(1),
@@ -666,7 +668,7 @@ fn enter_during_a_turn_steers_it_one_message_at_a_time_and_writes_it_once_read()
         id: 1,
         outcome: SteerOutcome::Accepted(2),
     });
-    chat.handle_turn_update(TurnUpdate::SteeringConsumed(2));
+    chat.handle_turn_update(TurnUpdate::SteeringConsumed(2, Vec::new()));
     assert_eq!(
         trimmed(drain(&events).0),
         vec!["› Look at the tests.", "› And the docs."]

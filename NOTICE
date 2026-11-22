@@ -28,13 +28,15 @@ Third-party notices
   - `crates/agent/src/service/mcp/oauth_login.rs`, the loopback that
     receives an MCP server's OAuth redirect, is derived from Codex's
     `codex-rs/rmcp-client/src/perform_oauth_login.rs` (`57a808a392`);
+  - asynchronous user questions (`crates/kernel/src/model/async_question.rs` and
+    `crates/kernel/src/core_tools/specs.rs`) follow the request and reply contract
+    of Codex at `cf3ff1530d82`;
   - the terminal interface, `crates/tui`, is ported from Codex's
-    `codex-rs/tui` at two revisions, `rust-v0.93.0` and the later
-    `57a808a392`, and its file search (`crates/tui/src/file_search`) from
+    `codex-rs/tui` at `rust-v0.93.0`, `57a808a392`, and for the sidebar
+    and asynchronous questions `cf3ff1530d82`, and its file search (`crates/tui/src/file_search`) from
     Codex's `codex-rs/file-search` (`rust-v0.93.0`): every file of it
     derived from Codex says so, and from which revision, in its first line
-    ("Modified from OpenAI Codex rust-v0.93.0 (Apache-2.0)" or "Modified
-    from OpenAI Codex 57a808a392 (Apache-2.0)"), and was modified as the
+    ("Modified from OpenAI Codex <revision> (Apache-2.0)"), and was modified as the
     port describes (site/content/docs/architecture.en.mdx, "What the port
     of the terminal interface changed");
     architecture/notices-policy.toml lists the files of it that are not

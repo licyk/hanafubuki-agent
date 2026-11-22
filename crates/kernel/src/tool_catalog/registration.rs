@@ -185,7 +185,6 @@ impl AgentPlannedTool {
         mut model_spec: ModelToolSpec,
         execution_class: AgentToolExecutionClass,
     ) -> Result<Self, AgentToolCatalogError> {
-        let exposure = ToolExposure::Direct;
         model_spec.strict = false;
         let tool_id = AgentToolId::parse(model_spec.name.clone())
             .map_err(|_| AgentToolCatalogError::InvalidToolName)?;
@@ -193,6 +192,11 @@ impl AgentPlannedTool {
             .into_iter()
             .find(|tool| tool.name() == model_spec.name)
             .ok_or(AgentToolCatalogError::InvalidToolName)?;
+        let exposure = if core_tool == crate::AgentCoreTool::RequestUserInputAsync {
+            ToolExposure::DirectModelOnly
+        } else {
+            ToolExposure::Direct
+        };
         let presentation = AgentToolPresentation {
             action: core_tool.activity_action(),
             subject: None,

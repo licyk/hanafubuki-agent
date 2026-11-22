@@ -26,7 +26,7 @@ macro_rules! action {
 }
 
 /// Every action, in [`Action`]'s order.
-pub(crate) static ACTIONS: [ActionSpec; 77] = [
+pub(crate) static ACTIONS: [ActionSpec; 81] = [
     action!(
         Leader,
         Global,
@@ -83,6 +83,10 @@ pub(crate) static ACTIONS: [ActionSpec; 77] = [
         "Switch between the main and the side conversation",
         ["ctrl-/", "leader tab"]
     ),
+    action!(FocusSidebarTabs, Global, "focus_sidebar_tabs", "Open the sidebar chooser", ["leader s"]),
+    action!(SidebarUp, Global, "sidebar_up", "Switch to the previous sidebar tab", ["leader up"]),
+    action!(SidebarDown, Global, "sidebar_down", "Switch to the next sidebar tab", ["leader down"]),
+    action!(CloseSidebarTab, Global, "close_sidebar_tab", "Close the selected sidebar tab", ["leader w"]),
     action!(
         MoveDividerLeft,
         Global,

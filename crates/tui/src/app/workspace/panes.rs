@@ -41,12 +41,34 @@ pub(crate) struct PaneLayout {
     /// The other conversation's, when both are shown.
     pub(crate) passive: Option<Rect>,
     pub(crate) divider: Option<Rect>,
+    pub(crate) panel: Option<Rect>,
+    pub(crate) strip: Option<Rect>,
     pub(crate) titles: Vec<(Rect, Line<'static>)>,
     /// The leader's box.
     pub(crate) hud: Option<Rect>,
 }
 
 impl Workspace {
+    pub(super) fn split_panes(&self, screen: Rect) -> Option<(Rect, Rect, Rect)> {
+        if self.zoomed || screen.width < SPLIT_MIN_WIDTH || screen.height <= 2 {
+            return None;
+        }
+        let width = self
+            .side_width
+            .unwrap_or(screen.width / 3)
+            .clamp(MIN_SIDE, screen.width - MIN_MAIN - 1);
+        let side = Rect::new(screen.right() - width, screen.y, width, screen.height);
+        let main = Rect {
+            width: screen.width - width - 1,
+            ..screen
+        };
+        Some((
+            main,
+            side,
+            Rect::new(main.right(), screen.y, 1, screen.height),
+        ))
+    }
+
     /// The panes on `screen`; with no second conversation, the focused
     /// one fills it. `leader`: the leader waits for its second key, and a
     /// box lists the panes' keys.
@@ -56,9 +78,15 @@ impl Workspace {
             focused: screen,
             passive: None,
             divider: None,
+            panel: None,
+            strip: None,
             titles: Vec::new(),
             hud: None,
         };
+        if self.sidebar.showing_panel() {
+            self.sidebar_layout(&mut layout);
+            return layout;
+        }
         let Some(second) = self.second.as_ref() else {
             if self.child.is_some() && screen.height > 1 {
                 let (title, body) = split_title(screen);
@@ -67,15 +95,8 @@ impl Workspace {
             }
             return layout;
         };
-        if !self.zoomed && screen.width >= SPLIT_MIN_WIDTH && screen.height > 2 {
-            let side_width = self
-                .side_width
-                .unwrap_or(screen.width / 3)
-                .clamp(MIN_SIDE, screen.width - MIN_MAIN - 1);
-            let main_width = screen.width - side_width - 1;
-            let main = Rect::new(screen.x, screen.y, main_width, screen.height);
-            let side = Rect::new(main.right() + 1, screen.y, side_width, screen.height);
-            layout.divider = Some(Rect::new(main.right(), screen.y, 1, screen.height));
+        if let Some((main, side, divider)) = self.split_panes(screen) {
+            layout.divider = Some(divider);
             let (main_title, main_body) = split_title(main);
             let (side_title, side_body) = split_title(side);
             let main_focused = second.focus == Focus::Main;
@@ -92,6 +113,15 @@ impl Workspace {
             let (title, body) = split_title(screen);
             layout.titles = vec![(title, self.title(second.focus, true, false))];
             layout.focused = body;
+        }
+        if let Some(side) = if second.focus == Focus::Second {
+            Some(&mut layout.focused)
+        } else {
+            layout.passive.as_mut()
+        } {
+            let (strip, body) = split_title(*side);
+            layout.strip = Some(strip);
+            *side = body;
         }
         if leader {
             let height = u16::try_from(hud_entries().len() + 2).unwrap_or(u16::MAX);
@@ -125,6 +155,15 @@ impl Workspace {
                 format!("Main conversation · {} side", hint(Action::FocusPaneRight))
             }
             Focus::Main => "Main conversation".to_string(),
+            Focus::Second
+                if self
+                    .second
+                    .as_ref()
+                    .is_some_and(|tab| tab.kind == super::side_tabs::TabKind::Agent) =>
+            {
+                "Subagent · read-only".to_owned()
+            }
+            Focus::Second if self.sidebar.uses_fullscreen() => "Side conversation".to_owned(),
             Focus::Second if focused && split => {
                 format!("Side · {} or /close closes", hint(Action::HidePane))
             }
@@ -146,7 +185,7 @@ impl Workspace {
         let Some(layout) = self.layout.as_ref() else {
             return;
         };
-        let (Some(divider), Some(_)) = (layout.divider, layout.passive) else {
+        let Some(divider) = layout.divider else {
             return;
         };
         let current = i32::from(layout.screen.right() - divider.right());
@@ -160,11 +199,14 @@ impl Workspace {
 }
 
 /// A pane's title row, and the rest.
-fn split_title(area: Rect) -> (Rect, Rect) {
-    let title = Rect { height: 1, ..area };
+pub(super) fn split_title(area: Rect) -> (Rect, Rect) {
+    let title = Rect {
+        height: area.height.min(1),
+        ..area
+    };
     let body = Rect {
-        y: area.y + 1,
-        height: area.height - 1,
+        y: area.y.saturating_add(1),
+        height: area.height.saturating_sub(1),
         ..area
     };
     (title, body)
@@ -221,6 +263,15 @@ impl App {
             }
             MouseEventKind::Up(MouseButton::Left) if workspace.dragging => {
                 workspace.dragging = false;
+            }
+            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
+                if layout.passive.is_some_and(|passive| passive.contains(at)) =>
+            {
+                if let Some(parked) = workspace.parked_mut() {
+                    parked
+                        .transcript_view
+                        .handle_mouse(mouse, &parked.transcript_cells);
+                }
             }
             MouseEventKind::Down(MouseButton::Left)
                 if layout.passive.is_some_and(|passive| passive.contains(at)) =>

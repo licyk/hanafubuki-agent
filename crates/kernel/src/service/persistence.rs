@@ -55,7 +55,7 @@ impl AgentService {
         &self,
         cell: &Arc<SessionCell>,
         source_session_id: AgentSessionId,
-        before_turn_id: AgentTurnId,
+        point: AgentHistoryForkPoint,
     ) -> Result<(), AgentError> {
         let commit = {
             let mut record = cell.lock_after_persistence_blocking()?;
@@ -64,7 +64,7 @@ impl AgentService {
         let base = self
             .inner
             .history_store
-            .create_fork(source_session_id, before_turn_id, commit)
+            .create_fork(source_session_id, point, commit)
             .map_err(history_store_error)?;
         self.hand_off(publish_fork_base(cell, base)?);
         Ok(())

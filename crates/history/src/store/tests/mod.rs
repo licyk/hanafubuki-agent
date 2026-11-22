@@ -9,11 +9,11 @@ use hanafubuki_agent_kernel::{
     AgentCompactionImplementation, AgentCompactionPhase, AgentCompactionReason,
     AgentCompactionSnapshot, AgentCompactionStatus, AgentCompactionTrigger,
     AgentContextWindowSnapshot, AgentConversationCommit, AgentConversationDelta, AgentGeneration,
-    AgentHistoryItem, AgentHistoryItemId, AgentHistoryMutation, AgentHistorySortDirection,
-    AgentHistoryStore, AgentModelContextBoundary, AgentRevision, AgentSessionConfig,
-    AgentSessionId, AgentSessionLifecycle, AgentSessionListRequest, AgentSessionMode,
-    AgentToolOutputTruncation, AgentTranscriptPageRequest, AgentTurnBudgetPolicy, AgentTurnId,
-    AgentTurnPageRequest, ConversationItem, PersistedAgentRuntimeState,
+    AgentHistoryForkPoint, AgentHistoryItem, AgentHistoryItemId, AgentHistoryMutation,
+    AgentHistorySortDirection, AgentHistoryStore, AgentModelContextBoundary, AgentRevision,
+    AgentSessionConfig, AgentSessionId, AgentSessionLifecycle, AgentSessionListRequest,
+    AgentSessionMode, AgentToolOutputTruncation, AgentTranscriptPageRequest, AgentTurnBudgetPolicy,
+    AgentTurnId, AgentTurnPageRequest, ConversationItem, PersistedAgentRuntimeState,
 };
 
 use super::jsonl::collect_jsonl_files;
