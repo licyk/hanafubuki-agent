@@ -96,14 +96,14 @@ async fn a_leaf_terminal_holds_both_agents_until_their_woken_answers_reach_the_r
     assert_eq!(branch_model.requests().len(), 3);
     assert!(body(&leaf_model, 2).contains("leaf-terminal-finished"));
     assert!(body(&branch_model, 2).contains("The leaf command finished."));
-    assert!(service.background_status(root).unwrap().work.is_empty());
     assert_eq!(
         agents
-            .wait(root, Duration::ZERO, &CancellationToken::default())
+            .wait(root, NO_WAIT, &CancellationToken::default())
             .await
             .unwrap(),
         WaitOutcome::Idle
     );
+    assert!(service.background_status(root).unwrap().work.is_empty());
     finish(service, paths);
     let _ = std::fs::remove_file(go);
 }

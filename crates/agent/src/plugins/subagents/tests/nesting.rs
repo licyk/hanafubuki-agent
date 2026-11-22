@@ -87,9 +87,10 @@ async fn a_waiting_parent_is_reported_only_after_its_child_wakes_it_and_it_answe
     assert!(body(&first, 2).contains("<background_events>"));
     assert!(body(&first, 2).contains("Leaf done."));
     assert!(!body(&second, 0).contains("<subagents>"));
+    // The completion is queued before the dispatcher releases the running slot.
     assert_eq!(
         agents
-            .wait(root, Duration::ZERO, &CancellationToken::default())
+            .wait(root, NO_WAIT, &CancellationToken::default())
             .await
             .unwrap(),
         WaitOutcome::Idle
