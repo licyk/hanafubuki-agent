@@ -31,6 +31,7 @@ mod context_usage_live;
 mod descriptors;
 mod executions;
 mod features;
+mod gemini;
 mod goal;
 mod goal_display;
 mod golden;

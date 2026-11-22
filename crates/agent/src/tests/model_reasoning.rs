@@ -38,7 +38,7 @@ fn stored_anywhere(directory: &std::path::Path, needle: &[u8]) -> bool {
         })
 }
 
-fn stop(service: &AgentApplicationService) {
+pub(super) fn stop(service: &AgentApplicationService) {
     assert_eq!(
         service.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),
         []
@@ -46,7 +46,7 @@ fn stop(service: &AgentApplicationService) {
 }
 
 /// A new Agent over `paths`' storage, as after a restart.
-fn reopen(config: AgentConfig, paths: &TestPaths) -> AgentApplicationService {
+pub(super) fn reopen(config: AgentConfig, paths: &TestPaths) -> AgentApplicationService {
     AgentApplicationService::new_with_host(
         config,
         test_host(paths),

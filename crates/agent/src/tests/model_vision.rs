@@ -38,7 +38,7 @@ fn png() -> Vec<u8> {
     output.into_inner()
 }
 
-fn staged(
+pub(super) fn staged(
     service: &AgentApplicationService,
     session_id: AgentSessionId,
 ) -> AgentImageAttachmentRef {
