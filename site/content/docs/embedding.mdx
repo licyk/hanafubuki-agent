@@ -676,9 +676,8 @@ impl AgentEventSink for PrintEvents {
 
 ## 会话工作区与剪贴板图片 [#conversation-workspaces]
 
-嵌入宿主通过 `create_session_with_workspace(mode, role, path)` 创建已绑定目录的会话，或用
-`set_session_workspace(AgentSessionWorkspaceRequest)` 修改空闲会话；请求携带会话 id、generation、revision 和路径。
-创建操作先解析目录，再提交会话。绑定持久保存，fork 和子会话继承。它与历史 `cwd` 元数据不同：
+嵌入宿主通过 `create_session_with_workspaces(mode, role, paths)` 为会话绑定一组有序目录，首个目录是相对路径的基准。
+修改空闲会话时，将会话 id、generation、revision 和目录列表传给 `set_session_workspace`。创建和修改操作均先解析全部目录，再保存绑定。绑定持久保存，fork 和子会话继承。它与历史 `cwd` 元数据不同：
 没有显式绑定的会话仍跟随宿主工作区，包括独立模式的 `/cd`。已绑定目录消失时操作失败，绝不回退到宿主目录。
 该会话运行回合、压缩或后台终端时拒绝修改绑定；其他会话可以在各自目录继续运行。
 

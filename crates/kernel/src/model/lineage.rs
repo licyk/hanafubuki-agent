@@ -34,6 +34,7 @@ pub enum AgentChildSessionBase {
 pub struct AgentSessionWorkspace {
     /// An explicitly bound execution root; absent means follow the host.
     pub execution_root: Option<String>,
+    pub additional_roots: Vec<String>,
     pub cwd: Option<String>,
     pub branch: Option<String>,
 }

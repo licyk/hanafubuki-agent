@@ -5,19 +5,12 @@ impl AgentSessionDriver {
         &self,
         session_id: AgentSessionId,
     ) -> Result<crate::AgentWorkspaceRoots, AgentError> {
-        match self.core.session_workspace(session_id)?.execution_root {
-            Some(cwd) => {
-                let path = hanafubuki_agent_foundation::paths::ResolvedPath::resolve(cwd)
-                    .map_err(|error| AgentError::InvalidInput(error.to_string()))?;
-                if !path.system().is_dir() {
-                    return Err(AgentError::InvalidInput(
-                        "session workspace is not a directory".to_string(),
-                    ));
-                }
-                crate::agent_workspace_roots_from([path.native().to_path_buf()]).ok_or_else(|| {
-                    AgentError::InvalidInput("session workspace is empty".to_string())
-                })
-            }
+        let workspace = self.core.session_workspace(session_id)?;
+        match workspace.execution_root {
+            Some(cwd) => crate::AgentWorkspaceRoots::resolve_session(
+                std::iter::once(cwd).chain(workspace.additional_roots),
+            )
+            .map_err(AgentError::InvalidInput),
             None => self.workspace.roots().map_err(AgentError::InvalidInput),
         }
     }

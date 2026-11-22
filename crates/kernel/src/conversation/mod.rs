@@ -156,6 +156,8 @@ pub struct PersistedAgentRuntimeState {
     pub cwd: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution_root: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub additional_roots: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub branch: Option<String>,
     #[serde(default)]

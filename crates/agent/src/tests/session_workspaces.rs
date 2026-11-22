@@ -30,11 +30,22 @@ async fn concurrent_sessions_keep_distinct_files_context_skills_and_execution_ro
         )
         .unwrap();
     }
+    let secondary = left.path().join("extra");
+    let skill = secondary.join(".agents/skills/secondary");
+    std::fs::create_dir_all(&skill).unwrap();
+    std::fs::write(
+        skill.join("SKILL.md"),
+        "---\nname: secondary\ndescription: Secondary root skill.\n---\nUse the secondary root.",
+    )
+    .unwrap();
     let a = service
-        .create_session_with_workspace(
+        .create_session_with_workspaces(
             AgentSessionMode::Default,
             None,
-            left.path().to_string_lossy().into(),
+            vec![
+                left.path().to_string_lossy().into(),
+                secondary.to_string_lossy().into(),
+            ],
         )
         .await
         .unwrap();
@@ -64,10 +75,13 @@ async fn concurrent_sessions_keep_distinct_files_context_skills_and_execution_ro
         .unwrap();
     assert!(ac.entries.iter().any(|entry| entry.name == "left-skill"));
     assert!(!ac.entries.iter().any(|entry| entry.name == "right-skill"));
+    assert!(ac.entries.iter().any(|entry| entry.name == "secondary"));
+    assert!(!bc.entries.iter().any(|entry| entry.name == "secondary"));
     assert!(bc.entries.iter().any(|entry| entry.name == "right-skill"));
     assert!(!bc.entries.iter().any(|entry| entry.name == "left-skill"));
     let ar = ta.get::<TurnWorkspace>().unwrap().roots.clone();
     let br = tb.get::<TurnWorkspace>().unwrap().roots.clone();
+    assert_eq!(ar.len(), 2);
     assert_ne!(ar, br);
     let ae = service.test_executions().with_workspace_roots(ar.clone());
     let be = service.test_executions().with_workspace_roots(br.clone());
@@ -109,10 +123,17 @@ async fn workspace_binding_survives_fork_child_and_reopen_and_refuses_missing_pa
         configure_test_provider(config, "http://127.0.0.1:1/v1", None)
     });
     let root = tempfile::tempdir().unwrap();
+    let second = tempfile::tempdir().unwrap();
+    let secondary =
+        hanafubuki_agent_foundation::paths::ResolvedPath::resolve(second.path()).unwrap();
     let path = root.path().to_string_lossy().to_string();
     let expected = hanafubuki_agent_foundation::paths::ResolvedPath::resolve(root.path()).unwrap();
     let session = service
-        .create_session_with_workspace(AgentSessionMode::Default, None, path.clone())
+        .create_session_with_workspaces(
+            AgentSessionMode::Default,
+            None,
+            vec![path, secondary.native_text().into()],
+        )
         .await
         .unwrap();
     let fork = service
@@ -140,6 +161,9 @@ async fn workspace_binding_survives_fork_child_and_reopen_and_refuses_missing_pa
         Some(expected.native_text())
     );
     for id in [session.id, fork.id, child.id] {
+        let roots = service.session_workspace_roots(id).unwrap();
+        assert_eq!(roots.roots().len(), 2);
+        assert_eq!(roots.roots()[1], secondary.native());
         assert_eq!(
             service
                 .core
@@ -186,7 +210,14 @@ async fn workspace_binding_survives_fork_child_and_reopen_and_refuses_missing_pa
             .to_string_lossy(),
         expected.native_text()
     );
-    drop(root);
+    assert_eq!(
+        reopened
+            .session_workspace_roots(session.id)
+            .unwrap()
+            .roots()[1],
+        secondary.native()
+    );
+    drop(second);
     assert!(reopened.session_workspace_roots(session.id).is_err());
     assert_eq!(
         reopened.shutdown(Instant::now() + TEST_SHUTDOWN_DEADLINE),

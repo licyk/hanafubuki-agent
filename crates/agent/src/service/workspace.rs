@@ -70,7 +70,7 @@ pub struct AgentSessionWorkspaceRequest {
     pub session_id: hanafubuki_agent_kernel::AgentSessionId,
     pub generation: hanafubuki_agent_kernel::AgentGeneration,
     pub revision: hanafubuki_agent_kernel::AgentRevision,
-    pub path: String,
+    pub paths: Vec<String>,
 }
 
 impl AgentApplicationService {
@@ -80,11 +80,21 @@ impl AgentApplicationService {
         role: Option<String>,
         path: String,
     ) -> Result<hanafubuki_agent_kernel::AgentSessionRuntimeSnapshot, String> {
+        self.create_session_with_workspaces(mode, role, vec![path])
+            .await
+    }
+
+    pub async fn create_session_with_workspaces(
+        &self,
+        mode: hanafubuki_agent_kernel::AgentSessionMode,
+        role: Option<String>,
+        paths: Vec<String>,
+    ) -> Result<hanafubuki_agent_kernel::AgentSessionRuntimeSnapshot, String> {
         let service = self.clone();
         let workspace = hanafubuki_agent_foundation::blocking::run_blocking_operation(
             self.blocking.as_ref(),
             "agent new session workspace",
-            move || service.resolve_session_workspace(&path),
+            move || service.resolve_session_workspace(paths),
         )
         .await??;
         self.create_session_in(mode, role, Some(workspace)).await
@@ -96,7 +106,7 @@ impl AgentApplicationService {
     ) -> Result<hanafubuki_agent_kernel::AgentSessionRuntimeSnapshot, String> {
         self.activate_session(request.session_id)
             .map_err(|error| error.to_string())?;
-        let workspace = self.resolve_session_workspace(&request.path)?;
+        let workspace = self.resolve_session_workspace(request.paths)?;
         let scope =
             background_terminal_scope(request.session_id).map_err(|error| error.to_string())?;
         if self
@@ -154,17 +164,18 @@ impl AgentApplicationService {
 impl AgentApplicationService {
     fn resolve_session_workspace(
         &self,
-        path: &str,
+        paths: Vec<String>,
     ) -> Result<hanafubuki_agent_kernel::AgentSessionWorkspace, String> {
-        let path = hanafubuki_agent_foundation::paths::ResolvedPath::resolve(path)
+        let roots = AgentWorkspaceRoots::resolve_session(paths)?;
+        WorkspaceFsPolicy::new(roots.roots().to_vec(), self.workspace.protected_roots())
             .map_err(|error| error.to_string())?;
-        WorkspaceFsPolicy::new(
-            vec![path.native().to_path_buf()],
-            self.workspace.protected_roots(),
-        )
-        .map_err(|error| error.to_string())?;
-        let mut workspace = crate::session_workspace::session_workspace(path.native());
-        workspace.execution_root = Some(path.native_text().to_string());
+        let mut workspace = crate::session_workspace::session_workspace(roots.primary());
+        let mut paths = roots
+            .into_vec()
+            .into_iter()
+            .map(|path| path.to_string_lossy().into_owned());
+        workspace.execution_root = paths.next();
+        workspace.additional_roots = paths.collect();
         Ok(workspace)
     }
 }

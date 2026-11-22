@@ -410,6 +410,7 @@ pub(super) fn conversation_commit(
             origin: record.lineage.origin,
             cwd: record.lineage.workspace.cwd.clone(),
             execution_root: record.lineage.workspace.execution_root.clone(),
+            additional_roots: record.lineage.workspace.additional_roots.clone(),
             branch: record.lineage.workspace.branch.clone(),
             title: record.settings.title.clone(),
             goal: record.settings.goal.clone(),

@@ -687,10 +687,11 @@ The facade installs no logger: the host keeps its own `log` implementation, and 
 
 ## Conversation workspaces and clipboard images [#conversation-workspaces]
 
-An embedded host can bind a conversation to a directory with
-`create_session_with_workspace(mode, role, path)`, or change an idle conversation
-with `set_session_workspace(AgentSessionWorkspaceRequest)` (session id, generation,
-revision and path). Creation resolves the directory before committing the session.
+An embedded host can bind a conversation to an ordered list of directories with
+`create_session_with_workspaces(mode, role, paths)`. The first directory is
+the base for relative paths. To change an idle conversation, pass its session
+id, generation, revision and paths to `set_session_workspace`. Creation and
+reassignment resolve every directory before committing the binding.
 The binding is durable and inherited by forks and children. It is distinct from
 historical `cwd` metadata: a conversation without an explicit binding continues to
 follow the host workspace, including standalone `/cd`. A bound directory that no

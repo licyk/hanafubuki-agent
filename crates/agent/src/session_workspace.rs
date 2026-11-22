@@ -13,6 +13,7 @@ use hanafubuki_agent_kernel::AgentSessionWorkspace;
 pub(crate) fn session_workspace(primary: &Path) -> AgentSessionWorkspace {
     AgentSessionWorkspace {
         execution_root: None,
+        additional_roots: Vec::new(),
         cwd: native_form(primary)
             .ok()
             .map(|path| path.to_string_lossy().into_owned()),

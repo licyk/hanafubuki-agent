@@ -40,10 +40,7 @@ pub trait WorkspaceRootsPort: Send + Sync {
 /// The Agent's elevation-free filesystem surface.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AgentWorkspaceRoots {
-    /// Every root, the host's primary root first. Never empty, deduplicated
-    /// on path identity, and free of roots nested inside an earlier root;
-    /// an earlier root may lie inside a later one (the standalone working
-    /// directory inside its Git root).
+    /// Every root, the host's primary root first. Never empty and deduplicated on path identity.
     ///
     /// The first entry is the base for relative requests.
     roots: Vec<PathBuf>,
@@ -52,6 +49,27 @@ pub struct AgentWorkspaceRoots {
 impl AgentWorkspaceRoots {
     pub fn roots(&self) -> &[PathBuf] {
         &self.roots
+    }
+
+    /// Keep each selected directory for per-session context and discovery, even
+    /// when an earlier directory already includes it for filesystem access.
+    pub(crate) fn resolve_session(paths: impl IntoIterator<Item = String>) -> Result<Self, String> {
+        let mut roots = Vec::new();
+        let mut keys = std::collections::BTreeSet::new();
+        for path in paths {
+            let resolved = hanafubuki_agent_foundation::paths::ResolvedPath::resolve(path)
+                .map_err(|e| e.to_string())?;
+            if !resolved.system().is_dir() {
+                return Err("session workspace is not a directory".into());
+            }
+            if keys.insert(resolved.key().clone()) {
+                roots.push(resolved.native().to_path_buf());
+            }
+        }
+        if roots.is_empty() {
+            return Err("choose at least one workspace".into());
+        }
+        Ok(Self { roots })
     }
 
     /// The base a relative request resolves against.

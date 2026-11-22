@@ -33,6 +33,7 @@ fn runtime(
         origin: None,
         cwd: None,
         execution_root: None,
+        additional_roots: Vec::new(),
         branch: None,
         title: None,
         goal: None,
