@@ -56,6 +56,7 @@ pub(crate) fn render_streaming_markdown(
         cwd,
         list_spacing,
         preferences::web_link_display(),
+        false,
     )
 }
 
@@ -66,6 +67,7 @@ pub(super) fn render_with_display(
     cwd: Option<&str>,
     list_spacing: ListSpacing,
     display: WebLinkDisplay,
+    hide_local_destinations: bool,
 ) -> StreamingMarkdownRender {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
@@ -84,6 +86,7 @@ pub(super) fn render_with_display(
     };
     let mut writer = Writer::new(input, width, cwd, display);
     writer.list_spacing = list_spacing;
+    writer.hide_local_destinations = hide_local_destinations;
     writer.run(&mut events);
     StreamingMarkdownRender {
         lines: writer.lines,

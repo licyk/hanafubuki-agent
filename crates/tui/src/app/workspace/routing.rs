@@ -29,6 +29,11 @@ impl App {
     pub(in crate::app) fn route_event(&mut self, event: AppEvent) -> Route {
         let (event, owner) = match event {
             AppEvent::Second(id, inner) => {
+                if let AppEvent::InsertHistoryCell(cell) = inner.as_ref() {
+                    if cell.as_any().is::<crate::history_cell::UserHistoryCell>() {
+                        self.invalidate_side_prompt(id);
+                    }
+                }
                 if let AppEvent::Agent(event) = inner.as_ref() {
                     if let hanafubuki_agent::AgentEventKind::SessionTitleUpdated { title } =
                         &event.kind

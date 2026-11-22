@@ -23,6 +23,7 @@ mod custom_terminal;
 mod diff_render;
 mod external_editor;
 mod file_search;
+mod footer_hint;
 mod fuzzy_match;
 mod get_git_diff;
 mod history_cell;

@@ -5,6 +5,7 @@
 
 mod chooser;
 mod input;
+mod prompts;
 mod strip;
 
 use hanafubuki_agent::AgentSessionId;
@@ -12,7 +13,6 @@ use ratatui::{
     backend::Backend,
     buffer::Buffer,
     layout::{Position, Rect},
-    style::Stylize,
     text::Line,
     widgets::{Clear, Widget},
 };
@@ -66,6 +66,7 @@ pub(in crate::app) struct Sidebar {
     pointer: Option<Position>,
     press: Option<(input::PointerTarget, ratatui::crossterm::event::MouseButton)>,
     chooser: Chooser,
+    prompts: std::collections::HashMap<AgentSessionId, Option<String>>,
     pub(in crate::app) chooser_dirty: bool,
     close: Option<ConfirmClose>,
     pub(super) closing: std::collections::HashSet<AgentSessionId>,
@@ -123,7 +124,7 @@ impl Sidebar {
     }
 
     pub(in crate::app) fn owns_input(&self) -> bool {
-        self.showing_panel() && self.focused
+        self.close.is_some() || (self.showing_panel() && self.focused)
     }
 
     pub(in crate::app) fn note_event(&self, event: &crate::app_event::AppEvent) {
@@ -150,49 +151,23 @@ impl Sidebar {
         buf: &mut Buffer,
     ) -> Option<crate::sidebar_files::ImagePlacement> {
         self.strip.clear();
-        if let Some(area) = layout.strip {
-            Clear.render(area, buf);
-            let ids: Vec<_> = (0..self.tabs.len()).collect();
-            let selected = self
-                .tabs
-                .iter()
-                .position(|(tab, _)| Some(tab) == self.active.as_ref());
-            let strip = TabStrip {
-                ids: &ids,
-                selected,
-            };
-            let chooser_state = if matches!(self.page, Some(Page::Chooser)) {
-                TabState::Active
-            } else {
-                TabState::Absent
-            };
-            let selected_state = if self.focused {
-                TabState::Active
-            } else {
-                TabState::Inactive
-            };
-            self.strip = strip.render(
-                area,
-                buf,
-                chooser_state,
-                selected_state,
-                self.pointer,
-                |index, rect, style, buf| {
-                    let line =
-                        Line::from(format!(" {}", strip_terminal_controls(&self.tabs[index].1)));
-                    truncate_line_with_ellipsis_if_overflow(line, usize::from(rect.width))
-                        .style(style)
-                        .render(rect, buf);
-                },
-            );
+        let strip = layout.strip?;
+        let pane = Rect {
+            x: strip.x,
+            width: strip.width,
+            ..layout.screen
+        };
+        if let Some(close) = self.close.as_mut() {
+            close.buttons = close.paint(pane, buf);
+            return None;
         }
-        let body = layout.panel?;
-        Clear.render(body, buf);
-        let image = match &self.page {
-            Some(Page::Document(path)) => self.files.paint(path, body, buf),
-            Some(Page::Chooser) => {
+        let image = match (&self.page, layout.panel) {
+            (Some(Page::Document(path)), Some(body)) => {
+                self.files.paint(path, body, buf, None, true)
+            }
+            (Some(Page::Chooser), Some(_)) => {
                 self.chooser.paint(
-                    body,
+                    pane,
                     buf,
                     self.pointer,
                     self.focused,
@@ -200,44 +175,124 @@ impl Sidebar {
                 );
                 None
             }
-            None => None,
+            _ => None,
         };
-        if let Some(close) = self.close.as_mut() {
-            Clear.render(body, buf);
-            use ratatui::widgets::{Paragraph, Wrap};
-            Paragraph::new(close.message.as_str())
-                .wrap(Wrap { trim: false })
-                .render(
-                    Rect {
-                        height: body.height.saturating_sub(2),
-                        ..body
-                    },
-                    buf,
-                );
-            let buttons = Rect::new(body.x, body.bottom().saturating_sub(2), body.width, 1)
-                .intersection(body);
-            let width = buttons.width / 2;
-            close.buttons = [
-                Rect { width, ..buttons },
-                Rect::new(
-                    buttons.x + width,
-                    buttons.y,
-                    buttons.width - width,
-                    buttons.height,
-                ),
-            ];
-            for (i, label) in ["Cancel", "Confirm"].iter().enumerate() {
-                let line = Line::from(*label);
-                (if close.confirm == (i == 1) {
-                    line.reversed()
-                } else {
-                    line
-                })
-                .render(close.buttons[i], buf);
-            }
-            return None;
-        }
+        Clear.render(strip, buf);
+        let ids: Vec<_> = (0..self.tabs.len()).collect();
+        let selected = self
+            .tabs
+            .iter()
+            .position(|(tab, _)| Some(tab) == self.active.as_ref());
+        let selector = TabStrip {
+            ids: &ids,
+            selected,
+        };
+        let showing_chooser = matches!(self.page, Some(Page::Chooser));
+        let focus = if self.focused {
+            TabState::Active
+        } else {
+            TabState::Inactive
+        };
+        self.strip = selector.render(
+            strip,
+            buf,
+            if showing_chooser {
+                focus
+            } else {
+                TabState::Absent
+            },
+            if showing_chooser {
+                TabState::Absent
+            } else {
+                focus
+            },
+            self.pointer,
+            |index, rect, style, buf| {
+                let width = usize::from(rect.width.saturating_sub(1));
+                let (tab, label) = &self.tabs[index];
+                let label = strip_terminal_controls(label);
+                let mut line = match tab {
+                    Tab::Chat(_) => {
+                        truncate_line_with_ellipsis_if_overflow(Line::from(label), width)
+                    }
+                    Tab::Agent(_) => Line::from(crate::line_truncation::middle_label(
+                        &label,
+                        width.saturating_sub(1),
+                    )),
+                    Tab::Document(path) => {
+                        Line::from(strip::document_title(path, &self.tabs, width))
+                    }
+                };
+                line.spans.insert(0, " ".into());
+                line.style(style).render(rect, buf);
+            },
+        );
         image
+    }
+
+    pub(in crate::app) fn document_cursor(&self) -> Option<Position> {
+        match &self.page {
+            Some(Page::Document(path)) if self.focused && self.close.is_none() => {
+                self.files.cursor(path)
+            }
+            _ => None,
+        }
+    }
+}
+
+impl ConfirmClose {
+    fn paint(&self, area: Rect, buf: &mut Buffer) -> [Rect; 2] {
+        Clear.render(area, buf);
+        if area.width < 3 || area.height < 3 {
+            return Default::default();
+        }
+        let body = area.inner(ratatui::layout::Margin::new(1, 0));
+        let lines = textwrap::wrap(&self.message, usize::from(body.width));
+        let offset = lines.len() + 2;
+        let accept = if self.archive { " Archive " } else { " Close " };
+        if body.width < 10 + accept.len() as u16 || offset >= usize::from(area.height) {
+            Line::from("Resize to review · Esc to cancel").render(body, buf);
+            return Default::default();
+        }
+        for (line, row) in lines.into_iter().zip(body.rows().skip(1)) {
+            Line::from(line).render(row, buf);
+        }
+        let y = area.y + offset as u16;
+        let buttons = [
+            Rect::new(body.x, y, 8, 1),
+            Rect::new(body.x + 10, y, accept.len() as u16, 1),
+        ];
+        for (index, (label, button)) in [" Cancel ", accept].into_iter().zip(buttons).enumerate() {
+            let line = Line::from(label);
+            if self.confirm == (index == 1) {
+                line.style(crate::style::selection_style())
+            } else {
+                line
+            }
+            .render(button, buf);
+        }
+        if let Some(footer) = body.rows().nth(offset + 2) {
+            use crate::footer_hint::{shortcut, HintLine};
+            HintLine::new(
+                [
+                    shortcut("←/→", "choose"),
+                    shortcut("Enter", "confirm"),
+                    shortcut("Esc", "cancel"),
+                ],
+                footer.width,
+            )
+            .line
+            .render(footer, buf);
+        }
+        buttons
+    }
+}
+
+fn chat_label(title: &str, ordinal: usize, multiple: bool, prefix: &str) -> String {
+    match title.trim().lines().next() {
+        Some(name) => name.trim().to_owned(),
+        None if multiple => format!("{prefix} {}", ordinal + 1),
+        None => "Side chat".into(),
     }
 }
 
@@ -254,9 +309,18 @@ impl App {
         let focused = self.workspace.second_focused();
         let agents = &self.workspace.sidebar_agents;
         let sidebar = &mut self.workspace.sidebar;
+        let multiple = chats.len() > 1
+            || self
+                .workspace
+                .saved_chats
+                .iter()
+                .any(|(id, _)| !chats.iter().any(|(open, _)| open == id));
         let mut available: Vec<_> = chats
             .iter()
-            .map(|(id, label)| (Tab::Chat(*id), label.clone()))
+            .enumerate()
+            .map(|(ordinal, (id, label))| {
+                (Tab::Chat(*id), chat_label(label, ordinal, multiple, "Side"))
+            })
             .collect();
         if let Some(id) = agent.or_else(|| {
             sidebar.tabs.iter().find_map(|(tab, _)| match tab {
@@ -264,11 +328,11 @@ impl App {
                 _ => None,
             })
         }) {
-            if agent.is_some() || agents.iter().any(|(a, _)| *a == id) {
+            if agent.is_some() || agents.iter().any(|a| a.session_id == id) {
                 let title = agents
                     .iter()
-                    .find(|(a, _)| *a == id)
-                    .map_or_else(|| format!("Agent {id}"), |(_, s)| s.clone());
+                    .find(|a| a.session_id == id)
+                    .map_or_else(|| format!("Agent {id}"), |a| a.title.clone());
                 available.push((Tab::Agent(id), title));
             }
         }
@@ -304,7 +368,8 @@ impl App {
                 &chats,
                 &self.workspace.saved_chats,
                 agents,
-                sidebar.files.entries(),
+                &sidebar.files,
+                &sidebar.prompts,
             );
         }
     }
@@ -322,6 +387,7 @@ impl App {
     ) {
         self.workspace.sidebar.chooser_dirty = true;
         self.workspace.sidebar.notice = None;
+        self.workspace.sidebar.prompts.clear();
         self.workspace.sidebar.chooser.dismiss_path();
         self.enter_panel(tui, Page::Chooser);
         self.request_sidebar_sessions();

@@ -46,6 +46,10 @@ pub(crate) struct UserHistoryCell {
 }
 
 impl UserHistoryCell {
+    pub(crate) fn prompt_preview(&self) -> Option<String> {
+        crate::user_message::prompt_preview(&self.message, !self.images.is_empty())
+    }
+
     /// Whether the message started a turn, which an edit restarts.
     pub(crate) fn starts_turn(&self) -> bool {
         self.starts_turn

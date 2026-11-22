@@ -29,6 +29,36 @@ use crate::style::user_message_style;
 use crate::ui_consts::LIVE_PREFIX_COLS;
 
 impl ChatComposer {
+    pub(crate) fn paint_parked(&self, area: Rect, buf: &mut Buffer, watch_only: bool) -> Rect {
+        let available = area.height.saturating_sub(1);
+        let composer = if watch_only { 0 } else { available.min(3) };
+        let mut above = available - composer;
+        if !watch_only {
+            let footer = FooterProps {
+                mode: FooterMode::ComposerEmpty,
+                navigation: Some(&[]),
+                ..self.footer_props()
+            };
+            let height = footer_height(footer, area.width)
+                .min(above)
+                .min(crate::ui_consts::pane_composer_height_limit(area.height).saturating_sub(1));
+            above -= height;
+            let status = Rect::new(area.x, area.y + above + composer, area.width, height);
+            render_footer(status, buf, footer);
+        }
+        let composer = Rect::new(area.x, area.y + above, area.width, composer);
+        buf.set_style(composer, ratatui::style::Style::default().dim());
+        let text = composer.inset(Insets::tlbr(u16::from(composer.height > 1), 2, 0, 0));
+        if !text.is_empty() {
+            buf[(composer.x, text.y)].set_symbol("›");
+            StatefulWidget::render(&self.textarea, text, buf, &mut Default::default());
+        }
+        Rect {
+            height: above.saturating_sub(1),
+            ..area
+        }
+    }
+
     fn layout_areas(&self, area: Rect) -> [Rect; 4] {
         let total = self.popup_or_footer_height(area.width);
         let above = matches!(

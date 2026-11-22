@@ -11,3 +11,8 @@
 /// - User history lines account for this many columns (e.g., "▌ ") when wrapping.
 pub(crate) const LIVE_PREFIX_COLS: u16 = 2;
 pub(crate) const FOOTER_INDENT_COLS: usize = LIVE_PREFIX_COLS as usize;
+
+/// Leave a third of the pane for reading, or allow eight composer rows on small screens.
+pub(crate) fn pane_composer_height_limit(height: u16) -> u16 {
+    ((u32::from(height) * 2 / 3) as u16).max(8).min(height)
+}

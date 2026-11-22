@@ -7,7 +7,7 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Position;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
+use ratatui::style::{Color, Style};
 use ratatui::text::Line;
 use ratatui::widgets::Widget;
 
@@ -106,12 +106,20 @@ impl<'a, Id: Copy + Eq> TabStrip<'a, Id> {
         paint: impl Fn(Id, Rect, Style, &mut Buffer),
     ) -> Vec<(TabTarget<Id>, Rect)> {
         let style = |state| match state {
-            TabState::Active => crate::style::selection_style(),
-            TabState::Inactive => Style::default().cyan(),
-            TabState::Absent => Style::default().dim(),
+            TabState::Active => crate::style::selection_style().not_underlined(),
+            TabState::Inactive => Style::default()
+                .dim()
+                .not_bold()
+                .not_reversed()
+                .not_underlined(),
+            TabState::Absent => Style::default()
+                .fg(Color::Reset)
+                .bg(Color::Reset)
+                .not_underlined()
+                .not_reversed(),
         };
-        let rest = Style::default();
-        let hover = Style::default().underlined();
+        let rest = style(TabState::Absent).patch(crate::style::user_message_style());
+        let hover = style(TabState::Absent).underlined();
         let selected_style = match selected_state {
             TabState::Active => style(selected_state),
             TabState::Inactive => hover.bold(),
@@ -168,5 +176,56 @@ impl<'a, Id: Copy + Eq> TabStrip<'a, Id> {
             }
         }
         targets
+    }
+}
+
+/// Identify same-named documents by the shortest distinguishing path suffix.
+pub(super) fn document_title(
+    path: &std::path::Path,
+    tabs: &[(super::Tab, String)],
+    width: usize,
+) -> String {
+    use crate::line_truncation::document_label;
+    let name = crate::text_formatting::strip_terminal_controls(&path.to_string_lossy());
+    let parts: Vec<_> = name.rsplit(['/', '\\']).collect();
+    let target = hanafubuki_agent::PathKey::of(path);
+    let others = tabs
+        .iter()
+        .filter_map(|(tab, _)| match tab {
+            super::Tab::Document(other) if hanafubuki_agent::PathKey::of(other) != target => Some(
+                crate::text_formatting::strip_terminal_controls(&other.to_string_lossy()),
+            ),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let depth = others
+        .iter()
+        .map(|other| {
+            1 + parts
+                .iter()
+                .copied()
+                .zip(other.rsplit(['/', '\\']))
+                .take_while(|(a, b)| a == b)
+                .count()
+        })
+        .max()
+        .unwrap_or(1)
+        .min(parts.len());
+    let parts = &parts[..depth];
+    let label = document_label(parts, width);
+    let mut index = 1;
+    let mut collision = false;
+    for other in others {
+        let parts: Vec<_> = other.rsplit(['/', '\\']).take(depth).collect();
+        if document_label(&parts, width) == label {
+            collision = true;
+            index += usize::from(other < name);
+        }
+    }
+    let prefix = format!("{index}:");
+    if collision && prefix.len() <= width {
+        format!("{prefix}{}", document_label(parts, width - prefix.len()))
+    } else {
+        label
     }
 }

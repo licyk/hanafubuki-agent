@@ -29,7 +29,7 @@ async fn linked_document_reflows_and_jumps_to_source_after_click_or_tab() {
     let mut doc = reader(&path, source.into(), None);
     let area = Rect::new(2, 3, 48, 6);
     let mut buf = Buffer::empty(area);
-    doc.paint(area, &mut buf);
+    doc.paint(area, &mut buf, None, false);
     let row = buf
         .content
         .chunks(usize::from(area.width))
@@ -60,18 +60,22 @@ async fn linked_document_reflows_and_jumps_to_source_after_click_or_tab() {
     );
     doc.key(KeyEvent::from(KeyCode::Tab));
     assert_eq!(doc.key(KeyEvent::from(KeyCode::Enter)), Some(target));
-    doc.go_to(Location {
+    doc.go_to(Some(Location {
         line: 20,
         column: None,
-    });
+    }));
     let area = Rect::new(0, 0, 24, 4);
     let mut buf = Buffer::empty(area);
-    doc.paint(area, &mut buf);
+    doc.paint(area, &mut buf, None, false);
     let top = buf.content[..24]
         .iter()
         .map(|cell| cell.symbol())
         .collect::<String>();
     assert!(top.contains("line 20"), "{top}");
+    doc.go_to(None);
+    let mut buf = Buffer::empty(area);
+    doc.paint(area, &mut buf, None, false);
+    assert!(painted_rows(&buf).starts_with(" Sibling"));
 }
 
 #[tokio::test]
@@ -84,7 +88,7 @@ async fn image_content_is_recognised_by_bytes_and_fits_the_panel_after_resize() 
     let mut doc = reader(Path::new("no-extension"), png.into_inner(), None);
     for area in [Rect::new(3, 2, 30, 8), Rect::new(7, 1, 14, 4)] {
         let mut buf = Buffer::empty(area);
-        let native = doc.paint(area, &mut buf);
+        let native = doc.paint(area, &mut buf, None, false);
         let label = buf.content[..area.width as usize]
             .iter()
             .map(|c| c.symbol())
@@ -129,4 +133,111 @@ fn history_file_links_decode_locations_and_skip_non_files_and_duplicates() {
         entries[1].target,
         FileTarget::document(root.join("src/other.rs"))
     );
+}
+
+fn painted_rows(buf: &Buffer) -> String {
+    buf.content
+        .chunks(usize::from(buf.area.width))
+        .map(|row| {
+            row.iter()
+                .map(|cell| cell.symbol())
+                .collect::<String>()
+                .trim_end()
+                .to_owned()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[tokio::test]
+async fn source_reader_matches_sidebar_margins_gutter_scroll_arrows_and_search_caret() {
+    let path = Path::new("sample.rs");
+    let contents = (1..=18)
+        .map(|n| format!("let value_{n} = {n};"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut doc = reader(
+        path,
+        contents.into(),
+        Some(Location {
+            line: 9,
+            column: Some(5),
+        }),
+    );
+    let area = Rect::new(3, 2, 54, 8);
+    let mut buf = Buffer::empty(area);
+    doc.paint(area, &mut buf, None, false);
+    let source = painted_rows(&buf);
+    let target_x = area.x + 1 + 3;
+    assert_eq!(
+        buf[(target_x, area.y)].modifier & ratatui::style::Modifier::REVERSED,
+        ratatui::style::Modifier::REVERSED
+    );
+    assert!(!buf[(target_x + 4, area.y)]
+        .modifier
+        .contains(ratatui::style::Modifier::REVERSED));
+    doc.key(KeyEvent::from(KeyCode::Esc));
+    doc.key(KeyEvent::from(KeyCode::Char('/')));
+    doc.paste("value");
+    let mut buf = Buffer::empty(area);
+    doc.paint(area, &mut buf, None, false);
+    let caret = doc.cursor.expect("active search has a terminal cursor");
+    assert_eq!(caret.x, area.x + 1 + 6 + 5);
+    assert_eq!(caret.y, area.bottom() - 2);
+    insta::assert_snapshot!(
+        "sidebar_source_and_find",
+        format!("{source}\n\n{}", painted_rows(&buf))
+    );
+}
+
+#[tokio::test]
+async fn markdown_loading_errors_and_image_footer_use_the_reader_body() {
+    let path = Path::new("src/notes.md");
+    let (tx, _) = std::sync::mpsc::channel();
+    let task = tokio::spawn(std::future::pending::<()>());
+    let mut doc = Document::new(
+        path.into(),
+        None,
+        1,
+        task.abort_handle(),
+        AppEventSender::new(tx),
+    );
+    let area = Rect::new(0, 0, 38, 12);
+    let paint = |doc: &mut Document| {
+        let mut buf = Buffer::empty(area);
+        doc.paint(area, &mut buf, None, false);
+        painted_rows(&buf)
+    };
+    let opening = paint(&mut doc);
+    assert!(opening.starts_with(" ◌ Opening…"));
+    doc.loaded(Err("No such file or directory (os error 2)".into()));
+    let error = paint(&mut doc);
+    doc.loaded(Ok((
+        path.into(),
+        DocumentContent::Text("Read [the manual](manual.md) first.".into()),
+    )));
+    let markdown = paint(&mut doc);
+    assert!(!markdown.contains("manual.md"));
+    doc.key(KeyEvent::from(KeyCode::Tab));
+    let mut buf = Buffer::empty(area);
+    doc.paint(area, &mut buf, None, false);
+    assert!(buf[(6, 0)]
+        .modifier
+        .contains(ratatui::style::Modifier::REVERSED));
+    insta::assert_snapshot!(
+        "sidebar_markdown_and_missing_file",
+        format!("{markdown}\n\n{error}")
+    );
+
+    doc.loaded(Ok((
+        path.into(),
+        DocumentContent::Image {
+            pixels: ::image::RgbaImage::new(3, 3),
+            label: "PNG · 3 × 3".into(),
+        },
+    )));
+    let image = paint(&mut doc);
+    assert!(image.starts_with(" PNG · 3 × 3"));
+    assert_eq!(image.lines().last(), Some(" ←/→ tabs · Esc back"));
+    assert_eq!(image.lines().nth(10), Some(""));
 }

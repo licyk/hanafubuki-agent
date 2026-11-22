@@ -4,7 +4,7 @@ use image::{DynamicImage, ImageDecoder, ImageFormat};
 use ratatui::{
     buffer::Buffer,
     crossterm::event::{KeyCode, KeyEvent, KeyEventKind, MouseButton, MouseEvent, MouseEventKind},
-    layout::Rect,
+    layout::{Margin, Position, Rect},
     style::Stylize,
     text::Line,
     widgets::{Paragraph, Widget},
@@ -17,10 +17,13 @@ use std::{
 
 use super::{image::Preview, FileTarget, ImagePlacement, Location};
 use crate::app_event::{AppCommand, AppEvent, AppEventSender};
+use crate::footer_hint::{shortcut, HintLine};
 use crate::history_cell::{raw_lines_from_source, HistoryCell};
+use crate::keymap::{self, Action};
 use crate::terminal_hyperlinks::{visible_lines, HyperlinkLine};
 use crate::transcript_view::TranscriptView;
-use crate::transcript_view::ViewAction;
+use crate::transcript_view::{DocumentLink, ViewAction};
+use std::time::{Duration, Instant};
 
 pub(crate) enum DocumentContent {
     Text(String),
@@ -98,12 +101,7 @@ impl HistoryCell for FileCell {
                 .map(HyperlinkLine::new)
                 .collect();
         }
-        crate::markdown::render_markdown_with_list_spacing(
-            &self.source,
-            Some(width as usize),
-            self.parent.as_deref(),
-            crate::markdown_render::ListSpacing::AfterMultiline,
-        )
+        crate::markdown_render::render_document_lines(&self.source, width, self.parent.as_deref())
     }
     fn retained_hyperlink_lines(&self, width: u16, _detailed: bool) -> Vec<HyperlinkLine> {
         self.display_hyperlink_lines(width)
@@ -119,22 +117,25 @@ impl HistoryCell for FileCell {
 pub(super) struct Document {
     pub(super) path: PathBuf,
     pub(super) request: u64,
-    pub(super) editing_search: bool,
     reader: TranscriptView,
     content: State,
     canonical: PathBuf,
     line: Option<Location>,
-    link: Option<(usize, FileTarget)>,
+    link: Option<DocumentLink>,
+    pub(super) cursor: Option<Position>,
     pressed_link: Option<(u16, u16)>,
     tx: AppEventSender,
     watch: tokio::task::AbortHandle,
 }
 
 enum State {
-    Notice(String),
+    Loading(Instant),
+    Failed(String),
     Text {
         cells: [Arc<dyn HistoryCell>; 1],
         source: Arc<str>,
+        starts: Vec<usize>,
+        target: Option<(usize, usize)>,
     },
     Image {
         preview: Preview,
@@ -164,19 +165,19 @@ impl Document {
             watch,
             tx,
             link: None,
+            cursor: None,
             pressed_link: None,
             reader: TranscriptView::default(),
-            content: State::Notice("Loading…".into()),
-            editing_search: false,
+            content: State::Loading(Instant::now()),
         }
     }
 
     pub(super) fn loaded(&mut self, result: Result<(PathBuf, DocumentContent), String>) {
         self.link = None;
         self.pressed_link = None;
-        self.editing_search = false;
+
         self.content = match result {
-            Err(error) => State::Notice(crate::text_formatting::strip_terminal_controls(&error)),
+            Err(error) => State::Failed(crate::text_formatting::strip_terminal_controls(&error)),
             Ok((canonical, DocumentContent::Image { pixels, label })) => {
                 self.canonical = canonical;
                 State::Image {
@@ -192,14 +193,27 @@ impl Document {
                     .extension()
                     .and_then(|s| s.to_str())
                     .unwrap_or("");
-                let language =
-                    (!matches!(ext.to_ascii_lowercase().as_str(), "md" | "markdown" | "mdx")
-                        || self.line.is_some())
+                let language = (!super::markdown_path(&self.path) || self.line.is_some())
                     .then(|| ext.to_owned());
+                let starts = if language.is_some() {
+                    source
+                        .lines()
+                        .scan(0, |offset, line| {
+                            let start = *offset;
+                            *offset += line.len() + 1;
+                            Some(start)
+                        })
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                };
+                let target = self
+                    .line
+                    .and_then(|line| source_target(&source, &starts, line));
                 let offset = if matches!(self.content, State::Text { .. }) {
                     self.reader.document_offset()
                 } else {
-                    Some(self.line.map_or(0, |loc| line_offset(&source, loc)))
+                    Some(target.map_or(0, |(_, offset)| offset))
                 };
                 let source: Arc<str> = source.into();
                 let cells: [Arc<dyn HistoryCell>; 1] = [Arc::new(FileCell {
@@ -214,68 +228,174 @@ impl Document {
                 if let Some(offset) = offset {
                     self.reader.jump_to_document_offset(&cells, offset)
                 }
-                self.editing_search = false;
-                State::Text { source, cells }
+
+                State::Text {
+                    source,
+                    cells,
+                    starts,
+                    target,
+                }
             }
         }
     }
-    pub(super) fn go_to(&mut self, line: Location) {
-        if self.line.replace(line).is_none() {
-            if let State::Text { source, .. } = &self.content {
-                let source = source.to_string();
-                self.loaded(Ok((self.canonical.clone(), DocumentContent::Text(source))));
+    pub(super) fn go_to(&mut self, location: Option<Location>) {
+        let located = self.line.is_some();
+        self.line = location;
+        self.link = None;
+        let State::Text {
+            source,
+            cells,
+            starts,
+            target,
+        } = &mut self.content
+        else {
+            return;
+        };
+        let ext = self
+            .canonical
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if matches!(ext.as_str(), "md" | "mdx" | "markdown") && located != location.is_some() {
+            let text = source.to_string();
+            self.content = State::Loading(Instant::now());
+            self.loaded(Ok((self.canonical.clone(), DocumentContent::Text(text))));
+        } else {
+            *target = location.and_then(|line| source_target(source, starts, line));
+            if let Some((_, offset)) = *target {
+                self.reader = TranscriptView::default();
+                self.reader.jump_to_document_offset(cells, offset);
             }
-        }
-        if let State::Text { source, cells } = &self.content {
-            self.reader
-                .jump_to_document_offset(cells, line_offset(source, line));
         }
     }
 
-    pub(super) fn paint(&mut self, area: Rect, buf: &mut Buffer) -> Option<ImagePlacement> {
-        if area.is_empty() {
+    pub(super) fn paint(
+        &mut self,
+        area: Rect,
+        buf: &mut Buffer,
+        resize_hint: Option<&str>,
+        animations: bool,
+    ) -> Option<ImagePlacement> {
+        self.cursor = None;
+        let body = area.inner(Margin::new(1, 0));
+        if body.is_empty() {
             return None;
         }
+        let bottom = Rect::new(body.x, body.bottom() - 1, body.width, 1);
         match &mut self.content {
-            State::Notice(text) => Paragraph::new(text.as_str())
-                .wrap(ratatui::widgets::Wrap { trim: false })
-                .render(area, buf),
-            State::Text { cells, .. } => {
-                if self.reader.advance_search(cells) {
-                    self.tx
-                        .send(AppEvent::ScheduleFrame(std::time::Instant::now()));
-                }
-                let footer = self
-                    .reader
-                    .footer(area.width)
-                    .map(|f| f.lines)
-                    .unwrap_or_else(|| {
-                        vec![
-                            if let Some((_, FileTarget::Document { path, .. })) = &self.link {
-                                Line::from(format!("Enter opens {}", path.display())).dim()
-                            } else {
-                                Line::from("↑/↓ scroll · / find").dim()
-                            },
-                        ]
-                    });
-                let height = (footer.len() as u16).min(area.height);
-                let body = Rect {
-                    height: area.height - height,
-                    ..area
+            State::Loading(started) => {
+                let spinner = if animations {
+                    const FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+                    self.tx.send(AppEvent::ScheduleFrame(
+                        Instant::now() + Duration::from_millis(100),
+                    ));
+                    FRAMES[((started.elapsed().as_millis() / 100) % 10) as usize]
+                } else {
+                    "◌"
                 };
-                self.reader.render(body, buf, cells);
-                Paragraph::new(footer)
-                    .render(Rect::new(area.x, body.bottom(), area.width, height), buf);
+                Line::from(vec![
+                    spinner.fg(crate::style::accent_color()),
+                    " ".into(),
+                    "Opening…".dim(),
+                ])
+                .render(body, buf);
+            }
+            State::Failed(error) => {
+                let mut lines = error_lines(&self.path, error, body.width);
+                if lines.len() + 2 < usize::from(body.height) {
+                    lines.insert(0, Line::default());
+                    if resize_hint.is_none() {
+                        shortcut("Esc", "back").render(bottom, buf);
+                    }
+                }
+                Paragraph::new(lines).render(body, buf);
             }
             State::Image { preview, label } => {
-                Line::from(label.as_str()).dim().render(area, buf);
-                return preview.paint(
-                    Rect::new(area.x, area.y + 1, area.width, area.height - 1),
+                Line::from(label.as_str()).dim().render(body, buf);
+                if body.height > 1 {
+                    if let Some(hint) = resize_hint {
+                        Line::from(hint).dim().render(bottom, buf);
+                    } else {
+                        HintLine::new(
+                            [shortcut("←/→", "tabs"), shortcut("Esc", "back")],
+                            body.width,
+                        )
+                        .line
+                        .render(bottom, buf);
+                    }
+                }
+                let rows = body.height.saturating_sub(2 + u16::from(body.height > 3));
+                return preview.paint(Rect::new(body.x, body.y + 1, body.width, rows), buf);
+            }
+            State::Text {
+                cells,
+                starts,
+                target,
+                ..
+            } => {
+                if self.reader.tick_selection(cells) {
+                    self.tx.send(AppEvent::ScheduleFrame(
+                        Instant::now() + Duration::from_millis(45),
+                    ));
+                }
+                if self.reader.advance_search(cells) {
+                    self.tx.send(AppEvent::ScheduleFrame(Instant::now()));
+                }
+                let active = self.reader.has_active_interaction();
+                let footer = active.then(|| self.reader.footer(body.width)).flatten();
+                let (lines, cursor) = if let Some(hint) = resize_hint {
+                    (vec![Line::from(hint).dim()], None)
+                } else if let Some(footer) = footer {
+                    (footer.lines, footer.cursor_column)
+                } else {
+                    (vec![reader_hints(body.width, target.is_some())], None)
+                };
+                let height = (lines.len() as u16).min(body.height.saturating_sub(1));
+                let gap = u16::from(height > 0 && body.height - height > 1);
+                let content = Rect {
+                    height: body.height - height - gap,
+                    ..body
+                };
+                let viewport = Rect {
+                    width: content.width - u16::from(content.width > 2),
+                    ..content
+                };
+                self.reader.render_document(
+                    viewport,
                     buf,
+                    cells,
+                    starts,
+                    target.filter(|_| !active),
+                    self.link.as_ref(),
                 );
+                self.reader
+                    .paint_document_scroll_indicators(content, buf, cells);
+                if height > 0 {
+                    let row = content.bottom() + gap;
+                    Paragraph::new(lines).render(Rect::new(body.x, row, body.width, height), buf);
+                    self.cursor = cursor.map(|c| Position::new(body.x + c, row));
+                }
+                return None;
             }
         }
+        if let Some(hint) = resize_hint {
+            Line::from(hint).dim().render(bottom, buf);
+        }
         None
+    }
+
+    pub(super) fn captures_key(&self, key: KeyEvent) -> bool {
+        matches!(self.content, State::Text { .. }) && self.reader.has_active_interaction()
+            || (key.code == KeyCode::Esc
+                && (self.link.is_some()
+                    || matches!(
+                        self.content,
+                        State::Text {
+                            target: Some(_),
+                            ..
+                        }
+                    )))
     }
 
     pub(super) fn key(&mut self, key: KeyEvent) -> Option<FileTarget> {
@@ -285,15 +405,28 @@ impl Document {
         let State::Text { cells, .. } = &self.content else {
             return None;
         };
+        if key.code == KeyCode::Esc && !self.reader.has_active_interaction() {
+            if self.link.take().is_none() {
+                if let State::Text { target, .. } = &mut self.content {
+                    *target = None;
+                }
+            }
+            return None;
+        }
         if !matches!(key.code, KeyCode::Tab | KeyCode::BackTab | KeyCode::Enter) {
             self.link = None;
         }
         if !self.reader.has_active_interaction() {
+            if keymap::matches(Action::SelectTranscript, &key) {
+                self.reader.begin_select_mode(cells);
+
+                return None;
+            }
             match key.code {
                 KeyCode::Tab | KeyCode::BackTab => {
                     self.link = self.reader.step_document_link(
                         cells,
-                        self.link.as_ref().map(|(at, _)| *at),
+                        self.link.as_ref().map(|link| link.index),
                         key.code == KeyCode::Tab
                             && !key
                                 .modifiers
@@ -305,7 +438,7 @@ impl Document {
                     return self
                         .link
                         .as_ref()
-                        .and_then(|(_, target)| self.relative_link(target.clone()));
+                        .and_then(|link| self.relative_link(link.target.clone()));
                 }
                 KeyCode::Char('/') => self.reader.begin_search(),
                 KeyCode::Up | KeyCode::Char('k') => self.reader.scroll(cells, -1),
@@ -319,7 +452,7 @@ impl Document {
         } else {
             copy_action(&self.tx, self.reader.handle_key(key, cells));
         }
-        self.editing_search = self.reader.has_active_interaction();
+
         None
     }
 
@@ -357,7 +490,7 @@ impl Document {
             _ => {}
         }
         copy_action(&self.tx, self.reader.handle_mouse(mouse, cells));
-        self.editing_search = self.reader.has_active_interaction();
+
         None
     }
     pub(super) fn canonical_key(&self) -> hanafubuki_agent::PathKey {
@@ -378,19 +511,110 @@ impl Document {
     }
 }
 
-fn line_offset(source: &str, loc: Location) -> usize {
-    let start = source
-        .split_inclusive('\n')
-        .take(loc.line.saturating_sub(1))
-        .map(str::len)
-        .sum::<usize>();
-    let line = source[start..].split('\n').next().unwrap_or_default();
-    start
-        + line
-            .chars()
-            .take(loc.column.unwrap_or(1).saturating_sub(1))
-            .map(char::len_utf8)
-            .sum::<usize>()
+fn source_target(source: &str, starts: &[usize], loc: Location) -> Option<(usize, usize)> {
+    use unicode_segmentation::UnicodeSegmentation;
+    let index = loc
+        .line
+        .saturating_sub(1)
+        .min(starts.len().saturating_sub(1));
+    let start = *starts.get(index)?;
+    let line = source[start..].split('\n').next()?;
+    let byte = line
+        .char_indices()
+        .nth(loc.column.unwrap_or(1).saturating_sub(1))
+        .map_or(line.len(), |(n, _)| n);
+    let byte = if byte < line.len() {
+        line.grapheme_indices(true)
+            .take_while(|(n, _)| *n <= byte)
+            .last()
+            .map_or(0, |(n, _)| n)
+    } else {
+        byte
+    };
+    Some((index + 1, start + byte))
+}
+
+fn reader_hints(width: u16, target: bool) -> Line<'static> {
+    let keys = keymap::current();
+    let first = |action| keys.primary_label(action);
+    HintLine::new(
+        [
+            Some(shortcut("↑/↓", "read")),
+            Some(shortcut(
+                first(Action::FindTranscript).as_deref().unwrap_or("/"),
+                "find",
+            )),
+            Some(shortcut("Tab", "link")),
+            first(Action::SelectTranscript).map(|key| shortcut(&key, "select")),
+            Some(shortcut(
+                "Esc",
+                if target { "clear highlight" } else { "back" },
+            )),
+        ]
+        .into_iter()
+        .flatten(),
+        width,
+    )
+    .line
+}
+
+fn error_lines(path: &Path, error: &str, width: u16) -> Vec<Line<'static>> {
+    let reason = error
+        .split_once(" (os error ")
+        .map_or(error, |(reason, _)| reason);
+    // Resolution errors include the attempted path; a read error carries the OS reason directly.
+    let reason = if reason.starts_with("resolve filesystem target: path does not exist: ") {
+        "No such file or directory"
+    } else {
+        reason.rsplit(": ").next().unwrap_or(reason)
+    };
+    let (heading, hint) = match reason {
+        "No such file or directory"
+        | "The system cannot find the file specified."
+        | "The system cannot find the path specified." => (
+            "File not found".yellow().bold(),
+            "This file may have moved since the link was added.",
+        ),
+        "Permission denied" | "Operation not permitted" | "Access is denied." => (
+            "Permission denied".red().bold(),
+            "Check your read access, then reopen the link.",
+        ),
+        _ => ("Could not open file".red().bold(), error),
+    };
+    let path = crate::text_formatting::strip_terminal_controls(&path.to_string_lossy());
+    let (dir, name) = path
+        .rfind(['/', '\\'])
+        .map_or(("", path.as_str()), |end| path.split_at(end + 1));
+    let options = textwrap::Options::new(usize::from(width))
+        .word_splitter(textwrap::WordSplitter::NoHyphenation);
+    let mut lines = vec![Line::from(heading), Line::default()];
+    lines.extend(
+        textwrap::wrap(name, &options)
+            .into_iter()
+            .map(|s| Line::from(s.into_owned()).bold()),
+    );
+    if !dir.is_empty() {
+        let path_options = options
+            .clone()
+            .word_separator(textwrap::WordSeparator::Custom(|s| {
+                Box::new(
+                    s.split_inclusive(['/', '\\'])
+                        .map(textwrap::core::Word::from),
+                )
+            }));
+        lines.extend(
+            textwrap::wrap(&format!("in {dir}"), path_options)
+                .into_iter()
+                .map(|s| Line::from(s.into_owned()).dim()),
+        );
+    }
+    lines.push(Line::default());
+    lines.extend(
+        textwrap::wrap(hint, options)
+            .into_iter()
+            .map(|s| Line::from(s.into_owned())),
+    );
+    lines
 }
 
 fn copy_action(tx: &AppEventSender, action: Option<ViewAction>) {

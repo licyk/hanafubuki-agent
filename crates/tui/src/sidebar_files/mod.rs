@@ -63,7 +63,21 @@ pub(crate) struct FileEntry {
     pub(crate) target: FileTarget,
 }
 
+fn markdown_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            ["md", "markdown", "mdx"]
+                .iter()
+                .any(|supported| ext.eq_ignore_ascii_case(supported))
+        })
+}
+
 impl FileEntry {
+    pub(crate) fn is_markdown(&self) -> bool {
+        matches!(&self.target, FileTarget::Document { path, .. } if markdown_path(path))
+    }
+
     fn document_key(&self) -> Option<PathKey> {
         match &self.target {
             FileTarget::Document { path, .. } => Some(PathKey::of(path)),
@@ -138,6 +152,13 @@ impl SidebarFiles {
         if let Some(history) = &self.history {
             history.send_replace(());
         }
+    }
+
+    pub(crate) fn relative_path(&self, path: &Path) -> PathBuf {
+        self.roots
+            .iter()
+            .find_map(|root| hanafubuki_agent::relative_below(path, root))
+            .unwrap_or_else(|| path.to_owned())
     }
 
     pub(crate) fn entries(&self) -> &[FileEntry] {
@@ -255,9 +276,7 @@ impl SidebarFiles {
                     path
                 };
                 if let Some(doc) = self.doc_mut(&path) {
-                    if let Some(line) = line {
-                        doc.go_to(line);
-                    }
+                    doc.go_to(line);
                     return Some(doc.path.clone());
                 }
                 let request = next_request();
@@ -289,8 +308,11 @@ impl SidebarFiles {
         path: &Path,
         area: Rect,
         buf: &mut Buffer,
+        resize_hint: Option<&str>,
+        animations: bool,
     ) -> Option<ImagePlacement> {
-        self.doc_mut(path)?.paint(area, buf)
+        self.doc_mut(path)?
+            .paint(area, buf, resize_hint, animations)
     }
     pub(crate) fn key(
         &mut self,
@@ -310,13 +332,19 @@ impl SidebarFiles {
         let target = self.doc_mut(path)?.mouse(mouse)?;
         self.open(target, bridge)
     }
-    pub(crate) fn editing_search(&self, path: &Path) -> bool {
+    pub(crate) fn cursor(&self, path: &Path) -> Option<ratatui::layout::Position> {
         self.documents
             .iter()
-            .any(|doc| PathKey::of(&doc.path) == PathKey::of(path) && doc.editing_search)
+            .find(|doc| PathKey::of(&doc.path) == PathKey::of(path))?
+            .cursor
+    }
+    pub(crate) fn captures_key(&self, path: &Path, key: KeyEvent) -> bool {
+        self.documents
+            .iter()
+            .any(|doc| PathKey::of(&doc.path) == PathKey::of(path) && doc.captures_key(key))
     }
     pub(crate) fn paste(&mut self, path: &Path, text: &str) {
-        if let Some(doc) = self.doc_mut(path).filter(|doc| doc.editing_search) {
+        if let Some(doc) = self.doc_mut(path) {
             doc.paste(text)
         }
     }

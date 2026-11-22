@@ -1,0 +1,21 @@
+---
+source: crates/tui/src/sidebar_files/tests.rs
+expression: "format!(\"{source}\\n\\n{}\", painted_rows(&buf))"
+---
+  9 let value_9 = 9;                                ↑
+ 10 let value_10 = 10;
+ 11 let value_11 = 11;
+ 12 let value_12 = 12;
+ 13 let value_13 = 13;
+ 14 let value_14 = 14;                              ↓
+
+ ↑/↓ read · f3 find · Tab link · ctrl-x [ select …
+
+ 16 let value_16 = 16;                              ↑
+ 17 let value_17 = 17;
+ 18 let value_18 = 18;
+
+
+
+ Find: value
+ enter accept · esc cancel

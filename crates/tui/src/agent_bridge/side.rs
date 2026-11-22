@@ -76,9 +76,7 @@ impl AgentBridge {
                                 "This saved side chat belongs to another conversation.".into()
                             );
                         }
-                        let title = snapshot
-                            .title
-                            .map_or_else(|| format!("Side chat {id}"), |t| t.value);
+                        let title = snapshot.title.map_or_else(String::new, |t| t.value);
                         Ok(SidebarSession::Saved(Box::new(session), title))
                     })
             };

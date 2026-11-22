@@ -35,9 +35,14 @@ fn scrollback_chooser_docks_a_saved_chat_and_a_read_only_subagent() {
         h.app.active_sidebar_agent() == Some(child)
     });
     assert!(h.tui.terminal.backend().vt100().screen().alternate_screen());
-    h.pump_until_screen_shows("read-only");
+    h.pump_until_screen_shows("Watch only");
     h.key(KeyCode::Char('x'));
     assert!(h.app.chat_widget.composer_is_empty());
+    h.key(KeyCode::Char('/'));
+    h.key(KeyCode::Char('f'));
+    assert!(h.app.transcript_view.is_search_editing());
+    h.key(KeyCode::Esc);
+    assert_eq!(h.app.active_sidebar_agent(), Some(child));
     h.key(KeyCode::Esc);
     h.pump_until_screen_shows("Open in sidebar");
     h.key_with(KeyCode::Char('x'), KeyModifiers::CONTROL);

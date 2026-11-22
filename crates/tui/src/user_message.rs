@@ -55,6 +55,16 @@ pub(crate) fn display_text(message: &str) -> String {
         .join("\n")
 }
 
+pub(crate) fn prompt_preview(text: &str, has_images: bool) -> Option<String> {
+    let plain = crate::text_formatting::strip_terminal_controls(&display_text(text));
+    let line = plain.split_whitespace().collect::<Vec<_>>().join(" ");
+    if line.is_empty() {
+        has_images.then(|| "[Image]".into())
+    } else {
+        Some(line)
+    }
+}
+
 /// The label image `number` (from 1) has in a message's text.
 pub(crate) fn image_label(number: usize) -> String {
     format!("[Image #{number}]")

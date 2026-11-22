@@ -93,28 +93,14 @@ impl AgentBridge {
                             .map(|chat| {
                                 (
                                     chat.session_id,
-                                    chat.title.map_or_else(
-                                        || format!("Side chat {}", chat.session_id),
-                                        |title| title.value,
-                                    ),
+                                    chat.title.map_or_else(String::new, |title| title.value),
                                 )
                             })
                             .collect()
                     });
             let agents = navigation_agents(&agent, parent)
                 .await
-                .map(|agents| {
-                    agents
-                        .into_iter()
-                        .skip(1)
-                        .map(|agent| {
-                            (
-                                agent.session_id,
-                                format!("{} · {:?}", agent.title, agent.status),
-                            )
-                        })
-                        .collect()
-                })
+                .map(|agents| agents.into_iter().skip(1).collect())
                 .map_err(subagents_error);
             sender.send(AppEvent::Workspace(WorkspaceEvent::SidebarSessions {
                 parent,

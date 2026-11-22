@@ -1,12 +1,16 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
+// Modified from OpenAI Codex cf3ff1530d82 (Apache-2.0).
 
 //! The panes in fullscreen (Codex's `app/side_pane.rs`, `app/pane_motion.rs`
 //! and `app/workspace_hud.rs`): the selected agent on the left and the
-//! side conversation docked on the right, a title row atop each and a
+//! side conversation docked on the right, a single row for its tabs and a
 //! divider between them, which the pointer drags and the panes' keys
 //! move; while the leader waits for its second key, a box lists them.
 //! Narrower than [`SPLIT_MIN_WIDTH`], zoomed, or without a side pane, the
-//! focused conversation fills the screen under one title row.
+//! focused pane fills the screen.
+
+#[cfg(test)]
+mod tests;
 
 use std::time::Instant;
 
@@ -28,9 +32,16 @@ pub(super) const SPLIT_MIN_WIDTH: u16 = 100;
 /// The narrowest the side pane gets (Codex's).
 const MIN_SIDE: u16 = 36;
 /// The narrowest the main pane gets.
-const MIN_MAIN: u16 = 40;
+const MIN_MAIN: u16 = 64;
 /// The HUD's width.
 const HUD_WIDTH: u16 = 40;
+
+fn clamp_width(total: u16, width: i32) -> u16 {
+    width.clamp(
+        i32::from(MIN_SIDE),
+        i32::from(total.saturating_sub(MIN_MAIN + 1).max(MIN_SIDE)),
+    ) as u16
+}
 
 /// Where the panes are drawn.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -50,13 +61,19 @@ pub(crate) struct PaneLayout {
 
 impl Workspace {
     pub(super) fn split_panes(&self, screen: Rect) -> Option<(Rect, Rect, Rect)> {
-        if self.zoomed || screen.width < SPLIT_MIN_WIDTH || screen.height <= 2 {
+        if self.zoomed || screen.width < SPLIT_MIN_WIDTH || screen.height == 0 {
             return None;
         }
-        let width = self
-            .side_width
-            .unwrap_or(screen.width / 3)
-            .clamp(MIN_SIDE, screen.width - MIN_MAIN - 1);
+        let preferred = match self.side_width {
+            Some((total, width)) if screen.width == total => width,
+            Some((total, width)) => {
+                let total = u32::from(total);
+                let percent = ((u32::from(width) * 100 + total / 2) / total).clamp(1, 99);
+                ((u32::from(screen.width) * percent + 50) / 100) as u16
+            }
+            None => screen.width / 3,
+        };
+        let width = clamp_width(screen.width, i32::from(preferred));
         let side = Rect::new(screen.right() - width, screen.y, width, screen.height);
         let main = Rect {
             width: screen.width - width - 1,
@@ -90,29 +107,18 @@ impl Workspace {
         let Some(second) = self.second.as_ref() else {
             if self.child.is_some() && screen.height > 1 {
                 let (title, body) = split_title(screen);
-                layout.titles = vec![(title, self.title(Focus::Main, true, false))];
+                layout.titles = vec![(title, self.banner(Focus::Main))];
                 layout.focused = body;
             }
             return layout;
         };
         if let Some((main, side, divider)) = self.split_panes(screen) {
             layout.divider = Some(divider);
-            let (main_title, main_body) = split_title(main);
-            let (side_title, side_body) = split_title(side);
-            let main_focused = second.focus == Focus::Main;
-            layout.titles = vec![
-                (main_title, self.title(Focus::Main, main_focused, true)),
-                (side_title, self.title(Focus::Second, !main_focused, true)),
-            ];
-            (layout.focused, layout.passive) = if main_focused {
-                (main_body, Some(side_body))
+            (layout.focused, layout.passive) = if second.focus == Focus::Main {
+                (main, Some(side))
             } else {
-                (side_body, Some(main_body))
+                (side, Some(main))
             };
-        } else if screen.height > 1 {
-            let (title, body) = split_title(screen);
-            layout.titles = vec![(title, self.title(second.focus, true, false))];
-            layout.focused = body;
         }
         if let Some(side) = if second.focus == Focus::Second {
             Some(&mut layout.focused)
@@ -136,12 +142,6 @@ impl Workspace {
     /// The title of `which` conversation's pane, or (scrollback mode) the
     /// line that says the interface switched to it.
     pub(super) fn banner(&self, which: Focus) -> Line<'static> {
-        self.title(which, true, false)
-    }
-
-    /// A pane's title; `split` when the panes share the screen, where the
-    /// side pane is narrow.
-    fn title(&self, which: Focus, focused: bool, split: bool) -> Line<'static> {
         let text = match which {
             Focus::Main if self.child.is_some() => {
                 let child = self.child.as_ref().unwrap();
@@ -151,7 +151,7 @@ impl Workspace {
                     child.title, child.parent_title
                 )
             }
-            Focus::Main if focused && self.second.is_some() => {
+            Focus::Main if self.second.is_some() => {
                 format!("Main conversation · {} side", hint(Action::FocusPaneRight))
             }
             Focus::Main => "Main conversation".to_string(),
@@ -164,19 +164,17 @@ impl Workspace {
                 "Subagent · read-only".to_owned()
             }
             Focus::Second if self.sidebar.uses_fullscreen() => "Side conversation".to_owned(),
-            Focus::Second if focused && split => {
-                format!("Side · {} or /close closes", hint(Action::HidePane))
-            }
-            Focus::Second if focused => format!(
+            Focus::Second => format!(
                 "Side conversation · {} or /close closes · Esc returns",
                 hint(Action::HidePane)
             ),
-            Focus::Second => format!("Side conversation · {}", hint(Action::FocusPaneRight)),
         };
-        if focused {
-            Line::from(format!(" {text} ").bold().cyan())
-        } else {
-            Line::from(format!(" {text} ").dim())
+        Line::from(format!(" {text} ").bold().cyan())
+    }
+
+    pub(super) fn set_side_width(&mut self, total: u16, width: i32) {
+        if total >= SPLIT_MIN_WIDTH {
+            self.side_width = Some((total, clamp_width(total, width)));
         }
     }
 
@@ -189,7 +187,7 @@ impl Workspace {
             return;
         };
         let current = i32::from(layout.screen.right() - divider.right());
-        self.side_width = u16::try_from((current + delta).max(1)).ok();
+        self.set_side_width(layout.screen.width, current + delta);
     }
 
     /// The panes as drawn, for the pointer and the divider's keys.
@@ -259,7 +257,7 @@ impl App {
             }
             MouseEventKind::Drag(MouseButton::Left) if workspace.dragging => {
                 let width = layout.screen.right().saturating_sub(mouse.column + 1);
-                workspace.side_width = Some(width);
+                workspace.set_side_width(layout.screen.width, i32::from(width));
             }
             MouseEventKind::Up(MouseButton::Left) if workspace.dragging => {
                 workspace.dragging = false;

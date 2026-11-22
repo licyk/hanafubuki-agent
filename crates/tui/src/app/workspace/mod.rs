@@ -70,10 +70,11 @@ pub(crate) enum WorkspaceEvent {
         id: AgentSessionId,
         read: Result<crate::agent_bridge::SidebarSession, String>,
     },
+    SidePrompts(AgentSessionId, Vec<(AgentSessionId, Option<String>)>),
     SidebarSessions {
         parent: AgentSessionId,
         saved: Result<Vec<(AgentSessionId, String)>, String>,
-        agents: Result<Vec<(AgentSessionId, String)>, String>,
+        agents: Result<Vec<crate::agent_bridge::NavigationAgent>, String>,
     },
     /// Shows a subagent in place of the main conversation.
     OpenChild(AgentSessionId),
@@ -171,14 +172,14 @@ pub(super) struct Workspace {
     hidden: Vec<Second>,
     reading_tab: Option<AgentSessionId>,
     pub(in crate::app) saved_chats: Vec<(AgentSessionId, String)>,
-    pub(in crate::app) sidebar_agents: Vec<(AgentSessionId, String)>,
+    pub(in crate::app) sidebar_agents: Vec<crate::agent_bridge::NavigationAgent>,
     closing_tabs: std::collections::BTreeSet<AgentSessionId>,
     child: Option<Child>,
     next_id: u64,
     /// The side conversation is being opened.
     opening_side: bool,
-    /// The side pane's width as the divider was moved to.
-    side_width: Option<u16>,
+    /// The terminal width and sidebar columns last chosen by moving the divider.
+    side_width: Option<(u16, u16)>,
     /// The focused pane fills the screen.
     zoomed: bool,
     /// The divider is being dragged.
@@ -279,6 +280,7 @@ impl App {
         self.workspace.sidebar.chooser_dirty = true;
         match event {
             WorkspaceEvent::OpenSidebar => self.open_sidebar(tui),
+            WorkspaceEvent::SidePrompts(parent, prompts) => self.side_prompts_read(parent, prompts),
             WorkspaceEvent::Files(update) => self.workspace.sidebar.files.apply(*update),
             WorkspaceEvent::OpenSide(message) => self.open_side(tui, message),
             WorkspaceEvent::CloseSide => self.close_second(tui),
@@ -405,10 +407,9 @@ impl App {
             return;
         }
         let parked = self.workspace.sidebar.showing_panel();
-        let title = message.as_ref().map_or_else(
-            || format!("Side chat {session}"),
-            |s| s.lines().next().unwrap_or(s).to_owned(),
-        );
+        let title = message
+            .as_ref()
+            .map_or_else(String::new, |s| s.lines().next().unwrap_or(s).to_owned());
         let kind = if side.saved {
             side_tabs::TabKind::Saved
         } else {
@@ -611,7 +612,8 @@ impl App {
             PaneAction::DividerRight => self.workspace.move_divider(-4),
             PaneAction::EqualWidths => {
                 if let Ok(size) = tui.terminal.size() {
-                    self.workspace.side_width = Some(size.width.saturating_sub(1) / 2);
+                    self.workspace
+                        .set_side_width(size.width, i32::from(size.width.saturating_sub(1) / 2));
                 }
             }
             PaneAction::ToggleZoom => self.workspace.zoomed = !self.workspace.zoomed,

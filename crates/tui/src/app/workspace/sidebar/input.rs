@@ -90,11 +90,39 @@ impl App {
         if let Tab::Chat(id) = tab {
             let losses = self.side_close_losses(id, archive);
             if !losses.is_empty() {
-                self.open_sidebar(tui);
+                let title = self
+                    .workspace
+                    .sidebar
+                    .tabs
+                    .iter()
+                    .find_map(|(tab, title)| (tab == &Tab::Chat(id)).then_some(title))
+                    .or_else(|| {
+                        self.workspace
+                            .saved_chats
+                            .iter()
+                            .find_map(|(chat, title)| (*chat == id).then_some(title))
+                    })
+                    .filter(|title| !title.trim().is_empty())
+                    .map_or("Side chat", String::as_str);
+                let title = truncate_line_with_ellipsis_if_overflow(
+                    Line::from(strip_terminal_controls(title)),
+                    24,
+                );
+                let verb = if archive { "Archive" } else { "Close" };
+                let message = format!("This will {}. {verb} “{title}”?", losses.join(" and "));
+                if !self.using_owned_view()
+                    || self
+                        .workspace
+                        .layout
+                        .as_ref()
+                        .is_none_or(|layout| layout.strip.is_none())
+                {
+                    self.open_sidebar(tui);
+                }
                 self.workspace.sidebar.close = Some(ConfirmClose {
                     id,
                     archive,
-                    message: format!("This will {}. Continue?", losses.join(" and ")),
+                    message,
                     confirm: false,
                     buttons: Default::default(),
                 });
@@ -223,8 +251,21 @@ impl App {
             && self.workspace.second_focused()
             && super::super::PaneAction::of(&key).is_none()
         {
-            if key.code == KeyCode::Esc && !self.transcript_view.has_active_interaction() {
-                self.open_sidebar(tui)
+            if self.transcript_view.has_active_interaction() {
+                self.handle_owned_key(key);
+            } else if keymap::matches(Action::SelectTranscript, &key) {
+                self.transcript_view
+                    .begin_select_mode(&self.transcript_cells);
+            } else if key.modifiers.is_empty() {
+                match key.code {
+                    KeyCode::Esc => self.open_sidebar(tui),
+                    KeyCode::Up => self.transcript_view.scroll(&self.transcript_cells, -1),
+                    KeyCode::Down => self.transcript_view.scroll(&self.transcript_cells, 1),
+                    KeyCode::Char('/') => self.transcript_view.begin_search(),
+                    _ => {
+                        self.handle_owned_key(key);
+                    }
+                }
             } else {
                 self.handle_owned_key(key);
             }
@@ -242,20 +283,19 @@ impl App {
     ) {
         match self.workspace.sidebar.page.clone() {
             Some(Page::Document(path)) => {
-                if self.workspace.sidebar.files.editing_search(&path) {
-                    self.with_sidebar_files(|files, b| files.key(&path, key, b));
-                } else {
-                    match key.code {
-                        KeyCode::Esc => self.open_sidebar(tui),
-                        KeyCode::Left | KeyCode::Right if key.modifiers == KeyModifiers::NONE => {
-                            self.cycle_tab(tui, key.code == KeyCode::Right)
-                        }
-                        _ => {
-                            if let Some(path) =
-                                self.with_sidebar_files(|files, b| files.key(&path, key, b))
-                            {
-                                self.enter_panel(tui, Page::Document(path))
-                            }
+                let captured = self.workspace.sidebar.files.captures_key(&path, key);
+                match key.code {
+                    KeyCode::Esc if !captured => self.open_sidebar(tui),
+                    KeyCode::Left | KeyCode::Right
+                        if !captured && key.modifiers == KeyModifiers::NONE =>
+                    {
+                        self.cycle_tab(tui, key.code == KeyCode::Right)
+                    }
+                    _ => {
+                        if let Some(path) =
+                            self.with_sidebar_files(|files, b| files.key(&path, key, b))
+                        {
+                            self.enter_panel(tui, Page::Document(path))
                         }
                     }
                 }
@@ -411,7 +451,13 @@ impl App {
     }
 
     pub(in crate::app) fn sidebar_paste(&mut self, text: &str) -> bool {
+        if self.workspace.sidebar.close.is_some() {
+            return true;
+        }
         if self.active_sidebar_agent().is_some() && self.workspace.second_focused() {
+            if self.transcript_view.paste_search(text) {
+                self.schedule_frame(std::time::Instant::now());
+            }
             return true;
         }
         if !self.workspace.sidebar.owns_input() {

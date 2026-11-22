@@ -1,0 +1,29 @@
+---
+source: crates/tui/src/sidebar_files/tests.rs
+expression: "format!(\"{markdown}\\n\\n{error}\")"
+---
+ Read the manual first.
+
+
+
+
+
+
+
+
+
+
+ ↑/↓ read · f3 find · Tab link …
+
+
+ File not found
+
+ notes.md
+ in src/
+
+ This file may have moved since the
+ link was added.
+
+
+
+ Esc back

@@ -165,6 +165,19 @@ impl Keymap {
         self.configured[action as usize]
     }
 
+    /// The first configured binding for a hint, expanding a leader chord to its keys.
+    pub(crate) fn primary_label(&self, action: Action) -> Option<String> {
+        let binding = self.bindings(action).first()?;
+        match binding {
+            Binding::Leader(second) => Some(format!(
+                "{} {}",
+                self.bindings(Action::Leader).first()?.spec(),
+                second.spec()
+            )),
+            binding => Some(binding.spec()),
+        }
+    }
+
     /// The first key of `action` to show in a hint; `None` when it has
     /// only chords or nothing.
     pub(crate) fn hint(&self, action: Action) -> Option<crate::key_hint::KeyBinding> {

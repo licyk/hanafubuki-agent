@@ -156,6 +156,7 @@ pub(crate) fn render_markdown_unlinked(
         cwd,
         ListSpacing::AfterMultiline,
         WebLinkDisplay::WithDestination,
+        false,
     );
     crate::terminal_hyperlinks::visible_lines(rendered.lines)
 }
@@ -172,6 +173,23 @@ pub(crate) fn render_markdown_lines(
     list_spacing: ListSpacing,
 ) -> Vec<HyperlinkLine> {
     render_streaming_markdown(input, width, cwd, list_spacing).lines
+}
+
+/// The sidebar follows local links itself, so their labels can stand alone.
+pub(crate) fn render_document_lines(
+    input: &str,
+    width: u16,
+    cwd: Option<&str>,
+) -> Vec<HyperlinkLine> {
+    streaming::render_with_display(
+        input,
+        Some(usize::from(width)),
+        cwd,
+        ListSpacing::AfterMultiline,
+        preferences::web_link_display(),
+        true,
+    )
+    .lines
 }
 
 /// The pulldown-cmark event consumer: inline styles, the indentation of
@@ -192,6 +210,7 @@ struct Writer<'a> {
     uniform_lists: Vec<UniformList>,
     link: Option<LinkState>,
     link_display: WebLinkDisplay,
+    hide_local_destinations: bool,
     needs_newline: bool,
     pending_marker_line: bool,
     /// Where the last task marker taken ended, so a marker the parser
@@ -242,6 +261,7 @@ impl<'a> Writer<'a> {
             uniform_lists: Vec::new(),
             link: None,
             link_display,
+            hide_local_destinations: false,
             needs_newline: false,
             pending_marker_line: false,
             last_task_marker_end: 0,

@@ -136,6 +136,18 @@ impl Writer<'_> {
             self.push_line(Line::default());
         }
         if show_label {
+            if self.hide_local_destinations {
+                let spans = label
+                    .into_iter()
+                    .map(|mut span| {
+                        span.style = span.style.patch(self.styles.link);
+                        span
+                    })
+                    .collect::<Vec<_>>();
+                let line = Line::from(spans);
+                self.push_link_part(HyperlinkLine::reader_link(line, destination));
+                return;
+            }
             for span in label {
                 self.push_link_part(HyperlinkLine::reader_link(Line::from(span), destination));
             }

@@ -131,22 +131,11 @@ impl App {
         let (sidebar, parked) = self.workspace.sidebar_and_parked();
         let mut passive = layout.passive.zip(parked);
         let passive_animating = passive.as_mut().is_some_and(|(area, parked)| {
-            prepare_pane(
-                &mut parked.transcript_view,
-                &parked.transcript_cells,
-                area.width,
-                false,
-            );
-            parked.chat_widget.set_navigation_footer(
-                parked
-                    .transcript_view
-                    .footer(
-                        area.width
-                            .saturating_sub(crate::ui_consts::FOOTER_INDENT_COLS as u16),
-                    )
-                    .map(|footer| footer.lines),
-            );
-            parked.transcript_view.is_following() && parked.chat_widget.has_live_entries()
+            let view = &mut parked.transcript_view;
+            view.sync_history_tail(&parked.transcript_cells);
+            view.prepare_width(area.width);
+            view.advance_search(&parked.transcript_cells)
+                || (view.is_following() && parked.chat_widget.has_live_entries())
         });
         let mut footer_rows = 0;
         tui.draw(u16::MAX, |frame| {
@@ -161,32 +150,33 @@ impl App {
                     notice,
                     browsing,
                     watch_only: watch_only && second_focused,
+                    bounded: layout.strip.is_some(),
                 },
             );
             footer_rows = painted.footer_rows;
             if let Some((area, parked)) = passive {
-                paint_pane(
-                    buf,
-                    area,
-                    PanePaint {
-                        chat_widget: &mut parked.chat_widget,
-                        cells: &parked.transcript_cells,
-                        view: &mut parked.transcript_view,
-                        notice: None,
-                        browsing: None,
-                        watch_only: watch_only && !second_focused,
-                    },
-                );
+                let transcript =
+                    parked
+                        .chat_widget
+                        .paint_parked(area, buf, watch_only && !second_focused);
+                parked
+                    .transcript_view
+                    .render(transcript, buf, &parked.transcript_cells);
             }
             super::workspace::paint_chrome(buf, &layout, dragging);
             frame.sidebar_image = sidebar.paint(&layout, buf);
-            if let Some((x, y)) = painted
-                .cursor
-                .filter(|_| layout.hud.is_none() && !sidebar.owns_input())
-            {
+            let cursor = if sidebar.owns_input() {
+                sidebar.document_cursor().map(|pos| (pos.x, pos.y))
+            } else {
+                painted.cursor
+            };
+            if let Some((x, y)) = cursor.filter(|_| layout.hud.is_none()) {
                 frame.set_cursor_position((x, y));
             }
         })?;
+        if layout.panel.is_some() {
+            self.refresh_visible_side_prompts();
+        }
         let layout_focused_empty = layout.focused.is_empty();
         self.workspace.remember_layout(layout);
         let view = &mut self.transcript_view;
@@ -222,6 +212,7 @@ struct PanePaint<'a> {
     notice: Option<String>,
     browsing: Option<Line<'static>>,
     watch_only: bool,
+    bounded: bool,
 }
 
 /// What a painted pane leaves: the composer's cursor, and the footer rows
@@ -259,6 +250,7 @@ fn paint_pane(buf: &mut Buffer, area: Rect, pane: PanePaint<'_>) -> Painted {
         notice,
         browsing,
         watch_only,
+        bounded,
     } = pane;
     if area.is_empty() {
         return Painted {
@@ -267,21 +259,15 @@ fn paint_pane(buf: &mut Buffer, area: Rect, pane: PanePaint<'_>) -> Painted {
         };
     }
     if watch_only {
-        let transcript = Rect {
-            height: area.height.saturating_sub(1),
-            ..area
-        };
-        view.render(transcript, buf, cells);
-        Line::from("Watching subagent · Esc to return")
-            .dim()
-            .render(Rect::new(area.x, area.bottom() - 1, area.width, 1), buf);
-        return Painted {
-            cursor: None,
-            footer_rows: 0,
-        };
+        return paint_agent_reader(area, buf, view, cells);
     }
     let width = area.width;
-    let chat_height = chat_widget.desired_height(width).min(area.height);
+    let height_limit = if bounded {
+        crate::ui_consts::pane_composer_height_limit(area.height)
+    } else {
+        area.height
+    };
+    let chat_height = chat_widget.desired_height(width).min(height_limit);
 
     let transcript = Rect {
         height: area.height - chat_height,
@@ -329,5 +315,58 @@ fn paint_pane(buf: &mut Buffer, area: Rect, pane: PanePaint<'_>) -> Painted {
     Painted {
         cursor,
         footer_rows,
+    }
+}
+
+fn paint_agent_reader(
+    area: Rect,
+    buf: &mut Buffer,
+    view: &mut TranscriptView,
+    cells: &[Arc<dyn HistoryCell>],
+) -> Painted {
+    use crate::footer_hint::{shortcut, HintLine};
+    use crate::keymap::{self, Action};
+    use ratatui::widgets::Paragraph;
+
+    let heading = Rect { height: 1, ..area };
+    Line::from("esc back to agents · Watch only")
+        .dim()
+        .render(heading, buf);
+    let mut body = Rect {
+        y: heading.bottom(),
+        height: area.height - 1,
+        ..area
+    };
+    let footer = view.footer(body.width);
+    let cursor_column = footer.as_ref().and_then(|footer| footer.cursor_column);
+    let lines = footer.map_or_else(
+        || {
+            let keys = keymap::current();
+            let hints = [
+                Some(shortcut("↑/↓", "read")),
+                keys.primary_label(Action::FindTranscript)
+                    .map(|key| shortcut(&key, "find")),
+                keys.primary_label(Action::SelectTranscript)
+                    .map(|key| shortcut(&key, "select")),
+            ];
+            vec![HintLine::new(hints.into_iter().flatten(), body.width).line]
+        },
+        |footer| footer.lines,
+    );
+    let height = (lines.len() as u16).min(body.height.saturating_sub(1));
+    let footer_area = Rect {
+        y: body.bottom() - height,
+        height,
+        ..body
+    };
+    body.height -= height;
+    body.height -= u16::from(body.height > 1);
+    view.render(body, buf, cells);
+    Paragraph::new(lines).render(footer_area, buf);
+    Painted {
+        cursor: cursor_column
+            .filter(|_| height > 0)
+            .map(|col| (area.x + col, footer_area.y)),
+        footer_rows: usize::from(height),
     }
 }

@@ -452,7 +452,10 @@ impl AgentBridge {
 }
 
 // Side chats show their own exchange; the model also reads their inherited history.
-fn keep_side_history(page: &mut hanafubuki_agent::AgentTranscriptPage, id: AgentSessionId) {
+pub(super) fn keep_side_history(
+    page: &mut hanafubuki_agent::AgentTranscriptPage,
+    id: AgentSessionId,
+) {
     if let Some(boundary) = page
         .items
         .iter()

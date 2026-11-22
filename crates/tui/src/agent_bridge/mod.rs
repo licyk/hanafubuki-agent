@@ -45,6 +45,7 @@ mod review;
 mod sessions;
 mod settings;
 mod side;
+mod side_prompts;
 mod sidebar_files;
 mod start;
 mod status;

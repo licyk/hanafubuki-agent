@@ -64,16 +64,7 @@ impl App {
         ) = update
         {
             if self.bridge.session_id() == self.workspace.shown {
-                self.workspace.sidebar_agents = agents
-                    .iter()
-                    .skip(1)
-                    .map(|agent| {
-                        (
-                            agent.session_id,
-                            format!("{} · {:?}", agent.title, agent.status),
-                        )
-                    })
-                    .collect();
+                self.workspace.sidebar_agents = agents.iter().skip(1).cloned().collect();
                 self.workspace.sidebar.chooser_dirty = true;
             }
         }
@@ -160,7 +151,7 @@ impl App {
             .workspace
             .sidebar_agents
             .iter()
-            .any(|(agent, _)| *agent == id)
+            .any(|agent| agent.session_id == id)
         {
             return;
         }
@@ -228,7 +219,7 @@ impl App {
             if chat.is_task_running() {
                 losses.push("stop the running turn");
             }
-            if !chat.composer_is_empty() || chat.has_pending_input() {
+            if chat.has_unsent_input() {
                 losses.push("discard unsent input");
             }
             if tab.kind == TabKind::Temporary {

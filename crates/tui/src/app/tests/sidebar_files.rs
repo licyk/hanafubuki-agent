@@ -25,3 +25,15 @@ fn newly_committed_file_links_join_the_open_chooser_without_duplicate_entries() 
     let files = h.app.workspace.sidebar.files.entries();
     assert_eq!(files.iter().filter(|f| f.label == "one.txt").count(), 1);
 }
+
+#[test]
+fn opening_a_missing_transcript_link_shows_the_file_and_recovery_in_the_reader() {
+    let mut h = Harness::owned(vec![assistant_events(
+        "[Missing record](./missing/log.txt)",
+    )]);
+    h.answered("Check the file", "Missing record");
+    h.click_on("Missing record");
+    let screen = h.pump_until_screen_shows("File not found");
+    assert!(screen.contains("log.txt"));
+    assert!(screen.contains("This file may have moved"));
+}

@@ -1,4 +1,5 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
+// Modified from OpenAI Codex cf3ff1530d82 (Apache-2.0).
 
 use ratatui::style::Style;
 use ratatui::text::Line;
@@ -109,4 +110,75 @@ pub(crate) fn truncate_line_with_ellipsis(line: Line<'static>, max_width: usize)
         alignment,
         spans,
     }
+}
+
+/// Shorten the path components (filename first) chosen to distinguish two documents.
+pub(crate) fn document_label(parts: &[&str], width: usize) -> String {
+    use crate::wrapping::display_width;
+    let name = parts.iter().rev().copied().collect::<Vec<_>>().join("/");
+    if display_width(&name) <= width {
+        return name;
+    }
+    if parts.len() < 2 || width < 4 {
+        return filename_label(&name, width);
+    }
+    let directory = parts[parts.len() - 1];
+    let budget = (width / 2).min(display_width(directory));
+    let directory = middle_label(directory, budget);
+    let filename = filename_label(
+        parts[0],
+        width.saturating_sub(display_width(&directory) + 1),
+    );
+    format!("{directory}/{filename}")
+}
+
+pub(crate) fn filename_label(name: &str, width: usize) -> String {
+    let extension = name
+        .rsplit_once('.')
+        .filter(|(_, ext)| !ext.contains(['/', '\\']))
+        .map_or(0, |(_, ext)| crate::wrapping::display_width(ext) + 1);
+    middle_label_with_suffix(name, width, extension)
+}
+
+pub(crate) fn middle_label(text: &str, width: usize) -> String {
+    middle_label_with_suffix(text, width, 0)
+}
+
+fn middle_label_with_suffix(text: &str, width: usize, suffix_width: usize) -> String {
+    use crate::wrapping::display_width;
+    use unicode_segmentation::UnicodeSegmentation;
+    if width == 0 {
+        return String::new();
+    }
+    if display_width(text) <= width {
+        return text.to_owned();
+    }
+    let mut prefix = (width - 1) / 2;
+    if suffix_width < width - 1 {
+        prefix = prefix.min(width - 1 - suffix_width);
+    }
+    let mut used = 0;
+    let start = text
+        .grapheme_indices(true)
+        .find_map(|(index, g)| {
+            let cells = display_width(g);
+            if used + cells > prefix {
+                Some(index)
+            } else {
+                used += cells;
+                None
+            }
+        })
+        .unwrap_or(text.len());
+    let mut remaining = width - used - 1;
+    let mut end = text.len();
+    for (index, g) in text[start..].grapheme_indices(true).rev() {
+        let cells = display_width(g);
+        if cells > remaining {
+            break;
+        }
+        remaining -= cells;
+        end = start + index;
+    }
+    format!("{}…{}", &text[..start], &text[end..])
 }

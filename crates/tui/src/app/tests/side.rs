@@ -244,12 +244,10 @@ fn in_fullscreen_the_side_conversation_is_a_pane_the_leader_and_pointer_focus() 
     let side = harness.session();
     let screen = harness.screen();
     insta::assert_snapshot!("side_pane_beside_the_transcript", harness.snapshot_screen());
-    // Both conversations are on the screen, each under its title.
-    assert!(screen.contains("Main conversation"), "{screen}");
-    assert!(
-        screen.contains("Side · ctrl-x x or /close closes"),
-        "{screen}"
-    );
+    let layout = harness.app.workspace.last_layout().unwrap();
+    assert_eq!(layout.strip.unwrap().y, 0);
+    assert_eq!(layout.passive.unwrap().y, 0);
+    assert_eq!(layout.focused.y, 1);
     assert!(screen.contains("Hi."), "{screen}");
     let divider = harness
         .app
@@ -265,11 +263,19 @@ fn in_fullscreen_the_side_conversation_is_a_pane_the_leader_and_pointer_focus() 
     harness.pump_until_screen_shows("main conversation");
     insta::assert_snapshot!("leader_keys_over_the_side_pane", harness.snapshot_screen());
     harness.key(KeyCode::Left);
-    harness.pump_until_screen_shows("Main conversation · ctrl-x right side");
+    harness.pump_until("the main conversation to have the focus", |h| {
+        h.session() == parent
+    });
     assert_eq!(harness.session(), parent);
     assert!(harness.screen().contains("Four."), "the side pane stays");
 
-    // The divider moves left, the side pane grows.
+    // A wider screen allows the side pane to grow while retaining the main transcript.
+    harness
+        .tui
+        .terminal
+        .backend_mut()
+        .resize(120, super::HEIGHT);
+    harness.app.draw(&mut harness.tui).unwrap();
     harness.leader(KeyCode::Char('<'));
     harness.pump_until("the divider to move", |harness| {
         harness
@@ -277,7 +283,7 @@ fn in_fullscreen_the_side_conversation_is_a_pane_the_leader_and_pointer_focus() 
             .workspace
             .last_layout()
             .and_then(|layout| layout.divider)
-            .is_some_and(|divider| divider.x == 59)
+            .is_some_and(|divider| divider.x == 75)
     });
 
     // A click in the side pane focuses it.
@@ -297,6 +303,41 @@ fn in_fullscreen_the_side_conversation_is_a_pane_the_leader_and_pointer_focus() 
     harness.pump_until_screen_shows("Side conversation closed.");
     assert_eq!(harness.session(), parent);
     assert!(!harness.screen().contains("Main conversation"));
+}
+
+#[test]
+fn reviewing_a_side_tab_close_keeps_its_focus_and_draft_when_cancelled() {
+    let mut h = Harness::owned(vec![assistant_events("Ready."), assistant_events("Done.")]);
+    h.answered("Main thread", "Ready.");
+    h.type_and_submit("/side A side question");
+    h.pump_until_screen_shows("Done.");
+    h.pump_until_turn_ends();
+    let side = h.session();
+    h.key(KeyCode::Char('x'));
+    h.leader(KeyCode::Char('w'));
+    let frame = h.pump_until_screen_shows("Cancel");
+    let sidebar = |line: &str| {
+        line.split_once('│')
+            .map(|(_, right)| right.trim().to_owned())
+    };
+    assert_eq!(sidebar(frame.lines().next().unwrap()).as_deref(), Some(""));
+    assert!(frame.contains("discard unsent input"), "{frame}");
+    h.key(KeyCode::Esc);
+    h.pump_until_screen_shows("Done.");
+    assert_eq!(h.session(), side);
+    assert_eq!(h.app.chat_widget.composer_text(), "x");
+    h.leader(KeyCode::Char('w'));
+    let frame = h.pump_until_screen_shows("Cancel");
+    let (row, line) = frame
+        .lines()
+        .enumerate()
+        .find(|(_, line)| line.contains("Cancel"))
+        .unwrap();
+    let close_column = line.find(" Close").unwrap();
+    h.click(line[..close_column].chars().count() as u16 + 2, row as u16);
+    h.pump_until("the temporary tab to close", |h| {
+        h.app.active_sidebar_chat().is_none()
+    });
 }
 
 #[test]

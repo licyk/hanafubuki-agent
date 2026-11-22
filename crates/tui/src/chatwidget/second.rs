@@ -8,6 +8,41 @@ use crate::commands::SECOND_CONVERSATION_COMMANDS;
 use crate::tui::FrameRequester;
 
 impl ChatWidget {
+    pub(crate) fn has_unsent_input(&self) -> bool {
+        !self.composer_is_empty()
+            || self.bottom_pane.is_in_paste_burst()
+            || self.has_pending_input()
+    }
+
+    /// Paint the retained composer and live work, returning the transcript's rows.
+    pub(crate) fn paint_parked(
+        &self,
+        area: ratatui::layout::Rect,
+        buf: &mut ratatui::buffer::Buffer,
+        watch_only: bool,
+    ) -> ratatui::layout::Rect {
+        use crate::render::renderable::Renderable;
+        use ratatui::layout::Rect;
+
+        let mut transcript = self
+            .bottom_pane
+            .composer
+            .paint_parked(area, buf, watch_only);
+        if let Some(status) = self.bottom_pane.status_widget() {
+            let height = status.desired_height(area.width).min(transcript.height);
+            transcript.height -= height;
+            status.render(
+                Rect {
+                    y: transcript.bottom(),
+                    height,
+                    ..area
+                },
+                buf,
+            );
+        }
+        transcript
+    }
+
     /// A chat like this one, sending through `app_event_tx`.
     pub(crate) fn second(&self, app_event_tx: AppEventSender) -> ChatWidget {
         let mut chat = ChatWidget::new(ChatWidgetInit {

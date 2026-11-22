@@ -1,0 +1,26 @@
+---
+source: crates/tui/src/app/tests/sidebar.rs
+expression: sidebar(&h.screen())
+---
+                                                               +
+
+ Open in sidebar
+
+ › + New side chat                 Start from this conversation
+
+ Files  2
+
+   · ../  Project root
+   · guide.md  docs
+
+
+
+
+
+
+
+
+
+
+
+ Enter open · Esc back · ↑/↓ move · ctrl-x x hide pane

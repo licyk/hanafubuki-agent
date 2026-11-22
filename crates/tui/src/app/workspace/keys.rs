@@ -144,14 +144,9 @@ impl PaneAction {
 /// `action`'s first keys as a hint says them: `ctrl-x right` for a leader
 /// chord.
 pub(super) fn hint(action: Action) -> String {
-    let keymap = keymap::current();
-    let leader = keymap.label(Action::Leader);
-    let keys = keymap.label(action);
-    let first = keys.split(", ").next().unwrap_or_default();
-    match first.strip_prefix("leader ") {
-        Some(second) => format!("{leader} {second}"),
-        None => first.to_string(),
-    }
+    keymap::current()
+        .primary_label(action)
+        .unwrap_or_else(|| "unbound".to_string())
 }
 
 /// The HUD's lines: each action's keys as the keymap has them, the leader

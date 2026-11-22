@@ -20,6 +20,8 @@
 //! caller as a [`ViewAction`] with the selected text.
 
 mod disclosure;
+mod document;
+pub(crate) use document::DocumentLink;
 mod follow_control;
 mod footer;
 mod history;
@@ -136,71 +138,6 @@ impl Default for TranscriptView {
 }
 
 impl TranscriptView {
-    pub(crate) fn file_link_at(
-        &self,
-        column: u16,
-        row: u16,
-    ) -> Option<crate::sidebar_files::FileTarget> {
-        if !self.area.contains((column, row).into()) {
-            return None;
-        }
-        let hit = self.visible.get(usize::from(row - self.area.y))?;
-        let line = hit.layout.row_line(hit.row);
-        line.hyperlinks
-            .iter()
-            .find(|link| link.columns.contains(&usize::from(column - self.area.x)))
-            .and_then(|link| crate::sidebar_files::FileTarget::link(&link.destination))
-    }
-
-    pub(crate) fn step_document_link(
-        &mut self,
-        cells: &[Arc<dyn HistoryCell>],
-        current: Option<usize>,
-        forward: bool,
-    ) -> Option<(usize, crate::sidebar_files::FileTarget)> {
-        let layout = self.layout(cells, 0)?;
-        let mut links = Vec::new();
-        for row in 0..layout.row_count() {
-            for link in layout.row_line(row).hyperlinks {
-                if let Some(target) = crate::sidebar_files::FileTarget::link(&link.destination) {
-                    if links.last().is_none_or(|(_, last)| last != &target) {
-                        links.push((row, target));
-                    }
-                }
-            }
-        }
-        if links.is_empty() {
-            return None;
-        }
-        let index = match (current, forward) {
-            (None, true) => 0,
-            (None, false) => links.len() - 1,
-            (Some(i), true) => (i + 1) % links.len(),
-            (Some(i), false) => (i + links.len() - 1) % links.len(),
-        };
-        let (row, target) = links.swap_remove(index);
-        self.jump_to_document_offset(cells, layout.position_at(row, 0));
-        Some((index, target))
-    }
-
-    pub(crate) fn document_offset(&self) -> Option<usize> {
-        match self.position {
-            Position::Latest => None,
-            Position::Reading(anchor) => Some(anchor.offset),
-        }
-    }
-
-    pub(crate) fn jump_to_document_offset(
-        &mut self,
-        cells: &[Arc<dyn HistoryCell>],
-        offset: usize,
-    ) {
-        self.jump_to_entry(cells, 0);
-        if let Position::Reading(anchor) = &mut self.position {
-            anchor.offset = offset;
-        }
-    }
-
     pub(crate) fn render(&mut self, area: Rect, buf: &mut Buffer, cells: &[Arc<dyn HistoryCell>]) {
         self.cache.begin_frame();
         self.sync_history_tail(cells);
