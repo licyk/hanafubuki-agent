@@ -229,6 +229,24 @@ fn a_key_that_starts_a_chord_conflicts_with_it() {
 }
 
 #[test]
+fn hints_skip_leader_chords_when_the_leader_is_unbound() {
+    let (keymap, warnings) = Keymap::resolve(&config(&[
+        ("global", "leader", &[]),
+        ("global", "focus_sidebar_tabs", &["leader s", "f9"]),
+    ]));
+    assert!(warnings.is_empty(), "{warnings:#?}");
+    assert!(keymap.matches(
+        Action::FocusSidebarTabs,
+        &KeyEvent::new(KeyCode::F(9), KeyModifiers::NONE)
+    ));
+    assert_eq!(
+        keymap.primary_label(Action::FocusSidebarTabs).as_deref(),
+        Some("f9")
+    );
+    assert_eq!(keymap.primary_label(Action::CloseSidebarTab), None);
+}
+
+#[test]
 fn the_default_leader_yields_to_a_key_bound_to_it() {
     let (keymap, warnings) =
         Keymap::resolve(&config(&[("global", "open_transcript", &["ctrl-x"])]));
