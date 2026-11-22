@@ -280,10 +280,17 @@ async fn clipboard_images_are_normalized_staged_and_readable_without_a_file_path
 
 #[tokio::test]
 async fn workspace_browser_uses_all_bound_roots_and_filters_protected_and_outside_children() {
-    use hanafubuki_agent_foundation::paths::PathKey;
+    use hanafubuki_agent_foundation::paths::{PathKey, ResolvedPath};
     let parent = tempfile::tempdir().unwrap();
     let extra = tempfile::tempdir().unwrap();
     let outside = tempfile::tempdir().unwrap();
+    let extra_root = extra.path().to_path_buf();
+    #[cfg(unix)]
+    let extra_root = {
+        let alias = outside.path().join("extra-root");
+        std::os::unix::fs::symlink(&extra_root, &alias).unwrap();
+        alias
+    };
     let secret = parent.path().join("private");
     std::fs::create_dir(&secret).unwrap();
     std::fs::write(secret.join("credential"), "protected").unwrap();
@@ -310,14 +317,14 @@ async fn workspace_browser_uses_all_bound_roots_and_filters_protected_and_outsid
             None,
             vec![
                 parent.path().to_string_lossy().into_owned(),
-                extra.path().to_string_lossy().into_owned(),
+                extra_root.to_string_lossy().into_owned(),
             ],
         )
         .await
         .unwrap()
         .id;
     std::fs::write(parent.path().join("main.txt"), "hello").unwrap();
-    let sibling = extra.path().join("extra.txt");
+    let sibling = extra_root.join("extra.txt");
     std::fs::write(&sibling, "next").unwrap();
     let entries = service
         .browse_workspace_directory(Some(id), parent.path())
@@ -337,7 +344,8 @@ async fn workspace_browser_uses_all_bound_roots_and_filters_protected_and_outsid
     let read = service
         .read_workspace_document(Some(id), &sibling, 4)
         .unwrap();
-    assert_eq!(PathKey::of(&read.path), PathKey::of(&sibling));
+    let resolved = ResolvedPath::resolve(&sibling).unwrap();
+    assert_eq!(&PathKey::of(&read.path), resolved.key());
     assert!(service
         .read_workspace_document(Some(id), &secret.join("credential"), 100)
         .is_err());
@@ -355,7 +363,7 @@ async fn workspace_browser_uses_all_bound_roots_and_filters_protected_and_outsid
         .unwrap();
     let replacement = extra.path().join("replacement");
     std::fs::write(&replacement, "changed").unwrap();
-    std::fs::rename(replacement, &sibling).unwrap();
+    std::fs::rename(replacement, resolved.system()).unwrap();
     rx.recv_timeout(Duration::from_secs(5)).unwrap();
     assert_eq!(
         service
