@@ -69,14 +69,17 @@ pub fn update_prompt(prompt: TuiUpdatePrompt) -> Result<TuiUpdateChoice, String>
     let terminal = tui::init().map_err(|error| format!("the terminal: {error}"))?;
     let restore = RestoreOnDrop;
     let mut tui = Tui::new(terminal);
-    // An Enter typed while the program started is not a choice.
-    tui::discard_input();
-    let (sender, events) = channel();
-    tui.set_input(
-        InputReader::start(AppEventSender::new(sender))
-            .map_err(|error| format!("the terminal's input: {error}"))?,
-    );
-    let chosen = choose(&mut tui, &events, &mut UpdatePromptScreen::new(prompt));
+    let mut screen = UpdatePromptScreen::new(prompt);
+    let chosen = (|| {
+        tui.set_inline_mouse_capture(true)?;
+        // Drop startup keystrokes before the first frame. A reply can arrive
+        // as soon as that frame reaches the terminal.
+        tui::discard_input();
+        screen.draw(&mut tui)?;
+        let (sender, events) = channel();
+        tui.set_input(InputReader::start(AppEventSender::new(sender))?);
+        read_choice(&mut tui, &events, &mut screen)
+    })();
     tui.stop_input();
     if chosen.is_err() {
         let _ = tui.leave();
@@ -93,21 +96,19 @@ pub(crate) fn choose_on<B: Backend<Error = io::Error> + Write>(
     events: &Receiver<AppEvent>,
     prompt: TuiUpdatePrompt,
 ) -> io::Result<TuiUpdateChoice> {
-    choose(tui, events, &mut UpdatePromptScreen::new(prompt))
+    let mut screen = UpdatePromptScreen::new(prompt);
+    tui.set_inline_mouse_capture(true)?;
+    screen.draw(tui)?;
+    read_choice(tui, events, &mut screen)
 }
 
-/// Draws the screen and reads `events` until a choice, the input's end
-/// being Skip; then clears the screen's rows.
-fn choose<B: Backend<Error = io::Error> + Write>(
+/// Reads the displayed prompt's events until a choice or end of input,
+/// then clears its rows.
+fn read_choice<B: Backend<Error = io::Error> + Write>(
     tui: &mut Tui<B>,
     events: &Receiver<AppEvent>,
     screen: &mut UpdatePromptScreen,
 ) -> io::Result<TuiUpdateChoice> {
-    tui.set_inline_mouse_capture(true)?;
-    screen.draw(tui)?;
-    // What the input thread read before the screen was drawn was typed
-    // before it appeared.
-    while events.try_recv().is_ok() {}
     let mut choice = TuiUpdateChoice::Skip;
     while let Ok(event) = events.recv() {
         let event = match event {

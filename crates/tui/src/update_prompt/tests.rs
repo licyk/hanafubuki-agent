@@ -1,7 +1,6 @@
 // Modified from OpenAI Codex 57a808a392 (Apache-2.0).
 
 use std::sync::mpsc::channel;
-use std::time::Duration;
 
 use insta::assert_snapshot;
 use ratatui::crossterm::event::{KeyEvent, KeyEventState};
@@ -216,41 +215,26 @@ fn a_key_release_is_ignored() {
     );
 }
 
-/// The loop drops what was read before the screen was drawn: an Enter
-/// typed while the program started does not update. The input then ends:
-/// Skip.
-#[test]
-fn a_key_queued_before_the_screen_is_dropped() {
-    let (sender, events) = channel();
-    sender.send(AppEvent::Key(key(KeyCode::Enter))).unwrap();
-    sender.send(AppEvent::Key(key(KeyCode::Char('1')))).unwrap();
-    drop(sender);
-    let mut tui = tui(80, 12);
-    let choice = choose_on(&mut tui, &events, prompt(RELEASED)).unwrap();
-    assert_eq!(choice, TuiUpdateChoice::Skip);
-}
-
 /// After the screen is drawn: each Redraw draws it again, a key that makes
 /// no choice too, and the choice ends the loop with the viewport cleared.
 #[test]
 fn the_loop_redraws_and_clears_the_viewport_when_a_choice_is_made() {
-    let (sender, events) = channel();
-    let sending = std::thread::spawn(move || {
-        // Long after the first frame, which drops what came before it.
-        std::thread::sleep(Duration::from_millis(1000));
-        for event in [
-            AppEvent::Redraw,
-            AppEvent::Redraw,
-            AppEvent::Key(key(KeyCode::Down)),
-            AppEvent::Key(key(KeyCode::Enter)),
-        ] {
-            sender.send(event).unwrap();
-        }
-    });
     let mut tui = tui(80, 12);
-    let choice = choose_on(&mut tui, &events, prompt(RELEASED)).unwrap();
-    sending.join().unwrap();
-    assert_eq!(choice, TuiUpdateChoice::Skip);
+    let mut screen = screen();
+    screen.draw(&mut tui).unwrap();
+    assert!(contents(&tui).contains(HINT));
+    let (sender, events) = channel();
+    for event in [
+        AppEvent::Redraw,
+        AppEvent::Redraw,
+        AppEvent::Key(key(KeyCode::Up)),
+        AppEvent::Key(key(KeyCode::Enter)),
+    ] {
+        sender.send(event).unwrap();
+    }
+    drop(sender);
+    let choice = read_choice(&mut tui, &events, &mut screen).unwrap();
+    assert_eq!(choice, TuiUpdateChoice::SkipVersion);
 
     let written = tui.terminal.backend_mut().take_written();
     // The first frame, two redraws and the highlight's move.
