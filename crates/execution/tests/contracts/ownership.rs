@@ -79,6 +79,34 @@ fn a_terminal_the_stop_is_disposing_is_gone_to_a_wait_and_disposed_once() {
 
 #[test]
 #[cfg(unix)]
+fn listing_skips_a_terminal_closed_while_its_details_are_read() {
+    for pause in [Pause::Info, Pause::Read] {
+        let (service, scope, id, gate) = start_paused_terminal(pause);
+        let request = exec_request(true);
+        let action = service.prepare_exec_command_action(&request).unwrap();
+        let other = service
+            .start_exec_command(
+                scope.clone(),
+                request,
+                Some(&approve_action(&action)),
+                &CancellationToken::default(),
+            )
+            .unwrap();
+        gate.arm();
+        let reader = service.clone();
+        let owner = scope.clone();
+        let listing = std::thread::spawn(move || reader.list_background_terminals(&owner));
+        gate.wait_reached();
+        service.stop_confirmed(&scope, id).unwrap();
+        gate.release();
+        let terminals = listing.join().unwrap().unwrap();
+        assert_eq!(terminals.len(), 1);
+        assert_eq!(terminals[0].execution_id, other.execution_id);
+    }
+}
+
+#[test]
+#[cfg(unix)]
 fn background_terminal_listing_is_scope_and_kind_bound_with_bounded_recent_output() {
     let process = FakeAgentExecutionProcessPort::shared();
     let service = AgentExecutionService::with_process_port(process.clone());
@@ -155,6 +183,7 @@ fn background_stop_retains_failed_cleanup_and_retries_the_same_identity() {
 enum Pause {
     /// The first `info` after arming: a wait holding its receipt.
     Info,
+    Read,
     /// Right after the process is terminated, before its disposal.
     AfterTerminate,
     /// Inside the claimed disposal, before the process is disposed.
@@ -249,6 +278,7 @@ impl AgentExecutionProcessPort for PausingPort {
         from_offset: Option<u64>,
         max_bytes: Option<usize>,
     ) -> Result<ExecutorOutput, String> {
+        self.pause_at(Pause::Read);
         self.fake.read(receipt, from_offset, max_bytes)
     }
 

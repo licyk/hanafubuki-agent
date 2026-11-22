@@ -27,32 +27,47 @@ impl AgentExecutionService {
         };
         let mut terminals = Vec::with_capacity(entries.len());
         for (execution_id, command, cwd) in entries {
-            let snapshot = self.snapshot(scope, execution_id)?;
-            let from_offset = snapshot
-                .output_offset
-                .saturating_sub(BACKGROUND_OUTPUT_BYTES as u64);
-            let output = self.read_output(
-                scope,
-                execution_id,
-                Some(from_offset),
-                Some(BACKGROUND_OUTPUT_BYTES),
-            )?;
-            let recent_output = recent_output_lines(&output);
-            terminals.push(AgentBackgroundTerminalSnapshot {
-                execution_id,
-                generation: snapshot.generation,
-                command,
-                cwd,
-                status: snapshot.status,
-                exit_code: snapshot.exit_code,
-                created_at_ms: snapshot.created_at_ms,
-                updated_at_ms: snapshot.updated_at_ms,
-                cleanup_required: snapshot.cleanup_required,
-                recent_output,
-            });
+            match self.background_terminal_snapshot(scope, execution_id, command, cwd) {
+                Ok(terminal) => terminals.push(terminal),
+                // A close can complete after the list of IDs was collected.
+                Err(AgentExecutionError::NotFound) => continue,
+                Err(error) => return Err(error),
+            }
         }
         terminals.sort_by_key(|terminal| terminal.execution_id.value());
         Ok(terminals)
+    }
+
+    fn background_terminal_snapshot(
+        &self,
+        scope: &AgentExecutionScope,
+        execution_id: AgentExecutionId,
+        command: String,
+        cwd: String,
+    ) -> Result<AgentBackgroundTerminalSnapshot, AgentExecutionError> {
+        let snapshot = self.snapshot(scope, execution_id)?;
+        let from_offset = snapshot
+            .output_offset
+            .saturating_sub(BACKGROUND_OUTPUT_BYTES as u64);
+        let output = self.read_output(
+            scope,
+            execution_id,
+            Some(from_offset),
+            Some(BACKGROUND_OUTPUT_BYTES),
+        )?;
+        let recent_output = recent_output_lines(&output);
+        Ok(AgentBackgroundTerminalSnapshot {
+            execution_id,
+            generation: snapshot.generation,
+            command,
+            cwd,
+            status: snapshot.status,
+            exit_code: snapshot.exit_code,
+            created_at_ms: snapshot.created_at_ms,
+            updated_at_ms: snapshot.updated_at_ms,
+            cleanup_required: snapshot.cleanup_required,
+            recent_output,
+        })
     }
 
     pub fn stop_background_terminals_confirmed(
