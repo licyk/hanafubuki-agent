@@ -29,7 +29,10 @@ impl AgentService {
         );
         // A panic in the turn's own work ends the turn as an internal
         // failure, not as the cancellation the drop guard would commit.
-        let result = match catch_panic_async(self.drive_turn(identity, event_sink.as_ref())).await {
+        // The sampling loop holds a large future. Keep it off the stack of
+        // callers that await a turn inline, including through the panic boundary.
+        let work = Box::pin(self.drive_turn(identity, event_sink.as_ref()));
+        let result = match catch_panic_async(work).await {
             Ok(result) => result,
             Err(message) => {
                 log::error!(
