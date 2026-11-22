@@ -741,14 +741,17 @@ impl ChatComposer {
         }
     }
 
+    pub(crate) fn can_show_shortcuts(&self) -> bool {
+        self.is_empty() && !self.is_in_paste_burst()
+    }
+
     fn handle_shortcut_overlay_key(&mut self, key_event: &KeyEvent) -> bool {
         if key_event.kind != KeyEventKind::Press {
             return false;
         }
 
-        let toggles = keymap::matches(Action::ShowShortcuts, key_event)
-            && self.is_empty()
-            && !self.is_in_paste_burst();
+        let toggles =
+            keymap::matches(Action::ShowShortcuts, key_event) && self.can_show_shortcuts();
 
         if !toggles {
             return false;

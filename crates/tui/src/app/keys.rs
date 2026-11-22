@@ -103,12 +103,16 @@ impl App {
         if self.handle_settings_key(tui, key) {
             return true;
         }
-        let contexts: &[Context] = if self.workspace.sidebar.owns_input() {
-            &[Context::Global]
+        let contexts: &[Context] = if self.overlay.is_some() {
+            &PAGER
+        } else if self.workspace.sidebar.owns_input() {
+            if self.sidebar_help_available(key) {
+                &[Context::Global, Context::Composer]
+            } else {
+                &[Context::Global]
+            }
         } else if self.chat_widget.captures_keys() {
             &[]
-        } else if self.overlay.is_some() {
-            &PAGER
         } else {
             &MAIN
         };

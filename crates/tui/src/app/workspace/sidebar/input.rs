@@ -63,13 +63,14 @@ impl App {
             T::Tab(tab) => self.choose_tab(tui, tab),
             T::Close(tab) => self.close_tab(tui, tab, false),
             T::Row(choice) => self.activate_choice(tui, choice),
-            T::Footer(FooterAction::Hide, _) => self.leave_panel(tui),
             T::Footer(action, _) => {
                 let key = match action {
+                    FooterAction::Help => return self.open_overlay(tui, super::help::overlay()),
+                    FooterAction::Hide => return self.leave_panel(tui),
                     FooterAction::Open => KeyCode::Enter,
                     FooterAction::Archive => KeyCode::Delete,
                     FooterAction::Path => KeyCode::Char('p'),
-                    FooterAction::Back | FooterAction::Hide => KeyCode::Esc,
+                    FooterAction::Back => KeyCode::Esc,
                 };
                 self.panel_content_key(tui, KeyEvent::new(key, KeyModifiers::NONE));
             }
@@ -195,6 +196,18 @@ impl App {
         self.choose_tab(tui, sidebar.tabs[next].0.clone());
     }
 
+    pub(in crate::app) fn sidebar_help_available(&self, key: KeyEvent) -> bool {
+        let sidebar = &self.workspace.sidebar;
+        if sidebar.owns_input() {
+            return sidebar.close.is_none()
+                && !matches!(&sidebar.page, Some(Page::Document(path)) if sidebar.files.captures_key(path, key));
+        }
+        sidebar.uses_fullscreen()
+            && self.workspace.second_focused()
+            && !self.transcript_view.has_active_interaction()
+            && (self.active_sidebar_agent().is_some() || self.chat_widget.can_show_shortcuts())
+    }
+
     pub(in crate::app) fn sidebar_key<B: Backend<Error = io::Error> + Write>(
         &mut self,
         tui: &mut Tui<B>,
@@ -210,6 +223,11 @@ impl App {
                 KeyCode::Enter => self.confirm_close(tui),
                 _ => {}
             }
+        } else if key.kind == KeyEventKind::Press
+            && keymap::matches(Action::ShowShortcuts, &key)
+            && self.sidebar_help_available(key)
+        {
+            self.open_overlay(tui, super::help::overlay());
         } else if keymap::matches(Action::FocusSidebarTabs, &key) {
             self.open_sidebar(tui);
         } else if (self.workspace.sidebar.owns_input() || self.workspace.second_focused())

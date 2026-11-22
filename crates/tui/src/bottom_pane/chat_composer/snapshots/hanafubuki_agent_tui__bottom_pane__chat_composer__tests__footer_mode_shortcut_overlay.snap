@@ -11,6 +11,7 @@ expression: terminal.backend()
 "                                                                                                    "
 "                                                                                                    "
 "  Keyboard shortcuts                                                                                "
+"  Open sidebar with ctrl-x s or /sidebar                                                            "
 "                                                                                                    "
 "  Compose                             Session                                                       "
 "  /              Commands             enter          Send message                                   "

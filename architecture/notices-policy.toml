@@ -977,6 +977,10 @@ path = "crates/tui/src/agent_bridge/agents.rs"
 reason = "The command center's fork, rename, delete and interrupt of a listed session or one of its children, over the facade's calls."
 
 [[original]]
+path = "crates/tui/src/app/workspace/sidebar/help.rs"
+reason = "The sidebar usage reference, assembled from the terminal interface’s current bindings."
+
+[[original]]
 path = "crates/tui/src/app/workspace/panes/tests.rs"
 reason = "The split geometry across terminal resizes and the restored divider column."
 

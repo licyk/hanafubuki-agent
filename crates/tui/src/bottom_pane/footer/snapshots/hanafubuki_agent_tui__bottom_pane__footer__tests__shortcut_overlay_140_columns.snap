@@ -3,6 +3,7 @@ source: crates/tui/src/bottom_pane/footer/tests.rs
 expression: "draw(props, width, height).backend()"
 ---
 "  Keyboard shortcuts                                                                                                                        "
+"  Open sidebar with ctrl-x s or /sidebar                                                                                                    "
 "                                                                                                                                            "
 "  Compose                        Session                                    Transcript (open first)                                         "
 "  /         Commands             enter          Send message                ctrl + t                       Open transcript                  "

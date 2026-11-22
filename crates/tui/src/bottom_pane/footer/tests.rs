@@ -388,6 +388,20 @@ fn the_shortcuts_cut_to_the_height_keep_the_keymap_footer() {
 }
 
 #[test]
+fn narrow_shortcut_help_keeps_the_sidebar_entry_in_view() {
+    install(&[("global", "leader", &["ctrl-q"])]);
+    let shown = rows(overlay(), 32, 6).join(" ");
+    install(&[("global", "focus_sidebar_tabs", &[])]);
+    let unbound = rows(overlay(), 32, 6).join(" ");
+    keymap::install(Keymap::default());
+
+    assert!(shown.contains("Open sidebar with ctrl-q s"), "{shown}");
+    assert!(shown.contains("or /sidebar"), "{shown}");
+    assert!(unbound.contains("Open sidebar with /sidebar"), "{unbound}");
+    assert!(shown.contains("/keymap customize"), "{shown}");
+}
+
+#[test]
 fn the_shortcuts_show_the_keys_in_force() {
     install(&[
         ("chat", "cycle_mode", &["f6"]),

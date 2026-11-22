@@ -4,6 +4,7 @@
 //! terminal's last painted rectangles are also its pointer targets.
 
 mod chooser;
+mod help;
 mod input;
 mod prompts;
 mod strip;

@@ -4,8 +4,8 @@
 //! Compose, Session and Transcript, in three, two or one column by width
 //! (`shortcut_help`), then `/keymap customize`. Each key is the keymap's
 //! in force, so a remapped action shows its new key and an unbound one, or
-//! one with only a chord, is left out, except Background tasks shows its
-//! chord too; `/`, `@`, `!`, Ctrl+C and PgUp/PgDn
+//! one with only a chord, is left out. Open sidebar and Background tasks
+//! also show chords. `/`, `@`, `!`, Ctrl+C and PgUp/PgDn
 //! are fixed. Paste image shows Ctrl+Alt+V under WSL, as Codex does. Codex's
 //! voice key is not ported. A cut list ends with a note naming `/keymap`.
 
@@ -129,7 +129,14 @@ pub(super) fn lines(props: &FooterProps<'_>, width: u16) -> Vec<Line<'static>> {
         });
     }
 
-    let mut result = vec![Line::from("Keyboard shortcuts").bold(), Line::default()];
+    let mut result = vec![Line::from("Keyboard shortcuts").bold()];
+    let mut sidebar = Line::from("Open sidebar with ");
+    if let Some(key) = keymap::current().primary_label(Action::FocusSidebarTabs) {
+        sidebar.push_span(key.fg(accent_color()));
+        sidebar.push_span(" or ");
+    }
+    sidebar.push_span("/sidebar".fg(accent_color()));
+    result.extend([sidebar, Line::default()]);
     result.extend(group_lines([compose, session, transcript], width));
     let width = usize::from(width.max(1));
     result.push(Line::default());

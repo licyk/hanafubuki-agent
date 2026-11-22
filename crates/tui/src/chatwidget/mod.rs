@@ -361,6 +361,10 @@ impl ChatWidget {
         }
     }
 
+    pub(crate) fn can_show_shortcuts(&self) -> bool {
+        self.no_modal_or_popup_active() && self.bottom_pane.composer.can_show_shortcuts()
+    }
+
     pub(crate) fn composer_is_empty(&self) -> bool {
         self.bottom_pane.composer_is_empty()
     }

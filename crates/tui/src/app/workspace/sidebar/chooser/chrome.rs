@@ -89,6 +89,9 @@ pub(super) fn footer(area: Rect, buf: &mut Buffer, mode: Footer<'_>) -> Vec<(Foo
     let row = body_row(area, area.bottom() - 1);
     let mut hints = Vec::new();
     let mut push = |keys: &str, text: &str, action| hints.push((shortcut(keys, text), action));
+    if let Some(label) = keymap::current().primary_label(Action::ShowShortcuts) {
+        push(&label, "help", Some(FooterAction::Help));
+    }
     match mode {
         Footer::Path => {
             push("Esc", "back", Some(FooterAction::Back));

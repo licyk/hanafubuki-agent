@@ -27,6 +27,7 @@ pub(super) enum Choice {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum FooterAction {
+    Help,
     Open,
     Path,
     Archive,

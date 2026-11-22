@@ -50,9 +50,22 @@ fn sidebar_mouse_reads_workspace_files_and_keyboard_returns_to_main_draft() {
         harness.key_with(KeyCode::Char('x'), KeyModifiers::CONTROL);
         harness.key(KeyCode::Char('s'));
         harness.pump_until_screen_shows("Open in sidebar");
+        click_text(&mut harness, "? help");
+        harness.pump_until_screen_shows("Sidebar help");
+        harness.key(KeyCode::End);
+        harness.pump_until_screen_shows("100%");
+        harness.key(KeyCode::Esc);
         click_text(&mut harness, "Browse ");
         click_text(&mut harness, "reader.txt");
         harness.pump_until_screen_shows("Hello from the file.");
+        harness.key(KeyCode::Char('?'));
+        harness.pump_until_screen_shows("Sidebar help");
+        harness.key(KeyCode::Esc);
+        harness.pump_until_screen_shows("Hello from the file.");
+        harness.key(KeyCode::Char('/'));
+        harness.key(KeyCode::Char('?'));
+        assert!(harness.app.overlay.is_none());
+        harness.key(KeyCode::Esc);
         harness.key(KeyCode::Esc);
         harness.pump_until_screen_shows("Open in sidebar");
         harness.key_with(KeyCode::Char('x'), KeyModifiers::CONTROL);
@@ -169,9 +182,13 @@ fn chooser_shows_the_last_own_prompt_of_a_live_and_then_closed_saved_chat() {
     ]);
     let parent = harness.answered("Parent-only prompt", "Ready.");
     harness.app.bridge.set_page_size(1);
-    harness.app.new_side_chat(&mut harness.tui, true);
+    harness.type_and_submit("/sidebar");
+    click_text(&mut harness, "New side chat");
     harness.pump_until("a saved chat", |h| h.app.active_sidebar_chat().is_some());
-    harness.answered("Earlier prompt", "First answer.");
+    harness.key(KeyCode::Char('?'));
+    harness.pump_until_screen_shows("Sidebar help");
+    harness.key(KeyCode::Esc);
+    harness.answered("Earlier prompt?", "First answer.");
     let saved = harness.answered("Latest    prompt", "Second answer.");
 
     // This empty saved fork still includes the parent's user message in model history.
