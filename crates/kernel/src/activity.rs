@@ -88,6 +88,7 @@ impl AgentActivityTracker {
                     execution_id: execution.execution_id,
                     generation: execution.generation,
                 })
+                .or_else(|| snapshot.call_id.clone().map(ActivitySource::Tool))
                 .unwrap_or(ActivitySource::Restored);
             tracker.activities.push_back(ActivityRecord {
                 source,
@@ -130,7 +131,6 @@ impl AgentActivityTracker {
                 AgentActivityKind::ToolInvocation,
                 AgentActivityPhase::Running,
                 presentation.clone(),
-                None,
                 now,
             )),
             AgentEventKind::ToolExecutionFinished { call_id, is_error }
@@ -224,7 +224,6 @@ impl AgentActivityTracker {
                 action: AgentActivityAction::GENERATING_RESPONSE,
                 subject: None,
             },
-            None,
             now,
         )
     }
@@ -253,7 +252,6 @@ impl AgentActivityTracker {
                 action: AgentActivityAction::WAITING_FOR_APPROVAL,
                 subject: Some(request.action.summary.clone()),
             },
-            None,
             now,
         )
     }
@@ -275,7 +273,6 @@ impl AgentActivityTracker {
                 action: AgentActivityAction::CHECKING_CONTINUATION,
                 subject: None,
             },
-            None,
             now,
         )
     }
@@ -332,16 +329,19 @@ impl AgentActivityTracker {
         kind: AgentActivityKind,
         phase: AgentActivityPhase,
         presentation: AgentActivityPresentation,
-        attempt: Option<u32>,
         now: u128,
     ) -> AgentActivitySnapshot {
         let snapshot = AgentActivitySnapshot {
             id: self.allocate_activity_id(),
+            call_id: match &source {
+                ActivitySource::Tool(id) => Some(id.clone()),
+                _ => None,
+            },
             revision: 1,
             kind,
             phase,
             presentation,
-            attempt,
+            attempt: None,
             started_at: now,
             updated_at: now,
             finished_at: None,
@@ -519,6 +519,7 @@ impl AgentActivityTracker {
         let generation = execution.generation;
         let snapshot = AgentActivitySnapshot {
             id: self.allocate_activity_id(),
+            call_id: None,
             revision: 1,
             kind: AgentActivityKind::Execution,
             phase: AgentActivityPhase::Running,

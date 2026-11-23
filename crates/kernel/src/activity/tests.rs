@@ -95,6 +95,9 @@ fn concurrent_tools_complete_independently() {
         )
         .unwrap();
     assert_eq!(tracker.active_snapshots().len(), 2);
+    assert_eq!(first.call_id.as_deref(), Some("a"));
+    assert_eq!(second.call_id.as_deref(), Some("b"));
+    let mut tracker = AgentActivityTracker::restore(tracker.persisted_snapshots());
 
     let completed = tracker
         .observe(

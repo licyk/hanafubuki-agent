@@ -72,6 +72,13 @@ impl AgentActivityPhase {
 #[serde(rename_all = "camelCase")]
 pub struct AgentActivitySnapshot {
     pub id: AgentActivityId,
+    /// The history call this tool invocation describes. Older snapshots lack it.
+    #[serde(
+        default,
+        deserialize_with = "tolerant_call_id",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub call_id: Option<String>,
     pub revision: u64,
     pub kind: AgentActivityKind,
     pub phase: AgentActivityPhase,
