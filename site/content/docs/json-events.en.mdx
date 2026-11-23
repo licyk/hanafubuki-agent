@@ -47,16 +47,17 @@ The examples below show the `kind` object only.
 
 The `reason` of `turn_failed`:
 
-| `reason`                          | Means                                                                             |
-| --------------------------------- | --------------------------------------------------------------------------------- |
-| `model_request_retries_exhausted` | The model request was retried until no retry was left (it could not connect, say) |
-| `model_stream_retries_exhausted`  | The model's response stream broke off, and no retry was left                      |
-| `model_error`                     | The Provider answered with an error                                               |
-| `model_protocol`                  | The Provider's response did not follow the protocol                               |
-| `budget_exceeded`                 | The turn went past a limit the Agent sets for it                                  |
-| `deadline_exceeded`               | The turn went past its time limit                                                 |
-| `context_window_exceeded`         | The context still exceeded the model's window after it was compacted              |
-| `internal_failure`                | An internal error of the Agent                                                    |
+| `reason`                                          | Means                                                                                |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `model_request_retries_exhausted`                 | The model request was retried until no retry was left (it could not connect, say)    |
+| `model_stream_retries_exhausted`                  | The stream was interrupted and the configured retries were exhausted or disabled.    |
+| `model_stream_interrupted_after_response_started` | The response started and its stream broke off. The Agent did not retry this request. |
+| `model_error`                                     | The Provider answered with an error                                                  |
+| `model_protocol`                                  | The Provider's response did not follow the protocol                                  |
+| `budget_exceeded`                                 | The turn went past a limit the Agent sets for it                                     |
+| `deadline_exceeded`                               | The turn went past its time limit                                                    |
+| `context_window_exceeded`                         | The context still exceeded the model's window after it was compacted                 |
+| `internal_failure`                                | An internal error of the Agent                                                       |
 
 ### Thinking [#reasoning]
 

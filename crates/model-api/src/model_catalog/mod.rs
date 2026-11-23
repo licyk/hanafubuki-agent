@@ -280,10 +280,8 @@ async fn read_body(
             Some(Ok(chunk)) => {
                 body.extend_from_slice(&chunk);
             }
-            Some(Err(_)) => {
-                return Err(ModelError::StreamInterrupted(
-                    "model catalog response body failed".into(),
-                ));
+            Some(Err(error)) => {
+                return Err(provider.body_read_error("the model catalog response body", error));
             }
             None => return Ok(body),
         }

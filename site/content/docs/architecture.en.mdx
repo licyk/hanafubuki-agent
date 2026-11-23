@@ -352,6 +352,8 @@ A package in this project's format may also carry code: its manifest's `runtime`
 
 If a provider opens a stream and then reports a rate limit before producing any output item, the Agent retries the same request under the session’s stream retry policy. Once a reasoning, text or tool item has started, the refusal ends the turn to prevent duplicate output.
 
+A stream interruption before the response-start event is eligible for the session’s stream retries. After that event the Agent ends the turn without replaying the request, even if the provider has sent only the response ID. The error says whether an output item had arrived and whether the request was retried.
+
 ## The terminal interface and the command line [#the-terminal-interface-and-the-command-line]
 
 - **`hanafubuki-agent-cli`** is the `hanafubuki-agent` binary, above the facade and depending on nothing else of the workspace. Every command composes the runtime from its global flags and installs the panic hook and the log file; the commands that read or write the configuration (`config`, `providers list`, `roles`, `doctor` offline) never start the Agent, so they work beside a running one; `roles` and `doctor` read the installed plugins' roles with the store's read-only listing (`PackageStore::read_installed`: no staging sweep, no quarantine, no write, no lock). `exec` brings its own sinks: the turn's `AgentEventSink` and the slot's status sink feed one channel the command's thread reads, so the events it prints are the facade's own (`--json` serializes `AgentEvent` as it is). See [CLI reference](/docs/cli-reference).

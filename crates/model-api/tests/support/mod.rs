@@ -168,9 +168,16 @@ async fn write_response(stream: &mut TcpStream, plan: PlannedResponse) {
         _ => "Test Response",
     };
     let mut headers = format!(
-        "HTTP/1.1 {} {}\r\ncontent-length: {}\r\nconnection: close\r\n",
-        plan.status, reason, content_length
+        "HTTP/1.1 {} {}\r\nconnection: close\r\n",
+        plan.status, reason
     );
+    if !plan
+        .headers
+        .iter()
+        .any(|(name, _)| name.eq_ignore_ascii_case("content-length"))
+    {
+        headers.push_str(&format!("content-length: {content_length}\r\n"));
+    }
     for (name, value) in plan.headers {
         headers.push_str(&format!("{name}: {value}\r\n"));
     }

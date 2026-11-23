@@ -80,3 +80,31 @@ async fn stream_failure_after_first_model_event_is_never_replayed() {
         Err(ModelError::StreamInterrupted(_))
     ));
 }
+
+#[tokio::test]
+async fn truncated_response_body_reports_the_read_failure() {
+    let started = b"data: {\"type\":\"response.created\",\"response\":{\"id\":\"started\"}}\n\n";
+    let mut response = PlannedResponse::sse(vec![ResponseFragment::immediate(started.to_vec())]);
+    response
+        .headers
+        .push(("content-length".into(), (started.len() + 1).to_string()));
+    let server = FakeHttpServer::start(vec![response]).await;
+    let endpoint =
+        ModelEndpoint::parse(&format!("{}?key=private-query", server.base_url())).unwrap();
+    let transport = ResponsesModelTransport::new(ModelProvider::new(endpoint, None)).unwrap();
+    let mut stream = transport
+        .stream(fixture_request(), CancellationToken::default())
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        stream.next().await,
+        Some(Ok(ModelEvent::ResponseStarted { .. }))
+    ));
+    let Some(Err(ModelError::StreamInterrupted(message))) = stream.next().await else {
+        panic!("expected a body read error");
+    };
+    assert!(message.contains("unexpected end of file"), "{message}");
+    assert!(!message.contains("private-query"));
+    assert_eq!(server.requests().len(), 1);
+}

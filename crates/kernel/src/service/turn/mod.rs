@@ -16,6 +16,9 @@ fn terminal_reason_for_error(error: &AgentError) -> AgentTurnTerminalReason {
         AgentError::ModelStreamRetriesExhausted { .. } => {
             AgentTurnTerminalReason::ModelStreamRetriesExhausted
         }
+        AgentError::ModelStreamInterruptedAfterResponseStarted { .. } => {
+            AgentTurnTerminalReason::ModelStreamInterruptedAfterResponseStarted
+        }
         AgentError::Protocol(_) => AgentTurnTerminalReason::ModelProtocol,
         AgentError::LimitExceeded { .. }
         | AgentError::ContextBudgetExceeded { .. }

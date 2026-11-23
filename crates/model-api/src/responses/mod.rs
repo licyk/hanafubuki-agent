@@ -248,10 +248,8 @@ impl ResponsesEventStream {
                         }
                     }
                 }
-                Some(Err(_)) => {
-                    return self.fail(ModelError::StreamInterrupted(
-                        "model response stream failed after establishment".into(),
-                    ));
+                Some(Err(error)) => {
+                    return self.fail(self.provider.body_read_error("the response body", error));
                 }
                 None => {
                     if let Err(error) = self.decoder.finish() {

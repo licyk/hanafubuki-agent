@@ -92,6 +92,7 @@ pub enum AgentTurnTerminalReason {
     UserInterrupted,
     ModelRequestRetriesExhausted,
     ModelStreamRetriesExhausted,
+    ModelStreamInterruptedAfterResponseStarted,
     ModelError,
     ModelProtocol,
     BudgetExceeded,

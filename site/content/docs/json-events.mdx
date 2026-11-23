@@ -47,16 +47,17 @@ icon: Braces
 
 `turn_failed` 的 `reason` 取值：
 
-| `reason`                          | 含义                                 |
-| --------------------------------- | ------------------------------------ |
-| `model_request_retries_exhausted` | 模型请求重试次数用尽（例如无法连接） |
-| `model_stream_retries_exhausted`  | 模型响应流中断，重试次数用尽         |
-| `model_error`                     | Provider 返回了错误                  |
-| `model_protocol`                  | Provider 的响应不符合协议            |
-| `budget_exceeded`                 | 超出了 Agent 对回合的限制            |
-| `deadline_exceeded`               | 超出了回合的时限                     |
-| `context_window_exceeded`         | 压缩上下文后仍然超出模型的上下文窗口 |
-| `internal_failure`                | Agent 内部错误                       |
+| `reason`                                          | 含义                                           |
+| ------------------------------------------------- | ---------------------------------------------- |
+| `model_request_retries_exhausted`                 | 模型请求重试次数用尽（例如无法连接）           |
+| `model_stream_retries_exhausted`                  | 模型响应流中断，已用完重试次数或已禁用流重试。 |
+| `model_stream_interrupted_after_response_started` | 响应开始后流中断，Agent 没有重试这次请求。     |
+| `model_error`                                     | Provider 返回了错误                            |
+| `model_protocol`                                  | Provider 的响应不符合协议                      |
+| `budget_exceeded`                                 | 超出了 Agent 对回合的限制                      |
+| `deadline_exceeded`                               | 超出了回合的时限                               |
+| `context_window_exceeded`                         | 压缩上下文后仍然超出模型的上下文窗口           |
+| `internal_failure`                                | Agent 内部错误                                 |
 
 ### 思考 [#reasoning]
 

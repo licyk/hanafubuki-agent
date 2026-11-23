@@ -37,6 +37,10 @@ pub enum AgentError {
         message: String,
     },
     ModelStreamInterrupted(String),
+    ModelStreamInterruptedAfterResponseStarted {
+        received_output: bool,
+        message: String,
+    },
     ModelStreamRetriesExhausted {
         retries: u32,
         message: String,
@@ -144,9 +148,27 @@ impl fmt::Display for AgentError {
                     "agent model response stream interrupted: {message}"
                 )
             }
+            Self::ModelStreamInterruptedAfterResponseStarted {
+                received_output,
+                message,
+            } => {
+                let when = if *received_output {
+                    "after output began"
+                } else {
+                    "before any output arrived"
+                };
+                write!(
+                    formatter,
+                    "model response started, then the stream was interrupted {when}. This request was not retried: {message}"
+                )
+            }
+            Self::ModelStreamRetriesExhausted { retries: 0, message } => write!(
+                formatter,
+                "model response stream interrupted. Automatic stream retries are disabled: {message}"
+            ),
             Self::ModelStreamRetriesExhausted { retries, message } => write!(
                 formatter,
-                "agent model response stream retries exhausted after {retries} retry(s): {message}"
+                "model response stream interrupted. Automatic retries exhausted ({retries} used): {message}"
             ),
             Self::UnsupportedImageInput {
                 status,

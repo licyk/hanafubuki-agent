@@ -219,10 +219,8 @@ impl RawSseStream {
                 Some(Ok(chunk)) => {
                     self.pending.extend(self.decoder.feed(&chunk)?);
                 }
-                Some(Err(_)) => {
-                    return Err(ModelError::StreamInterrupted(
-                        "model response stream failed after establishment".into(),
-                    ));
+                Some(Err(error)) => {
+                    return Err(self.provider.body_read_error("the response body", error));
                 }
                 None => {
                     self.decoder.finish()?;

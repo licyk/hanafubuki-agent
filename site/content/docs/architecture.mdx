@@ -344,6 +344,8 @@ Agent 对它访问的每个模型所知道的内容，是内核的 `ModelMetadat
 
 提供商打开事件流后，如果在首个输出项之前返回限流错误，Agent 会按会话的流重试设置重发同一请求。推理、文本或工具输出项一旦开始，收到限流错误就结束该轮，以免重复输出。
 
+响应开始事件到达前，流中断可以按会话设置重试。收到开始事件后，即使提供商只发来了响应 ID，流中断也会结束本轮。错误消息会说明是否已收到输出项，以及是否重试了该请求。
+
 ## 终端界面与命令行 [#the-terminal-interface-and-the-command-line]
 
 - **`hanafubuki-agent-cli`** 是 `hanafubuki-agent` 二进制，位于门面之上，不依赖工作区的其他东西。每个命令从全局标志组合运行时，安装 panic hook 和日志文件；读写配置的命令（`config`、`providers list`、`roles`、离线的 `doctor`）从不启动 Agent，所以它们可以在 Agent 运行时使用；`roles` 和 `doctor` 用包存储的只读列举（`PackageStore::read_installed`：不清理暂存区、不隔离、不写入、不取锁）读取已安装插件的角色。`exec` 自带 sink：轮次的 `AgentEventSink` 和槽位的状态 sink 送入命令线程读取的同一个通道，所以它打印的事件就是门面自己的（`--json` 原样序列化 `AgentEvent`）。见[命令行参考](/docs/cli-reference)。

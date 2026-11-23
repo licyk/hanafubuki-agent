@@ -256,7 +256,10 @@ async fn stream_failure_closes_active_reasoning_before_the_terminal_event() {
 
     assert!(matches!(
         service.start_turn(session.id, "fail").await,
-        Err(AgentError::Model(_))
+        Err(AgentError::ModelStreamInterruptedAfterResponseStarted {
+            received_output: true,
+            ..
+        })
     ));
     let turn = service.snapshot(session.id).unwrap().turn.unwrap();
     assert_eq!(turn.phase, AgentTurnPhase::Failed);

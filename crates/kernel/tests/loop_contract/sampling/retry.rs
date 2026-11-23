@@ -1,6 +1,53 @@
 use super::*;
 
 #[tokio::test]
+async fn interruption_after_response_start_reports_why_it_was_not_retried() {
+    let mut events = deterministic_assistant_events("unused");
+    events.truncate(1);
+    events.push(Err(ModelError::StreamInterrupted(
+        "connection reset".into(),
+    )));
+    let model = ScriptedEventModel::new([events]);
+    let service = AgentService::new(
+        Arc::new(model.clone()),
+        FakeTools::new([]).await.registries(),
+    );
+    let session = service.create_session(config()).unwrap();
+
+    let error = service.start_turn(session.id, "hello").await.unwrap_err();
+    assert_eq!(model.requests().len(), 1);
+    let events = service.events_since(session.id, None).unwrap().events;
+    assert!(!events
+        .iter()
+        .any(|event| matches!(event.kind, AgentEventKind::ModelRetryScheduled { .. })));
+    let Some(AgentEventKind::TurnFailed { reason, message }) =
+        events.last().map(|event| &event.kind)
+    else {
+        panic!("expected the turn to fail");
+    };
+    assert_eq!(message, &error.to_string());
+    assert!(
+        message.contains("before any output arrived")
+            && message.contains("not retried")
+            && message.contains("connection reset"),
+        "{message}"
+    );
+    assert_eq!(
+        serde_json::to_value(reason).unwrap(),
+        "model_stream_interrupted_after_response_started"
+    );
+    assert_eq!(
+        service
+            .snapshot(session.id)
+            .unwrap()
+            .turn
+            .unwrap()
+            .terminal_reason,
+        Some(*reason)
+    );
+}
+
+#[tokio::test]
 async fn streamed_rate_limit_retries_only_before_output() {
     for (events_before_refusal, should_retry) in [(0, true), (1, true), (3, false)] {
         let mut refused = deterministic_assistant_events("partial");
@@ -133,6 +180,10 @@ async fn response_stream_retry_exhaustion_fails_once_with_a_structured_reason() 
     let snapshot = service.snapshot(session.id).unwrap();
     let turn = snapshot.turn.unwrap();
     assert_eq!(turn.phase, AgentTurnPhase::Failed);
+    assert!(turn
+        .last_error
+        .unwrap()
+        .contains("Automatic retries exhausted (2 used)"));
     assert_eq!(
         turn.terminal_reason,
         Some(AgentTurnTerminalReason::ModelStreamRetriesExhausted)
@@ -147,6 +198,29 @@ async fn response_stream_retry_exhaustion_fails_once_with_a_structured_reason() 
             .count(),
         2
     );
+}
+
+#[tokio::test]
+async fn interruption_before_response_start_reports_disabled_stream_retries() {
+    let model = ScriptedEventModel::new([vec![Err(ModelError::StreamInterrupted(
+        "connection reset".into(),
+    ))]]);
+    let service = AgentService::new(
+        Arc::new(model.clone()),
+        FakeTools::new([]).await.registries(),
+    );
+    let mut config = config();
+    config.sampling_retry_policy.maximum_retries = 0;
+    let session = service.create_session(config).unwrap();
+    let error = service.start_turn(session.id, "hello").await.unwrap_err();
+    assert!(matches!(
+        error,
+        AgentError::ModelStreamRetriesExhausted { retries: 0, .. }
+    ));
+    assert!(error
+        .to_string()
+        .contains("Automatic stream retries are disabled"));
+    assert_eq!(model.requests().len(), 1);
 }
 
 #[tokio::test]

@@ -319,6 +319,27 @@ impl ModelProvider {
         &self.headers
     }
 
+    pub(crate) fn body_read_error(&self, body: &str, error: reqwest::Error) -> ModelError {
+        // I/O kinds describe the failure without exposing URLs or peer-supplied text.
+        let io_kind =
+            std::iter::successors(std::error::Error::source(&error), |cause| cause.source())
+                .find_map(|cause| {
+                    cause
+                        .downcast_ref::<std::io::Error>()
+                        .map(std::io::Error::kind)
+                });
+        let detail = if error.is_timeout() {
+            "read timed out".to_owned()
+        } else if let Some(kind) = io_kind {
+            kind.to_string()
+        } else {
+            error.without_url().to_string()
+        };
+        ModelError::StreamInterrupted(
+            self.bound_diagnostic(format!("could not read {body}: {detail}")),
+        )
+    }
+
     pub(crate) fn bound_diagnostic(&self, value: impl Into<String>) -> String {
         let mut value = value.into();
         if let Some(credential) = &self.credential {

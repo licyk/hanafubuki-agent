@@ -28,9 +28,12 @@ pub(super) fn stream_event(
                 "model response stream was idle for {timeout:?}"
             )))
         }
-        Err(ModelError::StreamInterrupted(message)) => Err(AgentError::Model(format!(
-            "model response stream interrupted after the first model event: {message}"
-        ))),
+        Err(ModelError::StreamInterrupted(message)) => {
+            Err(AgentError::ModelStreamInterruptedAfterResponseStarted {
+                received_output: response.saw_output_item || !response.pending_items.is_empty(),
+                message,
+            })
+        }
         Err(
             error @ (ModelError::UnsupportedImageInput { .. }
             | ModelError::UnsupportedReasoning { .. }),
