@@ -36,14 +36,16 @@ pub(crate) fn spec(kind: FsToolKind) -> FsToolSpec {
             &["path", "query", "maxDepth", "maxResults", "maxBytes"],
         ),
         FsToolKind::ReadFile => object(
-            "Read one bounded UTF-8 page from a file up to 128 MiB. Start with offset 0, then continue from nextOffset while truncated is true. Set lineNumbers to also get each line of the page with the number it has in the file; content and nextOffset stay as they are.",
+            "Read one bounded UTF-8 page from a file up to 128 MiB. Start at a byte offset (default 0) or at startLine (1-based). endLine is inclusive. While truncated, continue with offset=nextOffset and keep the same endLine. Set lineNumbers to also get each line of the page with the number it has in the file; content and nextOffset stay as they are.",
             json!({
                 "path": bounded_string(4096),
                 "offset": { "type": "integer", "minimum": 0, "maximum": 134217728 },
+                "startLine": { "type": "integer", "minimum": 1 },
+                "endLine": { "type": "integer", "minimum": 1 },
                 "maxBytes": { "type": "integer", "minimum": 4, "maximum": 262144 },
                 "lineNumbers": { "type": "boolean" }
             }),
-            &["path", "offset", "maxBytes"],
+            &["path"],
         ),
         FsToolKind::ApplyPatch => object(
             "Create, rewrite, rename, and delete files. This is the only tool that writes files; prefer it over shell commands that would write. The patch must use the *** Begin Patch / *** End Patch envelope and Add File, Delete File, or Update File sections. Add File with no '+' lines creates an empty file. Add File and Move to automatically create missing parent directories. Paths may be relative to the workspace or absolute; a path outside the workspace is written through the same approval flow as every other mutation.",

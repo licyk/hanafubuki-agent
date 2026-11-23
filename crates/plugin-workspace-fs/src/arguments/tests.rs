@@ -1,6 +1,7 @@
 use hanafubuki_agent_contracts::ToolCallValidationError;
 use hanafubuki_agent_workspace_fs::{
-    ApplyPatchRequest, ListDirectoryRequest, ReadFileRequest, SearchTextRequest, WorkspaceFsRequest,
+    ApplyPatchRequest, ListDirectoryRequest, ReadFileRequest, ReadFileStart, SearchTextRequest,
+    WorkspaceFsRequest,
 };
 use serde_json::json;
 
@@ -65,7 +66,8 @@ fn limits_out_of_range_are_clamped_to_their_bounds_with_a_note() {
         request,
         WorkspaceFsRequest::ReadFile(ReadFileRequest {
             path: "x".to_string(),
-            offset: 134217728,
+            start: ReadFileStart::Offset(134217728),
+            end_line: None,
             max_bytes: 262144,
             line_numbers: false,
         })
@@ -178,4 +180,23 @@ fn apply_patch_accepts_freeform_and_function_wrapped_codex_patches() {
 fn apply_patch_can_create_an_empty_file() {
     let empty = "*** Begin Patch\n*** Add File: pkg/__init__.py\n*** End Patch";
     assert!(parse(FsToolKind::ApplyPatch, &json!(empty)).is_ok());
+}
+#[test]
+fn read_file_accepts_a_line_range_without_byte_arguments() {
+    let args = json!({"path": "a.rs", "startLine": 3, "endLine": 7});
+    assert!(matches!(
+        parse(FsToolKind::ReadFile, &args).unwrap().0,
+        WorkspaceFsRequest::ReadFile(ReadFileRequest {
+            start: ReadFileStart::Line(3),
+            end_line: Some(7),
+            max_bytes: 65536,
+            ..
+        })
+    ));
+    let mut ambiguous = args;
+    ambiguous["offset"] = json!(0);
+    assert!(parse(FsToolKind::ReadFile, &ambiguous)
+        .unwrap_err()
+        .to_string()
+        .contains("either offset or startLine"));
 }

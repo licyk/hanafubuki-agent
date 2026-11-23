@@ -38,10 +38,19 @@ pub struct SearchTextRequest {
     pub max_bytes: usize,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ReadFileStart {
+    Offset(usize),
+    #[serde(rename = "startLine")]
+    Line(u64),
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReadFileRequest {
     pub path: String,
-    pub offset: usize,
+    pub start: ReadFileStart,
+    pub end_line: Option<u64>,
     pub max_bytes: usize,
     /// Number each line of the page, so a caller can name a line it read.
     pub line_numbers: bool,

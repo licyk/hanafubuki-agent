@@ -89,7 +89,8 @@ fn reads_are_unreviewed_and_mutations_require_exact_authorization() {
 
     let read = WorkspaceFsRequest::ReadFile(ReadFileRequest {
         path: "tree/a.txt".to_string(),
-        offset: 0,
+        start: ReadFileStart::Offset(0),
+        end_line: None,
         max_bytes: 5,
         line_numbers: false,
     });
@@ -143,7 +144,8 @@ fn read_file_pages_utf8_content_from_the_returned_next_offset() {
 
     let first = WorkspaceFsRequest::ReadFile(ReadFileRequest {
         path: "paged.txt".to_string(),
-        offset: 0,
+        start: ReadFileStart::Offset(0),
+        end_line: None,
         max_bytes: 4,
         line_numbers: false,
     });
@@ -158,7 +160,8 @@ fn read_file_pages_utf8_content_from_the_returned_next_offset() {
 
     let second = WorkspaceFsRequest::ReadFile(ReadFileRequest {
         path: "paged.txt".to_string(),
-        offset: first.next_offset,
+        start: ReadFileStart::Offset(first.next_offset),
+        end_line: None,
         max_bytes: 4,
         line_numbers: false,
     });
@@ -172,7 +175,8 @@ fn read_file_pages_utf8_content_from_the_returned_next_offset() {
 
     let third = WorkspaceFsRequest::ReadFile(ReadFileRequest {
         path: "paged.txt".to_string(),
-        offset: second.next_offset,
+        start: ReadFileStart::Offset(second.next_offset),
+        end_line: None,
         max_bytes: 4,
         line_numbers: false,
     });
@@ -193,7 +197,8 @@ fn read_file_counts_the_line_its_page_starts_on() {
     let read = |offset| {
         let request = WorkspaceFsRequest::ReadFile(ReadFileRequest {
             path: "lines.txt".to_string(),
-            offset,
+            start: ReadFileStart::Offset(offset),
+            end_line: None,
             max_bytes: 64,
             line_numbers: false,
         });
@@ -228,7 +233,8 @@ fn read_file_numbers_each_line_it_pages_without_changing_the_page() {
     let read = |offset, line_numbers| {
         let request = WorkspaceFsRequest::ReadFile(ReadFileRequest {
             path: "numbered.txt".to_string(),
-            offset,
+            start: ReadFileStart::Offset(offset),
+            end_line: None,
             max_bytes: 64,
             line_numbers,
         });
@@ -284,7 +290,8 @@ fn read_file_rejects_offsets_past_eof_and_files_larger_than_128_mib() {
 
     let past_eof = WorkspaceFsRequest::ReadFile(ReadFileRequest {
         path: "small.txt".to_string(),
-        offset: 6,
+        start: ReadFileStart::Offset(6),
+        end_line: None,
         max_bytes: MIN_READ_PAGE_BYTES,
         line_numbers: false,
     });
@@ -295,7 +302,8 @@ fn read_file_rejects_offsets_past_eof_and_files_larger_than_128_mib() {
 
     let exact_eof = WorkspaceFsRequest::ReadFile(ReadFileRequest {
         path: "exact-limit.txt".to_string(),
-        offset: MAX_READ_FILE_BYTES as usize,
+        start: ReadFileStart::Offset(MAX_READ_FILE_BYTES as usize),
+        end_line: None,
         max_bytes: MIN_READ_PAGE_BYTES,
         line_numbers: false,
     });
@@ -308,7 +316,8 @@ fn read_file_rejects_offsets_past_eof_and_files_larger_than_128_mib() {
 
     let oversized = WorkspaceFsRequest::ReadFile(ReadFileRequest {
         path: "oversized.txt".to_string(),
-        offset: 0,
+        start: ReadFileStart::Offset(0),
+        end_line: None,
         max_bytes: MAX_READ_PAGE_BYTES,
         line_numbers: false,
     });
@@ -518,7 +527,8 @@ fn symlink_target_replacement_invalidates_the_approved_action() {
     let service = WorkspaceFsService::new(policy(temp.path()));
     let request = WorkspaceFsRequest::ReadFile(ReadFileRequest {
         path: "link.txt".to_string(),
-        offset: 0,
+        start: ReadFileStart::Offset(0),
+        end_line: None,
         max_bytes: 64,
         line_numbers: false,
     });
@@ -612,7 +622,8 @@ fn large_files_are_truncated_or_rejected_without_unbounded_reads() {
     let service = WorkspaceFsService::new(policy(temp.path()));
     let read = WorkspaceFsRequest::ReadFile(ReadFileRequest {
         path: "large.txt".to_string(),
-        offset: 0,
+        start: ReadFileStart::Offset(0),
+        end_line: None,
         max_bytes: 1024,
         line_numbers: false,
     });
@@ -696,7 +707,8 @@ fn protected_application_paths_are_rejected_before_approval() {
     let service = WorkspaceFsService::new(policy);
     let request = WorkspaceFsRequest::ReadFile(ReadFileRequest {
         path: "app-data/credentials.json".to_string(),
-        offset: 0,
+        start: ReadFileStart::Offset(0),
+        end_line: None,
         max_bytes: 1024,
         line_numbers: false,
     });

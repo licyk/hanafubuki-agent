@@ -70,27 +70,19 @@ pub(crate) fn prepare_operation(
                 )));
             }
             let file = resolve_existing(policy, &request.path, Some(WorkspacePathKind::File))?;
-            if file.identity.size > MAX_READ_FILE_BYTES {
-                return Err(WorkspaceFsError::LimitExceeded(format!(
-                    "read file exceeds {MAX_READ_FILE_BYTES} bytes"
-                )));
-            }
-            if request.offset as u64 > file.identity.size {
-                return Err(WorkspaceFsError::InvalidRequest(format!(
-                    "read offset {} exceeds file size {}",
-                    request.offset, file.identity.size
-                )));
-            }
+            validate_read_range(request, file.identity.size)?;
             let canonical = serialize_action(&CanonicalFileAction::ReadFile {
                 file: &file.identity,
-                offset: request.offset,
+                start: request.start,
+                end_line: request.end_line,
                 max_bytes: request.max_bytes,
             })?;
             let summary = format!("Read file {}", file.identity.path);
             (
                 WorkspaceOperationPlan::ReadFile {
                     file,
-                    offset: request.offset,
+                    start: request.start,
+                    end_line: request.end_line,
                     max_bytes: request.max_bytes,
                     line_numbers: request.line_numbers,
                 },
@@ -263,6 +255,29 @@ pub(crate) fn prepare_operation(
     })
     .map_err(|error| WorkspaceFsError::Resolution(error.to_string()))?;
     Ok(PreparedWorkspaceOperation { plan, action })
+}
+
+fn validate_read_range(request: &ReadFileRequest, file_size: u64) -> Result<(), WorkspaceFsError> {
+    if file_size > MAX_READ_FILE_BYTES {
+        return Err(WorkspaceFsError::LimitExceeded(format!(
+            "read file exceeds {MAX_READ_FILE_BYTES} bytes"
+        )));
+    }
+    let first_line = match request.start {
+        ReadFileStart::Offset(offset) if offset as u64 > file_size => {
+            return Err(WorkspaceFsError::InvalidRequest(format!(
+                "read offset {offset} exceeds file size {file_size}"
+            )));
+        }
+        ReadFileStart::Offset(_) => 1,
+        ReadFileStart::Line(line) => line,
+    };
+    if first_line == 0 || request.end_line.is_some_and(|end| end < first_line) {
+        return Err(WorkspaceFsError::InvalidRequest(
+            "line numbers start at 1 and endLine must be at least startLine".into(),
+        ));
+    }
+    Ok(())
 }
 
 /// A search's own bounds: its query, and the limits on its results and bytes.

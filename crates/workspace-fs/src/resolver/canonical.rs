@@ -25,7 +25,10 @@ pub(super) enum CanonicalFileAction<'a> {
     },
     ReadFile {
         file: &'a PathIdentity,
-        offset: usize,
+        #[serde(flatten)]
+        start: crate::ReadFileStart,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        end_line: Option<u64>,
         max_bytes: usize,
     },
     WriteFile {

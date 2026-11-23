@@ -1,16 +1,19 @@
+use std::io::{BufRead, BufReader};
+
 use super::*;
 
 impl WorkspaceFsService {
     pub(super) fn read_file(
         &self,
         file: ExistingPathPlan,
-        offset: usize,
+        start: ReadFileStart,
+        end_line: Option<u64>,
         max_bytes: usize,
         line_numbers: bool,
         cancellation: &CancellationToken,
     ) -> Result<WorkspaceFsResult, WorkspaceFsError> {
         revalidate_existing(&file)?;
-        let mut handle = File::open(file.resolved.system()).map_err(|error| {
+        let handle = File::open(file.resolved.system()).map_err(|error| {
             WorkspaceFsError::Io(format!("open {}: {error}", file.identity.path))
         })?;
         let handle_identity = identity_from_metadata(
@@ -22,27 +25,29 @@ impl WorkspaceFsService {
         if handle_identity != file.identity {
             return Err(WorkspaceFsError::PathChanged);
         }
-        let start_line = lines_before(&mut handle, offset, cancellation)? + 1;
+        let mut reader = BufReader::with_capacity(IO_CHUNK_BYTES, handle);
+        let (offset, start_line) = locate_start(&mut reader, start, cancellation)?;
         let mut bytes = Vec::with_capacity(max_bytes.min(file.identity.size as usize));
-        let mut chunk = vec![0u8; IO_CHUNK_BYTES.min(max_bytes.saturating_add(1))];
-        while bytes.len() <= max_bytes {
+        let mut line = start_line;
+        while bytes.len() <= max_bytes && end_line.is_none_or(|end| line <= end) {
             check_cancel(cancellation)?;
-            let remaining = max_bytes.saturating_add(1).saturating_sub(bytes.len());
-            if remaining == 0 {
+            let chunk = reader.fill_buf().map_err(read_error)?;
+            if chunk.is_empty() {
                 break;
             }
-            let read_len = chunk.len().min(remaining);
-            let read = handle
-                .read(&mut chunk[..read_len])
-                .map_err(|error| WorkspaceFsError::Io(format!("read file: {error}")))?;
-            if read == 0 {
-                break;
-            }
-            bytes.extend_from_slice(&chunk[..read]);
+            let chunk = &chunk[..chunk.len().min(max_bytes + 1 - bytes.len())];
+            let length = if let Some(end) = end_line {
+                advance_to_line(chunk, &mut line, end.saturating_add(1))
+            } else {
+                chunk.len()
+            };
+            bytes.extend_from_slice(&chunk[..length]);
+            reader.consume(length);
         }
         let completed_identity = identity_from_metadata(
             &file.resolved,
-            &handle
+            &reader
+                .get_ref()
                 .metadata()
                 .map_err(|error| WorkspaceFsError::Io(format!("inspect read file: {error}")))?,
         )?;
@@ -57,7 +62,8 @@ impl WorkspaceFsService {
         let content = bounded_utf8(bytes, truncated)?;
         let content_sha256 = sha256_hex(content.as_bytes());
         let content_bytes = content.len();
-        let lines = if line_numbers {
+        let byte_page = matches!(start, ReadFileStart::Offset(_)) && end_line.is_none();
+        let lines = if line_numbers && (byte_page || !content.is_empty()) {
             numbered_lines(&content, start_line)
         } else {
             Vec::new()
@@ -92,27 +98,55 @@ fn numbered_lines(content: &str, start_line: u64) -> Vec<NumberedLine> {
         .collect()
 }
 
-/// The line breaks in the file's first `offset` bytes, read through
-/// `handle`, which is left at `offset`.
-fn lines_before(
-    handle: &mut File,
-    offset: usize,
+/// Scan in bounded chunks and leave the reader at the selected byte or line.
+fn locate_start(
+    reader: &mut impl BufRead,
+    start: ReadFileStart,
     cancellation: &CancellationToken,
-) -> Result<u64, WorkspaceFsError> {
-    let mut chunk = vec![0u8; IO_CHUNK_BYTES.min(offset)];
-    let mut remaining = offset;
-    let mut lines = 0u64;
-    while remaining > 0 {
+) -> Result<(usize, u64), WorkspaceFsError> {
+    let mut offset = 0;
+    let mut line = 1;
+    loop {
+        match start {
+            ReadFileStart::Offset(target) if offset == target => break,
+            ReadFileStart::Line(target) if line == target => break,
+            _ => {}
+        }
         check_cancel(cancellation)?;
-        let read_len = chunk.len().min(remaining);
-        let read = handle
-            .read(&mut chunk[..read_len])
-            .map_err(|error| WorkspaceFsError::Io(format!("read file: {error}")))?;
-        if read == 0 {
+        let chunk = reader.fill_buf().map_err(read_error)?;
+        if chunk.is_empty() {
             break;
         }
-        lines += chunk[..read].iter().filter(|byte| **byte == b'\n').count() as u64;
-        remaining -= read;
+        let length = match start {
+            ReadFileStart::Offset(target) => {
+                let length = chunk.len().min(target - offset);
+                line += chunk[..length]
+                    .iter()
+                    .filter(|&&byte| byte == b'\n')
+                    .count() as u64;
+                length
+            }
+            ReadFileStart::Line(target) => advance_to_line(chunk, &mut line, target),
+        };
+        reader.consume(length);
+        offset += length;
     }
-    Ok(lines)
+    Ok((offset, line))
+}
+
+/// Consume through the newline before `target`, or the whole chunk.
+fn advance_to_line(chunk: &[u8], line: &mut u64, target: u64) -> usize {
+    for (index, &byte) in chunk.iter().enumerate() {
+        if byte == b'\n' {
+            *line += 1;
+            if *line == target {
+                return index + 1;
+            }
+        }
+    }
+    chunk.len()
+}
+
+fn read_error(error: std::io::Error) -> WorkspaceFsError {
+    WorkspaceFsError::Io(format!("read file: {error}"))
 }

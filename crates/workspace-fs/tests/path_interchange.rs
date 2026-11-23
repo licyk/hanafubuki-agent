@@ -109,7 +109,8 @@ fn no_result_variant_exposes_a_verbatim_path() {
         }),
         WorkspaceFsRequest::ReadFile(ReadFileRequest {
             path: "tree/a.txt".to_string(),
-            offset: 0,
+            start: ReadFileStart::Offset(0),
+            end_line: None,
             max_bytes: 4096,
             line_numbers: false,
         }),
@@ -194,14 +195,16 @@ fn no_error_message_exposes_a_verbatim_path() {
         // A target that is not there.
         WorkspaceFsRequest::ReadFile(ReadFileRequest {
             path: "absent.txt".to_string(),
-            offset: 0,
+            start: ReadFileStart::Offset(0),
+            end_line: None,
             max_bytes: 1024,
             line_numbers: false,
         }),
         // A directory where a file was required.
         WorkspaceFsRequest::ReadFile(ReadFileRequest {
             path: ".".to_string(),
-            offset: 0,
+            start: ReadFileStart::Offset(0),
+            end_line: None,
             max_bytes: 1024,
             line_numbers: false,
         }),
@@ -228,7 +231,8 @@ fn a_relative_parent_request_resolves_instead_of_failing() {
         &service,
         &WorkspaceFsRequest::ReadFile(ReadFileRequest {
             path: "nested/../sibling.txt".to_string(),
-            offset: 0,
+            start: ReadFileStart::Offset(0),
+            end_line: None,
             max_bytes: 1024,
             line_numbers: false,
         }),
@@ -255,7 +259,8 @@ fn a_missing_path_is_reported_as_missing_not_as_a_resolution_failure() {
         &service,
         &WorkspaceFsRequest::ReadFile(ReadFileRequest {
             path: "tree/absent.txt".to_string(),
-            offset: 0,
+            start: ReadFileStart::Offset(0),
+            end_line: None,
             max_bytes: 1024,
             line_numbers: false,
         }),
@@ -294,7 +299,8 @@ fn protection_holds_across_spellings_of_one_location() {
             &service,
             &WorkspaceFsRequest::ReadFile(ReadFileRequest {
                 path: spelling.to_string(),
-                offset: 0,
+                start: ReadFileStart::Offset(0),
+                end_line: None,
                 max_bytes: 1024,
                 line_numbers: false,
             }),
@@ -555,7 +561,8 @@ fn relative_requests_resolve_against_the_first_root() {
         &service,
         &WorkspaceFsRequest::ReadFile(ReadFileRequest {
             path: "shared.txt".to_string(),
-            offset: 0,
+            start: ReadFileStart::Offset(0),
+            end_line: None,
             max_bytes: 1024,
             line_numbers: false,
         }),
@@ -588,7 +595,8 @@ fn a_nested_root_does_not_change_containment() {
         &service,
         &WorkspaceFsRequest::ReadFile(ReadFileRequest {
             path: "inner/file.txt".to_string(),
-            offset: 0,
+            start: ReadFileStart::Offset(0),
+            end_line: None,
             max_bytes: 1024,
             line_numbers: false,
         }),

@@ -178,6 +178,17 @@ fn without_reworded(mut request: Value) -> Value {
         )
     });
     for tool in request["tools"].as_array_mut().unwrap() {
+        if tool["name"] == "read_file" {
+            // The current goldens cover the two ways to select a page.
+            tool.as_object_mut().unwrap().remove("description");
+            let properties = tool["parameters"]["properties"].as_object_mut().unwrap();
+            properties.remove("startLine");
+            properties.remove("endLine");
+            tool["parameters"]["required"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|key| key != "offset" && key != "maxBytes");
+        }
         if tool["name"] == "exec_command" {
             tool["parameters"]["properties"]["login"]
                 .as_object_mut()

@@ -977,11 +977,15 @@
         "type": "function"
       },
       {
-        "description": "Read one bounded UTF-8 page from a file up to 128 MiB. Start with offset 0, then continue from nextOffset while truncated is true. Set lineNumbers to also get each line of the page with the number it has in the file; content and nextOffset stay as they are.",
+        "description": "Read one bounded UTF-8 page from a file up to 128 MiB. Start at a byte offset (default 0) or at startLine (1-based). endLine is inclusive. While truncated, continue with offset=nextOffset and keep the same endLine. Set lineNumbers to also get each line of the page with the number it has in the file; content and nextOffset stay as they are.",
         "name": "read_file",
         "parameters": {
           "additionalProperties": false,
           "properties": {
+            "endLine": {
+              "minimum": 1,
+              "type": "integer"
+            },
             "lineNumbers": {
               "type": "boolean"
             },
@@ -999,12 +1003,14 @@
               "maxLength": 4096,
               "minLength": 1,
               "type": "string"
+            },
+            "startLine": {
+              "minimum": 1,
+              "type": "integer"
             }
           },
           "required": [
-            "path",
-            "offset",
-            "maxBytes"
+            "path"
           ],
           "type": "object"
         },
@@ -2964,11 +2970,15 @@
         "type": "function"
       },
       {
-        "description": "Read one bounded UTF-8 page from a file up to 128 MiB. Start with offset 0, then continue from nextOffset while truncated is true. Set lineNumbers to also get each line of the page with the number it has in the file; content and nextOffset stay as they are.",
+        "description": "Read one bounded UTF-8 page from a file up to 128 MiB. Start at a byte offset (default 0) or at startLine (1-based). endLine is inclusive. While truncated, continue with offset=nextOffset and keep the same endLine. Set lineNumbers to also get each line of the page with the number it has in the file; content and nextOffset stay as they are.",
         "name": "read_file",
         "parameters": {
           "additionalProperties": false,
           "properties": {
+            "endLine": {
+              "minimum": 1,
+              "type": "integer"
+            },
             "lineNumbers": {
               "type": "boolean"
             },
@@ -2986,12 +2996,14 @@
               "maxLength": 4096,
               "minLength": 1,
               "type": "string"
+            },
+            "startLine": {
+              "minimum": 1,
+              "type": "integer"
             }
           },
           "required": [
-            "path",
-            "offset",
-            "maxBytes"
+            "path"
           ],
           "type": "object"
         },

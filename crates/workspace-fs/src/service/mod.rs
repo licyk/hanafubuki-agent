@@ -150,10 +150,11 @@ impl WorkspaceFsService {
             ),
             WorkspaceOperationPlan::ReadFile {
                 file,
-                offset,
+                start,
+                end_line,
                 max_bytes,
                 line_numbers,
-            } => self.read_file(file, offset, max_bytes, line_numbers, cancellation),
+            } => self.read_file(file, start, end_line, max_bytes, line_numbers, cancellation),
             WorkspaceOperationPlan::WriteFile {
                 target,
                 content,

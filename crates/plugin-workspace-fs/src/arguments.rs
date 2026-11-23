@@ -2,13 +2,13 @@
 
 use hanafubuki_agent_contracts::object_arguments;
 use hanafubuki_agent_contracts::tools::arguments::{
-    clamped_usize, optional_bool, required_bool, required_bounded_string, required_text,
-    ArgumentNotes,
+    clamped_usize, optional_bool, optional_u64, required_bool, required_bounded_string,
+    required_text, ArgumentNotes,
 };
 use hanafubuki_agent_contracts::ToolCallValidationError;
 use hanafubuki_agent_workspace_fs::{
     ApplyPatchRequest, DeletePathRequest, ListDirectoryRequest, MovePathRequest, ReadFileRequest,
-    SearchTextRequest, WorkspaceFsRequest,
+    ReadFileStart, SearchTextRequest, WorkspaceFsRequest,
 };
 use serde_json::Value;
 
@@ -73,7 +73,28 @@ pub(crate) fn parse(
         }),
         FsToolKind::ReadFile => WorkspaceFsRequest::ReadFile(ReadFileRequest {
             path: required_bounded_string(arguments, "path", 4096)?,
-            offset: clamped_usize(arguments, "offset", 0, MAX_READ_OFFSET, 0, &mut notes)?,
+            start: match optional_u64(arguments, "startLine", 1, u64::MAX)? {
+                Some(_)
+                    if arguments
+                        .get("offset")
+                        .is_some_and(|value| !value.is_null()) =>
+                {
+                    return Err(ToolCallValidationError::InvalidArgumentAt {
+                        path: "offset".into(),
+                        reason: "use either offset or startLine".into(),
+                    });
+                }
+                Some(line) => ReadFileStart::Line(line),
+                None => ReadFileStart::Offset(clamped_usize(
+                    arguments,
+                    "offset",
+                    0,
+                    MAX_READ_OFFSET,
+                    0,
+                    &mut notes,
+                )?),
+            },
+            end_line: optional_u64(arguments, "endLine", 1, u64::MAX)?,
             max_bytes: clamped_usize(
                 arguments,
                 "maxBytes",

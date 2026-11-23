@@ -74,7 +74,8 @@ pub(crate) enum WorkspaceOperationPlan {
     },
     ReadFile {
         file: ExistingPathPlan,
-        offset: usize,
+        start: crate::ReadFileStart,
+        end_line: Option<u64>,
         max_bytes: usize,
         line_numbers: bool,
     },
