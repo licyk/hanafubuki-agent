@@ -80,6 +80,26 @@ fn sidebar_mouse_reads_workspace_files_and_keyboard_returns_to_main_draft() {
 }
 
 #[test]
+fn main_agent_entry_restores_the_parent_from_an_interactive_subagent() {
+    let mut h = Harness::owned(vec![
+        super::subagents::spawn_and_wait("Count the files."),
+        assistant_events("Twelve files."),
+        assistant_events("There are twelve."),
+    ]);
+    let parent = h.answered("Delegate the count.", "There are twelve.");
+    let child = h.subagents_of(parent)[0];
+    h.key_with(KeyCode::Right, KeyModifiers::ALT);
+    h.pump_until("interactive child selected", |h| {
+        h.app.bridge.session_id() == Some(child)
+    });
+    h.type_and_submit("/sidebar");
+    click_text(&mut h, "Return to main conversation");
+    h.pump_until("parent conversation focused", |h| {
+        !h.app.workspace.sidebar.showing_panel() && h.app.bridge.session_id() == Some(parent)
+    });
+}
+
+#[test]
 fn chooser_can_scroll_past_selection_and_open_the_row_under_the_pointer() {
     let mut harness = Harness::owned(vec![assistant_events("Ready.")]);
     for index in 0..64 {

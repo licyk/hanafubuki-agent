@@ -20,6 +20,7 @@ use std::collections::{HashMap, HashSet};
 #[derive(Clone, PartialEq, Eq)]
 pub(super) enum Choice {
     New,
+    Main,
     Chat(AgentSessionId),
     Agent(AgentSessionId),
     File(FileTarget),
@@ -61,6 +62,9 @@ impl Chooser {
         let selected = self.choice();
         self.can_start = parent.is_some();
         let mut entries = vec![Entry::new_chat(self.can_start)];
+        if parent.is_some() {
+            entries.push(Entry::main_agent());
+        }
         let mut seen = HashSet::new();
         let start = entries.len();
         let chats: Vec<_> = chats

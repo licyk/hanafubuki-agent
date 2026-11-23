@@ -46,6 +46,15 @@ impl Entry {
         Self::new(Choice::New, "+", "New side chat", Some(description))
     }
 
+    pub(super) fn main_agent() -> Self {
+        Self::new(
+            Choice::Main,
+            "←",
+            "Main agent",
+            Some("Return to main conversation"),
+        )
+    }
+
     pub(super) fn chat(id: AgentSessionId, title: &str, prompt: Option<&str>) -> Self {
         Self::new(Choice::Chat(id), "○", title, prompt)
     }

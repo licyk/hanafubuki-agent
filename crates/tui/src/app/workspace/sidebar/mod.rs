@@ -474,6 +474,10 @@ impl App {
         choice: Choice,
     ) {
         match choice {
+            Choice::Main => {
+                self.leave_child(tui);
+                self.leave_panel(tui);
+            }
             Choice::New => {
                 self.enter_dock(tui);
                 self.new_side_chat(tui, true);

@@ -23,11 +23,13 @@ fn scrollback_chooser_docks_a_saved_chat_and_a_read_only_subagent() {
     h.pump_until("new side chat docked", |h| {
         h.app.active_sidebar_chat().is_some()
     });
+    let side = h.app.active_sidebar_chat().unwrap();
     assert!(h.tui.terminal.backend().vt100().screen().alternate_screen());
     assert!(h.app.workspace.last_layout().unwrap().strip.is_some());
     h.key(KeyCode::Esc);
     h.pump_until_screen_shows("Subagents");
     h.key(KeyCode::Home);
+    h.key(KeyCode::Down);
     h.key(KeyCode::Down);
     h.key(KeyCode::Down);
     h.key(KeyCode::Enter);
@@ -45,11 +47,21 @@ fn scrollback_chooser_docks_a_saved_chat_and_a_read_only_subagent() {
     assert_eq!(h.app.active_sidebar_agent(), Some(child));
     h.key(KeyCode::Esc);
     h.pump_until_screen_shows("Open in sidebar");
-    h.key_with(KeyCode::Char('x'), KeyModifiers::CONTROL);
-    h.key(KeyCode::Char('x'));
+    h.key(KeyCode::Home);
+    h.key(KeyCode::Down);
+    h.key(KeyCode::Enter);
     h.pump_until("native main transcript", |h| {
         h.app.bridge.session_id() == Some(parent)
             && !h.tui.terminal.backend().vt100().screen().alternate_screen()
+    });
+    h.type_and_submit("/sidebar");
+    h.pump_until_screen_shows("Side chats");
+    h.key(KeyCode::Home);
+    h.key(KeyCode::Down);
+    h.key(KeyCode::Down);
+    h.key(KeyCode::Enter);
+    h.pump_until("saved chat refocused", |h| {
+        h.app.bridge.session_id() == Some(side) && h.app.workspace.second_focused()
     });
 }
 

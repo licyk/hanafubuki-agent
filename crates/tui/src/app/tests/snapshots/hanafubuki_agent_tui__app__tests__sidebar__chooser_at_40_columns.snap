@@ -8,6 +8,8 @@ expression: sidebar(&narrow)
 
  › + New side chat
      Start from this conversation
+   ← Main agent
+     Return to main conversation
 
  Files  2
 
@@ -15,8 +17,6 @@ expression: sidebar(&narrow)
      Project root
    · guide.md
      docs
-
-
 
 
 

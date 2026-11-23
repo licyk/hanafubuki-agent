@@ -7,12 +7,12 @@ expression: sidebar(&h.screen())
  Open in sidebar
 
  › + New side chat                 Start from this conversation
+   ← Main agent                     Return to main conversation
 
  Files  2
 
    · ../  Project root
    · guide.md  docs
-
 
 
 
