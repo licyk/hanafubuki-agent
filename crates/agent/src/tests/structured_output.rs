@@ -177,6 +177,43 @@ async fn a_recap_on_a_gateway_without_structured_output_comes_through_the_forced
     finish(service, paths);
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn a_streamed_rejection_of_named_tool_choice_falls_back_to_a_text_title() {
+    let error = json!({"error": {
+        "code": "upstream_error",
+        "message": "buddy: cannot unmarshal object into Go struct field Request.tool_choice of type string"
+    }});
+    let server = FakeServer::refusing(
+        vec![
+            (assistant_events("Fixed the timeout."), Duration::ZERO),
+            (format!("data: {error}\n\n").into_bytes(), Duration::ZERO),
+            (
+                assistant_events(r#"{"title":"Fix login timeout"}"#),
+                Duration::ZERO,
+            ),
+        ],
+        GatewayRefusals {
+            structured_output: true,
+            tool_choice: false,
+        },
+    )
+    .await;
+    let (service, paths, session_id) = service_with_a_turn("title-streamed-refusal", &server).await;
+
+    assert_eq!(
+        service.suggest_session_title(session_id).await.unwrap(),
+        "Fix login timeout"
+    );
+    let requests = server.requests();
+    assert_eq!(requests.len(), 4);
+    assert_eq!(
+        body(&requests[2])["tool_choice"]["name"],
+        "submit_agent_conversation_title"
+    );
+    assert_eq!(body(&requests[3])["tool_choice"], "none");
+    finish(service, paths);
+}
+
 /// A gateway that refuses the forced tool too: the recap comes as text,
 /// read tolerantly, and the next one is asked as text at once.
 // The managed turn's task must finish while `shutdown` blocks this thread.

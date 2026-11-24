@@ -43,40 +43,37 @@ pub(crate) fn is_unsupported_structured_output(
     code: Option<&str>,
     message: &str,
 ) -> bool {
-    refuses(status, code, message, |message| {
-        STRUCTURED_OUTPUT.iter().any(|name| message.contains(name))
-    })
+    if !matches!(status, Some(400 | 422)) {
+        return false;
+    }
+    let message = message.to_ascii_lowercase();
+    STRUCTURED_OUTPUT.iter().any(|name| message.contains(name)) && refuses(code, &message)
 }
 
-/// Whether an error refuses a forced tool: a status of 400 or 422, and a
-/// message that names `tool_choice` (or `tools`) with a refusal code or
-/// wording.
+/// Some gateways accept an SSE request before their upstream rejects the
+/// named tool. The in-stream error has no HTTP error status.
 pub(crate) fn is_unsupported_tool_choice(
     status: Option<u16>,
     code: Option<&str>,
     message: &str,
 ) -> bool {
-    refuses(status, code, message, |message| {
-        message.contains("tool_choice")
-            || message.contains("functioncallingconfig")
-            || message.contains("function_calling_config")
-            || message.contains("tools")
-    })
-}
-
-fn refuses(
-    status: Option<u16>,
-    code: Option<&str>,
-    message: &str,
-    names: impl Fn(&str) -> bool,
-) -> bool {
-    if !matches!(status, Some(400 | 422)) {
+    if !matches!(status, None | Some(400 | 422)) {
         return false;
     }
     let message = message.to_ascii_lowercase();
-    if !names(&message) {
-        return false;
+    if message.contains("tool_choice") {
+        return refuses(code, &message)
+            || (message.contains("cannot unmarshal object")
+                && message.contains("tool_choice of type string"));
     }
+    status.is_some()
+        && ["functioncallingconfig", "function_calling_config", "tools"]
+            .iter()
+            .any(|name| message.contains(name))
+        && refuses(code, &message)
+}
+
+fn refuses(code: Option<&str>, message: &str) -> bool {
     code.is_some_and(|code| CODES.iter().any(|known| code.eq_ignore_ascii_case(known)))
         || WORDINGS.iter().any(|wording| message.contains(wording))
 }

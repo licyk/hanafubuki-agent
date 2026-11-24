@@ -74,6 +74,31 @@ fn refusals_of_a_forced_tool_count_at_400_and_422() {
 }
 
 #[test]
+fn streamed_errors_must_refuse_the_named_tool_choice() {
+    for message in [
+        "buddy: cannot unmarshal object into Go struct field Request.tool_choice of type string",
+        "Thinking mode does not support this tool_choice",
+    ] {
+        assert!(is_tool_choice_refusal(
+            None,
+            Some("upstream_error"),
+            message
+        ));
+        assert!(!is_tool_choice_refusal(Some(503), None, message));
+    }
+    for message in [
+        "upstream connection lost",
+        "cannot unmarshal object into Go struct field Request.arguments of type string",
+        "request with tool_choice exceeded rate limit",
+    ] {
+        assert!(matches!(
+            classify(None, Some("upstream_error"), message),
+            ModelError::Remote { .. }
+        ));
+    }
+}
+
+#[test]
 fn near_misses_are_not_refusals_of_a_rung() {
     // A schema the Provider found invalid names the parameter without
     // refusing it: the rung works, the request was wrong.
@@ -86,7 +111,7 @@ fn near_misses_are_not_refusals_of_a_rung() {
         classify(Some(400), None, "Invalid value for 'text.format.schema'."),
         ModelError::Remote { .. }
     ));
-    // A server error, or no status (an in-band error), never counts.
+    // A server error, or an in-band native schema error, does not count.
     let reported = "Structured output (`text.format`) is not supported by this stateless gateway.";
     assert!(matches!(
         classify(Some(500), None, reported),
