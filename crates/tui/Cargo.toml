@@ -58,6 +58,11 @@ arboard = { version = "3", default-features = false, features = ["image-data", "
 which = "8"
 winsplit = "0.1"
 
+# The terminal's reply to the identity probe (Terminal.app over SSH) is read
+# from a nonblocking duplicate of standard input, polled with a deadline.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 hanafubuki-agent = { workspace = true, features = ["test-support"] }
 insta = "1.46"

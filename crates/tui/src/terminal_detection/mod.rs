@@ -2,8 +2,18 @@
 
 //! Which terminal the interface runs in, from its environment (Codex's
 //! `codex-terminal-detection`, the identity only): a heuristic over the
-//! variables terminals set, never a query to the terminal. The rewrite's
-//! row cap and whether a web link's address can be hidden read it.
+//! variables terminals set. The rewrite's row cap and whether a web link's
+//! address can be hidden read it.
+//!
+//! Over SSH, where the environment describes the remote shell and not the
+//! terminal on the other end, the one decision that depends on which
+//! terminal that is ([`crate::transcript_mode`]) asks the terminal itself,
+//! once, at launch ([`probe_apple_terminal_over_ssh`], Codex's
+//! `terminal_probe::terminal_identity`): its primary and secondary device
+//! attributes, and whether they are Terminal.app's.
+
+#[cfg(unix)]
+mod identity;
 
 /// The terminal applications told apart.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -138,3 +148,28 @@ fn name_from_term_program(value: &str) -> TerminalName {
 
 #[cfg(test)]
 mod tests;
+
+/// Asks the terminal whether it is Terminal.app, in an SSH session without
+/// a multiplexer; `None` when there is nothing to ask or it does not say.
+///
+/// Terminal.app over SSH is the one terminal whose alternate screen loses
+/// the scrollback the interface writes on leaving it, which is why `auto`
+/// keeps the transcript off it there; every other terminal over SSH takes
+/// the alternate screen as it does locally. The reply is read with a
+/// deadline, before the input thread starts, so it is not taken for keys;
+/// what the terminal said beyond the reply is dropped: it was typed
+/// before the interface showed anything.
+#[cfg(unix)]
+pub(crate) fn probe_apple_terminal_over_ssh() -> Option<bool> {
+    if terminal_info().multiplexer.is_some() || !crate::transcript_mode::is_ssh_session() {
+        return None;
+    }
+    identity::probe().and_then(|reply| identity::is_apple_terminal(&reply))
+}
+
+/// Windows has no Terminal.app to recognize, and the console reports its
+/// own attributes; nothing is asked.
+#[cfg(not(unix))]
+pub(crate) fn probe_apple_terminal_over_ssh() -> Option<bool> {
+    None
+}

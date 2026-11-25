@@ -297,7 +297,7 @@ const DEFAULT_TERMINAL_TITLE: [&str; 3] = ["activity", "session-title", "project
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentAlternateScreen {
-    /// Yes, but not over SSH.
+    /// Yes, but not in Terminal.app over SSH.
     #[default]
     Auto,
     Always,
@@ -423,7 +423,7 @@ pub(crate) fn section() -> SettingsSection {
                     "Alternate screen",
                     choice(&[("auto", "Automatic"), ("always", "Always"), ("never", "Never")]),
                 ),
-                "Whether the interface may use the alternate screen; automatic does except over SSH",
+                "Whether the interface may use the alternate screen; automatic does, except in Terminal.app over SSH",
             )),
             described(
                 SettingSpec::new(

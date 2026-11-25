@@ -4,9 +4,11 @@
 //! the interface, drawing it on the alternate screen (owned), or the
 //! terminal, whose scrollback the finished cells are written into.
 //!
-//! Codex's `auto` keeps the alternate screen off only for Terminal.app
-//! over SSH, which it learns from a terminal identity probe; here `auto`
-//! keeps it off over any SSH session.
+//! `auto` keeps the alternate screen off only for Terminal.app over SSH
+//! (Codex's rule, from the same probe of the terminal's identity): its
+//! alternate screen does not keep what is written into the scrollback on
+//! leaving it. Every other terminal over SSH takes the alternate screen as
+//! it does locally.
 
 use hanafubuki_agent::{AgentAlternateScreen, AgentTuiPreferences};
 
@@ -18,14 +20,21 @@ pub(crate) enum TranscriptMode {
 
 impl TranscriptMode {
     /// The mode `preferences` give, with `--no-alt-screen` (`no_alt_screen`)
-    /// and whether this is an SSH session (`ssh`).
+    /// and `terminal_app_over_ssh`, asked of the terminal
+    /// ([`crate::terminal_detection`]) only under `auto`, where its answer
+    /// decides: elsewhere the terminal is not asked, and one slow to answer
+    /// does not delay the start.
     pub(crate) fn resolve(
         preferences: &AgentTuiPreferences,
         no_alt_screen: bool,
-        ssh: bool,
+        terminal_app_over_ssh: impl FnOnce() -> bool,
     ) -> Self {
         if preferences.fullscreen_transcript
-            && alternate_screen_allowed(no_alt_screen, preferences.alternate_screen, ssh)
+            && alternate_screen_allowed(
+                no_alt_screen,
+                preferences.alternate_screen,
+                terminal_app_over_ssh,
+            )
         {
             Self::Owned
         } else {
@@ -38,14 +47,18 @@ impl TranscriptMode {
     }
 }
 
-fn alternate_screen_allowed(no_alt_screen: bool, setting: AgentAlternateScreen, ssh: bool) -> bool {
+fn alternate_screen_allowed(
+    no_alt_screen: bool,
+    setting: AgentAlternateScreen,
+    terminal_app_over_ssh: impl FnOnce() -> bool,
+) -> bool {
     if no_alt_screen {
         return false;
     }
     match setting {
         AgentAlternateScreen::Always => true,
         AgentAlternateScreen::Never => false,
-        AgentAlternateScreen::Auto => !ssh,
+        AgentAlternateScreen::Auto => !terminal_app_over_ssh(),
     }
 }
 

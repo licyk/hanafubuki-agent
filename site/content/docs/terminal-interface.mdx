@@ -29,7 +29,7 @@ hanafubuki-agent "找出这个项目里没有测试覆盖的模块"
 除非下列设置另有要求，界面以 Fullscreen 启动，按顺序第一条适用的生效：
 
 1. 命令行中的 `--no-alt-screen`：本次运行使用 Scrollback。
-2. `tui.alternateScreen = "never"`：使用 Scrollback。`"auto"`（默认）在 SSH 会话中（设置了 `SSH_TTY` 或 `SSH_CONNECTION`）使用 Scrollback，`"always"` 从不。
+2. `tui.alternateScreen = "never"`：使用 Scrollback。`"auto"`（默认）只在通过 SSH 使用 Terminal.app 时使用 Scrollback，因为它的备用屏幕在离开时不会保留已写入的对话；通过 SSH 使用其他终端时与本地一样，是 Fullscreen。`"always"` 在任何终端中都是 Fullscreen。在 `"auto"` 下通过 SSH 连接时，界面启动时会询问终端是哪一个；不回答的终端视为其他终端，使用 Fullscreen。
 3. `tui.fullscreenTranscript = false`：使用 Scrollback。`/tui` 在[设置中心](#config)中打开它。
 
 这些键见[配置参考](/docs/config-reference#tui)。

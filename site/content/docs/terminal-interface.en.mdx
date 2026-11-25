@@ -29,7 +29,7 @@ The interface shows the conversation one of two ways, chosen when it starts and 
 It starts in Fullscreen unless one of these says otherwise, the first that applies winning:
 
 1. `--no-alt-screen` on the command line: Scrollback for this run.
-2. `tui.alternateScreen = "never"`: Scrollback. `"auto"` (the default) is Scrollback in an SSH session (`SSH_TTY` or `SSH_CONNECTION` set), `"always"` never.
+2. `tui.alternateScreen = "never"`: Scrollback. `"auto"` (the default) is Scrollback only in Terminal.app over SSH, whose alternate screen does not keep the conversation written on leaving it; in every other terminal over SSH it is Fullscreen, as it is locally. `"always"` is Fullscreen in every terminal. Under `auto` over SSH the interface asks the terminal which it is when it starts; one that does not answer counts as any other, and is Fullscreen.
 3. `tui.fullscreenTranscript = false`: Scrollback. `/tui` opens it in the [settings center](#config).
 
 The keys are in the [Configuration reference](/docs/config-reference#tui).

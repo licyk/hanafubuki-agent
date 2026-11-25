@@ -21,7 +21,7 @@ use crate::appearance::{Appearance, AppearanceEvent};
 use crate::chatwidget::{ChatWidget, ChatWidgetInit};
 use crate::history_cell::HistoryRenderMode;
 use crate::render::highlight::configure_theme;
-use crate::transcript_mode::{is_ssh_session, TranscriptMode};
+use crate::transcript_mode::TranscriptMode;
 use crate::tui::{self, FrameRequester, InputReader, RestoreOnDrop, Tui};
 use crate::tui_state::TuiState;
 use crate::update_notice::{TuiUpdateNotice, TuiUpdateNotifier};
@@ -133,7 +133,6 @@ pub fn run(
     );
     let (appearance, mut warnings) = Appearance::new(&preferences, options.directory.clone());
     warnings.extend(theme_warning);
-    let mode = TranscriptMode::resolve(&preferences, options.no_alt_screen, is_ssh_session());
     let render_mode = if preferences.raw_output {
         HistoryRenderMode::Raw
     } else {
@@ -141,6 +140,12 @@ pub fn run(
     };
     let terminal = tui::init().map_err(|error| format!("the terminal: {error}"))?;
     let restore = RestoreOnDrop;
+    // Asked while raw mode is on and before the input thread reads the
+    // terminal: in canonical mode the reply waits for a newline, and once
+    // the thread reads, the reply would be taken for keys.
+    let mode = TranscriptMode::resolve(&preferences, options.no_alt_screen, || {
+        crate::terminal_detection::probe_apple_terminal_over_ssh().unwrap_or(false)
+    });
     let enhanced_keys_supported = tui::enhanced_keys_supported();
     let mut tui = Tui::new(terminal);
     tui.set_input(
