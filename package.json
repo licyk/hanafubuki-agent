@@ -17,8 +17,5 @@
   },
   "devDependencies": {
     "prettier": "^3.9.10"
-  },
-  "patchedDependencies": {
-    "@tanstack/start-static-server-functions@1.167.39": "patches/@tanstack%2Fstart-static-server-functions@1.167.39.patch"
   }
 }

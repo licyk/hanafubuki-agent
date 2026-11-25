@@ -172,7 +172,7 @@ bun run format:check:site
 - 页面在 `site/content/docs/`：每页是 `x.mdx`（简体中文，默认）加 `x.en.mdx`（英文），frontmatter 有 `title`、`description` 和 `icon`（一个 lucide 图标名）。`meta.json` 与 `meta.en.json` 按同样的顺序列出同样的页面，`i18n-content.test.ts` 检查这两点。
 - prettier 格式化 MDX（表格、换行），不格式化 Markdown（`.prettierignore` 排除了 `**/*.md`）。
 - 构建之后检查每个页面都被预渲染了。
-- `patches/` 中有 `@tanstack/start-static-server-functions` 的一个 Bun 补丁：它从源站根目录取预渲染的结果，补丁加上 Vite 的 base。升级这个包时要重新生成补丁（`bun patch`），否则在 base 下的首次加载仍然正常，但站内导航会失败。
+- `site/src/lib/static-fn-cache.ts` 给 `@tanstack/start-static-server-functions` 发出的 `/__tsr/` 请求加上 Vite 的 base：这个包从源站根目录取预渲染的结果，而文件发布在前缀下，否则在 base 下的首次加载仍然正常，但站内导航会失败。它是站点自己的中间件，升级这个包时不需要另行处理。
 - 页面中的依赖片段写成 `hanafubuki-agent = "0.11"` 这样的形式，`cargo xtask version` 会在用户写的要求变化时更新它们。
 
 ## CI [#ci]

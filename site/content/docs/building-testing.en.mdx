@@ -172,7 +172,7 @@ bun run format:check:site
 - Pages live in `site/content/docs/`: each page is `x.mdx` (Simplified Chinese, the default) plus `x.en.mdx` (English), with `title`, `description` and `icon` (a lucide icon name) in the frontmatter. `meta.json` and `meta.en.json` list the same pages in the same order, which `i18n-content.test.ts` checks.
 - prettier formats MDX (tables, wrapping) but not Markdown (`.prettierignore` leaves out `**/*.md`).
 - After a build, check that every page was prerendered.
-- `patches/` holds a Bun patch of `@tanstack/start-static-server-functions`, which fetches its prerendered results from the origin root; the patch prefixes Vite's base. Bumping that package means regenerating the patch (`bun patch`): without it, first loads under the base still work but client-side navigation fails.
+- `site/src/lib/static-fn-cache.ts` puts Vite's base in front of the `/__tsr/` requests `@tanstack/start-static-server-functions` makes: the package asks the origin root for its prerendered results while the files are published under the prefix, so without it first loads under the base work but client-side navigation fails. It is the site's own middleware, so bumping that package needs nothing else.
 - Dependency snippets in the pages are written as `hanafubuki-agent = "0.11"`, which `cargo xtask version` keeps current when the requirement users write changes.
 
 ## CI [#ci]

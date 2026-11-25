@@ -204,11 +204,12 @@ once the work is complete).
   `bun run format:site` formats `site/` and the root `package.json` and
   `.prettierrc.json` with prettier. Markdown is not formatted
   (`.prettierignore`).
-- `patches/` holds a Bun patch of `@tanstack/start-static-server-functions`,
-  which fetches its prerendered results from the origin root; the patch
-  prefixes Vite's base. Bumping that package means regenerating the patch
-  (`bun patch`): without it, first loads under the base still work but
-  client-side navigation fails.
+- `site/src/lib/static-fn-cache.ts` puts Vite's base in front of the
+  `/__tsr/` requests `@tanstack/start-static-server-functions` makes: the
+  package asks the origin root for its prerendered results while the files
+  are published under the prefix, so without it first loads under the base
+  work but client-side navigation fails. It is the site's own middleware,
+  so bumping that package needs nothing else.
 - `.github/workflows/site.yml` checks and builds the site; `ci.yml` ignores
   the site's paths.
 
