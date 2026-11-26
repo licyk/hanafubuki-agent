@@ -56,6 +56,7 @@ cargo test --workspace --all-features
 另外还有：
 
 - `cargo xtask module-size-report [--top N]`：列出最大的文件和函数。
+- `cargo xtask update [--dry-run]` 把依赖升到 `Cargo.toml` 允许的最新版本，`cargo xtask lock [--dry-run]` 只按清单重写 `Cargo.lock`、不升级已锁定的版本。两者都不改版本要求；`--dry-run` 只打印会发生的变更。
 - `cargo xtask version` 与 `cargo xtask tag`：发布用，见[发布](/docs/releasing)。
 
 ## 测试 [#tests]

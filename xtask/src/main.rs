@@ -3,6 +3,7 @@
 mod cli;
 mod config_reference;
 mod dependencies;
+mod deps;
 mod git;
 mod locks;
 mod model_api_context;
@@ -68,6 +69,8 @@ fn run(root: &Path, task: Task) -> Result<(), String> {
         ),
         Task::WelcomePreview { input, output } => welcome::preview(&input, &output),
         Task::Tag(options) => tag::run(root, &options),
+        Task::Update(options) => deps::update(root, &options),
+        Task::Lock(options) => deps::lock(root, &options),
     }
 }
 

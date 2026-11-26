@@ -56,6 +56,7 @@ Commands and arguments are declared with Clap derives in `xtask/src/cli.rs` and 
 Besides:
 
 - `cargo xtask module-size-report [--top N]` lists the largest files and functions.
+- `cargo xtask update [--dry-run]` moves every dependency to the newest version `Cargo.toml` allows, and `cargo xtask lock [--dry-run]` rewrites `Cargo.lock` from the manifests without upgrading what is already locked. Neither changes a requirement; a dry run prints what would change.
 - `cargo xtask version` and `cargo xtask tag` are for releases: [Releasing](/docs/releasing).
 
 ## Tests [#tests]

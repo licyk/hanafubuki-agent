@@ -124,3 +124,18 @@ fn parsed_preview_paths_reach_the_real_command_handler() {
     let svg = std::fs::read_to_string(output).unwrap();
     assert!(svg.contains("#010203") && svg.contains(">X</text>"));
 }
+#[test]
+fn parses_the_lockfile_tasks_into_typed_options() {
+    let Task::Update(options) = Cli::try_parse_from(["xtask", "update", "--dry-run"])
+        .unwrap()
+        .task
+    else {
+        panic!("expected update")
+    };
+    assert!(options.dry_run);
+
+    let Task::Lock(options) = Cli::try_parse_from(["xtask", "lock"]).unwrap().task else {
+        panic!("expected lock")
+    };
+    assert!(!options.dry_run);
+}

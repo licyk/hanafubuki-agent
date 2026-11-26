@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-use crate::{tag, version};
+use crate::{deps, tag, version};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -68,6 +68,10 @@ pub(crate) enum Task {
     Version(version::Options),
     /// Create an annotated tag on HEAD (default: v<workspace version>).
     Tag(tag::Options),
+    /// Upgrade Cargo.lock to the newest versions the manifests allow.
+    Update(deps::Options),
+    /// Rewrite Cargo.lock from the manifests without upgrading locked versions.
+    Lock(deps::Options),
 }
 
 #[cfg(test)]

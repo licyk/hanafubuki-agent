@@ -253,7 +253,10 @@ macOS.
 requirement (and dependency snippets in `README.md` and the site's
 `.mdx` pages when the requirement users write changes), then refreshes `Cargo.lock`. Commit the
 result; `cargo xtask tag [--push] [--dry-run]` then makes the annotated
-`v<version>` tag on a clean `HEAD`. The tag starts `release.yml`
+`v<version>` tag on a clean `HEAD`. `cargo xtask update [--dry-run]` moves
+every dependency to the newest version `Cargo.toml` allows; `cargo xtask lock
+[--dry-run]` rewrites `Cargo.lock` from the manifests without upgrading what is
+already locked. The tag starts `release.yml`
 (crates.io, the binaries, the GitHub release); the checklist, the first
 release's crates.io rate limit and how to resume a stopped release are in
 [Releasing](site/content/docs/releasing.en.mdx). `about.toml` lists the licenses the
