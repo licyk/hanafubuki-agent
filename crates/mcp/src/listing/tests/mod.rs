@@ -99,22 +99,23 @@ fn a_page_that_is_not_a_page_still_fails_as_a_whole() {
     }
 }
 
-/// rmcp's `ServerResult` is untagged and tries `CallToolResult` before its
-/// custom fallback; `CallToolResult` accepts any object with `_meta`, so a
-/// page carrying `_meta` and an undecodable entry reaches the client as a
-/// tool result and its entries are already gone. Such a page still fails as
-/// a whole; this pins the rmcp behavior the per-entry decoding cannot reach.
+/// rmcp's `ServerResult` is untagged; a page carrying `_meta` used to be
+/// taken as a `CallToolResult`, which swallowed its entries. Since rmcp 3.12
+/// it is kept as its raw object, so the page reaches the per-entry decoding:
+/// the good entry is used and the undecodable one is reported.
 #[test]
-fn rmcp_decodes_a_page_with_meta_and_a_bad_entry_as_a_tool_result() {
+fn rmcp_keeps_a_page_with_meta_for_the_per_entry_decoding() {
     let result = server_result(json!({
         "tools": [tool("good"), {"name": "bad", "inputSchema": 1}],
         "_meta": {"vendor": true},
     }));
-    assert!(matches!(result, ServerResult::CallToolResult(_)));
-    assert!(matches!(
-        decode_page::<ListTools>(result, 0),
-        Err(McpError::Protocol(_))
-    ));
+    assert!(
+        matches!(result, ServerResult::CustomResult(_)),
+        "{result:?}"
+    );
+    let page = decode_page::<ListTools>(result, 0).unwrap();
+    assert_eq!(page.items.len(), 1);
+    assert_eq!(page.undecodable, ["bad"]);
 }
 
 #[test]

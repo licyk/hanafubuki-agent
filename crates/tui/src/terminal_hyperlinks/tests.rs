@@ -334,16 +334,18 @@ fn prefixes_and_appends_move_the_links() {
 #[test]
 fn marked_cells_keep_their_width_for_the_diff() {
     let destination = "https://example.com/dakuten";
-    let area = Rect::new(0, 0, 7, 1);
-    let previous = Buffer::with_lines(["       "]);
+    let area = Rect::new(0, 0, 8, 1);
+    let previous = Buffer::with_lines(["        "]);
     let mut next = Buffer::empty(area);
     next.set_string(0, 0, "ｶﾞ tail", Style::default().underlined());
-    mark_hyperlink_cells(&mut next, Rect::new(0, 0, 2, 1), destination);
+    mark_hyperlink_cells(&mut next, Rect::new(0, 0, 3, 1), destination);
 
-    assert_eq!(next[(0, 0)].cell_width(), 2);
+    // `ｶﾞ` is three columns: the halfwidth sound mark is one of them since
+    // `unicode-width` 0.2.3.
+    assert_eq!(next[(0, 0)].cell_width(), 3);
     assert!(matches!(
         next[(0, 0)].diff_option,
-        CellDiffOption::ForcedWidth(width) if width == NonZeroU16::new(2).unwrap()
+        CellDiffOption::ForcedWidth(width) if width == NonZeroU16::new(3).unwrap()
     ));
     assert_eq!(osc8_parts(next[(0, 0)].symbol()), Some((destination, "ｶﾞ")));
     assert_eq!(
@@ -358,11 +360,11 @@ fn marked_cells_keep_their_width_for_the_diff() {
             .collect::<Vec<_>>(),
         vec![
             (0, "ｶﾞ".to_string()),
-            (2, " ".to_string()),
-            (3, "t".to_string()),
-            (4, "a".to_string()),
-            (5, "i".to_string()),
-            (6, "l".to_string()),
+            (3, " ".to_string()),
+            (4, "t".to_string()),
+            (5, "a".to_string()),
+            (6, "i".to_string()),
+            (7, "l".to_string()),
         ]
     );
 }

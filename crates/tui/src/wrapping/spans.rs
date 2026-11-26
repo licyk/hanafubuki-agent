@@ -12,14 +12,11 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthStr;
 
-/// The columns `text` takes as ratatui draws it: Unicode's width, with the
-/// halfwidth sound marks (`ﾞ`, `ﾟ`) a column each, as ratatui gives them.
+/// The columns `text` takes as ratatui draws it: Unicode's width, in which
+/// the halfwidth sound marks (`ﾞ`, `ﾟ`) a column each since `unicode-width`
+/// 0.2.3 (before it, ratatui alone counted them).
 pub(crate) fn display_width(text: &str) -> usize {
     UnicodeWidthStr::width(text)
-        + text
-            .chars()
-            .filter(|ch| matches!(ch, '\u{FF9E}' | '\u{FF9F}'))
-            .count()
 }
 
 /// The columns a line takes as ratatui paints it, a grapheme at a time.
