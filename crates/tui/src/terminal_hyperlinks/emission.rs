@@ -10,10 +10,10 @@ use std::num::NonZeroU16;
 use ratatui::buffer::{Buffer, CellDiffOption, CellWidth};
 use ratatui::layout::Rect;
 use ratatui::style::Style;
-use ratatui::text::Span;
+use ratatui::text::{Line, Span};
 use unicode_segmentation::UnicodeSegmentation;
 
-use super::HyperlinkLine;
+use super::{HyperlinkLine, TerminalHyperlink};
 use crate::wrapping::display_width;
 
 pub(crate) const OSC8_CLOSE: &str = "\x1b]8;;\x07";
@@ -115,6 +115,83 @@ pub(crate) fn mark_hyperlink_cells(buf: &mut Buffer, row: Rect, destination: &st
 }
 
 /// The destination and the visible symbol of a linked cell's symbol.
+/// The destination and the visible symbol of a linked cell's symbol.
+/// Paints one row of a line, a grapheme at a time, so every grapheme takes
+/// the columns [`display_width`] gives it in one cell that says so
+/// (`ForcedWidth`).
+///
+/// ratatui's own `set_line` measures a grapheme by `CellWidth`, which counts a
+/// halfwidth sound mark twice under `unicode-width` 0.2.3 (as the mark's own
+/// column and as ratatui's compensation for when it had none), and then blanks
+/// the cells after it — the row and its links would disagree about where each
+/// character sits. Painted here, the layout, the links and the terminal agree.
+fn paint(
+    buf: &mut Buffer,
+    x: u16,
+    y: u16,
+    line: &Line<'_>,
+    max_width: u16,
+    hyperlinks: &[TerminalHyperlink],
+) {
+    let right = (x.saturating_add(max_width)).min(buf.area.right());
+    let mut column = 0usize;
+    let mut link_index = 0usize;
+    for span in line {
+        let style = line.style.patch(span.style);
+        for grapheme in span.content.graphemes(true) {
+            let width = display_width(grapheme);
+            let start = column;
+            column += width;
+            if width == 0 || grapheme.contains(char::is_control) {
+                continue;
+            }
+            let at = x.saturating_add(u16::try_from(start).unwrap_or(u16::MAX));
+            if at >= right {
+                return;
+            }
+            while hyperlinks
+                .get(link_index)
+                .is_some_and(|link| link.columns.end <= start)
+            {
+                link_index += 1;
+            }
+            let cell = &mut buf[(at, y)];
+            cell.set_symbol(grapheme).set_style(style);
+            if let Some(link) = hyperlinks.get(link_index) {
+                if link.columns.contains(&start) && is_terminal_destination(&link.destination) {
+                    let symbol = format!(
+                        "{}{}{OSC8_CLOSE}",
+                        osc8_open(&link.destination),
+                        cell.symbol()
+                    );
+                    cell.set_symbol(&symbol);
+                }
+            }
+            cell.set_diff_option(CellDiffOption::ForcedWidth(
+                NonZeroU16::new(u16::try_from(width).unwrap_or(u16::MAX))
+                    .unwrap_or(NonZeroU16::MIN),
+            ));
+        }
+    }
+}
+
+/// Paints one row of a line as [`paint`] does, with its links.
+pub(crate) fn paint_row(
+    buf: &mut Buffer,
+    x: u16,
+    y: u16,
+    line: &Line<'_>,
+    max_width: u16,
+    hyperlinks: &[TerminalHyperlink],
+) {
+    paint(buf, x, y, line, max_width, hyperlinks);
+}
+
+/// Paints one row of a line that carries no links of its own, so that the
+/// columns a grapheme takes are the same everywhere on screen.
+pub(crate) fn paint_line(buf: &mut Buffer, x: u16, y: u16, line: &Line<'_>, max_width: u16) {
+    paint(buf, x, y, line, max_width, &[]);
+}
 pub(crate) fn osc8_parts(symbol: &str) -> Option<(&str, &str)> {
     let rest = symbol.strip_prefix("\x1b]8;;")?;
     let (destination, rest) = rest.split_once('\x07')?;

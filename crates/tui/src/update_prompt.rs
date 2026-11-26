@@ -29,7 +29,7 @@ use crate::key_hint;
 use crate::render::renderable::{Renderable, RenderableExt, RenderableItem};
 use crate::render::{Insets, RectExt};
 use crate::style::accent_color;
-use crate::terminal_hyperlinks::{mark_hyperlink_cells, web_destination};
+use crate::terminal_hyperlinks::{mark_hyperlink_cells, paint_line, web_destination};
 use crate::tui::{self, InputReader, RestoreOnDrop, Tui};
 use crate::wrapping::{word_wrap_lines, RtOptions};
 
@@ -381,7 +381,7 @@ impl Renderable for OptionList<'_> {
         let lines: Vec<&Line> = rows[first..].iter().flatten().collect();
         let shown = lines.len().min(usize::from(body.height));
         for (y, line) in (body.y..).zip(&lines[..shown]) {
-            buf.set_line(body.x, y, line, body.width);
+            paint_line(buf, body.x, y, line, body.width);
         }
         let hidden_below = shown < lines.len();
         if spaced {

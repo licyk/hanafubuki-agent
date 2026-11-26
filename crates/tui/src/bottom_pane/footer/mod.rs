@@ -28,6 +28,7 @@ use crate::key_hint;
 use crate::key_hint::KeyBinding;
 use crate::keymap::{self, Action};
 use crate::render::line_utils::prefix_lines;
+use crate::terminal_hyperlinks::paint_line;
 use crate::ui_consts::FOOTER_INDENT_COLS;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::KeyCode;
@@ -172,7 +173,7 @@ pub(crate) fn render_footer(area: Rect, buf: &mut Buffer, props: FooterProps<'_>
             ..area
         };
         if let Some(status) = props.status_line {
-            buf.set_line(area.x, area.y, status, area.width);
+            paint_line(buf, area.x, area.y, status, area.width);
             area.y = area.y.saturating_add(1);
             area.height = area.height.saturating_sub(1);
         }
@@ -344,8 +345,8 @@ fn goal_line(props: FooterProps<'_>) -> Option<Line<'static>> {
 fn render_footer_row(area: Rect, buf: &mut Buffer, left: Line<'static>, right: Line<'static>) {
     let right_width = right.width().min(usize::from(area.width)) as u16;
     let left_width = area.width.saturating_sub(right_width).saturating_sub(2);
-    buf.set_line(area.x, area.y, &left, left_width);
-    buf.set_line(area.right() - right_width, area.y, &right, right_width);
+    paint_line(buf, area.x, area.y, &left, left_width);
+    paint_line(buf, area.right() - right_width, area.y, &right, right_width);
 }
 
 impl super::BottomPane {

@@ -19,7 +19,7 @@ use unicode_segmentation::UnicodeSegmentation;
 use url::Url;
 
 pub(crate) use emission::{
-    decorate_spans, mark_hyperlink_cells, osc8_open, osc8_parts, OSC8_CLOSE,
+    decorate_spans, mark_hyperlink_cells, osc8_open, osc8_parts, paint_line, paint_row, OSC8_CLOSE,
 };
 
 use crate::render::line_utils::line_to_static;

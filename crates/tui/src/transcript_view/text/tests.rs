@@ -249,3 +249,34 @@ fn a_row_line_carries_its_links_after_its_indent() {
     assert_eq!(row.line.to_string(), "      docs");
     assert_eq!(row.hyperlinks[0].columns, 6..10);
 }
+
+/// `unicode-width` gives a halfwidth sound mark a column of its own, so a
+/// kana with one is two columns and the text after it starts there — not a
+/// cell further, as ratatui's own measurement of the grapheme would put it.
+#[test]
+fn a_halfwidth_sound_mark_takes_the_single_column_it_is_drawn_in() {
+    let destination = "https://example.com/kana";
+    let mut line = HyperlinkLine::new(Line::from("a "));
+    line.push_span("ｶﾞb".into(), Some(destination));
+    let layout = TextLayout::linked(vec![line], 12);
+    let buffer = painted(&layout, Rect::new(0, 0, 12, 1), 0);
+    // Cells under a wide grapheme's columns are blank, as in any buffer.
+    let row = (0..12)
+        .map(|x| {
+            let symbol = buffer[(x, 0)].symbol();
+            match osc8_parts(symbol) {
+                Some((_, visible)) if x == 2 => visible.to_string(),
+                Some((_, visible)) => visible.chars().next().unwrap_or(' ').to_string(),
+                None => symbol.to_string(),
+            }
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        row,
+        vec!["a", " ", "ｶﾞ", " ", "b", " ", " ", " ", " ", " ", " ", " "]
+    );
+    assert_eq!(
+        osc8_parts(buffer[(4, 0)].symbol()),
+        Some((destination, "b"))
+    );
+}

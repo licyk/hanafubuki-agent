@@ -25,7 +25,7 @@ use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 use crate::terminal_hyperlinks::{
-    mark_hyperlink_cells, plain_hyperlink_lines, HyperlinkLine, TerminalHyperlink,
+    paint_row, plain_hyperlink_lines, HyperlinkLine, TerminalHyperlink,
 };
 use wrap::{expand_tabs, wrap_line};
 
@@ -218,16 +218,10 @@ impl TextLayout {
             buf.set_style(Rect::new(area.x, y, area.width, 1), row.line.style);
             let x = area.x + row.first_column as u16;
             let width = area.width.saturating_sub(row.first_column as u16);
-            buf.set_line(x, y, &row.line, width);
-            for link in &row.hyperlinks {
-                let start = link.columns.start.min(usize::from(width)) as u16;
-                let end = link.columns.end.min(usize::from(width)) as u16;
-                mark_hyperlink_cells(
-                    buf,
-                    Rect::new(x + start, y, end.saturating_sub(start), 1),
-                    &link.destination,
-                );
-            }
+            // A character at a time, so a row's columns are the ones the
+            // layout and its links were measured in whatever ratatui makes of
+            // a grapheme's width.
+            paint_row(buf, x, y, &row.line, width, &row.hyperlinks);
         }
     }
 
