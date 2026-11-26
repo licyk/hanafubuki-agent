@@ -72,12 +72,16 @@ impl SkillService {
             crate::system::synchronize_system_skills(&roots.system)?;
         }
         ensure_directory(&roots.user, "the managed Skill root")?;
+        // A managed root that is a link is served by the directory it names, so
+        // a package directory shared with another tool's catalog — its skills
+        // directory, through a link — is read as it is.
+        let user = crate::fs_util::link_target(&roots.user).unwrap_or_else(|| roots.user.clone());
         if let Some(parent) = roots.state_file.parent() {
             ensure_directory(parent, "the Skill state directory")?;
         }
         let service = Self {
             inner: Arc::new(Inner {
-                roots,
+                roots: SkillRoots { user, ..roots },
                 repo: RwLock::new(Vec::new()),
                 plugins: RwLock::new(Vec::new()),
                 mutation: Mutex::new(()),

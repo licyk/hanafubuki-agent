@@ -1,6 +1,6 @@
 //! Reading a Skill and the files it ships.
 
-use crate::discovery::{resource_kind, SKILL_FILE};
+use crate::discovery::{manifest_path, resource_kind};
 use crate::fs_util::{ensure_below, normalize_relative, read_bounded};
 use crate::model::{
     SkillAssetRead, SkillError, SkillFileRead, SkillId, SkillRead, SkillResourceKind,
@@ -82,7 +82,9 @@ impl SkillService {
     fn resource_bytes(&self, id: &SkillId, path: &str) -> Result<(String, Vec<u8>), SkillError> {
         let skill = self.loaded(id)?;
         let path = normalize_relative(path)?;
-        let known = path == SKILL_FILE
+        let manifest = manifest_path(&skill.directory)
+            .is_some_and(|manifest| manifest == skill.directory.join(&path));
+        let known = manifest
             || skill
                 .entry
                 .resources
@@ -93,7 +95,9 @@ impl SkillService {
         }
         let absolute = skill.directory.join(&path);
         ensure_below(&skill.directory, &absolute)?;
-        let bytes = read_bounded(&absolute, MAX_RESOURCE_READ_BYTES)?;
+        // A resource past the bound is cut, not refused: a research suite's
+        // reference can be larger, and the model pages through it.
+        let (bytes, _) = read_bounded(&absolute, MAX_RESOURCE_READ_BYTES)?;
         Ok((path, bytes))
     }
 }

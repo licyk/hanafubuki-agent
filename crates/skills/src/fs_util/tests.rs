@@ -23,12 +23,20 @@ fn a_relative_path_is_normalized_or_refused() {
 }
 
 #[test]
-fn collecting_files_skips_hidden_entries_and_reports_them_nowhere() {
+fn collecting_files_lists_the_package_and_leaves_out_hidden_entries() {
     let temporary = tempfile::tempdir().unwrap();
     let root = temporary.path();
     std::fs::create_dir_all(root.join("references")).unwrap();
+    std::fs::create_dir_all(root.join("scripts")).unwrap();
+    std::fs::create_dir_all(root.join("agents")).unwrap();
+    std::fs::create_dir_all(root.join("ars/shared")).unwrap();
+    std::fs::create_dir_all(root.join("ars/~test/evals")).unwrap();
     std::fs::write(root.join("SKILL.md"), "body").unwrap();
     std::fs::write(root.join("references/api.md"), "reference").unwrap();
+    std::fs::write(root.join("scripts/run.py"), "print()").unwrap();
+    std::fs::write(root.join("agents/openai.yaml"), "interface: {}").unwrap();
+    std::fs::write(root.join("ars/shared/WORKFLOW.md"), "workflow").unwrap();
+    std::fs::write(root.join("ars/~test/evals/run.json"), "{}").unwrap();
     std::fs::write(root.join(".DS_Store"), "junk").unwrap();
     std::fs::create_dir_all(root.join(".git")).unwrap();
     std::fs::write(root.join(".git/config"), "junk").unwrap();
@@ -37,10 +45,46 @@ fn collecting_files_skips_hidden_entries_and_reports_them_nowhere() {
     assert_eq!(
         files
             .iter()
-            .map(|file| file.relative_path.as_str())
+            .map(|file| (file.relative_path.as_str(), file.kind))
             .collect::<Vec<_>>(),
-        vec!["SKILL.md", "references/api.md"]
+        vec![
+            ("SKILL.md", crate::model::SkillResourceKind::Reference),
+            ("agents/openai.yaml", crate::model::SkillResourceKind::Asset),
+            (
+                "ars/shared/WORKFLOW.md",
+                crate::model::SkillResourceKind::Reference
+            ),
+            (
+                "ars/~test/evals/run.json",
+                crate::model::SkillResourceKind::Asset
+            ),
+            (
+                "references/api.md",
+                crate::model::SkillResourceKind::Reference
+            ),
+            ("scripts/run.py", crate::model::SkillResourceKind::Script),
+        ]
     );
+}
+
+/// A package far past the catalog's bound is refused where it is *written* —
+/// installing or duplicating it — and never silently cut down to fit. Discovery
+/// itself applies no such bound: what a package already ships is its business.
+#[test]
+fn a_package_past_the_bound_is_refused_rather_than_truncated() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path();
+    std::fs::create_dir_all(root.join("ars/scripts")).unwrap();
+    for index in 0..(crate::model::MAX_SKILL_FILES + 10) {
+        std::fs::write(root.join(format!("ars/scripts/check-{index:05}.py")), "x").unwrap();
+    }
+
+    match collect_files(root) {
+        Err(crate::model::SkillError::LimitExceeded(message)) => println!("{message}"),
+        Err(other) => panic!("unexpected error: {other}"),
+        Ok(files) => panic!("listed {} files", files.len()),
+    }
+    assert!(copy_tree(root, &temporary.path().join("copy")).is_err());
 }
 
 #[test]

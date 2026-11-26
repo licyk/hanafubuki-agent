@@ -141,6 +141,7 @@ fn the_ordinary_furniture_of_a_package_loads() {
         vec![
             "LICENSE.txt",
             "README.md",
+            "SKILL.md",
             "agents/openai.yaml",
             "assets/logo.svg",
             "references/api.md",
@@ -179,6 +180,15 @@ fn real_packages_load_completely() {
         eprintln!("warning: {}: {}", warning.path, warning.message);
     }
     assert_eq!(snapshot.entries.len(), expected);
+    for entry in &snapshot.entries {
+        eprintln!(
+            "{} ({}): {} resources, {} bytes of instructions",
+            entry.id,
+            entry.display_name(),
+            entry.resources.len(),
+            entry.description.len()
+        );
+    }
 
     let catalog = fixture.service.turn_catalog().unwrap();
     assert_eq!(catalog.entries.len(), expected);

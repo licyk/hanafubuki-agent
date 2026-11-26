@@ -102,7 +102,12 @@ async fn skill_resource_tool_rechecks_the_frozen_exact_resource_and_returns_a_sa
     let entry = skills.list().unwrap().entries.remove(0);
     skills.enable(&entry.id).unwrap();
     let snapshot = skills.turn_catalog().unwrap();
-    let resource = snapshot.entries[0].resources[0].clone();
+    let resource = snapshot.entries[0]
+        .resources
+        .iter()
+        .find(|resource| resource.path == "references/guide.md")
+        .unwrap()
+        .clone();
     let call = json!({ "skill": snapshot.entries[0].id, "path": resource.path });
     let mounted = MountedSkills::mount(&skills).await;
     let output = mounted

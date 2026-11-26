@@ -3,13 +3,13 @@
 #[cfg(unix)]
 use std::fs::File;
 use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::io::{Read as _, Write as _};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use hanafubuki_agent_foundation::paths::{PathKey, ResolvedPath};
 
-use crate::model::{SkillError, MAX_SKILL_FILES};
+use crate::model::{SkillError, SkillResourceKind, MAX_SKILL_FILES};
 
 /// How deep a Skill directory may nest.
 pub(crate) const MAX_DIRECTORY_DEPTH: usize = 8;
@@ -105,12 +105,21 @@ pub(crate) struct DiscoveredFile {
     pub(crate) relative_path: String,
     pub(crate) path: PathBuf,
     pub(crate) size: u64,
+    pub(crate) kind: SkillResourceKind,
 }
 
-/// Every regular file under `root`, sorted by relative path. Symlinks, hidden
-/// entries, and anything that is neither a file nor a directory are skipped
-/// rather than fatal: a stray `.DS_Store` or an editor's socket must not stop a
-/// package from loading.
+/// Files under `root` a model would read, sorted by relative path: the
+/// `document` and everything a Skill ships beside it.
+///
+/// The document is always listed even when it is named in lowercase, so a
+/// package copied here loads and reads back exactly as it did elsewhere.
+/// Symlinks, hidden entries, and anything that is neither a file nor a
+/// directory are skipped rather than fatal: a stray `.DS_Store` or an editor's
+/// socket must not stop a package from loading. A package may carry much more
+/// than it instructs — a wrapped research suite's fixtures, evaluation runs and
+/// vendored sources — so what it lists is bounded by [`MAX_SKILL_FILES`] for
+/// anything installed or duplicated through the catalog, and refused there
+/// rather than silently truncated.
 ///
 /// A file's size is recorded but never judged. Real packages ship multi-megabyte
 /// templates and reference documents — `openai-templates` ships a `.pptx` larger
@@ -119,9 +128,48 @@ pub(crate) struct DiscoveredFile {
 /// inline. What may be *read* is bounded where the read happens.
 pub(crate) fn collect_files(root: &Path) -> Result<Vec<DiscoveredFile>, SkillError> {
     let mut files = Vec::new();
+    if let Some(manifest) = crate::discovery::manifest_path(root) {
+        push_file(root, manifest, &mut files)?;
+    }
     collect_into(root, root, 0, &mut files)?;
     files.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+    files.dedup_by(|left, right| left.relative_path == right.relative_path);
+    if files.len() > MAX_SKILL_FILES {
+        // Discovery never applies this: what a package ships is the package's
+        // business. A managed Skill is what an install or a duplication carries,
+        // and that is where a listing this large stops being a Skill package.
+        return Err(SkillError::LimitExceeded(format!(
+            "a Skill to install or duplicate may hold at most {MAX_SKILL_FILES} files, found {}",
+            files.len()
+        )));
+    }
     Ok(files)
+}
+
+/// The size of a regular file, or `None` for a directory, a symlink, or
+/// anything that cannot be inspected.
+fn regular_file_size(path: &Path) -> Option<u64> {
+    let metadata = fs::symlink_metadata(path).ok()?;
+    (!metadata.file_type().is_symlink() && metadata.is_file()).then_some(metadata.len())
+}
+
+/// Record one file.
+fn push_file(
+    root: &Path,
+    path: PathBuf,
+    output: &mut Vec<DiscoveredFile>,
+) -> Result<(), SkillError> {
+    let Some(size) = regular_file_size(&path) else {
+        return Ok(());
+    };
+    let relative_path = relative_from(root, &path)?;
+    output.push(DiscoveredFile {
+        kind: crate::discovery::resource_kind(&relative_path),
+        relative_path,
+        path,
+        size,
+    });
+    Ok(())
 }
 
 fn collect_into(
@@ -135,10 +183,10 @@ fn collect_into(
             "a Skill directory may nest at most {MAX_DIRECTORY_DEPTH} levels"
         )));
     }
-    let mut entries = fs::read_dir(directory)
-        .map_err(|error| SkillError::Io(format!("read {}: {error}", native_text(directory))))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| SkillError::Io(format!("read {}: {error}", native_text(directory))))?;
+    let Ok(entries) = fs::read_dir(directory) else {
+        return Ok(());
+    };
+    let mut entries = entries.collect::<Result<Vec<_>, _>>().unwrap_or_default();
     entries.sort_by_key(std::fs::DirEntry::file_name);
     for entry in entries {
         let path = entry.path();
@@ -155,22 +203,14 @@ fn collect_into(
         if metadata.is_dir() {
             collect_into(root, &path, depth.saturating_add(1), output)?;
         } else if metadata.is_file() {
-            output.push(DiscoveredFile {
-                relative_path: relative_from(root, &path)?,
-                path,
-                size: metadata.len(),
-            });
-            if output.len() > MAX_SKILL_FILES {
-                return Err(SkillError::LimitExceeded(format!(
-                    "a Skill supports at most {MAX_SKILL_FILES} files"
-                )));
-            }
+            push_file(root, path, output)?;
         }
     }
     Ok(())
 }
 
-pub(crate) fn read_bounded(path: &Path, maximum: u64) -> Result<Vec<u8>, SkillError> {
+/// The first `maximum` bytes of a regular file, and whether it is longer.
+pub(crate) fn read_bounded(path: &Path, maximum: u64) -> Result<(Vec<u8>, bool), SkillError> {
     let metadata = fs::symlink_metadata(path)
         .map_err(|error| SkillError::Io(format!("inspect {}: {error}", native_text(path))))?;
     if metadata.file_type().is_symlink() || !metadata.is_file() {
@@ -179,25 +219,39 @@ pub(crate) fn read_bounded(path: &Path, maximum: u64) -> Result<Vec<u8>, SkillEr
             native_text(path)
         )));
     }
-    if metadata.len() > maximum {
-        return Err(SkillError::LimitExceeded(format!(
-            "{} exceeds {maximum} bytes",
-            native_text(path)
-        )));
-    }
-    fs::read(path).map_err(|error| SkillError::Io(format!("read {}: {error}", native_text(path))))
+    let mut bytes = Vec::new();
+    File::open(path)
+        .and_then(|file| file.take(maximum.saturating_add(1)).read_to_end(&mut bytes))
+        .map_err(|error| SkillError::Io(format!("read {}: {error}", native_text(path))))?;
+    let truncated = bytes.len() as u64 > maximum;
+    bytes.truncate(maximum as usize);
+    Ok((bytes, truncated))
 }
 
 pub(crate) fn ensure_directory(path: &Path, label: &str) -> Result<(), SkillError> {
     fs::create_dir_all(path).map_err(|error| SkillError::Io(format!("create {label}: {error}")))?;
-    let metadata = fs::symlink_metadata(path)
-        .map_err(|error| SkillError::Io(format!("inspect {label}: {error}")))?;
-    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+    if !path.is_dir() {
         return Err(SkillError::InvalidPath(format!(
-            "{label} must be a non-symlink directory"
+            "{label} must be a directory"
         )));
     }
     Ok(())
+}
+
+/// The directory a managed root that is a link names.
+///
+/// A user root linked to another tool's skills directory — a shared `skills/`
+/// folder, a checkout — is served as it is, the way that tool serves it. Only
+/// the root itself is followed: the files inside are still the Skill's own.
+pub(crate) fn link_target(path: &Path) -> Option<PathBuf> {
+    let metadata = fs::symlink_metadata(path).ok()?;
+    if !metadata.file_type().is_symlink() {
+        return None;
+    }
+    ResolvedPath::resolve(path)
+        .ok()
+        .map(|resolved| resolved.native().to_path_buf())
+        .filter(|target| target.is_dir())
 }
 
 pub(crate) fn write_new_file(path: &Path, bytes: &[u8]) -> Result<(), SkillError> {
@@ -248,8 +302,9 @@ pub(crate) fn atomic_write(path: &Path, bytes: &[u8], label: &str) -> Result<(),
     sync_directory(parent)
 }
 
-/// Copy a whole directory tree, skipping symlinks and hidden entries exactly as
-/// discovery does, so what is installed is what will be loaded.
+/// Copy what a Skill ships, exactly as the catalog lists it: the document, the
+/// interface file, and the package's files, with symlinks and hidden entries
+/// skipped so a copy never follows one out of the package.
 pub(crate) fn copy_tree(source: &Path, destination: &Path) -> Result<(), SkillError> {
     ensure_directory(destination, "Skill directory")?;
     for file in collect_files(source)? {

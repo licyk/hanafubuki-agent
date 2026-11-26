@@ -172,3 +172,47 @@ fn an_overlong_name_or_description_is_shortened_on_a_character_boundary() {
     // 2 + 3 * 1364 = 4094; one more character would pass the bound.
     assert_eq!(uneven.description.len(), 4094);
 }
+#[test]
+fn a_description_written_over_several_lines_is_read_whole() {
+    // A package copied from another tool keeps a dozen lines of trigger rules
+    // in a plain multi-line scalar. YAML folds the line breaks; the complete
+    // text is what the model decides from.
+    let parsed = parse(concat!(
+        "---\n",
+        "name: suite\n",
+        "description: >\n",
+        "  Research, academic writing and manuscript review.\n",
+        "  Use for literature reviews and paper drafts. Korean: 논문 심사.\n",
+        "  Role prompts live under ars/.\n",
+        "metadata:\n",
+        "  version: \"3.22.0\"\n",
+        "---\n",
+        "Body.\n",
+    ))
+    .unwrap();
+    assert_eq!(
+        parsed.description,
+        "Research, academic writing and manuscript review. \
+         Use for literature reviews and paper drafts. Korean: 논문 심사. \
+         Role prompts live under ars/."
+    );
+    assert_eq!(parsed.version.as_deref(), Some("3.22.0"));
+
+    // A plain scalar continues over its indented lines.
+    let plain =
+        parse("---\nname: suite\ndescription: First line\n  second line\n---\nB\n").unwrap();
+    assert_eq!(plain.description, "First line second line");
+}
+
+#[test]
+fn a_lowercase_manifest_is_a_skill_too() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().to_path_buf();
+    std::fs::create_dir_all(root.join("lower")).unwrap();
+    std::fs::write(
+        root.join("lower/skill.md"),
+        "---\nname: lower\ndescription: Lowercase manifest.\n---\nBody.\n",
+    )
+    .unwrap();
+    assert!(crate::discovery::manifest_path(&root.join("lower")).is_some());
+}

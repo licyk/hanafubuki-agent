@@ -356,7 +356,14 @@ fn only_a_managed_skill_can_be_written_or_deleted() {
             path: "references/new.md".to_string(),
         })
         .unwrap();
-    assert!(entry.resources.is_empty());
+    assert_eq!(
+        entry
+            .resources
+            .iter()
+            .map(|resource| resource.path.as_str())
+            .collect::<Vec<_>>(),
+        vec!["SKILL.md"]
+    );
 
     // SKILL.md is what makes the directory a Skill; removing it means removing
     // the Skill.
@@ -456,7 +463,7 @@ fn the_turn_catalog_carries_the_whole_document() {
     let entry = &catalog.entries[0];
     assert_eq!(entry.id.as_str(), "user:pdf");
     assert!(entry.document.contains("Body."));
-    assert_eq!(entry.resources.len(), 1);
+    assert_eq!(entry.resources.len(), 2);
 }
 
 #[test]

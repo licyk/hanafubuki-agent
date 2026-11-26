@@ -26,6 +26,10 @@ use crate::model::{
 use crate::parser::parse_skill;
 
 pub(crate) const SKILL_FILE: &str = "SKILL.md";
+/// A package written on a case-insensitive filesystem, or by hand, may name
+/// its manifest in lowercase. Codex accepts it, so a Skill copied from there
+/// loads here too.
+pub(crate) const SKILL_FILE_LOWERCASE: &str = "skill.md";
 /// A `SKILL.md` far larger than this is not instructions any more.
 pub(crate) const MAX_SKILL_MD_BYTES: u64 = 1024 * 1024;
 
@@ -113,17 +117,22 @@ pub(crate) fn load_skill(
     namespace: Option<&str>,
 ) -> Result<LoadedSkill, SkillError> {
     let id = SkillId::new(scope, relative)?;
-    let files = collect_files(directory)?;
-    let mut parsed = parse_skill(
-        &read_bounded(&directory.join(SKILL_FILE), MAX_SKILL_MD_BYTES)?,
-        id.folder_name(),
-    )?;
+    let manifest = manifest_path(directory).ok_or_else(|| {
+        SkillError::InvalidManifest(format!("{} holds no {SKILL_FILE}", native_text(directory)))
+    })?;
+    let (bytes, truncated) = read_bounded(&manifest, MAX_SKILL_MD_BYTES)?;
+    let mut parsed = parse_skill(&bytes, id.folder_name())?;
+    if truncated {
+        parsed.issues.push(format!(
+            "the document is longer than {MAX_SKILL_MD_BYTES} bytes; shortened"
+        ));
+        parsed.document = String::from_utf8_lossy(&bytes).trim().to_string();
+    }
+    let listed = collect_files(directory)?;
     let interface_path = directory.join("agents").join("openai.yaml");
-    let mut interface = interface_path
-        .is_file()
-        .then(|| read_bounded(&interface_path, MAX_INTERFACE_BYTES).ok())
-        .flatten()
-        .map(|bytes| parse_interface(&bytes))
+    let interface_bytes = read_bounded(&interface_path, MAX_INTERFACE_BYTES).ok();
+    let mut interface = interface_bytes
+        .map(|(bytes, _)| parse_interface(&bytes))
         .unwrap_or_default();
     if let Some(namespace) = namespace {
         parsed.name = format!("{namespace}:{}", parsed.name);
@@ -131,7 +140,7 @@ pub(crate) fn load_skill(
             *display_name = format!("{namespace}:{display_name}");
         }
     }
-    let skill_file = native_text(&directory.join(SKILL_FILE));
+    let skill_file = native_text(&manifest);
     let interface_file = native_text(&interface_path);
     let issues = parsed
         .issues
@@ -161,7 +170,7 @@ pub(crate) fn load_skill(
             editable: scope == SkillScope::User,
             enabled: true,
             availability: SkillAvailability::default(),
-            resources: resources(&files),
+            resources: resources(&listed),
             id,
         },
         directory: directory.to_path_buf(),
@@ -174,13 +183,26 @@ pub(crate) fn load_skill(
 fn resources(files: &[DiscoveredFile]) -> Vec<SkillResourceDescriptor> {
     files
         .iter()
-        .filter(|file| file.relative_path != SKILL_FILE)
         .map(|file| SkillResourceDescriptor {
-            kind: resource_kind(&file.relative_path),
+            kind: file.kind,
             path: file.relative_path.clone(),
             size: file.size,
         })
         .collect()
+}
+
+/// The directory's manifest: `SKILL.md`, or `skill.md` when that is the one
+/// present.
+pub(crate) fn manifest_path(directory: &Path) -> Option<PathBuf> {
+    [SKILL_FILE, SKILL_FILE_LOWERCASE]
+        .into_iter()
+        .map(|name| directory.join(name))
+        .find(|path| path.is_file())
+}
+
+/// Whether `directory` is a Skill package.
+fn is_skill(directory: &Path) -> bool {
+    manifest_path(directory).is_some()
 }
 
 pub(crate) fn resource_kind(path: &str) -> SkillResourceKind {
@@ -241,7 +263,7 @@ fn collect_skill_directories(
             continue;
         }
         let _ = metadata;
-        if path.join(SKILL_FILE).is_file() {
+        if is_skill(&path) {
             output.push(path);
             continue;
         }

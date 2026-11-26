@@ -11,21 +11,25 @@ const DOCUMENT: &str = "---\nname: demo\ndescription: Does a thing.\n---\nBody.\
 #[test]
 fn a_directory_holding_skill_md_is_a_skill() {
     let temporary = tempfile::tempdir().unwrap();
-    let root = temporary.path();
-    write(&root.join("demo/SKILL.md"), DOCUMENT);
+    let root = temporary.path().to_path_buf();
+    // The instructions name the licence, so it is part of what the Skill
+    // discloses even though it is not under a package part's directory.
+    write(
+        &root.join("demo/SKILL.md"),
+        "---\nname: demo\ndescription: Does a thing.\n---\n\nBody. Read `references/api.md` and `LICENSE.txt`.\n",
+    );
     write(&root.join("demo/references/api.md"), "reference");
     write(&root.join("demo/scripts/run.py"), "print()");
     write(&root.join("demo/LICENSE.txt"), "MIT");
-    write(&root.join("demo/logo.png"), "png");
+    write(&root.join("demo/assets/logo.png"), "png");
 
-    let scan = scan_root(root, SkillScope::User, None);
+    let scan = scan_root(&root, SkillScope::User, None);
     assert!(scan.issues.is_empty());
     assert_eq!(scan.skills.len(), 1);
     let skill = &scan.skills[0];
     assert_eq!(skill.entry.id.as_str(), "user:demo");
     assert_eq!(skill.entry.name, "demo");
-    // A licence, a readme, and a loose image are ordinary package contents. The
-    // previous allowlist refused the whole Skill for any of them.
+    // The parts of the package, plus the licence the instructions name.
     let paths = skill
         .entry
         .resources
@@ -36,7 +40,8 @@ fn a_directory_holding_skill_md_is_a_skill() {
         paths,
         vec![
             ("LICENSE.txt", SkillResourceKind::Asset),
-            ("logo.png", SkillResourceKind::Asset),
+            ("SKILL.md", SkillResourceKind::Reference),
+            ("assets/logo.png", SkillResourceKind::Asset),
             ("references/api.md", SkillResourceKind::Reference),
             ("scripts/run.py", SkillResourceKind::Script),
         ]
@@ -218,7 +223,15 @@ fn a_symlink_inside_a_skill_is_never_one_of_its_resources() {
 
     let scan = scan_root(&root, SkillScope::User, None);
     assert!(scan.issues.is_empty());
-    assert!(scan.skills[0].entry.resources.is_empty());
+    assert_eq!(
+        scan.skills[0]
+            .entry
+            .resources
+            .iter()
+            .map(|resource| resource.path.as_str())
+            .collect::<Vec<_>>(),
+        vec!["SKILL.md"]
+    );
 }
 
 #[test]

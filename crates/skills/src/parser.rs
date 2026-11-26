@@ -62,10 +62,19 @@ pub(crate) fn parse_skill(bytes: &[u8], default_name: &str) -> Result<ParsedSkil
             Some(repaired) => serde_yaml::from_str(&repaired).map_err(|_| original),
             None => Err(original),
         },
-    }
-    .map_err(|error| {
-        SkillError::InvalidManifest(format!("frontmatter is not valid YAML: {error}"))
-    })?;
+    };
+    let (parsed, repaired) = match parsed {
+        Ok(parsed) => (parsed, false),
+        Err(original) => match line_oriented_fields(&frontmatter) {
+            Some(fields) => (fields, true),
+            None => {
+                return Err(SkillError::InvalidManifest(format!(
+                    "frontmatter is not valid YAML: {original}"
+                )))
+            }
+        },
+    };
+    let parsed = parsed.with_description_kept_whole(&frontmatter);
     let Value::Mapping(fields) = parsed else {
         return Err(SkillError::InvalidManifest(format!(
             "frontmatter must be a mapping of keys, found {}",
@@ -73,6 +82,12 @@ pub(crate) fn parse_skill(bytes: &[u8], default_name: &str) -> Result<ParsedSkil
         )));
     };
     let mut issues = Vec::new();
+    if repaired {
+        issues.push(
+            "frontmatter is not valid YAML; name and description were read line by line"
+                .to_string(),
+        );
+    }
 
     let mut name = essential_string(&fields, "name")?
         .as_deref()
@@ -138,6 +153,86 @@ pub(crate) fn parse_skill(bytes: &[u8], default_name: &str) -> Result<ParsedSkil
         document: text.trim().to_string(),
         issues,
     })
+}
+
+/// Frontmatter read into a mapping without losing what YAML folds.
+trait KeptWhole {
+    fn with_description_kept_whole(self, frontmatter: &str) -> Self;
+}
+
+impl KeptWhole for Value {
+    /// YAML folds a plain, multi-line `description` into a single line, and a
+    /// third-party Skill's is often a dozen lines of trigger rules. The
+    /// mapping keeps that folded form for every key; the description the model
+    /// reads is taken from the field as written.
+    fn with_description_kept_whole(self, frontmatter: &str) -> Self {
+        let Value::Mapping(mut fields) = self else {
+            return self;
+        };
+        let folded = fields
+            .get(Value::String("description".to_string()))
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let Some(description) = folded else {
+            return Value::Mapping(fields);
+        };
+        let Some(written) = written_description(frontmatter) else {
+            return Value::Mapping(fields);
+        };
+        // A folded plain scalar keeps the line breaks it was written with, and
+        // stops folding at the first blank line; a block scalar's markers are
+        // not what the author meant to read.
+        let written = if written.trim_start().starts_with('|') {
+            single_line(&written)
+        } else {
+            let mut kept = String::new();
+            for line in written.lines() {
+                let line = line.trim();
+                if line.is_empty() {
+                    break;
+                }
+                if !kept.is_empty() && kept.len() < description.len() {
+                    kept.push(' ');
+                }
+                kept.push_str(line);
+            }
+            kept
+        };
+        if written.contains(&description) && written.len() > description.len() {
+            fields.insert(
+                Value::String("description".to_string()),
+                Value::String(written),
+            );
+        }
+        Value::Mapping(fields)
+    }
+}
+
+/// The `description` field as it is written, its continuation lines joined, or
+/// `None` when it is quoted and YAML's own value is what the author meant.
+fn written_description(frontmatter: &str) -> Option<String> {
+    let mut lines = frontmatter.lines();
+    let (_, value) = lines.by_ref().find_map(|line| match line.split_once(':') {
+        Some((key, value)) if key.trim() == "description" => Some((key, value)),
+        _ => None,
+    })?;
+    let value = value.trim();
+    if value.starts_with(['\'', '"']) {
+        return None;
+    }
+    let mut written = value.trim_start_matches('>').trim().to_string();
+    for line in lines {
+        if !(line.starts_with(' ') || line.starts_with('\t')) {
+            break;
+        }
+        // A plain scalar ends at a blank line; only a `>` or `|` block goes on.
+        if !value.starts_with(['>', '|']) && line.trim().is_empty() {
+            break;
+        }
+        written.push(' ');
+        written.push_str(line.trim());
+    }
+    Some(written)
 }
 
 /// `name` or `description`: absent is the caller's to decide, a string is the
@@ -291,6 +386,67 @@ fn split_trailing_comment(value: &str) -> (&str, &str) {
         }
     }
     (value, "")
+}
+
+/// The top-level `name` and `description` read from frontmatter YAML refuses
+/// whole — a stray tab, or a colon that makes a hand-written line a mapping.
+/// These two scalars are what makes a Skill selectable, so they are recovered
+/// line by line and every other key is dropped, with an issue saying so: a
+/// package another tool wrote still loads.
+fn line_oriented_fields(frontmatter: &str) -> Option<Value> {
+    let mut name = None;
+    let mut description: Option<String> = None;
+    for line in frontmatter.lines() {
+        let indented = line.starts_with([' ', '\t']);
+        if let Some(description) = description.as_mut().filter(|_| indented) {
+            description.push(' ');
+            description.push_str(line.trim());
+            continue;
+        }
+        if indented {
+            continue;
+        }
+        let Some((key, value)) = line.split_once(':') else {
+            continue;
+        };
+        let (value, quoted) = strip_quotes(value.trim());
+        match key.trim() {
+            "name" => name = Some(value.to_string()),
+            "description" => {
+                let scalar = if quoted {
+                    value
+                } else {
+                    split_trailing_comment(value).0.trim()
+                };
+                description = Some(scalar.to_string());
+            }
+            _ => {}
+        }
+    }
+    let mut fields = Mapping::new();
+    if let Some(name) = name.filter(|name| !name.is_empty()) {
+        fields.insert(Value::String("name".to_string()), Value::String(name));
+    }
+    if let Some(description) = description.filter(|description| !description.trim().is_empty()) {
+        fields.insert(
+            Value::String("description".to_string()),
+            Value::String(description),
+        );
+    }
+    (!fields.is_empty()).then_some(Value::Mapping(fields))
+}
+
+/// `value` without the quotes around it, and whether it had any.
+fn strip_quotes(value: &str) -> (&str, bool) {
+    let first = value.chars().next();
+    let quoted = value.len() >= 2
+        && matches!(first, Some('\'' | '"'))
+        && value.ends_with(first.unwrap_or_default());
+    if quoted {
+        (&value[1..value.len() - 1], true)
+    } else {
+        (value, false)
+    }
 }
 
 #[cfg(test)]

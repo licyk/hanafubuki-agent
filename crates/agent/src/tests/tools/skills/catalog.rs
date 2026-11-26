@@ -218,7 +218,15 @@ fn creating_and_editing_a_skill_stays_inside_the_managed_root() {
             path: "references/style.md".to_string(),
         })
         .unwrap();
-    assert!(cleaned.resources.is_empty());
+    // The document remains the one file it has.
+    assert_eq!(
+        cleaned
+            .resources
+            .iter()
+            .map(|resource| resource.path.as_str())
+            .collect::<Vec<_>>(),
+        vec!["SKILL.md"]
+    );
     // The copy keeps its own files.
     assert!(!service
         .list_skills()

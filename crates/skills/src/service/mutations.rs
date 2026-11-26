@@ -254,7 +254,7 @@ impl SkillService {
         ensure_directory(&staging, "the Skill staging directory")?;
         let result = build(&staging)
             .and_then(|()| {
-                if staging.join(SKILL_FILE).is_file() {
+                if crate::discovery::manifest_path(&staging).is_some() {
                     Ok(())
                 } else {
                     Err(SkillError::InvalidManifest(
@@ -303,7 +303,7 @@ fn skill_directory_of(source: &Path) -> Result<PathBuf, SkillError> {
         .map_err(|error| SkillError::Io(format!("read {}: {error}", native_text(source))))?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
-        .filter(|path| path.is_dir() && path.join(SKILL_FILE).is_file())
+        .filter(|path| path.is_dir() && crate::discovery::manifest_path(path).is_some())
         .collect::<Vec<_>>();
     candidates.sort();
     match candidates.len() {
@@ -326,9 +326,9 @@ fn source_folder_name(directory: &Path) -> Result<String, SkillError> {
         .ok_or_else(|| SkillError::InvalidPath(native_text(directory)))?;
     // The frontmatter name is a better folder name than a checkout called
     // `main` or `skill-abc123`, but only when it slugifies to something usable.
-    let from_frontmatter = read_bounded(&directory.join(SKILL_FILE), MAX_SKILL_MD_BYTES)
-        .ok()
-        .and_then(|bytes| crate::parser::parse_skill(&bytes, name).ok())
+    let from_frontmatter = crate::discovery::manifest_path(directory)
+        .and_then(|manifest| read_bounded(&manifest, MAX_SKILL_MD_BYTES).ok())
+        .and_then(|(bytes, _)| crate::parser::parse_skill(&bytes, name).ok())
         .map(|parsed| slug_from_name(&parsed.name))
         .filter(|slug| !slug.is_empty());
     let candidate = normalize_relative(name)

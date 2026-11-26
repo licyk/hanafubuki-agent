@@ -6,13 +6,13 @@ fn the_bundled_skills_are_published_and_repaired() {
     let root = temporary.path().join("system");
 
     synchronize_system_skills(&root).unwrap();
-    assert!(matches_embedded(&root).unwrap());
+    assert!(matches_embedded(&root).unwrap(), "after publishing");
     assert!(root.join("skill-creator/SKILL.md").is_file());
 
     std::fs::write(root.join("skill-manager/SKILL.md"), "tampered").unwrap();
     assert!(!matches_embedded(&root).unwrap());
     synchronize_system_skills(&root).unwrap();
-    assert!(matches_embedded(&root).unwrap());
+    assert!(matches_embedded(&root).unwrap(), "after repairing");
 }
 
 #[test]
