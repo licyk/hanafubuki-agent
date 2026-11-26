@@ -330,7 +330,9 @@ impl ChatWidget {
         }
         match input {
             InputResult::Submitted(text) => self.submit_user_message(text),
-            InputResult::Queued(text) => self.queue_user_message(text),
+            InputResult::Queued(queued) => {
+                self.queue_user_message(input_queue::Queued::with_kind(queued.message, queued.kind))
+            }
             InputResult::Command(command, args) => self.dispatch_command(command, args),
             InputResult::None => {}
         }

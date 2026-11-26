@@ -12,10 +12,11 @@
 //! message with images the model is known not to read stays in the
 //! composer (`images`).
 
-use super::input_queue::{EscAction, Settled, Submission};
+use super::input_queue::{EscAction, Queued, Settled, Submission};
 use super::ChatWidget;
 use crate::agent_bridge::SteerOutcome;
 use crate::app_event::{AppEvent, Op};
+use crate::bottom_pane::QueuedInput;
 use crate::history_cell;
 use crate::user_message::UserMessage;
 
@@ -27,15 +28,38 @@ impl ChatWidget {
     /// none; with no Provider or model set up yet, the message goes back to
     /// the composer and the setup opens.
     pub(crate) fn submit_user_message(&mut self, message: UserMessage) {
-        self.send_user_message(message, false);
+        self.send_user_message(message.into(), false);
     }
 
     /// Tab while a turn runs: `message` waits for the turns before it.
-    pub(super) fn queue_user_message(&mut self, message: UserMessage) {
-        self.send_user_message(message, true);
+    pub(super) fn queue_user_message(&mut self, message: impl Into<Queued>) {
+        let queued = message.into();
+        match queued.kind {
+            QueuedInput::Command => self.queue_command(queued.message),
+            QueuedInput::Shell | QueuedInput::Message => {
+                self.send_user_message(queued, true);
+            }
+        }
     }
 
-    pub(super) fn send_user_message(&mut self, message: UserMessage, queue: bool) -> bool {
+    /// A `/name` queued with Tab: its command runs when the queue reaches
+    /// it, and what a command that takes no argument cannot do yet waits as
+    /// a message for the turn after.
+    fn queue_command(&mut self, message: UserMessage) {
+        let running = self.bottom_pane.is_task_running();
+        match self
+            .input_queue
+            .queue(Queued::with_kind(message, QueuedInput::Command), running)
+        {
+            Submission::Start(queued) => self.run_queued(queued),
+            Submission::Steer { .. } | Submission::Waits => {}
+        }
+        self.sync_pending_input();
+    }
+
+    pub(super) fn send_user_message(&mut self, queued: Queued, queue: bool) -> bool {
+        let kind = queued.kind;
+        let message = queued.message;
         if message.text.trim().is_empty() {
             return false;
         }
@@ -48,9 +72,16 @@ impl ChatWidget {
             self.open_setup();
             return false;
         }
-        let message = match self.submit_shell_command(message) {
-            Some(message) => message,
-            None => return true,
+        // A message that runs now runs its `!` command; one that waits is
+        // given the kind the composer saw, so its command runs untaken when
+        // the queue reaches it.
+        let message = if queue || self.user_shell {
+            message
+        } else {
+            match self.submit_shell_command(message) {
+                Some(message) => message,
+                None => return true,
+            }
         };
         if let Some(refusal) = self.images_refusal(&message) {
             self.add_error_message(refusal);
@@ -61,17 +92,50 @@ impl ChatWidget {
         let running = self.bottom_pane.is_task_running();
         // A `!command` reads no messages: they wait for it.
         let submission = if queue || self.user_shell {
-            self.input_queue.queue(message, running)
+            self.input_queue
+                .queue(Queued::with_kind(message, kind), running)
         } else {
             self.input_queue.submit(message, running)
         };
         match submission {
-            Submission::Start(message) => self.start_turn(message),
+            Submission::Start(queued) => self.run_queued(queued),
             Submission::Steer { id, message } => self.send_steer(id, message),
             Submission::Waits => {}
         }
         self.sync_pending_input();
         true
+    }
+
+    /// Runs the item the queue hands over: a turn starts with a message, a
+    /// `!` command runs, and a `/` command dispatches — each once nothing
+    /// else runs, which is what leaving the queue means.
+    fn run_queued(&mut self, queued: Queued) {
+        match queued.kind {
+            QueuedInput::Message => self.start_turn(queued.message),
+            QueuedInput::Shell => {
+                if let Some(message) = self.submit_shell_command(queued.message) {
+                    self.start_turn(message);
+                }
+            }
+            QueuedInput::Command => {
+                let message = queued.message;
+                match crate::commands::parse_input(&message.text) {
+                    crate::commands::ParsedInput::Command(command, args) => {
+                        self.dispatch_command(command, args)
+                    }
+                    crate::commands::ParsedInput::Unrecognized(name) => self.add_to_history(
+                        history_cell::new_info_event(
+                            format!(
+                                r#"Unrecognized command '/{name}'. Type "/" for a list of supported commands."#
+                            ),
+                            None,
+                        ),
+                    ),
+                    // A slash in the name is a path, and a message after all.
+                    crate::commands::ParsedInput::Message => self.start_turn(message),
+                }
+            }
+        }
     }
 
     fn start_turn(&mut self, message: UserMessage) {
@@ -124,7 +188,7 @@ impl ChatWidget {
             self.send_steer(id, message);
         }
         match self.input_queue.settle() {
-            Some(Settled::Start(message)) => self.start_turn(message),
+            Some(Settled::Start(queued)) => self.run_queued(queued),
             Some(Settled::Restore(message)) => self.bottom_pane.restore_draft(message),
             None => {}
         }

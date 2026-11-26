@@ -3,10 +3,10 @@
 //! A message that starts with `!` (Codex's `submit_shell_command`): the
 //! rest is a command the Agent runs as a turn of its own, with no model, in
 //! the session's sandbox; the model reads what it did with the next
-//! message. `!` alone shows how. One runs only when nothing else does
-//! (Codex's running beside a turn is not ported): during a turn it is
-//! refused and stays in the composer, as one with images does. While it
-//! runs, a message waits for it, as Tab queues one.
+//! message. `!` alone shows how. One typed during a turn is refused and
+//! stays in the composer, as one with images does — Tab queues it instead,
+//! and it runs when the turn is over. While it runs, a message waits for
+//! it, as Tab queues one.
 
 use super::ChatWidget;
 use crate::app_event::{AppEvent, Op};
@@ -27,10 +27,7 @@ impl ChatWidget {
         };
         let refusal = if !message.images.is_empty() {
             Some(NO_IMAGES)
-        } else if self.user_shell
-            || self.bottom_pane.is_task_running()
-            || self.input_queue.is_busy()
-        {
+        } else if self.user_shell || self.bottom_pane.is_task_running() {
             Some(TURN_RUNNING)
         } else {
             None

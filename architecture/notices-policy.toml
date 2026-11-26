@@ -2163,3 +2163,7 @@ reason = "Exercises native preview encoding and frame replacement using the Agen
 [[original]]
 path = "crates/tui/src/app/tests/sidebar_files.rs"
 reason = "Verifies file discovery across persisted and live turns through the standalone runtime."
+
+[[original]]
+path = "crates/tui/src/bottom_pane/chat_composer/queue_key.rs"
+reason = "Tab's queueing split out of this project's composer: it says what the queued item is, which the chat runs when the queue reaches it; Codex keeps its equivalent inside chat_composer.rs."

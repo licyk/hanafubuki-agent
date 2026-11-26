@@ -715,7 +715,7 @@ fn an_interrupt_puts_the_waiting_messages_back_before_the_draft() {
         id: 0,
         outcome: SteerOutcome::Accepted(1),
     });
-    chat.queue_user_message("Queued.".into());
+    chat.queue_user_message(super::input_queue::Queued::text("Queued."));
     chat.set_composer_text("draft".to_string());
     drain(&events);
     // Ctrl-C (no Esc): nothing is sent.
@@ -754,8 +754,8 @@ fn tab_queues_while_a_turn_runs_and_sends_at_once_with_nothing_running() {
 fn shift_left_and_alt_up_put_the_last_queued_message_back_before_the_draft() {
     let (mut chat, events) = chat();
     chat.handle_turn_update(TurnUpdate::Started);
-    chat.queue_user_message("one".into());
-    chat.queue_user_message("two".into());
+    chat.queue_user_message(super::input_queue::Queued::text("one"));
+    chat.queue_user_message(super::input_queue::Queued::text("two"));
     chat.set_composer_text("draft".to_string());
     chat.handle_key_event(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
     assert_eq!(chat.bottom_pane.composer_text(), "two\ndraft");
@@ -767,6 +767,53 @@ fn shift_left_and_alt_up_put_the_last_queued_message_back_before_the_draft() {
     assert_eq!(chat.bottom_pane.composer_text(), "one\ntwo\ndraft");
     chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Completed));
     assert!(drain(&events).1.is_empty());
+}
+
+/// Tab queues what the composer holds whatever it is; each kind runs the
+/// way Enter would have run it once the queue reaches it.
+#[test]
+fn tab_queues_a_shell_command_and_runs_it_after_the_turn() {
+    let (mut chat, events) = chat();
+    chat.handle_turn_update(TurnUpdate::Started);
+    chat.set_composer_text("!ls".to_string());
+    chat.handle_key_event(key(KeyCode::Tab));
+    assert!(
+        drain(&events).1.is_empty(),
+        "a shell command waits for the turn"
+    );
+    let queued = screen(&chat, 80);
+    assert!(queued.contains("Queued follow-up inputs"), "{queued}");
+    assert!(queued.contains("↳ !ls"), "{queued}");
+
+    chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Completed));
+    let ops = drain(&events).1;
+    assert!(
+        matches!(ops.as_slice(), [Op::UserShellCommand(command)] if command == "ls"),
+        "{ops:?}"
+    );
+}
+
+#[test]
+fn tab_queues_a_slash_command_and_dispatches_it_after_the_turn() {
+    let (mut chat, events) = chat();
+    chat.handle_turn_update(TurnUpdate::Started);
+    // One that cannot run yet waits, and runs when the queue reaches it.
+    chat.queue_user_message(super::input_queue::Queued::command("/mode"));
+    assert_eq!(
+        drain(&events).1,
+        Vec::new(),
+        "the command waits for the turn"
+    );
+    assert!(screen(&chat, 80).contains("↳ /mode"));
+
+    chat.handle_turn_update(TurnUpdate::Ended(TurnEnd::Completed));
+    let errors = drain(&events).0;
+    assert!(
+        errors
+            .iter()
+            .any(|cell| cell.contains("'/mode' is disabled while a task is in progress")),
+        "the command was run, not sent as a message: {errors:?}"
+    );
 }
 
 #[test]
@@ -813,7 +860,7 @@ fn esc_interrupts_while_the_answer_streams() {
 fn a_session_opened_drops_what_waited_for_the_previous_one() {
     let (mut chat, events) = chat();
     chat.handle_turn_update(TurnUpdate::Started);
-    chat.queue_user_message("for the old session".into());
+    chat.queue_user_message(super::input_queue::Queued::text("for the old session"));
     chat.handle_turn_update(TurnUpdate::SessionOpened(OpenedSession {
         work: None,
         session_id: None,

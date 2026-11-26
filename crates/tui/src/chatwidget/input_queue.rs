@@ -28,12 +28,73 @@
 //! steer's answer can arrive after the turn's end. Messages sent or put
 //! back together are one message, a line each, their images renumbered in
 //! order (`UserMessage::join`).
+//!
+//! What was typed can be queued with Tab whatever it is: a message, a `!`
+//! shell command or a `/` command. The queue keeps what each one is, so a
+//! shell command runs and a command dispatches when the queue reaches it
+//! instead of reaching the model as text; anything waiting together is
+//! written back one per line, which is also how they are sent back.
 
 use std::collections::VecDeque;
 
 use crate::agent_bridge::SteerOutcome;
-use crate::bottom_pane::PendingInput;
+use crate::bottom_pane::{PendingInput, QueuedInput};
 use crate::user_message::UserMessage;
+
+/// One message waiting for a turn of its own, with what it becomes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct Queued {
+    pub(super) message: UserMessage,
+    pub(super) kind: QueuedInput,
+}
+
+impl From<UserMessage> for Queued {
+    fn from(message: UserMessage) -> Self {
+        Self::from_message(message)
+    }
+}
+
+impl Queued {
+    /// `message` as what Tab queued: a message, unless it is a command.
+    fn from_message(message: UserMessage) -> Self {
+        Self {
+            message,
+            kind: QueuedInput::Message,
+        }
+    }
+}
+
+impl Queued {
+    pub(super) fn message(message: UserMessage) -> Self {
+        Self {
+            message,
+            kind: QueuedInput::Message,
+        }
+    }
+
+    pub(super) fn with_kind(message: UserMessage, kind: QueuedInput) -> Self {
+        Self { message, kind }
+    }
+
+    /// What Tab queues when the composer did not say: a message.
+    #[cfg(test)]
+    pub(super) fn text(text: &str) -> Self {
+        Self::from_message(UserMessage::from(text))
+    }
+
+    #[cfg(test)]
+    pub(super) fn command(text: &str) -> Self {
+        Self::with_kind(UserMessage::from(text), QueuedInput::Command)
+    }
+}
+
+/// An empty message, for tests that only set its text.
+#[cfg(test)]
+impl From<&str> for Queued {
+    fn from(text: &str) -> Self {
+        Queued::from_message(UserMessage::from(text))
+    }
+}
 
 #[derive(Default)]
 pub(super) struct InputQueue {
@@ -47,7 +108,7 @@ pub(super) struct InputQueue {
     /// Sent at the end of the turn, together (Codex's rejected steers).
     held: Vec<UserMessage>,
     /// Queued with Tab: each starts a turn of its own.
-    queued: VecDeque<UserMessage>,
+    queued: VecDeque<Queued>,
     /// Esc with steers waiting: once the turn is interrupted, they are
     /// sent at once; until then none is sent to it.
     send_steers_after_interrupt: bool,
@@ -86,7 +147,7 @@ pub(super) enum Ending {
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Submission {
     /// Starts a turn with it.
-    Start(UserMessage),
+    Start(Queued),
     /// Steers the running turn with it.
     Steer { id: u64, message: UserMessage },
     /// It waits in the queue.
@@ -96,8 +157,9 @@ pub(super) enum Submission {
 /// What the queue asks of the chat once a turn has settled.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Settled {
-    /// A turn starts with this message.
-    Start(UserMessage),
+    /// The next queued item is run: a turn starts with it, a shell command
+    /// runs, or a command dispatches.
+    Start(Queued),
     /// These messages go back into the composer, before the draft.
     Restore(UserMessage),
 }
@@ -132,17 +194,18 @@ impl InputQueue {
                 None => Submission::Waits,
             };
         }
-        self.queue(message, running)
+        self.queue(Queued::from_message(message), running)
     }
 
     /// A message queued with Tab.
-    pub(super) fn queue(&mut self, message: UserMessage, running: bool) -> Submission {
+    pub(super) fn queue(&mut self, queue: impl Into<Queued>, running: bool) -> Submission {
+        let queue = queue.into();
         if running || self.review || self.pending_start || self.ended.is_some() {
-            self.queued.push_back(message);
+            self.queued.push_back(queue);
             return Submission::Waits;
         }
         self.pending_start = true;
-        Submission::Start(message)
+        Submission::Start(queue)
     }
 
     /// The steer to send next: the oldest waiting, once none is in flight
@@ -259,14 +322,14 @@ impl InputQueue {
         match ending {
             Ending::Interrupted if send_steers && !unread.is_empty() => {
                 self.pending_start = true;
-                Some(Settled::Start(UserMessage::join(unread)))
+                Some(Settled::Start(Queued::message(UserMessage::join(unread))))
             }
             Ending::Interrupted => {
                 let waiting: Vec<UserMessage> = self
                     .held
                     .drain(..)
                     .chain(unread)
-                    .chain(self.queued.drain(..))
+                    .chain(self.queued.drain(..).map(|queued| queued.message))
                     .collect();
                 (!waiting.is_empty()).then(|| Settled::Restore(UserMessage::join(waiting)))
             }
@@ -275,7 +338,7 @@ impl InputQueue {
                 let message = if self.held.is_empty() {
                     self.queued.pop_front()?
                 } else {
-                    UserMessage::join(std::mem::take(&mut self.held))
+                    Queued::message(UserMessage::join(std::mem::take(&mut self.held)))
                 };
                 self.pending_start = true;
                 Some(Settled::Start(message))
@@ -313,7 +376,10 @@ impl InputQueue {
                 return Some(self.steers.remove(index).message);
             }
         }
-        self.queued.pop_back().or_else(|| self.held.pop())
+        self.queued
+            .pop_back()
+            .map(|queued| queued.message)
+            .or_else(|| self.held.pop())
     }
 
     /// Whether anything waits, or a turn is about to start: editing an
@@ -333,7 +399,11 @@ impl InputQueue {
                 .map(|steer| text(&steer.message))
                 .collect(),
             held: self.held.iter().map(text).collect(),
-            queued: self.queued.iter().map(text).collect(),
+            queued: self
+                .queued
+                .iter()
+                .map(|queued| text(&queued.message))
+                .collect(),
             steer_is_editable: self.steer_is_editable(),
             ..Default::default()
         }

@@ -78,7 +78,7 @@ pub(crate) use module_view::ViewFailure;
 use module_view::{ModuleView, ViewFailures};
 pub(crate) use multi_select_picker::{MultiSelectItem, MultiSelectPicker};
 use paste_burst::PasteBurst;
-pub(crate) use pending_input_preview::PendingInput;
+pub(crate) use pending_input_preview::{PendingInput, QueuedInput, QueuedMessage};
 use request_user_input::RequestUserInputOverlay;
 pub(crate) use selection_popup_common::{render_menu_surface, GenericDisplayRow, RowFacts};
 pub(crate) use textarea::{TextArea, TextAreaState};
@@ -98,8 +98,8 @@ pub(crate) enum InputResult {
     /// The message the person sent, trimmed, with large pastes put back,
     /// and its images.
     Submitted(UserMessage),
-    /// The message the person queued (Tab) while a turn runs.
-    Queued(UserMessage),
+    /// The message the person queued (Tab) while a turn runs, and what it is.
+    Queued(QueuedMessage),
     /// A command, with the text after its name when it takes any.
     Command(&'static CommandSpec, String),
     None,

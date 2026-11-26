@@ -67,10 +67,12 @@ use super::mentions::Popup as MentionPopup;
 use super::paste_burst::CharDecision;
 use super::paste_burst::FlushResult;
 use super::paste_burst::PasteBurst;
+use super::pending_input_preview::QueuedInput;
 use super::skill_popup::SkillPopup;
 use super::textarea::TextArea;
 use super::textarea::TextAreaState;
 use super::InputResult;
+use super::QueuedMessage;
 use crate::app_event::AppEventSender;
 use crate::key_hint;
 use crate::key_hint::has_ctrl_or_alt;
@@ -78,6 +80,8 @@ use crate::key_hint::KeyBinding;
 use crate::keymap::{self, Action};
 use crate::user_message::{MessageImage, UserMessage};
 use history_search::HistorySearchSession;
+
+mod queue_key;
 
 /// If the pasted content exceeds this number of characters, replace it with a
 /// placeholder in the UI.
@@ -553,33 +557,6 @@ impl ChatComposer {
 
         match self.prepare_submission() {
             Some(message) => (InputResult::Submitted(message), true),
-            None => (InputResult::None, true),
-        }
-    }
-
-    /// Tab (Codex's `composer.queue`): while a turn runs the message is
-    /// queued for after it, a command still runs at once; with nothing
-    /// running it is sent as Enter sends it. Within a paste it is the
-    /// paste's, and the paste goes on: flushing it here would let the
-    /// paste's next Tab send what came before.
-    fn handle_queue_key(&mut self, now: Instant) -> (InputResult, bool) {
-        if self
-            .paste_burst
-            .newline_should_insert_instead_of_submit(now)
-        {
-            if !self.paste_burst.try_append_char_if_active('\t', now) {
-                self.paste_burst.extend_window(now);
-            }
-            return (InputResult::None, true);
-        }
-        if !self.is_task_running {
-            return self.handle_submission(now);
-        }
-        if let Some(result) = self.try_dispatch_slash_command() {
-            return (result, true);
-        }
-        match self.prepare_submission() {
-            Some(message) => (InputResult::Queued(message), true),
             None => (InputResult::None, true),
         }
     }

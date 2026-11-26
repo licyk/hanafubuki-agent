@@ -7,6 +7,8 @@
 //! (sent while a review ran, or a steer that did not reach the turn); and
 //! the messages queued with Tab, with the key that puts the last one back
 //! in the composer. Optional questions share this preview without taking focus.
+//! What a queued item becomes when the queue reaches it, [`QueuedInput`],
+//! lives here because it is what these entries run as.
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -20,6 +22,37 @@ use crate::wrapping::{word_wrap_lines, RtOptions};
 
 /// The lines of a message shown; a longer one ends with `…`.
 const PREVIEW_LINE_LIMIT: usize = 3;
+
+/// What a queued item becomes when the queue reaches it: everything typed
+/// into the composer can wait its turn (Codex's `QueuedInputAction`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum QueuedInput {
+    /// A message for the model.
+    Message,
+    /// `!command`: a shell command, not a message.
+    Shell,
+    /// `/name`: a command, run when the queue reaches it.
+    Command,
+}
+
+/// A message queued with Tab, with what it becomes when the queue reaches
+/// it: a shell or slash command runs instead of reaching the model.
+#[derive(Debug, PartialEq)]
+pub(crate) struct QueuedMessage {
+    pub(crate) message: crate::user_message::UserMessage,
+    pub(crate) kind: QueuedInput,
+}
+
+impl QueuedInput {
+    /// What `text` runs as when the queue reaches it.
+    pub(crate) fn of(text: &str) -> Self {
+        match text.as_bytes().first() {
+            Some(b'!') => Self::Shell,
+            Some(b'/') => Self::Command,
+            _ => Self::Message,
+        }
+    }
+}
 
 /// The messages waiting, oldest first in each group.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

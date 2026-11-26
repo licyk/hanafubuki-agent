@@ -146,7 +146,7 @@ impl ChatWidget {
                 .map(|reply| (reply, queue))
         };
         if let Some((reply, queue)) = submission {
-            if self.send_user_message(UserMessage::from_text(reply), queue) {
+            if self.send_user_message(UserMessage::from_text(reply).into(), queue) {
                 let mut state = self.async_questions.0.borrow_mut();
                 state.remove_current();
                 let empty = state.pending.is_empty();

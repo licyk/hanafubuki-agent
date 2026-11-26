@@ -1104,3 +1104,33 @@ fn current_text_with_pending_expands_placeholders() {
         "placeholder should expand to actual text"
     );
 }
+
+/// Tab queues whatever the composer holds, and says what it is: a message,
+/// a `!` shell command, or a `/` command to run when the queue reaches it.
+#[test]
+fn tab_queues_a_message_a_shell_command_and_a_slash_command_with_their_kind() {
+    let mut composer = ChatComposer::new(
+        true,
+        sender(),
+        false,
+        "Ask Codex to do anything".to_string(),
+    );
+    composer.set_task_running(true);
+    for (typed, expected) in [
+        ("hello", QueuedInput::Message),
+        ("!ls -la", QueuedInput::Shell),
+        ("/not-a-command", QueuedInput::Command),
+    ] {
+        composer.set_text_content(typed.to_string());
+        let (result, _) =
+            composer.handle_key_event(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        assert!(
+            matches!(
+                result,
+                InputResult::Queued(QueuedMessage { ref message, kind }) if kind == expected && message.text == typed
+            ),
+            "{typed}: {result:?}"
+        );
+        assert_eq!(composer.current_text_with_pending(), "");
+    }
+}
