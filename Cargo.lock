@@ -181,9 +181,9 @@ dependencies = [
 
 [[package]]
 name = "arrayvec"
-version = "0.7.8"
+version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
+checksum = "47a64a0fd06e123e9e3cf3ad01432af17dcab8185e8023edcf184fe696f9675d"
 
 [[package]]
 name = "async-broadcast"
@@ -609,9 +609,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.11.3"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02f0e023adb368345ce0ca6cdfc0f24a06554468d0e8503e14a0841de79bfa69"
+checksum = "95e45cf2980b2d467be49a9ed942c9179b701063a7ca3d037de7ee9bd67f8d66"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -1554,9 +1554,9 @@ dependencies = [
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.15"
+version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48"
+checksum = "3e44f110d1777dc6559a51e7d45083945ded4f1bf3305494350f693b6d20b9c8"
 
 [[package]]
 name = "finl_unicode"
@@ -3129,9 +3129,9 @@ dependencies = [
 
 [[package]]
 name = "kardia-core"
-version = "0.4.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1163a52440bc7680ef9e465927044243d13409721a3623cfb3e3ff2e0a01cd5d"
+checksum = "38a8433ddc4b1196bcc8a6752bf454892f9894e7afdf966eff5718cf18520a6a"
 dependencies = [
  "futures",
  "indexmap",
@@ -3145,9 +3145,9 @@ dependencies = [
 
 [[package]]
 name = "kardia-fs"
-version = "0.4.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "352c541edc53491ed47fd33cd857feb7221a48e5a4a52d607686a6da799ce75b"
+checksum = "bfe4db49ab7393754b2771ee5b3741172bf779563f908773afd86c94b0b95ee0"
 dependencies = [
  "bytes",
  "futures",
@@ -3164,9 +3164,9 @@ dependencies = [
 
 [[package]]
 name = "kardia-guest"
-version = "0.4.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b66e3f90ffc890813eb192bb409d99fe04cbf9026aa50515bc228c1d1a4f4051"
+checksum = "55614928b09df496bcd88d8b6571feaba4b840b5f6f79f850b239370bd061239"
 dependencies = [
  "serde",
  "serde_json",
@@ -3174,9 +3174,9 @@ dependencies = [
 
 [[package]]
 name = "kardia-hmr"
-version = "0.4.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "578190bac096200801008f9a5ee0ae370437eba6fc95c83be513d2cf38b9efb5"
+checksum = "9ec79e6e9ef116ca1badac9277b6c07fc50f906309c98cd699562c8cb4ed0d51"
 dependencies = [
  "futures",
  "indexmap",
@@ -3192,9 +3192,9 @@ dependencies = [
 
 [[package]]
 name = "kardia-loader"
-version = "0.4.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "147f15fce3db0e8fc10a3f1dcc4f418dc9c485081018cf805b4448ca6a5690a1"
+checksum = "80b124baecee5b950e9163f6758754716ec468506cf648d857a074e2b537e931"
 dependencies = [
  "futures",
  "kardia-core",
@@ -3206,9 +3206,9 @@ dependencies = [
 
 [[package]]
 name = "kardia-macros"
-version = "0.4.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "192dd904593ab4f533b5a6b1bcb9fb2d1bbfc274f503306ab89ad4a63539d39b"
+checksum = "b19573863967859b2bd2583a286d789120c36801e577a5b38d6fdee400991c53"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4231,9 +4231,9 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
 name = "plist"
-version = "1.10.4"
+version = "1.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d86a77b7d9cdebd9643c180c158748db7d894b24a3935ed4b5843e698ae086eb"
+checksum = "cb7a42747bbcc4374e6922a15040dccacf720e4ce48a77e668f7116b9aa19a0a"
 dependencies = [
  "base64 0.23.1",
  "indexmap",
@@ -6091,9 +6091,9 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "two-face"
-version = "0.5.2+bat-0.26.1"
+version = "0.5.3+bat-0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "915be7adc2ff6f4338acbf71f3eda0a146f46003b992a1669c674308610efdac"
+checksum = "8476eba391d01c32d3ef40325aa305a890d797aa57d906d14ac632479ceb22b5"
 dependencies = [
  "serde",
  "serde_derive",
@@ -7307,9 +7307,9 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "9.8.2"
+version = "9.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d8dbe089cf6b0448b78f5fc50139ab5aaa40d08ac07cdc1baf2c13add35fcce"
+checksum = "07db37dec4a7c468df4723fba4cadb4822d1d0f10dbea367100b6a6881b2a9c9"
 dependencies = [
  "constant_time_eq",
  "crc32fast",
