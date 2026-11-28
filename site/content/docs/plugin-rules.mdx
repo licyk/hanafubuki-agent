@@ -88,7 +88,7 @@ Agent 运行的所有东西都在 panic 被隔离的线程上：panic hook 让�
 
 panic 消息进入日志和插件状态，从不进入模型。`mcp` 插件自己隔离一种 panic：`McpTool::invoke` 在 `catch_panic_async` 下运行服务器调用，所以那里的 panic 是那次调用的错误和**那台服务器**的故障，从不是插件的。内核从不跨守卫调用持有锁，所以守卫不改变加锁顺序。身份访问器（`id`、`descriptor`、`kinds`、`rank`、`trust`、呈现器的 `tools`）是数据，不被守卫。
 
-故障之后：插件被停止并报告 `failed`（`panicked in <extension point>: <message>`），宿主在重启策略的下一个延迟后自动再次挂载它（2 秒、10 秒、30 秒，10 分钟内三次）；超过之后直到 `retry_plugin`、新配置或重新开关它（在拆除结束之后）。启动失败（而不是 panic）的插件不会自动重启。
+故障之后：插件报告 `failed`（`panicked in <extension point>: <message>`），宿主让它的 fiber 失败，由 kardia 的恢复策略在下一次延迟后自动重启它（2 秒、10 秒、30 秒，10 分钟内三次）；超过之后直到 `retry_plugin`、新配置或重新开关它（在拆除结束之后）。启动失败（而不是 panic）的插件不会自动重启。
 
 Kardia 0.3 的恢复策略保持默认的 `Manual`，包括已安装 Guest 的 loader 条目。自动重启只由 Agent 自己的宿主和 Guest 监督器按照 `RestartPolicy` 调度，不同时开启 Kardia 的自动恢复。
 

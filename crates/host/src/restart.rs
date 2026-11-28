@@ -6,6 +6,8 @@
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
+use kardia_core::RecoveryPolicy;
+
 /// The delays before the automatic restarts in one window, in order; their
 /// count is how many the window allows.
 pub const AUTOMATIC_RESTART_DELAYS: [Duration; 3] = [
@@ -31,6 +33,43 @@ impl Default for RestartPolicy {
             delays: AUTOMATIC_RESTART_DELAYS.to_vec(),
             window: AUTOMATIC_RESTART_WINDOW,
         }
+    }
+}
+
+impl RestartPolicy {
+    /// The kardia policy these delays and window describe: each restart
+    /// waits the next entry of the table, and a restart leaves the window's
+    /// count once it is that old.
+    pub fn recovery(&self) -> RecoveryPolicy {
+        let delays = self.delays.clone();
+        let window = self.window;
+        let made = std::sync::Arc::new(parking_lot::Mutex::new(RestartWindow::default()));
+        // `kardia` asks a host policy for its decision; the window is this
+        // policy's, since a host policy carries none.
+        RecoveryPolicy::host(move |failure: kardia_core::Failure| {
+            let delays = delays.clone();
+            let made = made.clone();
+            let policy = RestartPolicy {
+                delays: delays.clone(),
+                window,
+            };
+            async move {
+                // A constructor that fails fails the same way on every
+                // retry, so it is not restarted by itself.
+                if failure.phase == kardia_core::Phase::Start {
+                    return Ok(kardia_core::RecoveryAction::KeepFailed);
+                }
+                let mut made = made.lock();
+                let (_, delay) = made.next(&policy, Instant::now());
+                match delay {
+                    Some(delay) => {
+                        made.record(Instant::now());
+                        Ok(kardia_core::RecoveryAction::RetryAfter(delay))
+                    }
+                    None => Ok(kardia_core::RecoveryAction::KeepFailed),
+                }
+            }
+        })
     }
 }
 

@@ -2,7 +2,6 @@
 //! it.
 
 use std::sync::Arc;
-use std::time::Instant;
 
 use hanafubuki_agent_contracts::ContextSectionKind;
 use hanafubuki_agent_host::{RestartPolicy, RestartWindow};
@@ -101,6 +100,11 @@ pub(crate) struct GuestRecord {
     /// Whether its current start became active: a failure after that is a
     /// fault the restart loop answers, one before it a failed start.
     pub(crate) started: bool,
+    /// Whether the fiber carries kardia's restart policy: installed once it
+    /// first runs, and left for kardia to restart it from then on.
+    pub(crate) recovering: bool,
+    /// The automatic restarts kardia made, as its fiber reports them.
+    pub(crate) restarts_made: usize,
     pub(crate) window: RestartWindow,
     /// What its last start left out of its contributions.
     pub(crate) issues: Vec<String>,
@@ -122,6 +126,8 @@ impl GuestRecord {
             last_exit: None,
             started: false,
             window: RestartWindow::default(),
+            recovering: false,
+            restarts_made: 0,
             issues: Vec::new(),
             prompt: None,
             epoch: 0,
@@ -145,7 +151,10 @@ impl GuestRecord {
             error: self.error.clone(),
             last_exit: self.last_exit.as_deref().map(GuestExitReport::of),
             stderr_tail: String::from_utf8_lossy(&tail).into_owned(),
-            restarts: self.window.count(policy, Instant::now()),
+            restarts: {
+                let _ = policy;
+                self.restarts_made
+            },
             process_id: live.and_then(GuestHandle::id),
             issues: self.issues.clone(),
         }

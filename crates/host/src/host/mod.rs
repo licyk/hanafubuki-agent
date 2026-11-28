@@ -20,12 +20,10 @@ mod bounds;
 mod faults;
 mod lookup;
 mod reconfigure;
-mod restarts;
 mod row;
 mod service_row;
 
 use std::future::Future;
-use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -43,7 +41,7 @@ use row::{dependents_of, enabled_in, HostedRow, Mount};
 pub use row::{ModuleRow, SettingsConfig};
 pub use service_row::{ServiceContext, ServiceMount, ServiceStop};
 
-use crate::restart::{RestartPolicy, RestartWindow};
+use crate::restart::RestartPolicy;
 use crate::status::{ModuleGroup, ModuleState, ModuleStatus};
 use crate::{LogExporter, PluginError, PluginFaults};
 
@@ -126,8 +124,6 @@ pub struct ModuleHost<K: HostProfile> {
     safe_mode: bool,
     module_faults: bool,
     restart_policy: Option<RestartPolicy>,
-    /// Tells apart the automatic restarts scheduled.
-    next_restart: AtomicU64,
     state: Mutex<HostState<K>>,
     started: OnceCell<()>,
 }
@@ -181,8 +177,8 @@ impl<K: HostProfile> ModuleHost<K> {
                     from_settings: row.from_settings,
                     mount: Mount::NotStarted,
                     stop_bound: row.stop_bound,
-                    restarts: RestartWindow::default(),
-                    pending_restart: None,
+                    recovery: options.automatic_restarts.clone(),
+                    kardia_recovery: None,
                     dependents: Vec::new(),
                 })
             })
@@ -197,7 +193,6 @@ impl<K: HostProfile> ModuleHost<K> {
             safe_mode: options.safe_mode,
             module_faults: options.module_faults,
             restart_policy: options.automatic_restarts,
-            next_restart: AtomicU64::new(0),
             state: Mutex::new(HostState {
                 root: HostRoot::NotStarted,
                 rows,

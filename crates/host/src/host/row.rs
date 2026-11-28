@@ -8,9 +8,8 @@ use serde_json::Value;
 use tokio::sync::watch;
 
 use super::bounds::{stop_stuck, watch_disposal, Teardown};
-use super::restarts::PendingRestart;
 use super::HostProfile;
-use crate::restart::{RestartPolicy, RestartWindow};
+use crate::restart::RestartPolicy;
 use crate::status::{
     fiber_state, ModuleGroup, ModuleLock, ModuleRestart, ModuleState, ModuleStatus,
 };
@@ -73,11 +72,12 @@ pub(super) struct HostedRow<K: HostProfile> {
     pub(super) enabled: bool,
     pub(super) mount: Mount,
     pub(super) stop_bound: Option<Duration>,
-    /// The automatic restarts made in the current window.
-    pub(super) restarts: RestartWindow,
-    /// The automatic restart a fault scheduled, until it runs or is
-    /// cancelled.
-    pub(super) pending_restart: Option<PendingRestart>,
+    /// The policy kardia restarts a faulted instance under, when the host
+    /// has one: the fiber keeps the restart, its delay and its cancellation.
+    pub(super) recovery: Option<RestartPolicy>,
+    /// The kardia policy made from `recovery` once, so its restart window
+    /// outlives each call that installs it.
+    pub(super) kardia_recovery: Option<kardia_core::RecoveryPolicy>,
     /// What [`ModuleStatus::dependents`] reports; the manifest is fixed, so
     /// it is found once.
     pub(super) dependents: Vec<String>,
@@ -191,29 +191,53 @@ impl<K: HostProfile> HostedRow<K> {
     }
 
     fn restart_status(&self, policy: &RestartPolicy) -> Option<ModuleRestart> {
-        let made = self.restarts.count(policy, std::time::Instant::now());
-        let next = self
-            .pending_restart
-            .as_ref()
-            .map(PendingRestart::at_unix_millis);
-        (made > 0 || next.is_some()).then(|| ModuleRestart {
-            restarts_in_window: u32::try_from(made).unwrap_or(u32::MAX),
-            next_attempt_at_unix_millis: next,
+        let _ = policy;
+        let Mount::Mounted(fiber) = &self.mount else {
+            return None;
+        };
+        let state = fiber.recovery_state();
+        (state.attempts > 0 || state.due_in.is_some()).then(|| ModuleRestart {
+            // `attempts` counts the restart being waited out when one is
+            // pending; the restarts already made are the ones before it.
+            restarts_in_window: state
+                .attempts
+                .saturating_sub(u32::from(state.due_in.is_some())),
+            next_attempt_at_unix_millis: state.due_in.map(|due_in| {
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|elapsed| {
+                        u64::try_from(elapsed.as_millis() + due_in.as_millis()).unwrap_or(u64::MAX)
+                    })
+                    .unwrap_or(0)
+            }),
         })
     }
 
     /// Cancels the automatic restart a fault scheduled, if one is pending:
     /// the row was turned off, retried, reconfigured or shut down.
     pub(super) fn cancel_restart(&mut self) {
-        if let Some(pending) = self.pending_restart.take() {
-            pending.cancel();
-        }
+        // Replacing or disposing the fiber's policy cancels a pending
+        // restart; every caller here does one of the two.
     }
 
-    /// Mounts the row on `root` with its current configuration.
+    /// Mounts the row on `root` with its current configuration, under the
+    /// row's recovery policy when its host restarts a faulted row by itself.
     pub(super) fn mount(&mut self, root: &Context) -> Option<Fiber> {
         match root.plugin_def(&self.def, self.config.clone()) {
             Ok(fiber) => {
+                if let Some(policy) = &self.recovery {
+                    let made = self
+                        .kardia_recovery
+                        .get_or_insert_with(|| policy.recovery())
+                        .clone();
+                    if let Err(error) = fiber.set_recovery(made) {
+                        log::warn!(
+                            "{} {} takes no automatic recovery: {error}",
+                            K::NOUN,
+                            self.name
+                        );
+                    }
+                }
                 self.mount = Mount::Mounted(fiber.clone());
                 Some(fiber)
             }
@@ -242,8 +266,37 @@ impl<K: HostProfile> HostedRow<K> {
         true
     }
 
+    /// A fault of the running instance: under an automatic policy kardia
+    /// restarts it from the same fiber after the policy's delay, and
+    /// disposing the row (or replacing the policy) cancels that restart.
+    /// Without one the row is stopped until it is retried.
+    pub(super) fn fail_running(&mut self, profile: Arc<K>, reason: String) -> bool {
+        let Mount::Mounted(fiber) = &self.mount else {
+            return false;
+        };
+        if fiber.is_removed() {
+            return false;
+        }
+        let Some(_) = self.recovery else {
+            return self.retire(profile, Some(reason));
+        };
+        let failed = fiber.fail(kardia_core::Error::msg(reason));
+        let name = self.name.clone();
+        tokio::task::spawn(async move {
+            if failed.await.is_err() {
+                log::error!("{name} could not be marked failed");
+            }
+            profile.modules_changed();
+        });
+        true
+    }
+
     /// Whether it was stopped because it failed.
     pub(super) fn is_faulted(&self) -> bool {
-        matches!(self.mount, Mount::Retired { fault: Some(_), .. })
+        match &self.mount {
+            Mount::Retired { fault: Some(_), .. } => true,
+            Mount::Mounted(fiber) => fiber.state() == kardia_core::FiberState::Failed,
+            _ => false,
+        }
     }
 }

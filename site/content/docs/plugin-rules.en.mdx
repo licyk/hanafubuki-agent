@@ -88,7 +88,7 @@ The kernel calls plugin code only through a guard: `RegistryEntry::guard` or `gu
 
 The panic message reaches the log and the plugin's status, never the model. The `mcp` plugin contains one panic itself: `McpTool::invoke` runs its server's call under `catch_panic_async`, so a panic there is that call's error and **that server's** fault, never the plugin's. The kernel never holds a lock across a guarded call, so the guards change no lock ordering. The identity accessors (`id`, `descriptor`, `kinds`, `rank`, `trust`, a presenter's `tools`) are data and are not guarded.
 
-After a fault the plugin is stopped and reports `failed` (`panicked in <extension point>: <message>`), and the host mounts it again by itself after the restart policy's next delay (2 s, 10 s, 30 s, three in ten minutes); past that, until `retry_plugin`, a new configuration or turning it off and on mounts it anew, once its teardown has ended. A plugin whose start failed, rather than one that panicked, is not restarted by itself.
+After a fault the plugin reports `failed` (`panicked in <extension point>: <message>`) and the host fails its fiber, which kardia's recovery policy restarts after the next delay (2 s, 10 s, 30 s, three in ten minutes); past that, until `retry_plugin`, a new configuration or turning it off and on mounts it anew, once its teardown has ended. A plugin whose start failed, rather than one that panicked, is not restarted by itself.
 
 Kardia 0.3's recovery policy stays at its default `Manual`, including the installed guests' loader entries. The Agent's host and guest supervisor alone schedule automatic restarts under `RestartPolicy`; do not enable Kardia's automatic recovery alongside them.
 

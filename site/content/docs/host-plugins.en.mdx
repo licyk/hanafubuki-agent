@@ -327,7 +327,7 @@ A plugin panic is a bug, but it stays in its plugin: the kernel calls plugin cod
 | approval rule `evaluate`           | a denial (a rule fails closed, never "no opinion")      |
 | observer `observe`                 | that observer is skipped; the others are told           |
 
-The host then stops the plugin and mounts it again under the restart policy (2 s, 10 s, 30 s, three in ten minutes); after that it stays `failed` until `retry_plugin`, a new configuration or turning it off and on. The panic message reaches the log and the plugin's status, never the model. All of it needs the panic to unwind: [The panic-hook bridge](/docs/embedding#the-panic-hook-bridge).
+The host then fails the plugin's fiber, and kardia's recovery policy restarts it (2 s, 10 s, 30 s, three in ten minutes); after that it stays `failed` until `retry_plugin`, a new configuration or turning it off and on. Turning the row off disposes the fiber, which cancels a restart still waiting. The panic message reaches the log and the plugin's status, never the model. All of it needs the panic to unwind: [The panic-hook bridge](/docs/embedding#the-panic-hook-bridge).
 
 ## Testing [#testing]
 

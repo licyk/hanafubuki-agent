@@ -191,9 +191,21 @@ impl GuestHost {
                 .get_mut(&id)
                 .ok_or_else(|| format!("plugin `{id}` has no code"))?;
             record.window.clear();
+            record.restarts_made = 0;
             record.epoch += 1;
             record.state = GuestState::Starting;
             record.error = None;
+        }
+        // A new policy replaces the one kardia supervised the failure with,
+        // so its window starts over and nothing is left pending.
+        if self
+            .0
+            .records
+            .lock()
+            .get(&id)
+            .is_some_and(|record| record.recovering)
+        {
+            let _ = fiber.set_recovery(self.0.policy.recovery());
         }
         self.0.changed();
         log::info!("plugin {id}: its guest is retried");

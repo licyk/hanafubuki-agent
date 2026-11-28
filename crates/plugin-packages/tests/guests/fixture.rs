@@ -47,7 +47,9 @@ impl Default for Options {
             sandbox: None,
             call_timeout: Duration::from_secs(20),
             policy: RestartPolicy {
-                delays: vec![Duration::ZERO; 3],
+                // kardia refuses a zero delay; a short one keeps the tests
+                // quick while a restart is still a distinct process.
+                delays: vec![Duration::from_millis(50); 3],
                 window: Duration::from_secs(600),
             },
         }

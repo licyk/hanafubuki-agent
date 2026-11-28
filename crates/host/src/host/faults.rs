@@ -90,30 +90,28 @@ impl<K: HostProfile> ModuleHost<K> {
                 .enumerate()
                 .find(|(_, row)| row.name == fault.module)
             {
-                Some((index, row)) if !row.group.is_core() => row
-                    .retire(self.profile.clone(), Some(fault.reason.clone()))
-                    .then(|| self.schedule_restart(index, row)),
+                Some((_index, row)) if !row.group.is_core() => {
+                    let recovers = row.recovery.is_some();
+                    row.fail_running(self.profile.clone(), fault.reason.clone())
+                        .then_some(recovers)
+                }
                 Some(_) | None => None,
             }
         };
         let Some(restart) = stopped else {
             return;
         };
-        match restart {
-            Some(delay) => log::error!(
-                "{} {} is stopped because it {}; it starts again in {} ms",
-                K::NOUN,
-                fault.module,
-                fault.reason,
-                delay.as_millis()
-            ),
-            None => log::error!(
-                "{} {} is stopped because it {}; retry it to start it again",
-                K::NOUN,
-                fault.module,
-                fault.reason
-            ),
-        }
+        log::error!(
+            "{} {} is stopped because it {}; {}",
+            K::NOUN,
+            fault.module,
+            fault.reason,
+            if restart {
+                "it restarts by itself"
+            } else {
+                "retry it to start it again"
+            }
+        );
         self.profile.modules_changed();
     }
 }

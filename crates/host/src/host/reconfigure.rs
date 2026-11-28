@@ -217,7 +217,11 @@ impl<K: HostProfile> ModuleHost<K> {
             // A retry is the user's: it takes the place of a pending
             // automatic restart and empties the restart window.
             row.cancel_restart();
-            row.restarts.clear();
+            if let (Mount::Mounted(fiber), Some(policy)) = (&row.mount, &row.recovery) {
+                fiber
+                    .set_recovery(policy.recovery())
+                    .map_err(|error| PluginError::from(error).to_string())?;
+            }
             match (&row.mount, root) {
                 (Mount::Mounted(fiber), _) => {
                     if fiber.state() != FiberState::Failed {

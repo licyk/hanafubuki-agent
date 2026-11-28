@@ -46,10 +46,37 @@ impl Shared {
         let Some(id) = self.guest_of(fiber) else {
             return;
         };
+        // `attempts` counts the restart being waited out; the ones made are
+        // the ones before it.
+        let recovery = fiber.recovery_state();
+        let made = recovery
+            .attempts
+            .saturating_sub(u32::from(recovery.due_in.is_some()));
+        if let Some(record) = self.records.lock().get_mut(&id) {
+            record.restarts_made = usize::try_from(made).unwrap_or(usize::MAX);
+        }
         // Registered before it is said to run, so a guest that runs has its
         // contributions.
         if state == FiberState::Active {
             self.contribute(&id, fiber);
+            // Its first run installs kardia's policy: from then on the
+            // fiber restarts itself after a fault, and disposal, a retry or
+            // the policy's end cancels a pending restart.
+            let install = {
+                let mut records = self.records.lock();
+                match records.get_mut(&id) {
+                    Some(record) if !record.recovering => {
+                        record.recovering = true;
+                        Some(self.policy.recovery())
+                    }
+                    _ => None,
+                }
+            };
+            if let Some(policy) = install {
+                if let Err(error) = fiber.set_recovery(policy) {
+                    log::warn!("plugin {id}: its guest takes no automatic restart: {error}");
+                }
+            }
         }
         let restart = {
             let mut records = self.records.lock();
@@ -97,6 +124,28 @@ impl Shared {
                     if !record.started {
                         record.state = GuestState::Failed;
                         log::warn!("plugin {id}: its guest did not start");
+                        None
+                    } else if record.recovering {
+                        // kardia schedules the restart when the policy
+                        // allows one; once it does not, the guest stays
+                        // failed until it is retried.
+                        // kardia schedules the restart from its own
+                        // supervisor, after this status is reported, so the
+                        // window decides whether one is still to come.
+                        let pending = record.restarts_made < self.policy.delays.len();
+                        record.state = if pending {
+                            GuestState::Restarting
+                        } else {
+                            GuestState::Failed
+                        };
+                        log::warn!(
+                            "plugin {id}: its guest failed; {}",
+                            if pending {
+                                "it restarts by itself"
+                            } else {
+                                "it stays stopped until it is retried"
+                            }
+                        );
                         None
                     } else {
                         let (made, delay) = record.window.next(&self.policy, Instant::now());

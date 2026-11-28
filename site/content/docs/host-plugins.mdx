@@ -327,7 +327,7 @@ pub fn turn_request(text: String, title: String) -> AgentTurnRequest {
 | 审批规则 `evaluate`         | 拒绝（规则失败时关闭，而不是“没有意见”）         |
 | 观察者 `observe`            | 跳过这个观察者，其他观察者照常通知               |
 
-宿主随后停止该插件，按重启策略（2 秒、10 秒、30 秒，10 分钟内最多三次）重新挂载它；超过之后保持 `failed`，直到 `retry_plugin`、新的配置或重新开关它。panic 消息进入日志和插件状态，从不进入模型。这一切要求 panic 能展开，见[panic hook 桥](/docs/embedding#the-panic-hook-bridge)。
+宿主随后让该插件的 fiber 失败，由 kardia 的恢复策略重启它（2 秒、10 秒、30 秒，10 分钟内最多三次）；关掉该行会销毁 fiber，从而取消仍在等待的重启；超过之后保持 `failed`，直到 `retry_plugin`、新的配置或重新开关它。panic 消息进入日志和插件状态，从不进入模型。这一切要求 panic 能展开，见[panic hook 桥](/docs/embedding#the-panic-hook-bridge)。
 
 ## 测试 [#testing]
 
