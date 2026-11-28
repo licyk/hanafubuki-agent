@@ -240,6 +240,8 @@ A guest in another language implements the wire itself. Every message is one JSO
 4. While an export runs, the guest may call the host with the export's `id`: `{"call":"provide","key":"plugin","value":{}}` (in `apply`; any other key is refused with an error), `{"call":"view","key":"workspace"}`, which the Agent answers `{"result":…}` or `{"error":"…"}`, and `{"call":"log","level":2,"text":"…"}` (0 error to 3 debug), which it does not answer.
 5. At any time the Agent may send `{"ping":n}`, which the guest answers `{"pong":n}` at once, and `{"cancel":id}`, after which that export's result is dropped.
 
+A guest may answer the handshake with `{"ready":"kardia-guest/3"}` instead. Then every export still carries an `id`, but the Agent does not wait for one to end before sending the next: `call`s of one instance run at the same time, so state they share must be behind a lock or an atomic, and a host call from one export is answered while another export runs. `meta`, `apply` and `dispose` still run alone. A guest that answers `kardia-guest/2` keeps the serial behaviour above and needs no change; the same holds for a guest built with the `kardia-guest` SDK before 0.4.
+
 ## Check it [#validate]
 
 `hanafubuki-agent plugins validate DIR` reads the plugin as an install reads it and checks its code as the guest host would run it, without installing or starting anything:

@@ -240,6 +240,8 @@ kardia-guest 和 pykardia 的访客 SDK（`pykardia/guest/` 以及导出时一�
 4. 导出运行期间，访客可以用该导出的 `id` 调用宿主：`{"call":"provide","key":"plugin","value":{}}`（在 `apply` 中；其他任何键都会以错误被拒绝）、`{"call":"view","key":"workspace"}`，Agent 回答 `{"result":…}` 或 `{"error":"…"}`；以及 `{"call":"log","level":2,"text":"…"}`（0 为 error，3 为 debug），Agent 不回答它。
 5. Agent 随时可能发送 `{"ping":n}`，访客应立即回答 `{"pong":n}`；以及 `{"cancel":id}`，此后该导出的结果会被丢弃。
 
+访客也可以在握手时回答 `{"ready":"kardia-guest/3"}`。这样每个导出仍带 `id`，但 Agent 不会等一个导出结束才发下一个：同一实例的 `call` 会同时运行，它们共享的状态必须放在锁或原子量后面，且一个导出发起的宿主调用会在另一个导出运行期间得到回答。`meta`、`apply` 和 `dispose` 仍然单独运行。回答 `kardia-guest/2` 的访客保持上面的串行行为，无需改动；用 0.4 之前的 `kardia-guest` SDK 构建的访客也一样。
+
 ## 检查 [#validate]
 
 `hanafubuki-agent plugins validate 目录` 像安装那样读取插件，并像访客宿主运行它那样检查它的代码，但不安装也不启动任何东西：
