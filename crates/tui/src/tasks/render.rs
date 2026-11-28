@@ -10,23 +10,32 @@ use ratatui::{
 use super::{Section, Tasks};
 
 impl Tasks {
-    pub(crate) fn render(&self, area: Rect, buffer: &mut Buffer, now: u128) {
-        self.hits.borrow_mut().clear();
-        Clear.render(area, buffer);
-        let areas = Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Min(1),
-            Constraint::Length(3),
-        ])
-        .split(area);
-        let title = if self.loading {
+    /// The screen's head: the title, the section tabs under a blank row, and
+    /// the section's line under another.
+    fn render_head(&self, title: Rect, tabs: Rect, section_line: Rect, buffer: &mut Buffer) {
+        let heading = if self.loading {
             "Background tasks · Loading…"
         } else {
             "Background tasks"
         };
-        Paragraph::new(title.bold()).render(areas[0], buffer);
-        let mut tabs =
-            Rect::new(area.x, area.y.saturating_add(1), area.width, 1).intersection(areas[0]);
+        Paragraph::new(heading.bold()).render(title, buffer);
+        self.render_tabs(tabs, buffer);
+        let selected_section = match self.section {
+            Section::Agents => "Agents",
+            Section::Terminals => "Terminals",
+        };
+        Paragraph::new(
+            format!(
+                "{selected_section} · Tab switches section · {}/{}",
+                usize::from(self.len() > 0) + self.selected,
+                self.len()
+            )
+            .bold(),
+        )
+        .render(section_line, buffer);
+    }
+
+    fn render_tabs(&self, mut tabs: Rect, buffer: &mut Buffer) {
         for (section, label, shortcut) in [
             (Section::Agents, "[A] Agents", 'a'),
             (Section::Terminals, "[T] Terminals", 't'),
@@ -46,6 +55,26 @@ impl Tasks {
             tabs.x = tabs.x.saturating_add(width + 1);
             tabs.width = tabs.width.saturating_sub(width + 1);
         }
+    }
+
+    pub(crate) fn render(&self, area: Rect, buffer: &mut Buffer, now: u128) {
+        self.hits.borrow_mut().clear();
+        Clear.render(area, buffer);
+        // The title, a blank row, the tabs, a blank row, the section's line,
+        // a blank row, then the body: the head reads as a heading rather
+        // than a stack of rows.
+        let areas = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Min(1),
+            Constraint::Length(3),
+        ])
+        .split(area);
+        self.render_head(areas[0], areas[2], areas[4], buffer);
         let body = Layout::default()
             .direction(if area.width >= 90 {
                 Direction::Horizontal
@@ -53,18 +82,8 @@ impl Tasks {
                 Direction::Vertical
             })
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(areas[1]);
-        let selected_section = match self.section {
-            Section::Agents => "Agents",
-            Section::Terminals => "Terminals",
-        };
-        let mut lines: Vec<Line> = vec![format!(
-            "{selected_section} · Tab switches section · {}/{}",
-            usize::from(self.len() > 0) + self.selected,
-            self.len()
-        )
-        .bold()
-        .into()];
+            .split(areas[6]);
+        let mut lines: Vec<Line> = Vec::new();
         let mut rows = Vec::new();
         let mut selected_start = 0;
         let mut selected_end = 0;
@@ -207,7 +226,7 @@ impl Tasks {
             .scroll((self.detail_scroll, 0))
             .block(Block::default().borders(Borders::LEFT).title(" Details "))
             .render(body[1], buffer);
-        self.render_actions(areas[2], buffer);
+        self.render_actions(areas[7], buffer);
         self.render_confirmation(area, buffer);
     }
 

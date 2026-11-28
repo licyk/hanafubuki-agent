@@ -3,20 +3,20 @@ source: crates/tui/src/tasks/tests.rs
 expression: screen(&tasks)
 ---
 Background tasks
+
 [A] Agents [T] Terminals
-Terminals · Tab switches section · 1/1                      │ Details
-› #12 cargo test --workspace · running · 3m02s · check_tests│cargo test --workspace
-    Running tests                                           │in /work/repo · exit None
-    test first ... ok                                       │
-    test second ... ok                                      │Compiling example
+
+Terminals · Tab switches section · 1/1
+
+› #12 cargo test --workspace · running · 3m02s · check_tests│ Details
+    Running tests                                           │cargo test --workspace
+    test first ... ok                                       │in /work/repo · exit None
+    test second ... ok                                      │
+                                                            │Compiling example
                                                             │Running tests
                                                             │test first ... ok
                                                             │test second ... ok
                                                             │− Hide details (Enter)
-                                                            │
-                                                            │
-                                                            │
-                                                            │
                                                             │
                                                             │
                                                             │

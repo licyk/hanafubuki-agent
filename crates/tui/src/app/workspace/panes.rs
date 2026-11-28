@@ -28,7 +28,7 @@ use crate::app_event::AppEvent;
 use crate::keymap::{self, Action};
 
 /// The narrowest screen the panes share (Codex's).
-pub(super) const SPLIT_MIN_WIDTH: u16 = 100;
+pub(in crate::app) const SPLIT_MIN_WIDTH: u16 = 100;
 /// The narrowest the side pane gets (Codex's).
 const MIN_SIDE: u16 = 36;
 /// The narrowest the main pane gets.
@@ -61,7 +61,21 @@ pub(crate) struct PaneLayout {
 
 impl Workspace {
     pub(super) fn split_panes(&self, screen: Rect) -> Option<(Rect, Rect, Rect)> {
-        if self.zoomed || screen.width < SPLIT_MIN_WIDTH || screen.height == 0 {
+        self.split_panes_at(screen, 1.0)
+    }
+
+    /// Whether a side pane should be shown: a docked or panel sidebar, or a
+    /// second conversation. The slide follows this, so the pane it draws
+    /// outlasts the setting turning off until the animation ends.
+    pub(in crate::app) fn side_pane_open(&self) -> bool {
+        self.sidebar.uses_fullscreen() || self.second.is_some()
+    }
+
+    /// [`Self::split_panes`] with `fraction` of the side pane's width drawn:
+    /// the side pane slides open and shut, so a frame part-way through draws
+    /// that share of it, and nothing once it reaches the main pane's edge.
+    pub(super) fn split_panes_at(&self, screen: Rect, fraction: f64) -> Option<(Rect, Rect, Rect)> {
+        if self.zoomed || screen.width < SPLIT_MIN_WIDTH || screen.height == 0 || fraction <= 0.0 {
             return None;
         }
         let preferred = match self.side_width {
@@ -73,7 +87,9 @@ impl Workspace {
             }
             None => screen.width / 3,
         };
-        let width = clamp_width(screen.width, i32::from(preferred));
+        let full = clamp_width(screen.width, i32::from(preferred));
+        let width = (f64::from(full) * fraction.min(1.0)).round().max(1.0) as u16;
+        let width = width.min(full).min(screen.width.saturating_sub(1));
         let side = Rect::new(screen.right() - width, screen.y, width, screen.height);
         let main = Rect {
             width: screen.width - width - 1,
@@ -89,7 +105,9 @@ impl Workspace {
     /// The panes on `screen`; with no second conversation, the focused
     /// one fills it. `leader`: the leader waits for its second key, and a
     /// box lists the panes' keys.
-    pub(crate) fn pane_layout(&self, screen: Rect, leader: bool) -> PaneLayout {
+    /// The panes on `screen`; `fraction` is how much of the side pane the
+    /// slide has drawn (1: all of it).
+    pub(crate) fn pane_layout(&self, screen: Rect, leader: bool, fraction: f64) -> PaneLayout {
         let mut layout = PaneLayout {
             screen,
             focused: screen,
@@ -112,7 +130,7 @@ impl Workspace {
             }
             return layout;
         };
-        if let Some((main, side, divider)) = self.split_panes(screen) {
+        if let Some((main, side, divider)) = self.split_panes_at(screen, fraction) {
             layout.divider = Some(divider);
             (layout.focused, layout.passive) = if second.focus == Focus::Main {
                 (main, Some(side))

@@ -106,9 +106,18 @@ impl App {
         }
         let notice = self.copy_notice.as_ref().map(|(notice, _)| notice.clone());
         let leader = self.chords.leader_pending();
-        let layout = self
-            .workspace
-            .pane_layout(Rect::new(0, 0, size.width, size.height), leader);
+        // The side pane slides to where it should be, a frame at a time.
+        let (fraction, sliding) = self.workspace.motion.advance(
+            self.workspace.side_pane_open(),
+            Instant::now(),
+            size.width >= crate::app::workspace::SPLIT_MIN_WIDTH,
+        );
+        if sliding {
+            self.schedule_frame(Instant::now() + crate::app::workspace::SLIDE_FRAME);
+        }
+        let layout =
+            self.workspace
+                .pane_layout(Rect::new(0, 0, size.width, size.height), leader, fraction);
         let width = layout.focused.width;
         // Browsing's hints take the view's footer row when it has none.
         let browsing = self

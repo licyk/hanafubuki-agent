@@ -13,12 +13,16 @@
 mod agents;
 mod child;
 mod keys;
+mod pane_motion;
 mod panes;
 mod routing;
 mod settings;
 mod side_tabs;
 mod sidebar;
 mod tasks;
+
+pub(in crate::app) use pane_motion::SLIDE_FRAME;
+pub(in crate::app) use panes::SPLIT_MIN_WIDTH;
 
 use std::io::{self, Write};
 use std::sync::Arc;
@@ -180,6 +184,8 @@ pub(super) struct Workspace {
     opening_side: bool,
     /// The terminal width and sidebar columns last chosen by moving the divider.
     side_width: Option<(u16, u16)>,
+    /// The side pane's share of its width as it slides open or shut.
+    pub(super) motion: pane_motion::PaneMotion,
     /// The focused pane fills the screen.
     zoomed: bool,
     /// The divider is being dragged.

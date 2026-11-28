@@ -155,7 +155,8 @@ fn mouse_switches_sections_and_confirms_at_stable_button_positions() {
         modifiers: KeyModifiers::NONE,
     };
     screen(&tasks);
-    tasks.mouse(pointer(MouseEventKind::Down(MouseButton::Left), 13, 1));
+    // The title, a blank row, then the tabs.
+    tasks.mouse(pointer(MouseEventKind::Down(MouseButton::Left), 13, 2));
     assert!(screen(&tasks).contains("Terminals · Tab switches section · 1/1"));
     press(&mut tasks, KeyCode::Char('x'));
     let before = screen(&tasks);
