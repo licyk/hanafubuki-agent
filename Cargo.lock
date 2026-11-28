@@ -3129,9 +3129,9 @@ dependencies = [
 
 [[package]]
 name = "kardia-core"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6a7d2135b9d8aba24e16cae4cd7d9b209a6c18ed753eb072b94c947d112dc91"
+checksum = "1163a52440bc7680ef9e465927044243d13409721a3623cfb3e3ff2e0a01cd5d"
 dependencies = [
  "futures",
  "indexmap",
@@ -3145,9 +3145,9 @@ dependencies = [
 
 [[package]]
 name = "kardia-fs"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ddc9c8e86c048b8674404465fdf854d4596fc2eeb15d6a2a0ee4ffbe363595e"
+checksum = "352c541edc53491ed47fd33cd857feb7221a48e5a4a52d607686a6da799ce75b"
 dependencies = [
  "bytes",
  "futures",
@@ -3164,9 +3164,9 @@ dependencies = [
 
 [[package]]
 name = "kardia-guest"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66b20ce1266cc67ee2ddea79c266522a48e1bb9fe9efb5b9da7b342f00e9a758"
+checksum = "b66e3f90ffc890813eb192bb409d99fe04cbf9026aa50515bc228c1d1a4f4051"
 dependencies = [
  "serde",
  "serde_json",
@@ -3174,9 +3174,9 @@ dependencies = [
 
 [[package]]
 name = "kardia-hmr"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b4edbfb1d446405542675084aabdc535af88c150ec430d1ef6e76d278ed6171"
+checksum = "578190bac096200801008f9a5ee0ae370437eba6fc95c83be513d2cf38b9efb5"
 dependencies = [
  "futures",
  "indexmap",
@@ -3192,9 +3192,9 @@ dependencies = [
 
 [[package]]
 name = "kardia-loader"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f81108165fdd399607efc79d06695126bbb674e8718f10c8fc7b5ae644bacd1d"
+checksum = "147f15fce3db0e8fc10a3f1dcc4f418dc9c485081018cf805b4448ca6a5690a1"
 dependencies = [
  "futures",
  "kardia-core",
@@ -3206,9 +3206,9 @@ dependencies = [
 
 [[package]]
 name = "kardia-macros"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8906e1effff0a47422a74c9f695ac1753c0fcdeeca17a0824593de0b13d82669"
+checksum = "192dd904593ab4f533b5a6b1bcb9fb2d1bbfc274f503306ab89ad4a63539d39b"
 dependencies = [
  "proc-macro2",
  "quote",

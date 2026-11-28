@@ -61,7 +61,7 @@ impl Guest for TestGuest {
         Ok(TestGuest { config })
     }
 
-    fn call(&mut self, host: &Host, request: Request) -> Result<Value> {
+    fn call(&self, host: &Host, request: Request) -> Result<Value> {
         match request.method.as_str() {
             "echo" => Ok(request.args),
             "pid" => Ok(json!(std::process::id())),

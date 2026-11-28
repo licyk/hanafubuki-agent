@@ -72,7 +72,7 @@ impl Guest for CrashGuest {
         Ok(CrashGuest)
     }
 
-    fn call(&mut self, _host: &Host, request: Request) -> Result<Value> {
+    fn call(&self, _host: &Host, request: Request) -> Result<Value> {
         let args = &request.args;
         match request.method.as_str() {
             "tool" => tool(
