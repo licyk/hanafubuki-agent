@@ -13,6 +13,7 @@ use hanafubuki_agent::{
     AgentBackgroundCompactionState, AgentCompactionSettings, AgentCompactionStrategy,
     AgentSettingsPatch,
 };
+use ratatui::crossterm::event::KeyCode;
 
 use super::Harness;
 use crate::transcript_mode::TranscriptMode;
@@ -311,6 +312,52 @@ fn compact_shows_one_cell_and_a_resumed_session_replays_it_once() {
 
     harness.resume_again("Still here.");
     assert_eq!(harness.compacted_cells(), 1, "{}", harness.transcript());
+}
+
+/// `/compact` takes no turn, but the session takes none until it ends: what
+/// is typed with Tab meanwhile waits for it instead of reaching a session
+/// that cannot start a turn yet, and starts one once the compaction is over.
+#[test]
+fn a_message_typed_during_compact_waits_for_it_to_end() {
+    let mut harness = Harness::start(vec![
+        assistant_events("The answer is 42."),
+        assistant_events("The user asked for the answer."),
+        assistant_events("Still here."),
+    ]);
+    harness.exchange("What is the answer?", "The answer is 42.");
+
+    harness.type_and_submit("/compact");
+    harness.pump_until("the compaction to start", |harness| {
+        harness.app.chat_widget.is_compacting()
+    });
+    harness.type_draft("Are you there?");
+    harness.key(KeyCode::Tab);
+    // Queued, not sent: the compaction has not ended, so no turn of its own
+    // was asked for.
+    assert!(harness.app.chat_widget.is_compacting());
+    let requests = harness.server.requests().len();
+    std::thread::sleep(Duration::from_millis(100));
+    harness.app.draw(&mut harness.tui).unwrap();
+    assert_eq!(
+        harness.server.requests().len(),
+        requests,
+        "the message must not start a turn: {}",
+        harness.transcript()
+    );
+    let screen = harness.pump_until_screen_shows("Are you there?");
+    assert!(screen.contains("Are you there?"), "{screen}");
+
+    harness.pump_until("the queued message's turn", |harness| {
+        harness.transcript().contains("Still here.")
+    });
+    harness.pump_until_turn_ends();
+    let transcript = harness.transcript();
+    assert_eq!(harness.compacted_cells(), 1, "{transcript}");
+    assert!(
+        transcript.find(COMPACTED).unwrap() < transcript.find("Still here.").unwrap(),
+        "{transcript}"
+    );
+    assert_eq!(harness.server.requests().len(), 3);
 }
 
 #[test]

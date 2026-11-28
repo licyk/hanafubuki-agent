@@ -106,6 +106,9 @@ pub(crate) struct ChatComposer {
     has_focus: bool,
     placeholder_text: String,
     is_task_running: bool,
+    /// A compaction runs with no turn: what is typed queues, and Esc has
+    /// nothing to interrupt.
+    is_compacting: bool,
     /// The status line the footer shows (`/statusline`).
     status_line: Option<Line<'static>>,
     /// The footer's sides beside the hints: the counts and the items placed
@@ -183,6 +186,7 @@ impl ChatComposer {
             has_focus: has_input_focus,
             placeholder_text,
             is_task_running: false,
+            is_compacting: false,
             status_line: None,
             sides: super::FooterSides::default(),
             footer_hits: Default::default(),
@@ -747,6 +751,13 @@ impl ChatComposer {
     pub fn set_task_running(&mut self, running: bool) {
         self.goal_status.set_running(running, Instant::now());
         self.is_task_running = running;
+    }
+
+    /// [`Self::set_task_running`]'s queueing without its interrupt: a
+    /// compaction takes no turn, and nothing to stop, but the session takes
+    /// no new turn until it ends.
+    pub(crate) fn set_compacting(&mut self, compacting: bool) {
+        self.is_compacting = compacting;
     }
 
     pub(crate) fn set_goal(&mut self, goal: Option<&hanafubuki_agent::AgentGoal>) {

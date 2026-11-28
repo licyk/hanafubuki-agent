@@ -6,6 +6,9 @@
 //! the chat's to do (the composer only says what it is). A command that runs
 //! at once is not queued — it would be in the transcript twice — and with no
 //! turn running Tab sends as Enter does.
+//!
+//! A compaction counts as running the session: it takes no turn of its own,
+//! but the session takes none until it ends, so what is typed waits for it.
 
 use std::time::Instant;
 
@@ -28,7 +31,7 @@ impl ChatComposer {
             }
             return (InputResult::None, true);
         }
-        if !self.is_task_running {
+        if !(self.is_task_running || self.is_compacting) {
             return self.handle_submission(now);
         }
         // A `/name` that runs at once is not queued: it would be in the

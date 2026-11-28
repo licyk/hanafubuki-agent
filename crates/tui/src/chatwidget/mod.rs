@@ -114,6 +114,10 @@ pub(crate) struct ChatWidget {
     /// The Agent's warnings as the last listing reported them: what
     /// `/warnings` merges with the chat's own, and what the footer counts.
     agent_warnings: Vec<Warning>,
+    /// A compaction runs with no turn (`/compact`, an automatic one before
+    /// a turn). The session takes no turn meanwhile, so what is typed
+    /// queues as it does during one.
+    compacting: bool,
     appearance: Appearance,
     owned_transcript: bool,
     /// `[tui]` as the configuration resolves it (the saved
@@ -180,6 +184,7 @@ impl ChatWidget {
             mode: AgentSessionMode::Default,
             warnings: Vec::new(),
             agent_warnings: Vec::new(),
+            compacting: false,
             appearance,
             owned_transcript,
             preferences: AgentTuiPreferences {
@@ -411,7 +416,30 @@ impl ChatWidget {
     }
 
     pub(crate) fn is_task_running(&self) -> bool {
-        self.bottom_pane.is_task_running()
+        self.bottom_pane.is_task_running() || self.compacting
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_compacting(&self) -> bool {
+        self.compacting
+    }
+
+    /// A compaction started or ended: the composer queues what is typed
+    /// while it runs, as it does during a turn, and the queue moves on once
+    /// it ended.
+    pub(super) fn set_compacting(&mut self, compacting: bool) {
+        if self.compacting == compacting {
+            return;
+        }
+        self.compacting = compacting;
+        self.bottom_pane.set_compacting(compacting);
+        if !compacting {
+            // What was queued while it ran starts once it is over, as after
+            // a turn's end; a steer never waited, since no turn ran.
+            self.input_queue.compaction_ended();
+            self.advance_input_queue();
+        }
+        self.request_redraw();
     }
 
     /// The footer says a second Esc browses the prompts to edit one.

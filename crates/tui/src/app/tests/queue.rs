@@ -44,7 +44,7 @@ impl Harness {
     }
 
     /// Types `text` into the composer without sending it.
-    fn type_draft(&mut self, text: &str) {
+    pub(super) fn type_draft(&mut self, text: &str) {
         for character in text.chars() {
             self.key(KeyCode::Char(character));
         }

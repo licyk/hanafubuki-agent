@@ -543,19 +543,22 @@ impl BottomPane {
         let was_running = self.is_task_running;
         self.is_task_running = running;
         self.composer.set_task_running(running);
-
-        if running {
-            if !was_running {
-                self.ensure_status_indicator();
-                if let Some(status) = self.status.as_mut() {
-                    status.set_interrupt_hint_visible(true);
-                }
-                self.request_redraw();
-            }
-        } else {
+        if !running {
             // Hide the status indicator when a task completes, but keep other modal views.
             self.hide_status_indicator();
+        } else if !was_running {
+            self.ensure_status_indicator();
+            if let Some(status) = self.status.as_mut() {
+                status.set_interrupt_hint_visible(true);
+            }
+            self.request_redraw();
         }
+    }
+
+    /// A compaction runs with no turn to interrupt: the composer queues what
+    /// is typed, and Esc stops nothing.
+    pub(crate) fn set_compacting(&mut self, compacting: bool) {
+        self.composer.set_compacting(compacting);
     }
 
     pub(crate) fn hide_status_indicator(&mut self) {

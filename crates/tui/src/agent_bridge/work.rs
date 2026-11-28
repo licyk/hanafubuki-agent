@@ -18,6 +18,12 @@ pub(crate) struct WorkSnapshot {
 }
 
 impl WorkSnapshot {
+    /// Whether this is a compaction's own entry, whose id its snapshot
+    /// names (`compaction:<id>`).
+    pub(crate) fn is_compaction(&self) -> bool {
+        self.id.starts_with("compaction:")
+    }
+
     pub(crate) fn from_event(event: &AgentEventKind) -> Option<Self> {
         let snapshot = match event {
             AgentEventKind::CompactionUpdated { compaction } => compaction,

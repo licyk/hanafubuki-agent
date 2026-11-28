@@ -346,6 +346,12 @@ impl InputQueue {
         }
     }
 
+    /// The compaction a message waited for ended: the oldest queued item
+    /// starts, as after a turn's end.
+    pub(super) fn compaction_ended(&mut self) {
+        self.ended = Some(Ending::Finished);
+    }
+
     /// Whether Shift+Left takes a steer back: one is waiting for the turn
     /// to send it, and the turn still runs so it is this queue's to take.
     /// A turn that ended settles its steers itself, into the next turn or
