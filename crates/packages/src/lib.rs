@@ -49,11 +49,12 @@ pub use error::PackageError;
 pub use hash::content_hash;
 pub use id::{validate_marketplace_name, validate_plugin_name, PluginId, PluginIdError};
 pub use manifest::{
-    find_manifest, load_manifest, parse_manifest, ContributedSection, ContributedTool,
-    HooksDeclaration, LoadedManifest, ManifestError, ManifestFormat, ManifestInterface,
-    ManifestPaths, McpServersDeclaration, PackageCode, PackageContributes, PackageManifest,
-    PackagePermissions, PackageRuntime, ProcessRuntime, RuntimeKind, WasmRuntime,
-    WasmRuntimeLimits, WorkspaceAccess, AGENT_PLUGINS_SCHEMA, DEFAULT_WASM_MEMORY_BYTES,
+    find_manifest, load_manifest, parse_manifest, ContributedField, ContributedSection,
+    ContributedTool, ContributedToolPresenter, HooksDeclaration, LoadedManifest, ManifestError,
+    ManifestFormat, ManifestInterface, ManifestPaths, McpServersDeclaration, PackageCode,
+    PackageContributes, PackageManifest, PackagePermissions, PackageRuntime, ProcessRuntime,
+    RuntimeKind, WasmRuntime, WasmRuntimeLimits, WorkspaceAccess, AGENT_PLUGINS_SCHEMA,
+    DEFAULT_WASM_MEMORY_BYTES,
 };
 pub use marketplace::{
     find_marketplace_manifest, list_marketplaces, load_marketplace, InstallationPolicy,

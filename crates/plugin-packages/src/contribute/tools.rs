@@ -78,7 +78,7 @@ pub(super) fn register(
 
 /// The model's name space for a plugin: its name, with what a tool name
 /// cannot hold replaced by `_`.
-fn namespace(plugin: &str) -> String {
+pub(super) fn namespace(plugin: &str) -> String {
     plugin
         .chars()
         .map(|character| match character {

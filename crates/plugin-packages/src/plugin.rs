@@ -7,7 +7,7 @@ use std::sync::Arc;
 use hanafubuki_agent_contracts::{
     spawn_scoped_worker, ContextRegistry, ContextRendererRegistry, ContinuationHookRegistry,
     ObserverRegistry, PluginFaults, PromptContributorRegistry, Register, ToolLifecycleHookRegistry,
-    ToolSourceRegistry,
+    ToolPresenterRegistry, ToolSourceRegistry,
 };
 use kardia_core::{Context, Inject, PluginDef, Service, StatusChanged};
 use kardia_hmr::{GuestExited, GuestStarted};
@@ -51,6 +51,7 @@ impl GuestHost {
         .inject(
             Inject::new()
                 .with(ToolSourceRegistry::NAME)
+                .with(ToolPresenterRegistry::NAME)
                 .with(ContextRegistry::NAME)
                 .with(ContextRendererRegistry::NAME)
                 .with(PromptContributorRegistry::NAME)

@@ -22,7 +22,10 @@ use hanafubuki_agent_contracts::{
     ToolSourceRegistry, ToolSourceStep, TurnExtensions,
 };
 use hanafubuki_agent_host::RestartPolicy;
-use hanafubuki_agent_packages::{ContributedSection, ContributedTool, PackageContributes};
+use hanafubuki_agent_packages::{
+    ContributedField, ContributedSection, ContributedTool, ContributedToolPresenter,
+    PackageContributes,
+};
 use hanafubuki_agent_plugin_packages::{GuestPackage, GuestState};
 use hanafubuki_agent_tool_contracts::{ToolOutput, ToolOutputContent};
 use serde_json::{json, Map, Value};
@@ -48,6 +51,19 @@ fn contributing(fixture: &Fixture, mode: &str) -> GuestPackage {
             .into_iter()
             .map(tool)
             .collect(),
+        tool_presenters: vec![ContributedToolPresenter {
+            tool: "echo".to_string(),
+            fields: vec![
+                ContributedField {
+                    key: "call".to_string(),
+                    label: "Call".to_string(),
+                },
+                ContributedField {
+                    key: "echoed".to_string(),
+                    label: "Echoed".to_string(),
+                },
+            ],
+        }],
         context_sections: ["demo_board", "empty_board", "broken_board", "environment"]
             .into_iter()
             .map(section)
@@ -233,6 +249,22 @@ pub async fn a_guest_contributes_what_its_manifest_declares() {
             "call": { "sessionId": 1, "turnId": 2, "callId": "call-1" },
         }))
     );
+    // The presenter its manifest declares shows the call's structured output
+    // as the fields it named, in that order.
+    let display = fixture
+        .registry::<hanafubuki_agent_contracts::ToolPresenterRegistry>()
+        .display(
+            "demo__echo",
+            &json!({ "q": "x" }),
+            &output,
+            &Default::default(),
+        );
+    let hanafubuki_agent_contracts::AgentToolDisplay::Fields { rows } = display else {
+        panic!("a declared presenter shows fields: {display:?}");
+    };
+    assert_eq!(rows[0].0, "Call");
+    assert_eq!(rows[1].0, "Echoed");
+    assert!(rows[1].1.contains("\"q\""), "{rows:?}");
     let output = run(tool(&tools, "demo__text"), json!({})).await.unwrap();
     assert_eq!(
         output.content,

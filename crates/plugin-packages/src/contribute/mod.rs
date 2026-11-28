@@ -20,6 +20,7 @@ mod check;
 mod context;
 mod hooks;
 mod observers;
+mod presenters;
 mod prompt;
 mod protocol;
 mod tools;
@@ -141,6 +142,7 @@ impl Shared {
         let ctx = fiber.context();
         let mut issues = Vec::new();
         tools::register(ctx, &guest, &package, &entry, &mut issues);
+        presenters::register(ctx, &package, &mut issues);
         context::register(ctx, &guest, &package, &mut issues);
         let prompt = prompt::register(ctx, &package, &mut issues);
         hooks::register(ctx, &guest, &package, &entry, &mut issues);

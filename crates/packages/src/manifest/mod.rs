@@ -21,9 +21,9 @@ mod legacy;
 mod probe;
 
 pub use code::{
-    ContributedSection, ContributedTool, PackageCode, PackageContributes, PackagePermissions,
-    PackageRuntime, ProcessRuntime, RuntimeKind, WasmRuntime, WasmRuntimeLimits, WorkspaceAccess,
-    DEFAULT_WASM_MEMORY_BYTES,
+    ContributedField, ContributedSection, ContributedTool, ContributedToolPresenter, PackageCode,
+    PackageContributes, PackagePermissions, PackageRuntime, ProcessRuntime, RuntimeKind,
+    WasmRuntime, WasmRuntimeLimits, WorkspaceAccess, DEFAULT_WASM_MEMORY_BYTES,
 };
 pub(crate) use probe::{agent_plugins_schema_status, SchemaStatus};
 pub use probe::{find_manifest, AGENT_PLUGINS_SCHEMA};

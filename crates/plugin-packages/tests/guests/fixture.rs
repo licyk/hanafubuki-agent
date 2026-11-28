@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use hanafubuki_agent_contracts::{
     ContextRegistry, ContextRendererRegistry, ContinuationHookRegistry, ObserverRegistry,
     PluginFaults, PromptContributorRegistry, RegistryService, ToolLifecycleHookRegistry,
-    ToolSourceRegistry,
+    ToolPresenterRegistry, ToolSourceRegistry,
 };
 use hanafubuki_agent_foundation::background_worker::BackgroundWorkerGroup;
 use hanafubuki_agent_host::{LogExporter, RestartPolicy};
@@ -119,6 +119,7 @@ impl Fixture {
         let services = PluginDef::new(|ctx: Context, _| async move {
             ctx.provide(PluginFaults::default())?;
             ctx.provide(ToolSourceRegistry::default())?;
+            ctx.provide(ToolPresenterRegistry::default())?;
             ctx.provide(ContextRegistry::default())?;
             ctx.provide(ContextRendererRegistry::default())?;
             ctx.provide(PromptContributorRegistry::default())?;
@@ -130,6 +131,7 @@ impl Fixture {
         .provides([
             PluginFaults::NAME,
             ToolSourceRegistry::NAME,
+            ToolPresenterRegistry::NAME,
             ContextRegistry::NAME,
             ContextRendererRegistry::NAME,
             PromptContributorRegistry::NAME,

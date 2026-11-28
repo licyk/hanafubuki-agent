@@ -98,6 +98,9 @@ const MAXIMUM_WASM_TIMEOUT_MS: u64 = 3_600_000;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PackageContributes {
     pub tools: Vec<ContributedTool>,
+    /// What each tool's finished call shows, when the fallback shows too
+    /// little: the fields of its structured output, in this order.
+    pub tool_presenters: Vec<ContributedToolPresenter>,
     pub context_sections: Vec<ContributedSection>,
     /// The prompt slot the guest fills, when it contributes a prompt.
     pub prompt_slot: Option<String>,
@@ -120,6 +123,24 @@ pub struct ContributedTool {
 pub struct ContributedSection {
     pub kind: String,
     pub renderer: Option<String>,
+}
+
+/// `contributes.toolPresenters[]`: a tool's output shown as its fields.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ContributedToolPresenter {
+    /// The tool's name, as `contributes.tools[]` declares it.
+    pub tool: String,
+    /// The fields of its structured output, labelled, in this order; an
+    /// output that is not an object shows its text.
+    pub fields: Vec<ContributedField>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ContributedField {
+    /// The key of the output's object.
+    pub key: String,
+    /// What the interface calls it; the key when it says nothing.
+    pub label: String,
 }
 
 /// What a package's code may reach: what its manifest asks for, and what
@@ -148,6 +169,7 @@ type EntryReader<T> = fn(&Map<String, Value>, &str, &mut Vec<String>) -> Option<
 
 const CONTRIBUTES: &[&str] = &[
     "tools",
+    "toolPresenters",
     "contextSections",
     "prompt",
     "toolLifecycleHooks",
@@ -290,12 +312,14 @@ fn contributes(object: &Map<String, Value>, issues: &mut Vec<String>) -> Package
         fields.issue(key, "not a contribution this version knows");
     }
     let tools = list(&mut fields, "tools", tool);
+    let tool_presenters = list(&mut fields, "toolPresenters", presenter);
     let context_sections = list(&mut fields, "contextSections", section);
     let prompt_slot = fields.object("prompt").and_then(|prompt| {
         Fields::new(prompt, "contributes.prompt.", fields.issues()).string("slot")
     });
     PackageContributes {
         tools,
+        tool_presenters,
         context_sections,
         prompt_slot,
         tool_lifecycle_hooks: fields.bool("toolLifecycleHooks").unwrap_or(false),
@@ -368,6 +392,40 @@ fn tool(
 
 /// The longest a manifest may let one tool call run.
 const MAXIMUM_TOOL_TIMEOUT_SECONDS: f64 = 3600.0;
+
+fn presenter(
+    object: &Map<String, Value>,
+    label: &str,
+    issues: &mut Vec<String>,
+) -> Option<ContributedToolPresenter> {
+    let mut fields = Fields::new(object, &format!("{label}."), issues);
+    let Some(tool) = fields.string("tool").filter(|tool| !tool.is_empty()) else {
+        fields
+            .issues()
+            .push(format!("ignoring {label}: a tool presenter needs a tool"));
+        return None;
+    };
+    let mut keys = Vec::new();
+    for (index, field) in fields.strings("fields").into_iter().enumerate() {
+        if !keys.contains(&field) {
+            keys.push(field);
+        } else {
+            fields
+                .issues()
+                .push(format!("{label}.fields[{index}] names `{field}` twice"));
+        }
+    }
+    Some(ContributedToolPresenter {
+        tool,
+        fields: keys
+            .into_iter()
+            .map(|key| ContributedField {
+                label: key.clone(),
+                key,
+            })
+            .collect(),
+    })
+}
 
 fn section(
     object: &Map<String, Value>,
