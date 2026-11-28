@@ -86,6 +86,7 @@ impl Fixture {
         let directory = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
         let workspace = directory.path().join("workspace");
         fs::create_dir_all(&workspace).unwrap();
+        fs::create_dir_all(workspace.join("protected")).unwrap();
         let record = ProcessGroupRecord::new(directory.path().join("process-groups.json"));
         let group = ProcessOwnerGroup::recorded_in(record.clone());
         let executor = ExecutorManager::default().owned_by(group.clone());
@@ -100,7 +101,8 @@ impl Fixture {
             settings: settings.clone(),
             workspace: Arc::new(move || roots.clone()),
             files: WorkspaceFsService::new(
-                WorkspaceFsPolicy::new(vec![workspace.clone()], Vec::new()).unwrap(),
+                WorkspaceFsPolicy::new(vec![workspace.clone()], vec![workspace.join("protected")])
+                    .unwrap(),
             ),
             restart_policy: options.policy,
             call_timeout: options.call_timeout,

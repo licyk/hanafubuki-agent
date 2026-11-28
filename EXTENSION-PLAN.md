@@ -50,15 +50,11 @@ kardia 0.7 已提供三件本机确实要用的东西：`HostAction`/`register_a
 
 ### 任务 4：会话与记忆工具的动作面
 
-在任务 1 的通道上加三个会产生副作用的动作。副作用的授权**沿工具调用流动**：`contributes.tools[]` 新增可选 `approval: "<kind>"`，宿主为该工具生成的动作按调用自带的 `ApprovalAction` 放行，未授权的调用直接拒绝。这样不引入插件级长期授权，也复用现有审批 UI。
+评估结论：**有副作用的方法不在同步 `HostAction` 上做**。`HostAction::call` 是同步的，而会话、记忆、终端都在 Agent 的异步服务里；`run_blocking_operation` 从宿主运行时自己的 blocking 线程上等待会同池自等。把 `session.list`/`memory.write`/`terminal.spawn` 塞进 `invoke` 只能是阻塞桥或第二套授权模型，两条都坏。
 
-| 方法 | 效果 | 需要的工具授权 |
-| --- | --- | --- |
-| `session.list` | 已有会话（id、标题、更新时间） | 无（只读） |
-| `memory.write` | 写一条记忆 | `DomainMutation` |
-| `terminal.spawn` | 起一个受管后台终端 | `InteractiveExecution` |
+替代做法：`agent` 动作保持在**只读**面（任务 1 的 `workspace.list`/`workspace.read` + 本任务的 `workspace.search`），全部走 workspace 策略；需要副作用的插件用**插件工具**，那里已有 `PluginToolCall` 审批、调用上下文与取消，`sessionId`/`turnId`/`callId` 随参数到达。这条分界写进文档。
 
-验收：`crates/plugin-packages/tests/guests/` 新增用例证明"未经工具授权的 `invoke` 被拒、经授权后通过"，并覆盖 `terminal.spawn` 的进程随 fiber 结束被回收。
+验收：`host_calls` 覆盖 `workspace.search` 的允许/拒绝，以及未授权时的拒绝理由。
 
 ### 任务 5：声明式渲染面
 
@@ -73,9 +69,9 @@ kardia 0.7 已提供三件本机确实要用的东西：`HostAction`/`register_a
 
 ### 任务 6：不重启的配置迁移
 
-`GuestPackage::entry_name` 把 `settings` 之外的字段都算进身份，`settings` 变化本身不重命名，但 `#host` 行的 `config` 变化会让行重建。用 kardia 的 `migrate_binding`/`refresh_consumers`，让 `agent` 动作与 `settings` 视图在设置变化时原地迁移，而不是重启 guest。
+评估结论：**本机做不到，记录理由**。实测（`new_settings_reach_the_guest_without_restarting_it`，随后删除）显示改设置后进程号变了：设置变化确实走 kardia 的 `patch_context`，但 `patch_context` 对 `config` 这个键调用 `inner.update_with(config, true)`，而 guest 桥接（kardia-hmr `bridge()`）没有注册 `on_update`，配置变化只能通过重启插件生效。`migrate_binding`/`refresh_consumers` 只迁移 Realm 里的绑定，不改变插件自身对配置的处理。
 
-验收：`crates/plugin-packages/tests/guests/` 覆盖"改设置后 process_id 不变、`settings.get` 返回新值"。
+可行的替代是一份真正的协议扩展：guest ABI 增加一个 `reconfigure` 导出，桥接用 `on_update` 接管配置，届时不重启；这要改 kardia-hmr 与两个 SDK，属于上游工作。计划在这里停：**不改**，并在文档里写明"改设置会重启 guest"。
 
 ### 任务 7：文档
 

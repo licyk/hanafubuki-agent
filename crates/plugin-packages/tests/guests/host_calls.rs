@@ -133,6 +133,7 @@ pub async fn a_guest_calls_the_agent_it_is_granted() {
     std::fs::write(fixture.workspace.join("notes.txt"), "first\nsecond\n").unwrap();
     std::fs::create_dir(fixture.workspace.join("src")).unwrap();
     std::fs::write(fixture.workspace.join("src/main.rs"), "fn main() {}\n").unwrap();
+    std::fs::write(fixture.workspace.join("protected/secret.txt"), "hidden\n").unwrap();
     let mut package = fixture.package("demo", "run");
     let id = package.id.key();
     package.settings = settings("B-1");
@@ -153,6 +154,10 @@ pub async fn a_guest_calls_the_agent_it_is_granted() {
     for (method, args) in [
         ("workspace.list", json!({ "path": "." })),
         ("workspace.read", json!({ "path": "notes.txt" })),
+        (
+            "workspace.search",
+            json!({ "path": ".", "query": "second" }),
+        ),
     ] {
         let refused = fixture
             .call(&package, "invoke", agent(method, args))
@@ -175,7 +180,7 @@ pub async fn a_guest_calls_the_agent_it_is_granted() {
             .call(
                 &package,
                 "invoke",
-                agent("workspace.list", json!({ "path": ".", "depth": 2 })),
+                agent("workspace.list", json!({ "path": "src", "depth": 2 })),
             )
             .await;
     }
@@ -190,22 +195,62 @@ pub async fn a_guest_calls_the_agent_it_is_granted() {
             .map(|read| read["content"].clone()),
         Ok(json!("first\nsecond\n"))
     );
-    // A path above the workspace root leaves it, which the policy refuses.
+    // A protected subtree is the policy's to refuse.
     let refused = fixture
         .call(
             &package,
             "invoke",
-            agent("workspace.read", json!({ "path": "../../../etc/hostname" })),
+            agent("workspace.read", json!({ "path": "protected/secret.txt" })),
         )
         .await
         .unwrap_err();
-    assert!(!refused.is_empty(), "{refused}");
+    assert!(refused.contains("protected"), "{refused}");
     // A method no one registered says so.
     let refused = fixture
         .call(&package, "invoke", agent("nothing.at.all", json!({})))
         .await
         .unwrap_err();
     assert!(refused.contains("no method nothing.at.all"), "{refused}");
+
+    // The search reads what the policy allows, and says where it matched.
+    let mut found = Err(String::new());
+    while !found.as_ref().is_ok_and(|results: &Value| {
+        results["matches"].as_array().is_some_and(|matches| {
+            matches.iter().any(|entry| {
+                entry["path"]
+                    .as_str()
+                    .is_some_and(|path| path.ends_with("main.rs"))
+            })
+        })
+    }) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the search found nothing: {found:?}"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        found = fixture
+            .call(
+                &package,
+                "invoke",
+                agent(
+                    "workspace.search",
+                    json!({ "path": "src", "query": "main" }),
+                ),
+            )
+            .await;
+    }
+    let refused = fixture
+        .call(
+            &package,
+            "invoke",
+            agent(
+                "workspace.search",
+                json!({ "path": "protected", "query": "hidden" }),
+            ),
+        )
+        .await
+        .unwrap_err();
+    assert!(refused.contains("protected"), "{refused}");
 }
 
 fn has_entries(value: &Value) -> bool {

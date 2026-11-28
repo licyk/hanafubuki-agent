@@ -16,8 +16,9 @@ use hanafubuki_agent_foundation::paths::ResolvedPath;
 use hanafubuki_agent_packages::WorkspaceAccess;
 use hanafubuki_agent_workspace_fs::{
     DirectoryListing, FileReadResult, ListDirectoryRequest, ReadFileRequest, ReadFileStart,
-    WorkspaceFsRequest, WorkspaceFsResult, WorkspaceFsService, MAX_DIRECTORY_DEPTH,
-    MAX_LIST_ENTRIES, MAX_READ_PAGE_BYTES,
+    SearchResults, SearchTextRequest, WorkspaceFsRequest, WorkspaceFsResult, WorkspaceFsService,
+    MAX_DIRECTORY_DEPTH, MAX_LIST_ENTRIES, MAX_READ_PAGE_BYTES, MAX_SEARCH_BYTES,
+    MAX_SEARCH_RESULTS,
 };
 use kardia_core::{Context, PluginDef};
 use kardia_hmr::{register_action, HostAction};
@@ -147,6 +148,26 @@ impl AgentActions {
             Err(error) => Err(error.to_string()),
         }
     }
+
+    /// What `query` matches under `dir`, each within the bounds the file
+    /// service already holds.
+    fn search(&self, dir: &str, query: &str, depth: usize) -> Result<SearchResults, String> {
+        let request = WorkspaceFsRequest::SearchText(SearchTextRequest {
+            path: dir.to_string(),
+            query: query.to_string(),
+            max_depth: depth.clamp(1, MAX_DIRECTORY_DEPTH),
+            max_results: MAX_SEARCH_RESULTS,
+            max_bytes: MAX_SEARCH_BYTES,
+        });
+        match self
+            .readable()?
+            .execute(&request, None, &Default::default())
+        {
+            Ok(WorkspaceFsResult::SearchResults(results)) => Ok(results),
+            Ok(other) => Err(format!("searching {dir} answered {other:?}")),
+            Err(error) => Err(error.to_string()),
+        }
+    }
 }
 
 impl HostAction for AgentActions {
@@ -168,10 +189,13 @@ impl HostAction for AgentActions {
                     args.get("endLine").and_then(Value::as_u64),
                 )
                 .and_then(|read| serde_json::to_value(read).map_err(|e| e.to_string())),
+            "workspace.search" => self
+                .search(text("path"), text("query"), whole("depth").unwrap_or(8))
+                .and_then(|results| serde_json::to_value(results).map_err(|e| e.to_string())),
             "settings.get" => Ok(self.settings.clone()),
             other => Err(format!(
                 "no method {other}: `workspace.list` and `workspace.read` read the workspace, \
-                 and `settings.get` answers the guest's settings"
+                 `workspace.search` searches it, and `settings.get` answers the guest's settings"
             )),
         };
         answer.map_err(kardia_core::Error::msg)
