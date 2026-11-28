@@ -57,7 +57,8 @@ impl AgentToolPresenter for FsPresenter {
     }
 
     /// A patch shows its diff whether or not it applied; the other tools
-    /// what their result says, and the fallback for an error.
+    /// what their result says, and the fallback for an error, which is the
+    /// only place a patch's failure reason reaches the interface.
     fn display(
         &self,
         tool: &str,
@@ -65,6 +66,9 @@ impl AgentToolPresenter for FsPresenter {
         output: &ToolOutput,
     ) -> Option<AgentToolDisplay> {
         if tool == APPLY_PATCH {
+            if output.is_error {
+                return None;
+            }
             return Some(AgentToolDisplay::Patch {
                 preview: agent_preview(preview_patch(patch(arguments)?)),
             });

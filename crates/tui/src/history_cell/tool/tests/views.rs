@@ -98,6 +98,41 @@ fn a_patch_of_several_files_snapshot() {
     insta::assert_snapshot!(both(&cell, 60));
 }
 
+/// A patch that did not apply shows why, from the tool's error text.
+#[test]
+fn a_failed_patch_shows_why_it_did_not_apply() {
+    let output = hanafubuki_agent::ToolOutput::structured(
+        serde_json::json!({
+            "error": "file preimage no longer matches the approved patch: src/lib.rs"
+        }),
+        true,
+    );
+    let mut cell = super::new_tool_call(
+        "call-1".to_string(),
+        "apply_patch".to_string(),
+        Some("src/lib.rs".to_string()),
+    );
+    cell.complete("call-1", true);
+    cell.show(
+        "call-1",
+        hanafubuki_agent::AgentToolCallDisplay {
+            subject: None,
+            display: Some(AgentToolDisplay::fallback(&output)),
+        },
+    );
+    let rendered = render(&cell, 60);
+    assert!(
+        rendered.contains("• Failed apply_patch: src/lib.rs"),
+        "{rendered}"
+    );
+    assert!(cell.activity_disclosure(60).is_some());
+    let expanded = super::text(&cell.transcript_lines(200));
+    assert!(
+        expanded.contains("preimage no longer matches the approved patch"),
+        "{expanded}"
+    );
+}
+
 #[test]
 fn a_file_read_snapshot() {
     let cell = shown(

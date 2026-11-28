@@ -132,6 +132,16 @@ fn a_patch_shows_its_diff_from_a_function_or_a_freeform_call() {
 }
 
 #[test]
+fn a_failed_patch_takes_the_fallback_so_its_reason_shows() {
+    let arguments = json!({ "patch": PATCH });
+    let output = ToolResult::model_visible_error(json!({
+        "error": "file preimage no longer matches the approved patch: src/lib.rs"
+    }))
+    .output;
+    assert_eq!(FsPresenter.display(APPLY_PATCH, &arguments, &output), None);
+}
+
+#[test]
 fn a_move_and_a_delete_name_their_paths_and_an_error_takes_the_fallback() {
     let moving = json!({ "source": "a.txt", "destination": "b.txt" });
     let moved = output(json!({
