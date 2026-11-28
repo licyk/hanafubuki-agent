@@ -22,6 +22,7 @@ hanafubuki-agent-packages.workspace = true
 hanafubuki-agent-process.workspace = true
 hanafubuki-agent-sandbox.workspace = true
 hanafubuki-agent-tool-contracts.workspace = true
+hanafubuki-agent-workspace-fs.workspace = true
 hex.workspace = true
 kardia-core.workspace = true
 # Only here: the guest host is the one crate that runs a loader subtree and

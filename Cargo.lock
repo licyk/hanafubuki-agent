@@ -2249,6 +2249,7 @@ dependencies = [
  "hanafubuki-agent-process",
  "hanafubuki-agent-sandbox",
  "hanafubuki-agent-tool-contracts",
+ "hanafubuki-agent-workspace-fs",
  "hex",
  "kardia-core",
  "kardia-guest",

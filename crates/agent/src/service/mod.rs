@@ -398,6 +398,7 @@ impl AgentApplicationService {
                     &config,
                     blocking.clone(),
                     workspace.clone(),
+                    files.clone(),
                     workers.clone(),
                     guests,
                 )

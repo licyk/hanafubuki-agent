@@ -123,7 +123,8 @@ const LAYERS: &[(&str, &[&str])] = &[
         &[CONTRACTS, FOUNDATION, HOOKS, PROCESS, TOOL_CONTRACTS],
     ),
     // The guest host: `RestartPolicy`, which the plugin API does not
-    // re-export, comes from the host.
+    // re-export, comes from the host; the methods a guest calls read the
+    // workspace through its policy.
     (
         GUEST_HOST,
         &[
@@ -135,6 +136,7 @@ const LAYERS: &[(&str, &[&str])] = &[
             PROCESS,
             SANDBOX,
             TOOL_CONTRACTS,
+            "hanafubuki-agent-workspace-fs",
         ],
     ),
     // The configuration.

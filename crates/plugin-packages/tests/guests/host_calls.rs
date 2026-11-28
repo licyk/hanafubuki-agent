@@ -127,3 +127,89 @@ pub async fn a_guest_that_provides_another_service_is_refused() {
     );
     assert_eq!(fixture.call(&package, "echo", json!(1)).await, Ok(json!(1)));
 }
+
+pub async fn a_guest_calls_the_agent_it_is_granted() {
+    let fixture = Fixture::start(Options::default()).await;
+    std::fs::write(fixture.workspace.join("notes.txt"), "first\nsecond\n").unwrap();
+    std::fs::create_dir(fixture.workspace.join("src")).unwrap();
+    std::fs::write(fixture.workspace.join("src/main.rs"), "fn main() {}\n").unwrap();
+    let mut package = fixture.package("demo", "run");
+    let id = package.id.key();
+    package.settings = settings("B-1");
+    fixture.apply(vec![package.clone()]).await;
+    fixture.wait(&id, "start", running).await;
+
+    let agent =
+        |method: &str, args: Value| json!({ "key": "agent", "method": method, "args": args });
+    // The settings are the ones it was configured with.
+    assert_eq!(
+        fixture
+            .call(&package, "invoke", agent("settings.get", Value::Null))
+            .await,
+        Ok(json!({ "board": "B-1" }))
+    );
+    // Without the grant, the workspace is not readable, and neither method
+    // reaches it.
+    for (method, args) in [
+        ("workspace.list", json!({ "path": "." })),
+        ("workspace.read", json!({ "path": "notes.txt" })),
+    ] {
+        let refused = fixture
+            .call(&package, "invoke", agent(method, args))
+            .await
+            .unwrap_err();
+        assert!(refused.contains("not readable"), "{method}: {refused}");
+    }
+
+    // Granted, both read what the workspace policy allows.
+    package.permissions.workspace = WorkspaceAccess::Read;
+    package.granted = Some(package.permissions.clone());
+    fixture.apply(vec![package.clone()]).await;
+    // A new grant is a new start: wait for its listing.
+    let mut listed = Err(String::new());
+    let deadline = std::time::Instant::now() + crate::fixture::DEADLINE;
+    while !listed.as_ref().is_ok_and(has_entries) {
+        assert!(std::time::Instant::now() < deadline, "{listed:?}");
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        listed = fixture
+            .call(
+                &package,
+                "invoke",
+                agent("workspace.list", json!({ "path": ".", "depth": 2 })),
+            )
+            .await;
+    }
+    assert_eq!(
+        fixture
+            .call(
+                &package,
+                "invoke",
+                agent("workspace.read", json!({ "path": "notes.txt" })),
+            )
+            .await
+            .map(|read| read["content"].clone()),
+        Ok(json!("first\nsecond\n"))
+    );
+    // A path above the workspace root leaves it, which the policy refuses.
+    let refused = fixture
+        .call(
+            &package,
+            "invoke",
+            agent("workspace.read", json!({ "path": "../../../etc/hostname" })),
+        )
+        .await
+        .unwrap_err();
+    assert!(!refused.is_empty(), "{refused}");
+    // A method no one registered says so.
+    let refused = fixture
+        .call(&package, "invoke", agent("nothing.at.all", json!({})))
+        .await
+        .unwrap_err();
+    assert!(refused.contains("no method nothing.at.all"), "{refused}");
+}
+
+fn has_entries(value: &Value) -> bool {
+    value["entries"]
+        .as_array()
+        .is_some_and(|entries| !entries.is_empty())
+}

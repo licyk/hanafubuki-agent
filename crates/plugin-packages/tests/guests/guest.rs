@@ -90,7 +90,7 @@ impl Guest for TestGuest {
             "invoke" => host.invoke(
                 request.args["key"].as_str().unwrap_or_default(),
                 request.args["method"].as_str().unwrap_or_default(),
-                &Value::Null,
+                request.args.get("args").unwrap_or(&Value::Null),
             ),
             "provide" => {
                 host.provide(request.args.as_str().unwrap_or_default(), &json!({}))?;

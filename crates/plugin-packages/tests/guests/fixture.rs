@@ -24,6 +24,7 @@ use hanafubuki_agent_process::executor::manager::executor_registry_counts;
 use hanafubuki_agent_process::executor::ExecutorManager;
 use hanafubuki_agent_process::process_groups::{ProcessGroupRecord, ProcessOwnerGroup};
 use hanafubuki_agent_sandbox::Sandbox;
+use hanafubuki_agent_workspace_fs::{WorkspaceFsPolicy, WorkspaceFsService};
 use kardia_core::{Context, Fiber, PluginDef, Service, Svc};
 use parking_lot::Mutex;
 use serde_json::{json, Map, Value};
@@ -98,6 +99,9 @@ impl Fixture {
                 .unwrap_or_else(|| Sandbox::unavailable("unconfined")),
             settings: settings.clone(),
             workspace: Arc::new(move || roots.clone()),
+            files: WorkspaceFsService::new(
+                WorkspaceFsPolicy::new(vec![workspace.clone()], Vec::new()).unwrap(),
+            ),
             restart_policy: options.policy,
             call_timeout: options.call_timeout,
             workers: BackgroundWorkerGroup::contained(),

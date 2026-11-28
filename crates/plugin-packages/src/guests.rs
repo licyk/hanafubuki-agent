@@ -40,6 +40,9 @@ pub struct GuestHostInputs {
     pub settings: Arc<dyn GuestSettingsPort>,
     /// The workspace a guest may read or write, as granted.
     pub workspace: WorkspaceRoots,
+    /// Where a guest reads the workspace it is granted, and the policy that
+    /// bounds it.
+    pub files: hanafubuki_agent_workspace_fs::WorkspaceFsService,
     /// When a guest that failed while running starts again.
     pub restart_policy: RestartPolicy,
     /// The bound on a guest's handshake and on each export without a
@@ -106,6 +109,7 @@ impl GuestHost {
             executor: inputs.executor,
             sandbox,
             workspace: inputs.workspace,
+            files: inputs.files,
             call_timeout: inputs.call_timeout,
         });
         let shared = Arc::new(Shared {

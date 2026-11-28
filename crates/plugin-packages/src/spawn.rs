@@ -26,6 +26,7 @@ use hanafubuki_agent_process::executor::{
 };
 use hanafubuki_agent_process::ownership::ProcessOwnerId;
 use hanafubuki_agent_sandbox::{Sandbox, SandboxPolicy};
+use hanafubuki_agent_workspace_fs::WorkspaceFsService;
 use kardia_hmr::{GuestChild, GuestCommand, GuestProcess, Spawner};
 
 use crate::package::GuestPackage;
@@ -45,6 +46,9 @@ pub(crate) struct SpawnContext {
     /// `None`: guests run unconfined (tests only).
     pub(crate) sandbox: Option<Sandbox>,
     pub(crate) workspace: WorkspaceRoots,
+    /// Where a guest's `workspace.list` and `workspace.read` read the
+    /// workspace, under the policy the roots make.
+    pub(crate) files: WorkspaceFsService,
     /// The bound on each export (`apply`, a call, `dispose`) and the
     /// handshake: past it the process is killed.
     pub(crate) call_timeout: Duration,

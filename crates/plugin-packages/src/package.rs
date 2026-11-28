@@ -8,7 +8,7 @@ use hanafubuki_agent_packages::{
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
-use crate::host_services::{SETTINGS_SERVICE, WORKSPACE_SERVICE};
+use crate::host_services::{AGENT_SERVICE, SETTINGS_SERVICE, WORKSPACE_SERVICE};
 
 /// The service every guest provides, in a realm of its own: the Agent calls
 /// a guest through it. A guest declares it in its metadata
@@ -98,7 +98,8 @@ impl GuestPackage {
 
     /// Its loader entries, off unless the guest runs: the guest's, and its
     /// host services' beside it. The guest's `plugin` is a realm of its own;
-    /// what it may view (`workspace`, `settings`) is in a realm the two
+    /// what it may view (`workspace`, `settings`) and call (`agent`) is in a
+    /// realm the two
     /// entries share, which the guest's entry declares (`inject`), so the
     /// guest starts once its host services run. The plugins are named by
     /// everything their start depends on, so a new version, a changed
@@ -113,7 +114,7 @@ impl GuestPackage {
                 "id": self.host_entry_id(),
                 "name": self.host_entry_name(revision),
                 "disabled": !self.runs(),
-                "isolate": { WORKSPACE_SERVICE: label, SETTINGS_SERVICE: label },
+                "isolate": { WORKSPACE_SERVICE: label, SETTINGS_SERVICE: label, AGENT_SERVICE: label },
                 "config": config,
             }),
             json!({
@@ -124,8 +125,9 @@ impl GuestPackage {
                     GUEST_SERVICE: true,
                     WORKSPACE_SERVICE: label,
                     SETTINGS_SERVICE: label,
+                    AGENT_SERVICE: label,
                 },
-                "inject": [WORKSPACE_SERVICE, SETTINGS_SERVICE],
+                "inject": [WORKSPACE_SERVICE, SETTINGS_SERVICE, AGENT_SERVICE],
                 "config": config,
             }),
         ]

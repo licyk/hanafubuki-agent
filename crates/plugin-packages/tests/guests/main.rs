@@ -90,6 +90,9 @@ const CHECKS: &[(&str, Check)] = &[
     ("a_guest_that_provides_another_service_is_refused", || {
         Box::pin(host_calls::a_guest_that_provides_another_service_is_refused())
     }),
+    ("a_guest_calls_the_agent_it_is_granted", || {
+        Box::pin(host_calls::a_guest_calls_the_agent_it_is_granted())
+    }),
     (
         "the_sandbox_keeps_a_guest_to_its_package_its_data_and_its_grant",
         || Box::pin(sandbox::the_sandbox_keeps_a_guest_to_its_package_its_data_and_its_grant()),

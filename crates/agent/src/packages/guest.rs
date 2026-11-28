@@ -14,6 +14,7 @@ use hanafubuki_agent_plugin_packages::{
 };
 use hanafubuki_agent_process::executor::ExecutorManager;
 use hanafubuki_agent_sandbox::Sandbox;
+use hanafubuki_agent_workspace_fs::WorkspaceFsService;
 use serde_json::{Map, Value};
 
 use crate::WorkspaceRootsPort;
@@ -28,6 +29,7 @@ pub(crate) fn guest_host(
     config: &AgentConfig,
     blocking: Arc<dyn BlockingOperationPort>,
     workspace: Arc<dyn WorkspaceRootsPort>,
+    files: WorkspaceFsService,
     workers: BackgroundWorkerGroup,
     packages: Vec<GuestPackage>,
 ) -> GuestHost {
@@ -46,6 +48,7 @@ pub(crate) fn guest_host(
                     .map(|roots| roots.roots().to_vec())
                     .unwrap_or_default()
             }),
+            files,
             restart_policy: RestartPolicy::default(),
             call_timeout: hanafubuki_agent_kernel::FIRST_BATCH_HARD_LIMITS.plugin_call_deadline,
             workers,
