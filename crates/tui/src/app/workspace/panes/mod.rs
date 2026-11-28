@@ -9,8 +9,11 @@
 //! Narrower than [`SPLIT_MIN_WIDTH`], zoomed, or without a side pane, the
 //! focused pane fills the screen.
 
+mod snapshot;
 #[cfg(test)]
 mod tests;
+
+pub(in crate::app) use snapshot::PaneSnapshot;
 
 use std::time::Instant;
 
@@ -55,6 +58,8 @@ pub(crate) struct PaneLayout {
     pub(crate) panel: Option<Rect>,
     pub(crate) strip: Option<Rect>,
     pub(crate) titles: Vec<(Rect, Line<'static>)>,
+    /// Where a closed pane still sliding out is drawn.
+    pub(crate) closing: Option<Rect>,
     /// The leader's box.
     pub(crate) hud: Option<Rect>,
 }
@@ -116,6 +121,7 @@ impl Workspace {
             panel: None,
             strip: None,
             titles: Vec::new(),
+            closing: None,
             hud: None,
         };
         if self.sidebar.showing_panel() {
@@ -123,6 +129,15 @@ impl Workspace {
             return layout;
         }
         let Some(second) = self.second.as_ref() else {
+            // A closed pane still sliding out keeps the split: what it last
+            // showed is drawn in it.
+            if self.closing_pane.is_some() {
+                if let Some((main, side, divider)) = self.split_panes_at(screen, fraction) {
+                    layout.focused = main;
+                    layout.divider = Some(divider);
+                    layout.closing = Some(side);
+                }
+            }
             if self.child.is_some() && screen.height > 1 {
                 let (title, body) = split_title(screen);
                 layout.titles = vec![(title, self.banner(Focus::Main))];

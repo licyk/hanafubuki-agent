@@ -105,6 +105,14 @@ path = "crates/tui/src/chatwidget/tests/async_questions.rs"
 reason = "Exercises this project's event routing, steering and terminal views."
 
 [[original]]
+path = "crates/tui/src/app/workspace/panes/snapshot.rs"
+reason = "A closed pane's last picture, copied from ratatui's buffer and drawn narrowed as the pane slides out; Codex tears a closing pane down without a slide."
+
+[[original]]
+path = "crates/tui/src/app/workspace/panes/snapshot/tests.rs"
+reason = "Tests the snapshot above."
+
+[[original]]
 path = "crates/agent/src/plugins/subagents/service/statuses.rs"
 reason = "The subagents' statuses as the facade lists them, and the facade's interrupt of one; moved out of the service's module."
 

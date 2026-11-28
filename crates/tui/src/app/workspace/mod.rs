@@ -22,6 +22,7 @@ mod sidebar;
 mod tasks;
 
 pub(in crate::app) use pane_motion::SLIDE_FRAME;
+pub(in crate::app) use panes::PaneSnapshot;
 pub(in crate::app) use panes::SPLIT_MIN_WIDTH;
 
 use std::io::{self, Write};
@@ -186,6 +187,8 @@ pub(super) struct Workspace {
     side_width: Option<(u16, u16)>,
     /// The side pane's share of its width as it slides open or shut.
     pub(super) motion: pane_motion::PaneMotion,
+    /// The picture a closing pane last showed, drawn while it slides out.
+    pub(super) closing_pane: Option<panes::PaneSnapshot>,
     /// The focused pane fills the screen.
     zoomed: bool,
     /// The divider is being dragged.

@@ -114,6 +114,8 @@ impl App {
         );
         if sliding {
             self.schedule_frame(Instant::now() + crate::app::workspace::SLIDE_FRAME);
+        } else if !self.workspace.side_pane_open() {
+            self.workspace.closing_pane = None;
         }
         let layout =
             self.workspace
@@ -136,6 +138,8 @@ impl App {
                 .map(|footer| footer.lines)
                 .or_else(|| browsing.clone().map(|line| vec![line])),
         );
+        // The picture a closed pane showed, drawn while it slides out.
+        let mut closing_pane = self.workspace.closing_pane.take();
         let chat_widget = &mut self.chat_widget;
         let (sidebar, parked) = self.workspace.sidebar_and_parked();
         let mut passive = layout.passive.zip(parked);
@@ -171,6 +175,12 @@ impl App {
                 parked
                     .transcript_view
                     .render(transcript, buf, &parked.transcript_cells);
+                closing_pane = Some(crate::app::workspace::PaneSnapshot::take(area, buf));
+            }
+            if let Some(area) = layout.closing {
+                if let Some(snapshot) = closing_pane.as_ref() {
+                    snapshot.paint(area, buf);
+                }
             }
             super::workspace::paint_chrome(buf, &layout, dragging);
             frame.sidebar_image = sidebar.paint(&layout, buf);
@@ -183,6 +193,7 @@ impl App {
                 frame.set_cursor_position((x, y));
             }
         })?;
+        self.workspace.closing_pane = if sliding { closing_pane } else { None };
         if layout.panel.is_some() {
             self.refresh_visible_side_prompts();
         }
