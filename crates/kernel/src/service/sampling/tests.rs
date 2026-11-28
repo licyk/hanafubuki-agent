@@ -373,7 +373,12 @@ fn a_request_is_composed_of_its_groups_and_they_add_up_to_its_estimate() {
         output_format: None,
     };
 
-    let composition = compose_request(&request, &plan).unwrap();
+    let composition = compose_request(
+        &request,
+        &plan,
+        hanafubuki_agent_contracts::DEFAULT_BYTES_PER_TOKEN,
+    )
+    .unwrap();
 
     let (stripped, _) = estimate::without_media(&request).unwrap();
     let items = |indexes: &[usize]| {

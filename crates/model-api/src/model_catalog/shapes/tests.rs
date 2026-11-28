@@ -73,6 +73,22 @@ fn max_output_takes_the_documented_fields_in_order() {
 }
 
 #[test]
+fn a_listed_ratio_is_thousandths_of_a_byte_to_a_token() {
+    let cases = [
+        (json!({ "bytes_per_token": 3.2 }), Some(3_200)),
+        (json!({ "bytesPerToken": 4 }), Some(4_000)),
+        (json!({ "bytes_per_token": "2.653" }), Some(2_653)),
+        (json!({ "bytes_per_token": 0 }), None),
+        (json!({ "bytes_per_token": -1 }), None),
+        (json!({ "bytes_per_token": "many" }), None),
+        (json!({}), None),
+    ];
+    for (item, expected) in cases {
+        assert_eq!(bytes_per_token_millis(&item), expected, "{item}");
+    }
+}
+
+#[test]
 fn image_input_is_yes_when_any_field_says_yes() {
     let cases = [
         (

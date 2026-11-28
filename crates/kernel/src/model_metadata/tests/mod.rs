@@ -38,6 +38,7 @@ fn entry(id: &str, context_window: Option<u64>) -> ModelCatalogEntry {
         supported_reasoning_efforts: Vec::new(),
         context_window,
         max_output_tokens: None,
+        bytes_per_token_millis: None,
         image_input: None,
         reasoning: None,
     }

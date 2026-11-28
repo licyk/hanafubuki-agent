@@ -382,6 +382,9 @@ pub(super) fn reported_facts(entry: &ModelCatalogEntry, now_ms: u64) -> ModelMet
     ModelMetadata {
         context_window: entry.context_window.map(|value| reported(value, now_ms)),
         max_output_tokens: entry.max_output_tokens.map(|value| reported(value, now_ms)),
+        bytes_per_token_millis: entry
+            .bytes_per_token_millis
+            .map(|value| reported(value, now_ms)),
         reasoning: reasoning.map(|value| reported(value, now_ms)),
         image_input: entry.image_input.map(|value| reported(value, now_ms)),
         structured_output: None,
@@ -431,6 +434,7 @@ fn stamped(metadata: ModelMetadata, source: ModelMetadataSource, now_ms: u64) ->
     ModelMetadata {
         context_window: stamp(metadata.context_window, source, now_ms),
         max_output_tokens: stamp(metadata.max_output_tokens, source, now_ms),
+        bytes_per_token_millis: stamp(metadata.bytes_per_token_millis, source, now_ms),
         reasoning: stamp(metadata.reasoning, source, now_ms),
         image_input: stamp(metadata.image_input, source, now_ms),
         structured_output: stamp(metadata.structured_output, source, now_ms),

@@ -126,7 +126,7 @@ impl AgentBridge {
                 input_tokens: usage.cumulative_input_tokens,
                 output_tokens: usage.cumulative_output_tokens,
                 context: usage
-                    .context_consumed_tokens
+                    .context_size_reported()
                     .zip(usage.context_window_tokens),
                 last_input_tokens: usage.last_response_input_tokens,
                 cache_read_tokens: usage.last_response_cache_read_tokens.unwrap_or(0),

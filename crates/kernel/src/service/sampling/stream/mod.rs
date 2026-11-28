@@ -58,7 +58,13 @@ impl AgentService {
             identity.turn_id,
             identity.generation
         );
-        let composition = compose_request(&request, &tool_plan)?;
+        let bytes_per_token = self
+            .session(identity.session_id)?
+            .lock()?
+            .settings
+            .config
+            .bytes_per_token();
+        let composition = compose_request(&request, &tool_plan, bytes_per_token)?;
         let estimated_input_tokens = composition.total_tokens;
         self.capture_sent_request(identity.session_id, composition)
             .await?;

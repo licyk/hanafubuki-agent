@@ -681,6 +681,7 @@ broken = 3
             AgentModelOverrideSettings {
                 context_window_tokens: Some(200_000),
                 max_output_tokens: None,
+                bytes_per_token_millis: None,
                 image_input: AgentModelImageInput::Unsupported,
                 reasoning_efforts: Some(Vec::new()),
             },
@@ -690,6 +691,7 @@ broken = 3
             AgentModelOverrideSettings {
                 context_window_tokens: None,
                 max_output_tokens: Some(32_000),
+                bytes_per_token_millis: None,
                 image_input: AgentModelImageInput::Supported,
                 reasoning_efforts: None,
             },

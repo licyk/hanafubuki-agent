@@ -140,6 +140,7 @@ fn listed(model: &str, image_input: Option<bool>) -> ModelCatalogEntry {
         supported_reasoning_efforts: Vec::new(),
         context_window: None,
         max_output_tokens: None,
+        bytes_per_token_millis: None,
         image_input,
         reasoning: None,
     }
@@ -154,6 +155,7 @@ fn config(image_input: ModelImageInputPolicy) -> AgentSessionConfig {
         mode: crate::AgentSessionMode::Default,
         reasoning_effort: None,
         context_window_tokens: None,
+        bytes_per_token_millis: None,
         input_capabilities: ModelInputCapabilityPolicy { image_input },
         auto_compaction_enabled: true,
         auto_compact_threshold_percent: 80,

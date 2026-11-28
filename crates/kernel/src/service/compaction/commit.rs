@@ -125,6 +125,12 @@ impl AgentService {
             };
             if let Some(usage) = staged.runtime.usage.as_mut() {
                 usage.context_consumed_tokens = Some(next_context_tokens);
+                // The Provider counted the context before the instalment, so
+                // that count no longer measures what the next request sends;
+                // the count of the installed one comes with the next
+                // response. Keeping it would hold the context above the
+                // threshold the instalment just brought it under.
+                usage.context_reported_tokens = None;
                 usage.context_estimated_tokens = None;
             }
             let event = record_compaction_event(&mut staged, snapshot.clone(), self.inner.limits);

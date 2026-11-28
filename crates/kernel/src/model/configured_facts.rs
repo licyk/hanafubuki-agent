@@ -25,6 +25,15 @@ pub struct AgentConfiguredModelFacts {
         skip_serializing_if = "Option::is_none"
     )]
     pub max_output_tokens: Option<u64>,
+    /// The bytes of UTF-8 one token is estimated at for this model, when
+    /// its requests are counted rather than reported, in thousandths of a
+    /// byte.
+    #[serde(
+        default,
+        deserialize_with = "tolerant",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub bytes_per_token_millis: Option<u64>,
     /// Whether the model reads images. A session's input policy that
     /// disables images still wins over a configured "yes".
     #[serde(

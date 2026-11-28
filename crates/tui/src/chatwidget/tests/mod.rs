@@ -243,6 +243,7 @@ fn a_model_picked_from_the_catalogs_is_set_on_the_session() {
             supported_reasoning_efforts: Vec::new(),
             context_window: None,
             max_output_tokens: None,
+            bytes_per_token_millis: None,
             image_input: None,
             reasoning: None,
         },

@@ -75,6 +75,20 @@ pub(super) fn max_output_tokens(item: &Value) -> Option<u64> {
     first_positive(item, MAX_OUTPUT_FIELDS)
 }
 
+/// The listing's own ratio, when it states one: a number, or a string that
+/// is one, in thousandths of a byte.
+pub(super) fn bytes_per_token_millis(item: &Value) -> Option<u64> {
+    let value = item
+        .get("bytes_per_token")
+        .or_else(|| item.get("bytesPerToken"))?;
+    let ratio = match value {
+        Value::Number(number) => number.as_f64(),
+        Value::String(text) => text.trim().parse().ok(),
+        _ => None,
+    }?;
+    (ratio.is_finite() && ratio > 0.0).then(|| (ratio * 1000.0).round() as u64)
+}
+
 pub(super) fn image_input(item: &Value) -> Option<bool> {
     let modalities = INPUT_MODALITY_FIELDS
         .iter()

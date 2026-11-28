@@ -1,5 +1,37 @@
 use super::*;
 
+/// A session counts its model's own ratio: two bytes to a token counts the
+/// same text twice as many tokens as the default of four.
+#[tokio::test]
+async fn a_session_counts_at_the_ratio_it_is_given() {
+    let count = async |ratio: Option<u64>| {
+        let model = ScriptedModel::new([response("first", "Recorded.", 40_000)]);
+        let service = AgentService::new(Arc::new(model), FakeTools::new([]).await.registries());
+        let session = service
+            .create_session(AgentSessionConfig {
+                context_window_tokens: Some(1_000_000),
+                bytes_per_token_millis: ratio,
+                ..config()
+            })
+            .unwrap();
+        service
+            .start_turn(session.id, "configuration ".repeat(40_000))
+            .await
+            .unwrap();
+        service
+            .snapshot(session.id)
+            .unwrap()
+            .usage
+            .unwrap()
+            .context_estimated_tokens
+            .unwrap()
+    };
+    let dense = count(Some(2_000)).await;
+    let default = count(None).await;
+    // Each group rounds up, so twice the tokens is a few short of exact.
+    assert!(dense + 64 >= default * 2, "dense {dense} default {default}");
+}
+
 #[tokio::test]
 async fn background_compaction_does_not_use_the_uncalibrated_history_size() {
     use hanafubuki_agent_kernel::{AgentBackgroundCompactionThreshold, AgentCompactionStrategy};

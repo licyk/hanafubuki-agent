@@ -109,6 +109,30 @@ impl AgentService {
         Some(window)
     }
 
+    /// Takes the ratio the route's model resolves to now: what the person
+    /// configured, else what its listing or a measurement stated. The
+    /// request estimate admits compaction, so a session that changed model
+    /// or route takes the new ratio with its next turn. Returns whether it
+    /// changed.
+    pub(super) fn refresh_bytes_per_token(&self, record: &mut SessionRecord) -> bool {
+        let config = &record.settings.config;
+        let Some(route) = record.settings.model.route_key(&config.model) else {
+            return false;
+        };
+        let ratio = self.inner.model_metadata.bytes_per_token(
+            config.configured_facts.bytes_per_token_millis,
+            Some(&route),
+            &config.model,
+            now_millis_u64(),
+        );
+        let millis = (ratio * 1000.0).round() as u64;
+        if config.bytes_per_token_millis == Some(millis) {
+            return false;
+        }
+        record.settings.config.bytes_per_token_millis = Some(millis);
+        true
+    }
+
     /// Learns from the Provider's refusal of `request` (with `message`) as
     /// too long for its model's window: the window the refusal names, else
     /// the request's estimated size, an upper bound. The route keeps it

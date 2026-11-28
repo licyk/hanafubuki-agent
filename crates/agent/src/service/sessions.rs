@@ -133,7 +133,10 @@ impl AgentApplicationService {
                 None
             },
             // The kernel resolves the window, the configured one first.
+            // The kernel resolves the token ratio too, the configured one
+            // first.
             context_window_tokens: None,
+            bytes_per_token_millis: None,
             input_capabilities: policy.input_capabilities,
             auto_compaction_enabled: policy.auto_compaction_enabled,
             auto_compact_threshold_percent: policy.auto_compact_threshold_percent,

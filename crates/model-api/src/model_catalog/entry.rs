@@ -45,6 +45,7 @@ pub(super) fn decode_entry(protocol: ModelApiProtocol, item: &Value) -> Option<M
         supported_reasoning_efforts,
         context_window: shapes::context_window(item),
         max_output_tokens: shapes::max_output_tokens(item),
+        bytes_per_token_millis: shapes::bytes_per_token_millis(item),
         image_input: shapes::image_input(item),
         reasoning: shapes::reasoning(item, reports_levels),
     })

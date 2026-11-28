@@ -13,6 +13,15 @@ pub struct AgentSessionConfig {
     pub mode: AgentSessionMode,
     pub reasoning_effort: Option<hanafubuki_agent_model_api::ModelReasoningEffort>,
     pub context_window_tokens: Option<u64>,
+    /// The bytes of UTF-8 one token is estimated at when this session's
+    /// requests are counted rather than reported, in thousandths of a byte;
+    /// unset while the model says nothing, which counts as four.
+    #[serde(
+        default,
+        deserialize_with = "tolerant_ratio",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub bytes_per_token_millis: Option<u64>,
     pub input_capabilities: hanafubuki_agent_model_api::ModelInputCapabilityPolicy,
     pub auto_compaction_enabled: bool,
     pub auto_compact_threshold_percent: u8,
@@ -100,6 +109,17 @@ where
     Ok(value.and_then(|value| serde_json::from_value(value).ok()))
 }
 
+/// A ratio that is not a positive number is unset.
+fn tolerant_ratio<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(value
+        .and_then(|value| serde_json::from_value::<u64>(value).ok())
+        .filter(|millis| *millis > 0))
+}
+
 /// The share of the context window at which a session with the `background`
 /// strategy starts a compaction in the background, from
 /// `[compaction.background]`: the facade puts it in each turn's extensions.
@@ -174,6 +194,15 @@ impl AgentSessionConfig {
     ) {
         self.context_window_tokens = window.as_ref().map(|window| window.value);
         self.context_window_source = window.map(|window| window.source);
+    }
+
+    /// The bytes of UTF-8 one token is estimated at for this model: what was
+    /// resolved for it, else the default.
+    pub(crate) fn bytes_per_token(&self) -> f64 {
+        self.bytes_per_token_millis.map_or(
+            hanafubuki_agent_contracts::DEFAULT_BYTES_PER_TOKEN,
+            |millis| millis as f64 / 1000.0,
+        )
     }
 }
 

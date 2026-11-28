@@ -416,8 +416,7 @@ fn token_count(record: &SessionRecord, items: &[Arc<AgentHistoryItem>]) -> (u64,
     if let Some(tokens) = record
         .runtime
         .usage
-        .filter(|usage| usage.source == AgentUsageSource::ProviderReported)
-        .and_then(|usage| usage.context_consumed_tokens)
+        .and_then(|usage| usage.context_size_reported())
     {
         return (tokens, TokenCountSource::Usage);
     }

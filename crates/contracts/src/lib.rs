@@ -83,7 +83,9 @@ pub use session::{
     DisableAsyncUserInput, TurnWake,
 };
 pub use skills::{SelectableSkill, SelectableSkills};
-pub use tokens::{estimate_tokens, token_budget_bytes};
+pub use tokens::{
+    estimate_tokens, estimate_tokens_with, token_budget_bytes, DEFAULT_BYTES_PER_TOKEN,
+};
 pub use tool_lifecycle::{
     PostToolUseDecision, PostToolUseFuture, PreToolUseDecision, PreToolUseFuture,
     ToolLifecycleCall, ToolLifecycleHook, ToolLifecycleHookError, ToolLifecycleHookRegistration,

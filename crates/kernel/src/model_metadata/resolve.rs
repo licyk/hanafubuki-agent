@@ -35,6 +35,13 @@ pub(super) fn resolve(
             &catalog.max_output_tokens,
             None,
         ),
+        // A ratio is a measurement, not a ceiling, so no source can be
+        // proved wrong by another: the person's, else most recent.
+        bytes_per_token_millis: configured
+            .bytes_per_token_millis
+            .map(|value| unobserved(value, ModelMetadataSource::Configured))
+            .or_else(|| reported.bytes_per_token_millis.clone())
+            .or_else(|| catalog.bytes_per_token_millis.clone()),
         reasoning: capability(
             configured.reasoning,
             &learned.reasoning,

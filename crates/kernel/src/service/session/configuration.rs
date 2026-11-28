@@ -347,6 +347,11 @@ impl AgentService {
         record.settings.config.compaction_capability = update.compaction_capability;
         normalize_session_config(&mut record.settings.config);
         validate_session_config(&record.settings.config, self.inner.limits)?;
+        // A changed model counts its next request at its own ratio.
+        if model_changed {
+            record.settings.config.bytes_per_token_millis = None;
+            self.refresh_bytes_per_token(record);
+        }
         // Recovery refuses usage measured against another window.
         if let Some(usage) = record.runtime.usage.as_mut() {
             usage.context_window_tokens = record.settings.config.context_window_tokens;

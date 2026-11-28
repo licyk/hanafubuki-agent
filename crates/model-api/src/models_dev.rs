@@ -206,6 +206,9 @@ impl ModelsDevModel {
         ModelMetadata {
             context_window: self.context_window.map(sourced),
             max_output_tokens: self.max_output_tokens.map(sourced),
+            // The catalogue describes models, not tokenizers; nothing there
+            // counts bytes per token.
+            bytes_per_token_millis: None,
             reasoning: self.reasoning.then_some(Sourced {
                 value: ModelReasoningSupport::Supported {
                     efforts: Vec::new(),

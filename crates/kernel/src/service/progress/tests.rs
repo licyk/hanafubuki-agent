@@ -191,6 +191,7 @@ fn a_report_on_a_runtime_that_has_shut_down_frees_the_consumer_slot() {
                 mode: crate::AgentSessionMode::Default,
                 reasoning_effort: None,
                 context_window_tokens: None,
+                bytes_per_token_millis: None,
                 input_capabilities: Default::default(),
                 auto_compaction_enabled: true,
                 auto_compact_threshold_percent: 80,

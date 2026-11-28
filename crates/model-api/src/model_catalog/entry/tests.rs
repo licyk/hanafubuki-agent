@@ -66,6 +66,7 @@ fn a_field_that_cannot_be_read_is_unknown() {
             supported_reasoning_efforts: Vec::new(),
             context_window: None,
             max_output_tokens: None,
+            bytes_per_token_millis: None,
             image_input: None,
             reasoning: None,
         }

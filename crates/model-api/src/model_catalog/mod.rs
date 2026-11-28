@@ -36,6 +36,11 @@ pub struct ModelCatalogEntry {
     pub supported_reasoning_efforts: Vec<ModelReasoningEffort>,
     pub context_window: Option<u64>,
     pub max_output_tokens: Option<u64>,
+    /// The bytes of UTF-8 one token is estimated at, for a Provider that
+    /// measures its own tokenizer; nothing when it says nothing. In
+    /// thousandths of a byte, as [`ModelMetadata`](crate::ModelMetadata)
+    /// keeps it, so the fact stays exactly comparable.
+    pub bytes_per_token_millis: Option<u64>,
     /// Whether the model reads images.
     pub image_input: Option<bool>,
     /// Whether the model takes a reasoning parameter; reported levels mean

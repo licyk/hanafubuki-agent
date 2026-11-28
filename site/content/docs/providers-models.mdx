@@ -192,6 +192,8 @@ Provider 拒绝推理参数时（状态码 400 或 422，并指名该参数，�
 
 上下文是 Provider 报告的上一次请求的提示总量：每个输入 token，无论是否从提示缓存读取，以及写入缓存的 token。Responses 和 Chat Completions 协议报告的就是这个总量；Anthropic 把缓存分开报告，Agent 把它加回去。所以在 Anthropic 上，主要由缓存提供的对话与其他协议在同样的大小达到阈值；0.3 之前只计它未缓存的输入，压缩得比应有的晚。`/status`、状态栏、回合的输入 token 预算和[目标](/docs/sessions#goals)的 token 预算计的都是同一个总量。
 
+在两次回答之间，以及手头没有 Provider 的最近计数时（会话中途切换模型、刚安装一次压缩），Agent 改为测量即将发送的请求：按模型的 [`bytesPerToken`](#per-model) 折算其 UTF-8 字节（没有任何来源说明时为 4）。Provider 的计数与这个估算分开保存：有计数时估算只补上其后的增长，没有计数时取两者中较大的一个，因此某个模型的分词器不会让 Provider 实测占窗口 55% 的历史按 80% 被压缩。文本的 token 密度高于每 token 四字节的模型，可在其 `bytesPerToken` 或模型列表（`bytesPerToken`，单位为千分之一字节）中说明，从而不被按四字节计数的估算过早压缩。
+
 Provider 以超出模型窗口为由拒绝请求时，Agent 会压缩一次并重试；再次被拒时回合失败（`context_window_exceeded`）。它还会从拒绝中学习：拒绝中写明的窗口（`maximum context length is 131072 tokens`），或在没有写明时，被拒请求的大小（窗口一定比它小）。会话立即采用这个窗口，于是重试和之后的轮次会在窗口填满前压缩，对话中也会提示（`The Provider refused the request as too long; this model's window is taken as 131072 from now on.`）。此后同一 Provider 上同一模型的每个会话都从这个窗口开始，重启后也一样，为期 7 天；在此之前只有更小的窗口才会替换它，[遗忘](#forget)则会丢弃它。即使关闭了自动压缩也会学习，且从不替换你设置的 `contextWindowTokens`。
 
 | 设置                          | 默认值       | 作用                                                                                       |
@@ -239,6 +241,7 @@ imageInput = "supported"
 | --------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `contextWindowTokens` | 正整数                                           | 模型的窗口，优先于 `[modelPolicy]` 的 `contextWindowTokens`、学到的窗口和目录报告的窗口                                                                              |
 | `maxOutputTokens`     | 正整数                                           | 模型的最大输出，阈值为它留出空间，Anthropic 的思考预算也按它计算（[上下文窗口与压缩](#compaction)、[推理强度与思考过程](#reasoning)）                                |
+| `bytesPerToken`       | 正数，单位为千分之一字节                         | 该模型的每个 token 占多少字节 UTF-8，Agent 的请求估算按它计数：`3200` 表示同样的文本 3.2 字节一个 token。省略时按 Provider 的模型列表所述，都没有则为 4（[上下文窗口与压缩](#compaction)） |
 | `imageInput`          | `"auto"`（默认）、`"supported"`、`"unsupported"` | `"auto"` 按已知的信息（[图片](#images)）；`"supported"` 不论目录怎么说、拒绝教了什么都发送图片：拒绝仍会让那次请求回退，下一次请求再次发送；`"unsupported"` 从不发送 |
 | `reasoningEfforts`    | 推理强度的列表，或 `[]`                          | 模型接受的档位，取代目录列出的档位，发送的推理强度按它收窄，`/effort` 和策略的推理强度一行也提供它们；`[]`：不接受推理参数，不发送推理强度                           |
 

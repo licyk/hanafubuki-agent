@@ -22,6 +22,17 @@ pub struct AgentModelUsage {
     /// The last response's prompt total, or after a compaction the
     /// estimate of the next request.
     pub context_consumed_tokens: Option<u64>,
+    /// What the Provider counted of the last request it answered; none
+    /// until one answers, and unchanged by a compaction, whose instalment
+    /// is counted rather than answered. This is the model's own measure of
+    /// its context, which [`Self::context_consumed_tokens`] is not once
+    /// something was estimated.
+    #[serde(
+        default,
+        deserialize_with = "tolerant",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub context_reported_tokens: Option<u64>,
     /// The raw request estimate paired with `context_consumed_tokens`.
     /// Kept across restarts to estimate only growth after a reported prompt.
     #[serde(
@@ -50,17 +61,46 @@ pub struct AgentModelUsage {
 }
 
 impl AgentModelUsage {
+    /// What the context holds as `estimated` (this request's count) says,
+    /// measured from what the provider last reported.
+    ///
+    /// The provider's count is what the model saw; the estimate only adds
+    /// what came after it. Without a baseline to add to, the provider's
+    /// count still stands for the history it measured, and the estimate
+    /// covers this request: the larger of the two, since one of them is the
+    /// whole context and both count text that was sent. Taking the estimate
+    /// alone there let a model whose count differs from the Agent's — a
+    /// tokenizer packing more text per token, a model switched mid-session —
+    /// be compacted well below its threshold.
     pub(crate) fn calibrated_context_tokens(&self, estimated: u64) -> u64 {
         match (
             self.source,
-            self.context_consumed_tokens,
+            self.reported_context_tokens(),
             self.context_estimated_tokens,
         ) {
             (AgentUsageSource::ProviderReported, Some(reported), Some(baseline)) => {
                 reported.saturating_add(estimated.saturating_sub(baseline))
             }
+            (AgentUsageSource::ProviderReported, Some(reported), None) => reported.max(estimated),
             _ => estimated,
         }
+    }
+
+    /// What the Provider counted of the last request it answered, else the
+    /// context's count when that came from one.
+    fn reported_context_tokens(&self) -> Option<u64> {
+        self.context_reported_tokens.or(match self.source {
+            AgentUsageSource::ProviderReported => self.context_consumed_tokens,
+            AgentUsageSource::Estimated => None,
+        })
+    }
+
+    /// The context's size to show: what the Provider measured of the last
+    /// request it answered, else the context's own count, which a
+    /// compaction made an estimate.
+    pub fn context_size_reported(&self) -> Option<u64> {
+        self.context_reported_tokens
+            .or(self.context_consumed_tokens)
     }
 }
 
@@ -548,3 +588,6 @@ pub struct AgentTurnOutcome {
     pub final_answer_message_id: AgentMessageId,
     pub final_answer: String,
 }
+
+#[cfg(test)]
+mod tests;

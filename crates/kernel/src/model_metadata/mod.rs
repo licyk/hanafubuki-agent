@@ -37,6 +37,7 @@ pub use store::{ModelMetadataSnapshot, ModelMetadataStore};
 pub(crate) struct ConfiguredModelFacts {
     pub(crate) context_window: Option<u64>,
     pub(crate) max_output_tokens: Option<u64>,
+    pub(crate) bytes_per_token_millis: Option<u64>,
     pub(crate) image_input: Option<bool>,
     pub(crate) reasoning: Option<ModelReasoningSupport>,
 }
@@ -47,6 +48,7 @@ impl ConfiguredModelFacts {
         Self {
             context_window: facts.context_window_tokens,
             max_output_tokens: facts.max_output_tokens,
+            bytes_per_token_millis: facts.bytes_per_token_millis,
             image_input: facts.image_input,
             reasoning: facts.reasoning(),
         }
@@ -332,6 +334,24 @@ impl ModelMetadataRegistry {
         };
         self.resolve(route, model, configured, now_ms)
             .context_window
+    }
+
+    /// The bytes of UTF-8 one token is estimated at for `model`: the
+    /// person's ratio, else the one its listing or a measurement stated,
+    /// else four.
+    pub(crate) fn bytes_per_token(
+        &self,
+        configured: Option<u64>,
+        route: Option<&ModelRouteKey>,
+        model: &str,
+        now_ms: u64,
+    ) -> f64 {
+        let configured = ConfiguredModelFacts {
+            bytes_per_token_millis: configured,
+            ..ConfiguredModelFacts::default()
+        };
+        self.resolve(route, model, configured, now_ms)
+            .bytes_per_token()
     }
 
     /// When `endpoint`'s latest listing was recorded, in milliseconds since

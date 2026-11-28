@@ -100,6 +100,7 @@ fn listed(window: u64) -> ModelCatalogEntry {
         supported_reasoning_efforts: Vec::new(),
         context_window: Some(window),
         max_output_tokens: None,
+        bytes_per_token_millis: None,
         image_input: None,
         reasoning: None,
     }
@@ -114,6 +115,7 @@ fn config(window: Option<u64>, source: Option<ModelMetadataSource>) -> AgentSess
         mode: crate::AgentSessionMode::Default,
         reasoning_effort: None,
         context_window_tokens: window,
+        bytes_per_token_millis: None,
         input_capabilities: Default::default(),
         auto_compaction_enabled: true,
         auto_compact_threshold_percent: 80,

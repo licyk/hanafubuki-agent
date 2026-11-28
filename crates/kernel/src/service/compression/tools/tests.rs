@@ -8,6 +8,7 @@ fn usage(cache_read_tokens: Option<u64>) -> AgentModelUsage {
         cumulative_output_tokens: 10,
         context_window_tokens: None,
         context_consumed_tokens: Some(2_000),
+        context_reported_tokens: Some(2_000),
         context_estimated_tokens: None,
         source: AgentUsageSource::ProviderReported,
         last_response_cache_read_tokens: cache_read_tokens,

@@ -17,6 +17,7 @@ async fn request_retry_exhaustion_reason_survives_durable_runtime_reload() {
             mode: hanafubuki_agent_kernel::AgentSessionMode::Default,
             reasoning_effort: None,
             context_window_tokens: None,
+            bytes_per_token_millis: None,
             input_capabilities: Default::default(),
             auto_compaction_enabled: true,
             auto_compact_threshold_percent: 80,

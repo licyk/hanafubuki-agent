@@ -140,6 +140,7 @@ fn listed(reasoning: Option<bool>, levels: &[&str], max_output: Option<u64>) -> 
         supported_reasoning_efforts: levels.iter().map(|level| effort(level)).collect(),
         context_window: None,
         max_output_tokens: max_output,
+        bytes_per_token_millis: None,
         image_input: None,
         reasoning,
     }
@@ -154,6 +155,7 @@ fn config(reasoning_effort: Option<&str>) -> AgentSessionConfig {
         mode: crate::AgentSessionMode::Default,
         reasoning_effort: reasoning_effort.map(effort),
         context_window_tokens: None,
+        bytes_per_token_millis: None,
         input_capabilities: ModelInputCapabilityPolicy {
             image_input: ModelImageInputPolicy::Auto,
         },

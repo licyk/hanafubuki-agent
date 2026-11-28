@@ -212,6 +212,7 @@ fn text_session_config() -> AgentSessionConfig {
         mode: hanafubuki_agent_kernel::AgentSessionMode::Default,
         reasoning_effort: None,
         context_window_tokens: None,
+        bytes_per_token_millis: None,
         input_capabilities: hanafubuki_agent_model_api::ModelInputCapabilityPolicy {
             image_input: hanafubuki_agent_model_api::ModelImageInputPolicy::Disabled,
         },

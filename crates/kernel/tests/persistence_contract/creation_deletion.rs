@@ -17,6 +17,7 @@ async fn image_only_turn_is_durable_and_unsupported_capability_fails_before_admi
             mode: hanafubuki_agent_kernel::AgentSessionMode::Default,
             reasoning_effort: None,
             context_window_tokens: None,
+            bytes_per_token_millis: None,
             input_capabilities: hanafubuki_agent_model_api::ModelInputCapabilityPolicy {
                 image_input: hanafubuki_agent_model_api::ModelImageInputPolicy::Disabled,
             },
@@ -74,6 +75,7 @@ async fn image_only_turn_is_durable_and_unsupported_capability_fails_before_admi
             mode: hanafubuki_agent_kernel::AgentSessionMode::Default,
             reasoning_effort: None,
             context_window_tokens: None,
+            bytes_per_token_millis: None,
             input_capabilities: hanafubuki_agent_model_api::ModelInputCapabilityPolicy::default(),
             auto_compaction_enabled: true,
             auto_compact_threshold_percent: 80,
@@ -243,6 +245,7 @@ fn session_creation_uses_a_small_runtime_checkpoint_without_history_snapshot() {
                 mode: hanafubuki_agent_kernel::AgentSessionMode::Default,
                 reasoning_effort: None,
                 context_window_tokens: None,
+                bytes_per_token_millis: None,
                 input_capabilities: Default::default(),
                 auto_compaction_enabled: true,
                 auto_compact_threshold_percent: 80,

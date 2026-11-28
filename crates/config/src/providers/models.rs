@@ -20,6 +20,12 @@ pub struct AgentModelOverrideSettings {
     pub context_window_tokens: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_output_tokens: Option<u64>,
+    /// The bytes of UTF-8 one token is estimated at when this model's
+    /// requests are counted rather than reported. Unset: what its listing,
+    /// a measurement or the default says. In thousandths of a byte:
+    /// `"bytesPerToken": 3200` is 3.2 bytes to a token.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bytes_per_token_millis: Option<u64>,
     #[serde(default, skip_serializing_if = "AgentModelImageInput::is_auto")]
     pub image_input: AgentModelImageInput,
     /// The levels the model takes, in place of the known ones; empty: it
@@ -90,6 +96,7 @@ pub(super) fn decode_models(
         let overrides = AgentModelOverrideSettings {
             context_window_tokens: entry.read_checked("contextWindowTokens", None, positive),
             max_output_tokens: entry.read_checked("maxOutputTokens", None, positive),
+            bytes_per_token_millis: entry.read_checked("bytesPerToken", None, positive),
             image_input: entry.read("imageInput", AgentModelImageInput::Auto),
             reasoning_efforts: entry.read("reasoningEfforts", None),
         };

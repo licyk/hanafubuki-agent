@@ -295,7 +295,8 @@ impl AgentService {
             &step.prompt,
             self.inner.limits.maximum_tool_output_bytes,
         )?;
-        let estimated = estimate_model_request_tokens(&request)?;
+        let estimated =
+            estimate_model_request_tokens_with(&request, record.settings.config.bytes_per_token())?;
         let active = record.runtime.usage.map_or(estimated, |usage| {
             usage.calibrated_context_tokens(estimated)
         });

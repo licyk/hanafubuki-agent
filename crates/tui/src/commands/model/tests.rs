@@ -129,6 +129,7 @@ fn model(id: &str, window: u64, thinks: Option<bool>, vision: Option<bool>) -> A
             supported_reasoning_efforts: Vec::new(),
             context_window: (window > 0).then_some(window),
             max_output_tokens: None,
+            bytes_per_token_millis: None,
             image_input: vision,
             reasoning: thinks,
         },

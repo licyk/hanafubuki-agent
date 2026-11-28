@@ -77,6 +77,7 @@ fn usage(cache: bool) -> AgentModelUsage {
         cumulative_output_tokens: 5_200,
         context_window_tokens: Some(200_000),
         context_consumed_tokens: Some(74_000),
+        context_reported_tokens: Some(74_000),
         context_estimated_tokens: None,
         source: AgentUsageSource::ProviderReported,
         last_response_cache_read_tokens: cache.then_some(61_000),

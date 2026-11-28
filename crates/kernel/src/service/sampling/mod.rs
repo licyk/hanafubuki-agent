@@ -9,7 +9,10 @@ mod request;
 mod stream;
 
 use composition::{compose_request, record_reported_prompt};
-pub(super) use estimate::{estimate_conversation_items_tokens, estimate_model_request_tokens};
+pub(super) use estimate::{
+    estimate_conversation_items_tokens, estimate_model_request_tokens,
+    estimate_model_request_tokens_with,
+};
 pub(super) use images::{referenced_images, LoadedImages};
 pub(super) use prompt::RequestContext;
 use prompt::{ordered_input, prepare_prompt_step, request_context, PlacedInput};
@@ -66,6 +69,8 @@ pub(super) fn next_model_usage(
         )?,
         context_window_tokens: record.settings.config.context_window_tokens,
         context_consumed_tokens: Some(usage.input_tokens),
+        context_reported_tokens: (source == AgentUsageSource::ProviderReported)
+            .then_some(usage.input_tokens),
         context_estimated_tokens: (source == AgentUsageSource::ProviderReported)
             .then_some(estimated_input_tokens),
         source,

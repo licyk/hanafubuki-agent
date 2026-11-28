@@ -40,6 +40,7 @@ fn unstamped(metadata: &ModelMetadata) -> ModelMetadata {
     ModelMetadata {
         context_window: fact(&metadata.context_window),
         max_output_tokens: fact(&metadata.max_output_tokens),
+        bytes_per_token_millis: fact(&metadata.bytes_per_token_millis),
         reasoning: fact(&metadata.reasoning),
         image_input: fact(&metadata.image_input),
         structured_output: fact(&metadata.structured_output),

@@ -19,6 +19,7 @@ fn inline_tool_images_replay_in_place_and_same_sized_images_remain_distinct() {
                 mode: crate::AgentSessionMode::Default,
                 reasoning_effort: None,
                 context_window_tokens: None,
+                bytes_per_token_millis: None,
                 input_capabilities: Default::default(),
                 auto_compaction_enabled: true,
                 auto_compact_threshold_percent: 80,

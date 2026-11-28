@@ -115,6 +115,7 @@ fn configured_facts_beat_learned_and_reported_ones() {
     let configured = |reasoning| ConfiguredModelFacts {
         context_window: Some(200_000),
         max_output_tokens: Some(8_000),
+        bytes_per_token_millis: None,
         image_input: Some(true),
         reasoning,
     };

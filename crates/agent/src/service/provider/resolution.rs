@@ -94,6 +94,7 @@ pub(crate) fn configured_model_facts(
     AgentConfiguredModelFacts {
         context_window_tokens: overrides.context_window_tokens.or(policy_window),
         max_output_tokens: overrides.max_output_tokens,
+        bytes_per_token_millis: overrides.bytes_per_token_millis,
         image_input: overrides.image_input.configured(),
         reasoning_efforts: overrides.reasoning_efforts,
     }

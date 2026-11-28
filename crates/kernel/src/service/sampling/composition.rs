@@ -2,7 +2,7 @@
 //! step's request as it is sent, kept for the session while the Agent runs,
 //! and, before one is sent, an estimate of the next.
 
-use hanafubuki_agent_contracts::estimate_tokens;
+use hanafubuki_agent_contracts::estimate_tokens_with;
 
 use super::estimate::{serialized_len, without_media};
 use super::*;
@@ -54,18 +54,19 @@ impl AgentService {
     ) -> Result<AgentContextComposition, AgentError> {
         let transport = self.prepare_compaction_transport(session_id).await?;
         let images = self.load_history_images(session_id).await?;
-        let request = {
+        let (request, bytes_per_token) = {
             let cell = self.session(session_id)?;
             let record = cell.lock()?;
-            step_model_request(
+            let request = step_model_request(
                 &record,
                 &images,
                 &transport.tool_plan,
                 &transport.prompt,
                 self.inner.limits.maximum_tool_output_bytes,
-            )?
+            )?;
+            (request, record.settings.config.bytes_per_token())
         };
-        compose_request(&request, &transport.tool_plan)
+        compose_request(&request, &transport.tool_plan, bytes_per_token)
     }
 
     /// Keeps `composition` as the session's last sent request; what the
@@ -102,14 +103,19 @@ pub(super) fn record_reported_prompt(
 
 /// `request`'s groups, its tools attributed by `tool_plan` (the plan it was
 /// built with, whose specs are its tools in order). Each group is the
-/// estimate of its own serialized part; what no group holds is the rest.
+/// estimate of its own serialized part at `bytes_per_token`, the model's
+/// own ratio; what no group holds is the rest.
 pub(in crate::service) fn compose_request(
     request: &ModelRequest,
     tool_plan: &AgentToolPlan,
+    bytes_per_token: f64,
 ) -> Result<AgentContextComposition, AgentError> {
     let (stripped, images) = without_media(request)?;
     let mut composition = AgentContextComposition {
-        instructions_tokens: estimate_tokens(serialized_len(&stripped.instructions)?),
+        instructions_tokens: estimate_tokens_with(
+            serialized_len(&stripped.instructions)?,
+            bytes_per_token,
+        ),
         images: images.count,
         image_tokens: images.tokens,
         ..AgentContextComposition::default()
@@ -131,15 +137,15 @@ pub(in crate::service) fn compose_request(
         .map(|(provider_id, count, bytes)| AgentContextTools {
             provider_id: provider_id.map(|id| id.as_str().to_string()),
             count,
-            tokens: estimate_tokens(bytes),
+            tokens: estimate_tokens_with(bytes, bytes_per_token),
         })
         .collect();
     let mut input_bytes = InputBytes::default();
     for item in &stripped.input {
         input_bytes.add(item, serialized_len(item)?);
     }
-    input_bytes.estimate_into(&mut composition);
-    let total_bytes_tokens = estimate_tokens(serialized_len(&stripped)?);
+    input_bytes.estimate_into(&mut composition, bytes_per_token);
+    let total_bytes_tokens = estimate_tokens_with(serialized_len(&stripped)?, bytes_per_token);
     composition.other_tokens = total_bytes_tokens.saturating_sub(grouped_text_tokens(&composition));
     composition.total_tokens =
         total_bytes_tokens
@@ -197,21 +203,24 @@ impl InputBytes {
         *group = group.saturating_add(bytes);
     }
 
-    fn estimate_into(self, composition: &mut AgentContextComposition) {
+    fn estimate_into(self, composition: &mut AgentContextComposition, bytes_per_token: f64) {
         composition.sections = self
             .sections
             .into_iter()
             .map(|(kind, bytes)| AgentContextSection {
                 kind,
-                tokens: estimate_tokens(bytes),
+                tokens: estimate_tokens_with(bytes, bytes_per_token),
             })
             .collect();
-        composition.user_messages_tokens = estimate_tokens(self.user_messages);
-        composition.assistant_messages_tokens = estimate_tokens(self.assistant_messages);
-        composition.reasoning_tokens = estimate_tokens(self.reasoning);
-        composition.tool_calls_tokens = estimate_tokens(self.tool_calls);
-        composition.continuation_tokens = estimate_tokens(self.continuation);
-        composition.compaction_summaries_tokens = estimate_tokens(self.compaction_summaries);
+        composition.user_messages_tokens =
+            estimate_tokens_with(self.user_messages, bytes_per_token);
+        composition.assistant_messages_tokens =
+            estimate_tokens_with(self.assistant_messages, bytes_per_token);
+        composition.reasoning_tokens = estimate_tokens_with(self.reasoning, bytes_per_token);
+        composition.tool_calls_tokens = estimate_tokens_with(self.tool_calls, bytes_per_token);
+        composition.continuation_tokens = estimate_tokens_with(self.continuation, bytes_per_token);
+        composition.compaction_summaries_tokens =
+            estimate_tokens_with(self.compaction_summaries, bytes_per_token);
     }
 }
 

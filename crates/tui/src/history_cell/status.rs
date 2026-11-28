@@ -90,7 +90,7 @@ pub(crate) fn new_status_output(report: &StatusReport) -> StatusHistoryCell {
         session: session.id.to_string(),
         input_tokens: usage.map_or(0, |usage| usage.cumulative_input_tokens),
         output_tokens: usage.map_or(0, |usage| usage.cumulative_output_tokens),
-        context_used: usage.and_then(|usage| usage.context_consumed_tokens),
+        context_used: usage.and_then(|usage| usage.context_size_reported()),
         context_window: report.metadata.context_window.clone(),
         background_compaction: session.background_compaction,
     }

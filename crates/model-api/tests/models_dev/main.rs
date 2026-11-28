@@ -91,6 +91,7 @@ fn the_providers_own_entry_comes_first() {
         ModelMetadata {
             context_window: models_dev(128_000),
             max_output_tokens: models_dev(16_384),
+            bytes_per_token_millis: None,
             reasoning: None,
             image_input: models_dev(true),
             structured_output: None,

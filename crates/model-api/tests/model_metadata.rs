@@ -17,6 +17,11 @@ fn metadata_round_trips_with_each_fact_and_its_source() {
             observed_at_ms: 1_700_000_000_000,
         }),
         max_output_tokens: None,
+        bytes_per_token_millis: Some(Sourced {
+            value: 3_200,
+            source: ModelMetadataSource::Reported,
+            observed_at_ms: 4,
+        }),
         reasoning: Some(Sourced {
             value: ModelReasoningSupport::Supported {
                 efforts: vec![ModelReasoningEffort::Low, ModelReasoningEffort::High],
@@ -42,6 +47,7 @@ fn metadata_round_trips_with_each_fact_and_its_source() {
         json!({
             "contextWindow": {"value": 200_000, "source": "reported", "observedAtMs": 1_700_000_000_000_u64},
             "maxOutputTokens": null,
+            "bytesPerToken": {"value": 3200, "source": "reported", "observedAtMs": 4},
             "reasoning": {
                 "value": {"type": "supported", "efforts": ["low", "high"], "default": "high"},
                 "source": "built_in",
@@ -77,6 +83,7 @@ fn a_fact_that_does_not_decode_is_unknown_and_the_others_are_kept() {
         ModelMetadata {
             context_window: None,
             max_output_tokens: None,
+            bytes_per_token_millis: None,
             reasoning: Some(Sourced {
                 value: ModelReasoningSupport::Supported {
                     efforts: vec![ModelReasoningEffort::Low],

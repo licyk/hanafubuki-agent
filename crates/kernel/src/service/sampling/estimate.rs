@@ -12,12 +12,24 @@ use super::*;
 pub(in crate::service) fn estimate_model_request_tokens(
     request: &ModelRequest,
 ) -> Result<u64, AgentError> {
+    estimate_model_request_tokens_with(request, hanafubuki_agent_contracts::DEFAULT_BYTES_PER_TOKEN)
+}
+
+/// [`estimate_model_request_tokens`] counting `bytes_per_token` bytes of
+/// UTF-8 per token, as the model's own ratio says.
+pub(in crate::service) fn estimate_model_request_tokens_with(
+    request: &ModelRequest,
+    bytes_per_token: f64,
+) -> Result<u64, AgentError> {
     let (request_without_media_bytes, images) = without_media(request)?;
-    estimate_tokens(serialized_len(&request_without_media_bytes)?)
-        .checked_add(images.tokens)
-        .ok_or(AgentError::UsageOverflow {
-            field: "estimated model request tokens",
-        })
+    hanafubuki_agent_contracts::estimate_tokens_with(
+        serialized_len(&request_without_media_bytes)?,
+        bytes_per_token,
+    )
+    .checked_add(images.tokens)
+    .ok_or(AgentError::UsageOverflow {
+        field: "estimated model request tokens",
+    })
 }
 
 /// The images a request carries, and their estimate.

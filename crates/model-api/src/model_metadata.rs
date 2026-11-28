@@ -15,6 +15,13 @@ pub struct ModelMetadata {
     pub context_window: Option<Sourced<u64>>,
     #[serde(default, deserialize_with = "tolerant")]
     pub max_output_tokens: Option<Sourced<u64>>,
+    /// The bytes of UTF-8 one token is estimated at when the text of a
+    /// request is counted rather than reported, in thousandths of a byte: a
+    /// model whose tokenizer packs more text per token sees fewer tokens,
+    /// and counting it at four would overstate a request. Unknown counts as
+    /// four.
+    #[serde(default, rename = "bytesPerToken", deserialize_with = "tolerant")]
+    pub bytes_per_token_millis: Option<Sourced<u64>>,
     #[serde(default, deserialize_with = "tolerant")]
     pub reasoning: Option<Sourced<ModelReasoningSupport>>,
     #[serde(default, deserialize_with = "tolerant")]
@@ -77,6 +84,19 @@ impl ModelMetadata {
     /// Whether the model reads images, when that is known.
     pub fn supports_image_input(&self) -> Option<bool> {
         self.image_input.as_ref().map(|fact| fact.value)
+    }
+
+    /// The bytes of UTF-8 one token is estimated at, as known, any positive
+    /// ratio; four is the default and the count of a model that says
+    /// nothing.
+    pub fn bytes_per_token(&self) -> f64 {
+        self.bytes_per_token_millis
+            .as_ref()
+            .filter(|fact| fact.value > 0)
+            .map_or(
+                hanafubuki_agent_tool_contracts::DEFAULT_BYTES_PER_TOKEN,
+                |fact| fact.value as f64 / 1000.0,
+            )
     }
 }
 
