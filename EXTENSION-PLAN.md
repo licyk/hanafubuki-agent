@@ -33,20 +33,20 @@ kardia 0.7 已提供三件本机确实要用的东西：`HostAction`/`register_a
 
 ### 任务 2：清单声明的设置选项（`configSchema` 放开）
 
-现在 lowering 只能表达 boolean/integer/number/string/enum/字符串数组（`crates/packages/src/options/lower.rs`）。补两个本机需要、且能映射到既有 `SettingKind` 的：
+现在 lowering 只能表达 boolean/integer/number/string/enum/字符串数组（`crates/packages/src/options/lower.rs`），且"没有任何选项是秘密"。补两项：
 
-- `enum` 常量数组 → `SettingKind::Choice`；
-- `x-secret: true` → `SettingKind::Text { secret: true }`（今天"没有任何选项是秘密"，插件没法放 token）。
+- `x-secret: true` → `SettingKind::Text { secret: true }`（插件才能放 token）；
+- `["string", "null"]` 类型或含 `null` 的 `enum` → 可空的文本/选项，使 `default: null` 能成立。
 
-其它关键字仍不解析，写进文档而不是加校验。
+`enum` 原本已 lower 成 `Choice`，无需改动；数值 `enum` 未做，因为 `Choice` 在 foundation 层只按字符串读写，要动读写与三处 UI，超出本任务的收益。
 
 验收：`crates/packages/src/options` 的单元测试与 `plugins validate` 的 issues 列表。
 
 ### 任务 3：内置插件的选项改用声明式清单
 
-`plugin-web` 的 60 个 `SettingSpec` 逐条对应 `SearchOptions` 字段；改为由 `configSchema` lowering 产出，Rust 里只保留 `search_options_from_value` 这个解码函数。顺序：先迁移 `plugin-web`（它的 schema 最完整，且已有 `search_options_from_value` 兜住解码），再决定是否动其余内置插件。
+评估结论：**不做整表迁移**。`plugin-web` 的选项作为内置行（`[pluginOptions.web]`）时，缺失的键取 `SettingSpec::default`；作为插件设置（`[plugins."id".settings]`）时，缺失的键保持缺失、由 guest 自己的默认值生效。把默认值搬进 `configSchema` 会改变设置中心显示的层（"default" 变成 "user"）、使 `packages` 的 `to_object()` 塞入 10+ 个可计算默认值、并把 `region` 的 `nullable` 语义挤进 lowering。改动的风险与收益不成比例。
 
-验收：`crates/plugin-web/tests/plugin.rs` 与设置中心的选项快照不变；`/config` 里 web 段仍能读写每一项。
+替代做法：任务 2 补齐的 lowering 词汇（secret、可空文本、可空 enum）已经覆盖了第三方插件最缺的部分；`plugin-web` 继续用 Rust 声明，因为它的默认值来自 `SearchOptions` 的计算值，不是常量。
 
 ### 任务 4：会话与记忆工具的动作面
 

@@ -168,7 +168,7 @@ fn a_config_schema_is_lowered_with_its_supported_keywords() {
             "tags": { "type": "array", "maxItems": 3, "items": { "type": "string", "maxLength": 8 } },
             "verbose": { "type": "boolean", "default": "no" },
             "nested": { "type": "object" },
-            "either": { "type": ["string", "null"] },
+            "either": { "type": ["string", "integer"] },
         }
     })));
     let keys = lowered
@@ -234,6 +234,54 @@ fn a_config_schema_is_lowered_with_its_supported_keywords() {
     assert!(issues
         .iter()
         .any(|issue| issue.contains("`verbose` has a default")));
+}
+
+#[test]
+fn a_text_that_may_be_unset_is_nullable() {
+    let (lowered, issues) = lower_config_schema(&object(json!({
+        "properties": {
+            "region": { "type": ["string", "null"], "default": null, "maxLength": 16 },
+            "shorthand": { "type": ["null", "string"] },
+            "style": { "enum": ["plain", null] },
+            "fixed": { "type": "string" },
+        }
+    })));
+    assert!(issues.is_empty(), "{issues:?}");
+    for (key, maximum_chars) in [("region", Some(16)), ("shorthand", None)] {
+        assert_eq!(
+            lowered.option(key).unwrap().kind,
+            SettingKind::Text {
+                maximum_chars,
+                secret: false,
+                nullable: true
+            },
+            "{key}"
+        );
+    }
+    assert_eq!(
+        lowered.option("region").unwrap().default,
+        Some(SettingValue::Null)
+    );
+    assert_eq!(
+        lowered.option("style").unwrap().kind,
+        SettingKind::ChoiceOrText {
+            values: vec![SettingChoice::new("plain", "plain")],
+            maximum_chars: None,
+            nullable: true
+        },
+        "a null among the choices only makes it unset, never an offered one"
+    );
+    assert!(
+        matches!(
+            lowered.option("fixed").unwrap().kind,
+            SettingKind::Text {
+                nullable: false,
+                ..
+            }
+        ),
+        "{:?}",
+        lowered.option("fixed").unwrap().kind
+    );
 }
 
 #[test]

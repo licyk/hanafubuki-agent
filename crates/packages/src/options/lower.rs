@@ -5,7 +5,9 @@
 //! `type`, `minimum` and `maximum`, `maxLength`, `enum`, `items` (with
 //! `maxItems`), `default` and `description`, labelled by its `title` (else
 //! its key), each choice by its value. `x-secret` makes a text an option
-//! the forms do not show. A keyword not among them constrains nothing, as
+//! the forms do not show. A string or an `enum` with `null` among its
+//! values is a text that may be unset. A keyword not among them constrains
+//! nothing, as
 //! in the kernel's check of a dynamic tool's arguments. A property that is
 //! none of the kinds (an object, a list of anything but strings, a union of
 //! types, an `enum` of anything but strings) is left out with an issue, and
@@ -82,10 +84,18 @@ fn lower_property(key: &str, property: &Value) -> Result<(SettingSpec, Option<St
 }
 
 fn kind(property: &Map<String, Value>) -> Result<SettingKind, String> {
-    let choices = property.get("enum").map(strings).transpose()?;
+    let (choices, nullable) = match property.get("enum") {
+        Some(values) => {
+            let (values, nullable) = strings(values)?;
+            (Some(values), nullable)
+        }
+        None => (None, types_allow_null(property)?),
+    };
     let kind = match property.get("type") {
+        None if nullable => Some("string"),
         None => None,
         Some(Value::String(kind)) => Some(kind.as_str()),
+        Some(Value::Array(types)) if nullable && names_text(types) => Some("string"),
         Some(_) => return Err("has more than one type".to_string()),
     };
     let (minimum, maximum) = (bound(property, "minimum"), bound(property, "maximum"));
@@ -96,6 +106,14 @@ fn kind(property: &Map<String, Value>) -> Result<SettingKind, String> {
         return Err("has a minimum above its maximum".to_string());
     }
     match (kind, choices) {
+        (None | Some("string"), Some(values)) if nullable => Ok(SettingKind::ChoiceOrText {
+            values: values
+                .into_iter()
+                .map(|value| SettingChoice::new(value.clone(), value))
+                .collect(),
+            maximum_chars: count(property, "maxLength"),
+            nullable,
+        }),
         (None | Some("string"), Some(values)) => Ok(SettingKind::Choice {
             values: values
                 .into_iter()
@@ -115,7 +133,7 @@ fn kind(property: &Map<String, Value>) -> Result<SettingKind, String> {
                 .get("x-secret")
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
-            nullable: false,
+            nullable,
         }),
         (Some("array"), None) => {
             let items = property
@@ -133,18 +151,48 @@ fn kind(property: &Map<String, Value>) -> Result<SettingKind, String> {
     }
 }
 
-/// An `enum`'s values, when they are all strings.
-fn strings(values: &Value) -> Result<Vec<String>, String> {
-    values
+/// An `enum`'s string values, and whether it also has `null`: a choice the
+/// forms do not offer may still be unset, as a text is.
+fn strings(values: &Value) -> Result<(Vec<String>, bool), String> {
+    let values = values
         .as_array()
-        .filter(|values| !values.is_empty())
-        .and_then(|values| {
-            values
-                .iter()
-                .map(|value| value.as_str().map(str::to_string))
-                .collect()
-        })
-        .ok_or_else(|| "has an enum that is not a list of strings".to_string())
+        .ok_or_else(|| "has an enum that is not a list".to_string())?;
+    let (values, nulls) = values
+        .iter()
+        .partition::<Vec<_>, _>(|value| **value != Value::Null);
+    let texts = values
+        .iter()
+        .map(|value| value.as_str().map(str::to_string))
+        .collect::<Option<Vec<_>>>()
+        .filter(|texts| !texts.is_empty())
+        .ok_or_else(|| "has an enum that is not a list of strings".to_string())?;
+    // One `null` at most: a list of them offers nothing to choose.
+    let nullable = nulls.len() == 1;
+    if nulls.len() > 1 {
+        return Err("has an enum that is not a list of strings".to_string());
+    }
+    Ok((texts, nullable))
+}
+
+/// Whether a union of types names `null`, as a text that may be unset
+/// does.
+fn types_allow_null(property: &Map<String, Value>) -> Result<bool, String> {
+    let Some(Value::Array(types)) = property.get("type") else {
+        return Ok(false);
+    };
+    Ok(names(types, "null"))
+}
+
+/// Whether a union of types is `string` and `null` alone.
+fn names_text(types: &[Value]) -> bool {
+    names(types, "string")
+        && types
+            .iter()
+            .all(|kind| matches!(kind.as_str(), Some("string" | "null")))
+}
+
+fn names(types: &[Value], kind: &str) -> bool {
+    types.iter().any(|value| value.as_str() == Some(kind))
 }
 
 fn bound(property: &Map<String, Value>, keyword: &str) -> Option<f64> {
