@@ -4,10 +4,11 @@
 //! Each property of the schema's `properties` becomes an option from its
 //! `type`, `minimum` and `maximum`, `maxLength`, `enum`, `items` (with
 //! `maxItems`), `default` and `description`, labelled by its `title` (else
-//! its key), each choice by its value. A keyword not among them
-//! constrains nothing, as in the kernel's check of a dynamic tool's
-//! arguments. A property that is none of the kinds (an object, a list of
-//! anything but strings, a union of types) is left out with an issue, and
+//! its key), each choice by its value. `x-secret` makes a text an option
+//! the forms do not show. A keyword not among them constrains nothing, as
+//! in the kernel's check of a dynamic tool's arguments. A property that is
+//! none of the kinds (an object, a list of anything but strings, a union of
+//! types, an `enum` of anything but strings) is left out with an issue, and
 //! its value reaches the guest unchecked.
 
 use hanafubuki_agent_foundation::settings::{SettingChoice, SettingKind, SettingSpec};
@@ -110,7 +111,10 @@ fn kind(property: &Map<String, Value>) -> Result<SettingKind, String> {
         (Some("number"), None) => Ok(SettingKind::Number { minimum, maximum }),
         (Some("string"), None) => Ok(SettingKind::Text {
             maximum_chars: count(property, "maxLength"),
-            secret: false,
+            secret: property
+                .get("x-secret")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
             nullable: false,
         }),
         (Some("array"), None) => {

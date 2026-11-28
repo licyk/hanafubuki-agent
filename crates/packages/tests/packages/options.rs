@@ -237,6 +237,38 @@ fn a_config_schema_is_lowered_with_its_supported_keywords() {
 }
 
 #[test]
+fn a_secret_property_is_a_text_the_forms_hide() {
+    let (lowered, issues) = lower_config_schema(&object(json!({
+        "properties": {
+            "token": { "type": "string", "x-secret": true, "default": "" },
+            "public": { "type": "string", "x-secret": false },
+            "named": { "type": "string", "x-secret": "yes" },
+        }
+    })));
+    assert!(issues.is_empty(), "{issues:?}");
+    for (key, secret) in [("token", true), ("public", false)] {
+        assert_eq!(
+            lowered.option(key).unwrap().kind,
+            SettingKind::Text {
+                maximum_chars: None,
+                secret,
+                nullable: false
+            },
+            "{key}"
+        );
+    }
+    // Only `true` hides it: any other value is not a claim of secrecy.
+    assert!(
+        matches!(
+            lowered.option("named").unwrap().kind,
+            SettingKind::Text { secret: false, .. }
+        ),
+        "{:?}",
+        lowered.option("named").unwrap().kind
+    );
+}
+
+#[test]
 fn a_guests_settings_are_checked_and_what_the_schema_does_not_describe_is_kept() {
     let (lowered, _) = lower_config_schema(&object(json!({
         "properties": {
